@@ -63,13 +63,54 @@ router.put("/business", async (req, res) => {
     const profiles = req.tenantId
       ? await db.select().from(businessProfileTable).where(eq(businessProfileTable.tenantId, req.tenantId)).limit(1)
       : await db.select().from(businessProfileTable).limit(1);
-    const body = req.body;
+
+    // Strip derived / non-column fields that the GET response includes but the DB doesn't accept.
+    // Pulling only explicit column names prevents Drizzle from choking on ISO-string timestamps,
+    // trial info fields, plan, siteSlug, etc.
+    const {
+      name, tagline, description, logoUrl, coverImageUrl,
+      primaryColor, accentColor,
+      email, phone, website,
+      location, address, city, state, zipCode, country,
+      socialInstagram, socialFacebook, socialTwitter,
+      depositRequired, depositPercent,
+      cancellationPolicy, rentalTerms,
+      kioskModeEnabled, embedCode,
+    } = req.body;
+
+    const safeBody = {
+      ...(name               !== undefined && { name }),
+      ...(tagline            !== undefined && { tagline }),
+      ...(description        !== undefined && { description }),
+      ...(logoUrl            !== undefined && { logoUrl }),
+      ...(coverImageUrl      !== undefined && { coverImageUrl }),
+      ...(primaryColor       !== undefined && { primaryColor }),
+      ...(accentColor        !== undefined && { accentColor }),
+      ...(email              !== undefined && { email }),
+      ...(phone              !== undefined && { phone }),
+      ...(website            !== undefined && { website }),
+      ...(location           !== undefined && { location }),
+      ...(address            !== undefined && { address }),
+      ...(city               !== undefined && { city }),
+      ...(state              !== undefined && { state }),
+      ...(zipCode            !== undefined && { zipCode }),
+      ...(country            !== undefined && { country }),
+      ...(socialInstagram    !== undefined && { socialInstagram }),
+      ...(socialFacebook     !== undefined && { socialFacebook }),
+      ...(socialTwitter      !== undefined && { socialTwitter }),
+      ...(depositRequired    !== undefined && { depositRequired }),
+      ...(cancellationPolicy !== undefined && { cancellationPolicy }),
+      ...(rentalTerms        !== undefined && { rentalTerms }),
+      ...(kioskModeEnabled   !== undefined && { kioskModeEnabled }),
+      ...(embedCode          !== undefined && { embedCode }),
+      depositPercent: depositPercent !== undefined ? String(depositPercent) : undefined,
+    };
 
     if (profiles.length === 0) {
       const [created] = await db.insert(businessProfileTable).values({
-        ...body,
+        ...safeBody,
         ...(req.tenantId ? { tenantId: req.tenantId } : {}),
-        depositPercent: String(body.depositPercent ?? "25"),
+        depositPercent: String(depositPercent ?? "25"),
         updatedAt: new Date(),
       }).returning();
       const p = created;
@@ -85,8 +126,7 @@ router.put("/business", async (req, res) => {
     const [updated] = await db
       .update(businessProfileTable)
       .set({
-        ...body,
-        depositPercent: body.depositPercent !== undefined ? String(body.depositPercent) : undefined,
+        ...safeBody,
         updatedAt: new Date(),
       })
       .where(eq(businessProfileTable.id, profiles[0].id))
