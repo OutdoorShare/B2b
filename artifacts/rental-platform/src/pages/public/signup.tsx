@@ -1,6 +1,6 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Link, useLocation } from "wouter";
-import { CheckCircle2, ArrowRight, Eye, EyeOff, ExternalLink, Building2 } from "lucide-react";
+import { CheckCircle2, ArrowRight, Eye, EyeOff, ExternalLink, Building2, Upload, X, ImageIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -41,6 +41,12 @@ export default function SignupPage() {
     plan: "professional",
   });
 
+  const [logoFile, setLogoFile] = useState<File | null>(null);
+  const [logoPreview, setLogoPreview] = useState<string>("");
+  const [logoUrl, setLogoUrl] = useState<string>("");
+  const [logoUploading, setLogoUploading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
   const [slugPreview, setSlugPreview] = useState("");
 
   useEffect(() => {
@@ -55,6 +61,38 @@ export default function SignupPage() {
 
   const set = (field: string, value: string) => setForm(f => ({ ...f, [field]: value }));
 
+  const handleLogoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setLogoFile(file);
+    setLogoPreview(URL.createObjectURL(file));
+    setLogoUrl("");
+  };
+
+  const removeLogo = () => {
+    setLogoFile(null);
+    setLogoPreview("");
+    setLogoUrl("");
+    if (fileInputRef.current) fileInputRef.current.value = "";
+  };
+
+  const uploadLogo = async (): Promise<string> => {
+    if (!logoFile) return "";
+    setLogoUploading(true);
+    try {
+      const fd = new FormData();
+      fd.append("file", logoFile);
+      const res = await fetch(`${BASE}/api/upload/image`, { method: "POST", body: fd });
+      if (!res.ok) return "";
+      const data = await res.json();
+      return data.url ?? "";
+    } catch {
+      return "";
+    } finally {
+      setLogoUploading(false);
+    }
+  };
+
   const validateInfo = () => {
     if (!form.companyName.trim()) { setError("Company name is required."); return false; }
     if (!form.contactName.trim()) { setError("Your name is required."); return false; }
@@ -68,6 +106,7 @@ export default function SignupPage() {
     setError("");
     setSubmitting(true);
     try {
+      const uploadedLogoUrl = logoFile ? await uploadLogo() : logoUrl;
       const res = await fetch(`${BASE}/api/public/signup`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -78,6 +117,7 @@ export default function SignupPage() {
           password: form.password,
           plan: form.plan,
           phone: form.phone || null,
+          logoUrl: uploadedLogoUrl || null,
         }),
       });
       const data = await res.json();
@@ -169,6 +209,44 @@ export default function SignupPage() {
                     <Building2 className="w-3 h-3" />
                     Your site URL: <code className="font-mono bg-gray-100 px-1 rounded">platform.com/<strong>{slugPreview}</strong></code>
                   </p>
+                )}
+              </div>
+
+              {/* Logo Upload */}
+              <div className="space-y-1.5">
+                <Label>Company Logo <span className="text-muted-foreground font-normal">(optional)</span></Label>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp,image/svg+xml,image/gif"
+                  className="hidden"
+                  onChange={handleLogoChange}
+                />
+                {logoPreview ? (
+                  <div className="flex items-center gap-3 p-3 border rounded-xl bg-gray-50">
+                    <img src={logoPreview} alt="Logo preview" className="h-12 w-12 object-contain rounded-lg border bg-white" />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-gray-900 truncate">{logoFile?.name}</p>
+                      <p className="text-xs text-muted-foreground">{logoFile ? `${(logoFile.size / 1024).toFixed(0)} KB` : ""}</p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={removeLogo}
+                      className="p-1.5 rounded-lg hover:bg-gray-200 text-muted-foreground hover:text-gray-700 transition-colors"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => fileInputRef.current?.click()}
+                    className="w-full h-20 border-2 border-dashed rounded-xl flex flex-col items-center justify-center gap-1.5 text-muted-foreground hover:border-gray-400 hover:text-gray-600 transition-colors bg-gray-50 hover:bg-gray-100"
+                  >
+                    <ImageIcon className="w-5 h-5" />
+                    <span className="text-sm font-medium">Upload your logo</span>
+                    <span className="text-xs">PNG, JPG, SVG or WebP · max 5 MB</span>
+                  </button>
                 )}
               </div>
 

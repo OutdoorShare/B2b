@@ -33,7 +33,7 @@ function safeTenant(t: typeof tenantsTable.$inferSelect) {
 // Public endpoint — creates a new tenant account
 router.post("/public/signup", async (req, res) => {
   try {
-    const { companyName, contactName, email, password, plan, phone } = req.body;
+    const { companyName, contactName, email, password, plan, phone, logoUrl } = req.body;
 
     if (!companyName || !contactName || !email || !password) {
       res.status(400).json({ error: "companyName, contactName, email and password are required" });
@@ -93,6 +93,7 @@ router.post("/public/signup", async (req, res) => {
       name: companyName.trim(),
       email: email.toLowerCase().trim(),
       phone: phone?.trim() || "(555) 000-0000",
+      logoUrl: logoUrl?.trim() || null,
       tagline: "Quality gear for your next adventure",
       description: `Welcome to ${companyName.trim()}! We provide top-quality rental gear for your next adventure.`,
       location: "Your City, State",
