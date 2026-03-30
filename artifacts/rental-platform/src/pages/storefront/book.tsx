@@ -1031,58 +1031,66 @@ export default function StorefrontBook() {
           {/* ── SIDEBAR SUMMARY ── */}
           {step !== "confirmation" && (
             <div className="lg:col-span-2">
-              <div className="sticky top-32">
+              <div className="sticky top-32 space-y-4">
+
+                {/* Price breakdown — always at the top */}
+                {dateRange?.from && dateRange?.to && (
+                  <div className="bg-background rounded-2xl border shadow-sm p-5 space-y-3">
+                    <h3 className="font-bold text-sm flex items-center gap-2">
+                      <CalendarIcon className="w-4 h-4 text-primary" />
+                      Order Summary
+                    </h3>
+                    <Separator />
+                    <div className="space-y-2 text-sm">
+                      <div className="flex justify-between text-muted-foreground">
+                        <span className="flex items-center gap-1.5">
+                          <CalendarIcon className="w-3 h-3" /> {startFormatted}
+                        </span>
+                        <span>→ {endFormatted}</span>
+                      </div>
+                      <div className="flex justify-between text-muted-foreground">
+                        <span>${listing.pricePerDay}/day × {days} day{days > 1 ? "s" : ""}</span>
+                        <span>${subtotal.toFixed(2)}</span>
+                      </div>
+                      {availableAddons.filter(a => selectedAddonIds.has(a.id)).map(a => (
+                        <div key={a.id} className="flex justify-between text-muted-foreground">
+                          <span className="truncate mr-2">{a.name}</span>
+                          <span>+${(a.priceType === "per_day" ? a.price * days : a.price).toFixed(2)}</span>
+                        </div>
+                      ))}
+                      {deposit > 0 && (
+                        <div className="flex justify-between text-muted-foreground">
+                          <span>Refundable deposit</span>
+                          <span>${deposit.toFixed(2)}</span>
+                        </div>
+                      )}
+                      <Separator />
+                      <div className="flex justify-between font-bold text-base">
+                        <span>Total due</span>
+                        <span>${total.toFixed(2)}</span>
+                      </div>
+                      <p className="text-xs text-muted-foreground flex items-center gap-1">
+                        <Lock className="w-3 h-3" /> No charge until confirmed
+                      </p>
+                    </div>
+                  </div>
+                )}
+
+                {/* Listing photo + name — below the breakdown */}
                 <div className="bg-background rounded-2xl border shadow-sm overflow-hidden">
-                  <div className="aspect-[4/3] bg-muted relative">
+                  <div className="aspect-[16/9] bg-muted relative">
                     {listing.imageUrls?.[0] ? (
                       <img src={listing.imageUrls[0]} alt={listing.title} className="w-full h-full object-cover" />
                     ) : (
                       <div className="w-full h-full flex items-center justify-center text-muted-foreground text-sm">No image</div>
                     )}
                   </div>
-                  <div className="p-5 space-y-4">
-                    <div>
-                      <p className="text-xs font-semibold text-primary uppercase tracking-wider mb-0.5">{listing.categoryName}</p>
-                      <h3 className="font-bold text-base leading-snug">{listing.title}</h3>
-                    </div>
-                    {dateRange?.from && dateRange?.to && (
-                      <>
-                        <Separator />
-                        <div className="space-y-2 text-sm">
-                          <div className="flex justify-between">
-                            <span className="text-muted-foreground flex items-center gap-1.5">
-                              <CalendarIcon className="w-3.5 h-3.5" /> {startFormatted}
-                            </span>
-                            <span className="text-muted-foreground">→</span>
-                            <span className="text-muted-foreground">{endFormatted}</span>
-                          </div>
-                          <div className="flex justify-between text-muted-foreground">
-                            <span>${listing.pricePerDay}/day × {days} day{days > 1 ? "s" : ""}</span>
-                            <span>${subtotal.toFixed(2)}</span>
-                          </div>
-                          {availableAddons.filter(a => selectedAddonIds.has(a.id)).map(a => (
-                            <div key={a.id} className="flex justify-between text-muted-foreground">
-                              <span className="truncate mr-2">{a.name}</span>
-                              <span>+${(a.priceType === "per_day" ? a.price * days : a.price).toFixed(2)}</span>
-                            </div>
-                          ))}
-                          {deposit > 0 && (
-                            <div className="flex justify-between text-muted-foreground">
-                              <span>Refundable deposit</span>
-                              <span>${deposit.toFixed(2)}</span>
-                            </div>
-                          )}
-                          <Separator />
-                          <div className="flex justify-between font-bold text-base">
-                            <span>Total</span>
-                            <span>${total.toFixed(2)}</span>
-                          </div>
-                          <p className="text-xs text-muted-foreground">No charge until confirmed</p>
-                        </div>
-                      </>
-                    )}
+                  <div className="px-4 py-3">
+                    <p className="text-xs font-semibold text-primary uppercase tracking-wider mb-0.5">{listing.categoryName}</p>
+                    <h3 className="font-semibold text-sm leading-snug">{listing.title}</h3>
                   </div>
                 </div>
+
               </div>
             </div>
           )}
