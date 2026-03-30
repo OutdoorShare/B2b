@@ -33,7 +33,12 @@ router.get("/bookings", async (req, res) => {
       .where(conditions.length > 0 ? and(...conditions) : undefined)
       .orderBy(bookingsTable.createdAt);
 
-    const listings = await db.select({ id: listingsTable.id, title: listingsTable.title }).from(listingsTable);
+    // Only fetch listings scoped to this tenant for title lookup
+    const listingConditions = req.tenantId ? [eq(listingsTable.tenantId, req.tenantId)] : [];
+    const listings = await db
+      .select({ id: listingsTable.id, title: listingsTable.title })
+      .from(listingsTable)
+      .where(listingConditions.length > 0 ? and(...listingConditions) : undefined);
     const titleMap = Object.fromEntries(listings.map(l => [l.id, l.title]));
 
     res.json(bookings.map(b => formatBooking(b, titleMap[b.listingId] ?? "Unknown")));
@@ -47,8 +52,10 @@ router.post("/bookings", async (req, res) => {
   try {
     const body = req.body;
 
-    // Calculate total price
-    const [listing] = await db.select().from(listingsTable).where(eq(listingsTable.id, body.listingId));
+    // Verify listing belongs to this tenant
+    const listingConditions = [eq(listingsTable.id, body.listingId)];
+    if (req.tenantId) listingConditions.push(eq(listingsTable.tenantId, req.tenantId));
+    const [listing] = await db.select().from(listingsTable).where(and(...listingConditions));
     if (!listing) { res.status(404).json({ error: "Listing not found" }); return; }
 
     const start = new Date(body.startDate);
@@ -56,7 +63,6 @@ router.post("/bookings", async (req, res) => {
     const days = Math.max(1, Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)));
     const basePrice = parseFloat(listing.pricePerDay) * days * (body.quantity ?? 1);
 
-    // Sum selected addon prices
     const addons: Array<{ id: number; name: string; price: number; priceType: string; subtotal: number }> = body.addons ?? [];
     const addonsTotal = addons.reduce((sum, a) => {
       const subtotal = a.priceType === "per_day" ? a.price * days : a.price;
@@ -85,7 +91,9 @@ router.post("/bookings", async (req, res) => {
 
 router.get("/bookings/:id", async (req, res) => {
   try {
-    const [booking] = await db.select().from(bookingsTable).where(eq(bookingsTable.id, Number(req.params.id)));
+    const conditions = [eq(bookingsTable.id, Number(req.params.id))];
+    if (req.tenantId) conditions.push(eq(bookingsTable.tenantId, req.tenantId));
+    const [booking] = await db.select().from(bookingsTable).where(and(...conditions));
     if (!booking) { res.status(404).json({ error: "Not found" }); return; }
 
     const [listing] = await db.select({ title: listingsTable.title }).from(listingsTable).where(eq(listingsTable.id, booking.listingId));
@@ -99,14 +107,12 @@ router.get("/bookings/:id", async (req, res) => {
 router.put("/bookings/:id", async (req, res) => {
   try {
     const body = req.body;
+    const bookingId = Number(req.params.id);
     const updateData: Record<string, any> = { updatedAt: new Date() };
 
-    // Status & notes (existing)
     if (body.status !== undefined) updateData.status = body.status;
     if (body.adminNotes !== undefined) updateData.adminNotes = body.adminNotes;
     if (body.depositPaid !== undefined) updateData.depositPaid = body.depositPaid != null ? String(body.depositPaid) : null;
-
-    // Full edit fields
     if (body.customerName !== undefined) updateData.customerName = body.customerName;
     if (body.customerEmail !== undefined) updateData.customerEmail = body.customerEmail;
     if (body.customerPhone !== undefined) updateData.customerPhone = body.customerPhone || null;
@@ -123,8 +129,9 @@ router.put("/bookings/:id", async (req, res) => {
 
     // Recalculate total if dates/qty/listingId changed
     if (body.startDate !== undefined || body.endDate !== undefined || body.quantity !== undefined || body.listingId !== undefined) {
-      const bookingId = Number(req.params.id);
-      const [existing] = await db.select().from(bookingsTable).where(eq(bookingsTable.id, bookingId));
+      const existingConditions = [eq(bookingsTable.id, bookingId)];
+      if (req.tenantId) existingConditions.push(eq(bookingsTable.tenantId, req.tenantId));
+      const [existing] = await db.select().from(bookingsTable).where(and(...existingConditions));
       if (!existing) { res.status(404).json({ error: "Not found" }); return; }
 
       const listingId = body.listingId ?? existing.listingId;
@@ -142,17 +149,21 @@ router.put("/bookings/:id", async (req, res) => {
       }
     }
 
-    const previousStatus = (await db.select({ status: bookingsTable.status }).from(bookingsTable).where(eq(bookingsTable.id, Number(req.params.id))))[0]?.status;
+    // Get previous status for automation trigger — scoped to tenant
+    const statusConditions = [eq(bookingsTable.id, bookingId)];
+    if (req.tenantId) statusConditions.push(eq(bookingsTable.tenantId, req.tenantId));
+    const previousStatus = (await db.select({ status: bookingsTable.status }).from(bookingsTable).where(and(...statusConditions)))[0]?.status;
 
+    const whereConditions = [eq(bookingsTable.id, bookingId)];
+    if (req.tenantId) whereConditions.push(eq(bookingsTable.tenantId, req.tenantId));
     const [updated] = await db
       .update(bookingsTable)
       .set(updateData)
-      .where(eq(bookingsTable.id, Number(req.params.id)))
+      .where(and(...whereConditions))
       .returning();
 
     if (!updated) { res.status(404).json({ error: "Not found" }); return; }
 
-    // Fire automation if status changed
     if (body.status && body.status !== previousStatus) {
       const triggerMap: Record<string, string> = {
         confirmed: "booking_confirmed",
@@ -165,8 +176,8 @@ router.put("/bookings/:id", async (req, res) => {
         fetch(`http://localhost:8080/api/communications/send-automation`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ trigger, bookingId: updated.id }),
-        }).catch(() => {}); // Fire and forget — don't block the response
+          body: JSON.stringify({ trigger, bookingId: updated.id, tenantId: req.tenantId ?? null }),
+        }).catch(() => {});
       }
     }
 

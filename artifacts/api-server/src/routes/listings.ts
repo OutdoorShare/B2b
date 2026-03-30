@@ -7,7 +7,6 @@ import { sql } from "drizzle-orm";
 const router: IRouter = Router();
 
 function formatListing(l: typeof listingsTable.$inferSelect, categoryName?: string | null) {
-  // Count bookings for this listing
   return {
     ...l,
     categoryName: categoryName ?? null,
@@ -30,7 +29,7 @@ function formatListing(l: typeof listingsTable.$inferSelect, categoryName?: stri
 router.get("/listings", async (req, res) => {
   try {
     const { categoryId, status, search, minPrice, maxPrice } = req.query;
-    
+
     const conditions = [];
     if (req.tenantId) conditions.push(eq(listingsTable.tenantId, req.tenantId));
     if (categoryId) conditions.push(eq(listingsTable.categoryId, Number(categoryId)));
@@ -50,11 +49,17 @@ router.get("/listings", async (req, res) => {
       .where(conditions.length > 0 ? and(...conditions) : undefined)
       .orderBy(listingsTable.createdAt);
 
-    // Get categories for lookup
-    const cats = await db.select().from(categoriesTable);
+    // Scope categories to this tenant
+    const catConditions = req.tenantId ? [eq(categoriesTable.tenantId, req.tenantId)] : [];
+    const cats = await db
+      .select()
+      .from(categoriesTable)
+      .where(catConditions.length > 0 ? and(...catConditions) : undefined);
     const catMap = Object.fromEntries(cats.map(c => [c.id, c.name]));
 
-    // Get booking stats
+    // Scope booking stats to this tenant
+    const statsConditions: any[] = [sql`${bookingsTable.status} != 'cancelled'`];
+    if (req.tenantId) statsConditions.push(eq(bookingsTable.tenantId, req.tenantId));
     const bookingStats = await db
       .select({
         listingId: bookingsTable.listingId,
@@ -62,7 +67,7 @@ router.get("/listings", async (req, res) => {
         totalRevenue: sum(bookingsTable.totalPrice),
       })
       .from(bookingsTable)
-      .where(sql`${bookingsTable.status} != 'cancelled'`)
+      .where(and(...statsConditions))
       .groupBy(bookingsTable.listingId);
 
     const statsMap = Object.fromEntries(
@@ -105,19 +110,28 @@ router.post("/listings", async (req, res) => {
 
 router.get("/listings/:id", async (req, res) => {
   try {
-    const [listing] = await db.select().from(listingsTable).where(eq(listingsTable.id, Number(req.params.id)));
+    const conditions = [eq(listingsTable.id, Number(req.params.id))];
+    if (req.tenantId) conditions.push(eq(listingsTable.tenantId, req.tenantId));
+    const [listing] = await db.select().from(listingsTable).where(and(...conditions));
     if (!listing) { res.status(404).json({ error: "Not found" }); return; }
 
     let categoryName: string | null = null;
     if (listing.categoryId) {
-      const [cat] = await db.select().from(categoriesTable).where(eq(categoriesTable.id, listing.categoryId));
+      const catConditions = [eq(categoriesTable.id, listing.categoryId)];
+      if (req.tenantId) catConditions.push(eq(categoriesTable.tenantId, req.tenantId));
+      const [cat] = await db.select().from(categoriesTable).where(and(...catConditions));
       categoryName = cat?.name ?? null;
     }
 
+    const statsConditions = [
+      eq(bookingsTable.listingId, listing.id),
+      sql`${bookingsTable.status} != 'cancelled'`,
+    ];
+    if (req.tenantId) statsConditions.push(eq(bookingsTable.tenantId, req.tenantId) as any);
     const [stats] = await db
       .select({ totalBookings: count(), totalRevenue: sum(bookingsTable.totalPrice) })
       .from(bookingsTable)
-      .where(and(eq(bookingsTable.listingId, listing.id), sql`${bookingsTable.status} != 'cancelled'`));
+      .where(and(...statsConditions));
 
     res.json({
       ...formatListing(listing, categoryName),
@@ -139,10 +153,12 @@ router.put("/listings/:id", async (req, res) => {
     if (body.pricePerHour !== undefined) updateData.pricePerHour = body.pricePerHour != null ? String(body.pricePerHour) : null;
     if (body.depositAmount !== undefined) updateData.depositAmount = body.depositAmount != null ? String(body.depositAmount) : null;
 
+    const whereConditions = [eq(listingsTable.id, Number(req.params.id))];
+    if (req.tenantId) whereConditions.push(eq(listingsTable.tenantId, req.tenantId));
     const [updated] = await db
       .update(listingsTable)
       .set(updateData)
-      .where(eq(listingsTable.id, Number(req.params.id)))
+      .where(and(...whereConditions))
       .returning();
 
     if (!updated) { res.status(404).json({ error: "Not found" }); return; }
@@ -155,7 +171,9 @@ router.put("/listings/:id", async (req, res) => {
 
 router.delete("/listings/:id", async (req, res) => {
   try {
-    await db.delete(listingsTable).where(eq(listingsTable.id, Number(req.params.id)));
+    const whereConditions = [eq(listingsTable.id, Number(req.params.id))];
+    if (req.tenantId) whereConditions.push(eq(listingsTable.tenantId, req.tenantId));
+    await db.delete(listingsTable).where(and(...whereConditions));
     res.status(204).send();
   } catch (err) {
     req.log.error(err);

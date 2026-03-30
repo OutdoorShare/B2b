@@ -15,7 +15,6 @@ function formatClaim(c: typeof claimsTable.$inferSelect) {
   };
 }
 
-// GET all claims (with optional filters)
 router.get("/claims", async (req, res) => {
   try {
     const { status, type, customerEmail, startDate, endDate } = req.query;
@@ -40,28 +39,29 @@ router.get("/claims", async (req, res) => {
   }
 });
 
-// GET single claim
 router.get("/claims/:id", async (req, res) => {
   try {
-    const [claim] = await db
-      .select()
-      .from(claimsTable)
-      .where(eq(claimsTable.id, Number(req.params.id)));
+    const conditions = [eq(claimsTable.id, Number(req.params.id))];
+    if (req.tenantId) conditions.push(eq(claimsTable.tenantId, req.tenantId));
+    const [claim] = await db.select().from(claimsTable).where(and(...conditions));
     if (!claim) return res.status(404).json({ error: "Not found" });
 
-    // Attach booking + listing info if available
     let bookingInfo = null;
     let listingInfo = null;
     if (claim.bookingId) {
+      const bookingConditions = [eq(bookingsTable.id, claim.bookingId)];
+      if (req.tenantId) bookingConditions.push(eq(bookingsTable.tenantId, req.tenantId));
       const [b] = await db
         .select({ id: bookingsTable.id, startDate: bookingsTable.startDate, endDate: bookingsTable.endDate, totalPrice: bookingsTable.totalPrice })
-        .from(bookingsTable).where(eq(bookingsTable.id, claim.bookingId));
+        .from(bookingsTable).where(and(...bookingConditions));
       bookingInfo = b ?? null;
     }
     if (claim.listingId) {
+      const listingConditions = [eq(listingsTable.id, claim.listingId)];
+      if (req.tenantId) listingConditions.push(eq(listingsTable.tenantId, req.tenantId));
       const [l] = await db
         .select({ id: listingsTable.id, title: listingsTable.title, imageUrls: listingsTable.imageUrls })
-        .from(listingsTable).where(eq(listingsTable.id, claim.listingId));
+        .from(listingsTable).where(and(...listingConditions));
       listingInfo = l ?? null;
     }
 
@@ -72,7 +72,6 @@ router.get("/claims/:id", async (req, res) => {
   }
 });
 
-// POST create a claim
 router.post("/claims", async (req, res) => {
   try {
     const { bookingId, listingId, customerName, customerEmail, type, description, claimedAmount, evidenceUrls } = req.body;
@@ -106,11 +105,12 @@ router.post("/claims", async (req, res) => {
   }
 });
 
-// PUT update a claim (status, notes, settled amount)
 router.put("/claims/:id", async (req, res) => {
   try {
     const { status, adminNotes, settledAmount, claimedAmount, description, type, evidenceUrls } = req.body;
 
+    const whereConditions = [eq(claimsTable.id, Number(req.params.id))];
+    if (req.tenantId) whereConditions.push(eq(claimsTable.tenantId, req.tenantId));
     const [updated] = await db
       .update(claimsTable)
       .set({
@@ -123,7 +123,7 @@ router.put("/claims/:id", async (req, res) => {
         ...(evidenceUrls !== undefined && { evidenceUrls: evidenceUrls ? JSON.stringify(evidenceUrls) : null }),
         updatedAt: new Date(),
       })
-      .where(eq(claimsTable.id, Number(req.params.id)))
+      .where(and(...whereConditions))
       .returning();
 
     if (!updated) return res.status(404).json({ error: "Not found" });
@@ -134,10 +134,11 @@ router.put("/claims/:id", async (req, res) => {
   }
 });
 
-// DELETE a claim
 router.delete("/claims/:id", async (req, res) => {
   try {
-    await db.delete(claimsTable).where(eq(claimsTable.id, Number(req.params.id)));
+    const whereConditions = [eq(claimsTable.id, Number(req.params.id))];
+    if (req.tenantId) whereConditions.push(eq(claimsTable.tenantId, req.tenantId));
+    await db.delete(claimsTable).where(and(...whereConditions));
     res.json({ success: true });
   } catch (err) {
     req.log.error(err);

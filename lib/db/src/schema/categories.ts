@@ -6,7 +6,7 @@ export const categoriesTable = pgTable("categories", {
   id: serial("id").primaryKey(),
   tenantId: integer("tenant_id"),
   name: text("name").notNull(),
-  slug: text("slug").notNull().unique(),
+  slug: text("slug").notNull(),
   icon: text("icon"),
   description: text("description"),
   createdAt: timestamp("created_at").defaultNow().notNull(),

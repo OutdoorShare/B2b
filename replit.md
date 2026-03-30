@@ -124,6 +124,20 @@ Tables:
 - `customers` — Customer accounts (tenantId, scoped per company)
 - `admin_users` — Staff accounts (tenantId)
 - `listing_addons` — Optional/required add-ons per listing
+- `listing_units` — Individual unit tracking per listing (serial numbers, etc.)
+- `message_logs` — Per-tenant outbound communication history (tenantId)
+- `automation_settings` — Per-tenant email/SMS automation templates (tenantId, seeded on first access)
+
+## Multi-Tenant Isolation Rules
+
+Every data-writing endpoint stamps `tenantId` from `req.tenantId`. Every data-reading endpoint filters by `req.tenantId`. Single-record lookups (GET/PUT/DELETE `/:id`) include tenant check in WHERE clause so one tenant cannot read/modify another's records. A new tenant starts with a completely empty database view.
+
+- **business_profile**: scoped by `tenant_id` column; auto-created on first GET
+- **categories**: scoped by `tenant_id`; slug uniqueness is per-tenant (no global unique constraint)
+- **listings, bookings, quotes, claims**: scoped by `tenant_id` on all CRUD + list operations
+- **analytics**: all summary, revenue, top-listings, booking-volume, booking-status, renter-locations queries scoped by `tenant_id`
+- **communications/renters**: scoped to tenant bookings; message_logs scoped by `tenant_id`
+- **automation_settings**: per-tenant, seeded on first GET `/communications/automations`
 
 ## API Routes
 

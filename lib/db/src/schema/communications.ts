@@ -1,7 +1,8 @@
-import { pgTable, serial, text, boolean, integer, timestamp } from "drizzle-orm/pg-core";
+import { pgTable, serial, text, boolean, integer, timestamp, uniqueIndex } from "drizzle-orm/pg-core";
 
 export const messageLogs = pgTable("message_logs", {
   id: serial("id").primaryKey(),
+  tenantId: integer("tenant_id"),
   bookingId: integer("booking_id"),
   customerName: text("customer_name").notNull(),
   customerEmail: text("customer_email").notNull(),
@@ -16,7 +17,8 @@ export const messageLogs = pgTable("message_logs", {
 
 export const automationSettings = pgTable("automation_settings", {
   id: serial("id").primaryKey(),
-  trigger: text("trigger").notNull().unique(),
+  tenantId: integer("tenant_id"),
+  trigger: text("trigger").notNull(),
   name: text("name").notNull(),
   description: text("description"),
   emailEnabled: boolean("email_enabled").notNull().default(true),

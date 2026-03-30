@@ -1,7 +1,7 @@
 import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
 import { quotesTable, listingsTable } from "@workspace/db/schema";
-import { eq } from "drizzle-orm";
+import { eq, and } from "drizzle-orm";
 
 const router: IRouter = Router();
 
@@ -32,10 +32,12 @@ router.post("/quotes", async (req, res) => {
   try {
     const body = req.body;
 
-    // Enrich items with listing titles
+    // Enrich items with listing titles — only from this tenant's listings
     const enrichedItems = await Promise.all(
       (body.items ?? []).map(async (item: any) => {
-        const [listing] = await db.select({ title: listingsTable.title }).from(listingsTable).where(eq(listingsTable.id, item.listingId));
+        const listingConditions = [eq(listingsTable.id, item.listingId)];
+        if (req.tenantId) listingConditions.push(eq(listingsTable.tenantId, req.tenantId));
+        const [listing] = await db.select({ title: listingsTable.title }).from(listingsTable).where(and(...listingConditions));
         const subtotal = item.pricePerDay * item.days * item.quantity;
         return {
           listingId: item.listingId,
@@ -82,8 +84,9 @@ router.put("/quotes/:id", async (req, res) => {
     if (body.status) updateData.status = body.status;
     if (body.discount !== undefined) {
       updateData.discount = String(body.discount);
-      // Recalculate total
-      const [existing] = await db.select().from(quotesTable).where(eq(quotesTable.id, Number(req.params.id)));
+      const conditions = [eq(quotesTable.id, Number(req.params.id))];
+      if (req.tenantId) conditions.push(eq(quotesTable.tenantId, req.tenantId));
+      const [existing] = await db.select().from(quotesTable).where(and(...conditions));
       if (existing) {
         updateData.totalPrice = String(Math.max(0, parseFloat(existing.subtotal) - body.discount));
       }
@@ -91,10 +94,12 @@ router.put("/quotes/:id", async (req, res) => {
     if (body.notes !== undefined) updateData.notes = body.notes;
     if (body.validUntil !== undefined) updateData.validUntil = body.validUntil;
 
+    const whereConditions = [eq(quotesTable.id, Number(req.params.id))];
+    if (req.tenantId) whereConditions.push(eq(quotesTable.tenantId, req.tenantId));
     const [updated] = await db
       .update(quotesTable)
       .set(updateData)
-      .where(eq(quotesTable.id, Number(req.params.id)))
+      .where(and(...whereConditions))
       .returning();
 
     if (!updated) { res.status(404).json({ error: "Not found" }); return; }
