@@ -1,9 +1,22 @@
 import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
-import { tenantsTable, businessProfileTable } from "@workspace/db/schema";
+import { tenantsTable, businessProfileTable, categoriesTable } from "@workspace/db/schema";
 import { eq } from "drizzle-orm";
-import { scrypt, randomBytes, timingSafeEqual } from "crypto";
+import { scrypt, randomBytes } from "crypto";
 import { promisify } from "util";
+
+const DEFAULT_CATEGORIES = [
+  { name: "Jet Ski",         slug: "jet-ski",         icon: "🚤" },
+  { name: "RV",              slug: "rv",               icon: "🚌" },
+  { name: "ATV",             slug: "atv",              icon: "🏍️" },
+  { name: "UTV",             slug: "utv",              icon: "🚗" },
+  { name: "Boat",            slug: "boat",             icon: "⛵" },
+  { name: "Dirt Bike",       slug: "dirt-bike",        icon: "🏍️" },
+  { name: "Ebike",           slug: "ebike",            icon: "🚲" },
+  { name: "Utility Trailer", slug: "utility-trailer",  icon: "🚛" },
+  { name: "Snowmobile",      slug: "snowmobile",       icon: "❄️" },
+  { name: "Towing Vehicle",  slug: "towing-vehicle",   icon: "🚙" },
+];
 
 const scryptAsync = promisify(scrypt);
 const router: IRouter = Router();
@@ -99,6 +112,11 @@ router.post("/public/signup", async (req, res) => {
       location: "Your City, State",
       updatedAt: new Date(),
     });
+
+    // Seed default categories so the listing form dropdown is pre-populated
+    await db.insert(categoriesTable).values(
+      DEFAULT_CATEGORIES.map(c => ({ ...c, tenantId: tenant.id }))
+    );
 
     res.status(201).json({
       tenant: safeTenant(tenant),
