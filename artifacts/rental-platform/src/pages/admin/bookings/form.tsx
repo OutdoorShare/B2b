@@ -13,7 +13,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
 import { useToast } from "@/hooks/use-toast";
-import { ArrowLeft, CalendarDays, User, DollarSign, Package, Info } from "lucide-react";
+import { ArrowLeft, CalendarDays, User, DollarSign, Package, Info, Hash } from "lucide-react";
 import { format, addDays, differenceInDays } from "date-fns";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
@@ -48,6 +48,11 @@ export default function AdminBookingForm() {
   const [error, setError] = useState("");
   const [listingDetails, setListingDetails] = useState<any | null>(null);
 
+  // Per-unit assignment (VIN / HIN / serial)
+  const [availableUnits, setAvailableUnits] = useState<{ id: number; unitIdentifier: string; identifierType: string; label: string | null; status: string }[]>([]);
+  // assignedSlots[i] = unitId string (from dropdown) or free-text identifier
+  const [assignedSlots, setAssignedSlots] = useState<string[]>([""]);
+
   const { data: listings } = useGetListings(
     {},
     { query: { queryKey: getGetListingsQueryKey({}) } }
@@ -74,6 +79,18 @@ export default function AdminBookingForm() {
         adminNotes: existingBooking.adminNotes ?? "",
         depositPaid: existingBooking.depositPaid != null ? String(existingBooking.depositPaid) : "",
       });
+      // Prefill assigned unit slots
+      try {
+        const raw = (existingBooking as any).assignedUnitIds;
+        const parsed = raw ? JSON.parse(raw) : [];
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          setAssignedSlots(parsed.map(String));
+        } else {
+          setAssignedSlots(Array(existingBooking.quantity).fill(""));
+        }
+      } catch {
+        setAssignedSlots(Array(existingBooking.quantity).fill(""));
+      }
     }
   }, [isEditing, existingBooking]);
 
@@ -83,6 +100,25 @@ export default function AdminBookingForm() {
     const listing = listings?.find(l => l.id === Number(form.listingId));
     if (listing) setListingDetails(listing);
   }, [form.listingId, listings]);
+
+  // Fetch available units when listing changes
+  useEffect(() => {
+    if (!form.listingId) { setAvailableUnits([]); return; }
+    fetch(`${BASE}/api/listings/${form.listingId}/units`)
+      .then(r => r.json())
+      .then(data => { if (Array.isArray(data)) setAvailableUnits(data); })
+      .catch(() => {});
+  }, [form.listingId]);
+
+  // Keep assignedSlots array length in sync with quantity
+  useEffect(() => {
+    const qty = Math.max(1, Number(form.quantity) || 1);
+    setAssignedSlots(prev => {
+      if (prev.length === qty) return prev;
+      if (prev.length < qty) return [...prev, ...Array(qty - prev.length).fill("")];
+      return prev.slice(0, qty);
+    });
+  }, [form.quantity]);
 
   const days = useMemo(() => {
     try {
@@ -117,6 +153,7 @@ export default function AdminBookingForm() {
 
     setSaving(true);
     try {
+      const filledSlots = assignedSlots.filter(s => s.trim() !== "");
       const payload: any = {
         listingId: Number(form.listingId),
         customerName: form.customerName.trim(),
@@ -130,6 +167,7 @@ export default function AdminBookingForm() {
         notes: form.notes || null,
         adminNotes: form.adminNotes || null,
         depositPaid: form.depositPaid ? Number(form.depositPaid) : null,
+        assignedUnitIds: filledSlots.length > 0 ? filledSlots : [],
       };
 
       const url = isEditing ? `${BASE}/api/bookings/${editId}` : `${BASE}/api/bookings`;
@@ -230,6 +268,74 @@ export default function AdminBookingForm() {
                   </Select>
                 </div>
               </div>
+
+              {/* ── Per-unit VIN / HIN / Serial assignment ── */}
+              {form.listingId && (
+                <div className="space-y-3 pt-1">
+                  <div className="flex items-center gap-2">
+                    <Hash className="w-4 h-4 text-primary" />
+                    <span className="font-semibold text-sm">
+                      Unit Assignment
+                    </span>
+                    <span className="text-xs text-muted-foreground ml-1">
+                      — {assignedSlots.length} unit{assignedSlots.length !== 1 ? "s" : ""} required
+                    </span>
+                  </div>
+                  <div className="space-y-2">
+                    {assignedSlots.map((val, i) => {
+                      const identType = availableUnits[0]?.identifierType ?? "serial";
+                      const label = identType === "vin" ? "VIN" : identType === "hin" ? "HIN" : "Serial #";
+                      return (
+                        <div key={i} className="flex items-center gap-2">
+                          <span className="text-xs font-medium text-muted-foreground w-14 shrink-0">
+                            Unit {i + 1}
+                          </span>
+                          {availableUnits.length > 0 ? (
+                            <Select
+                              value={val}
+                              onValueChange={v => setAssignedSlots(prev => { const n = [...prev]; n[i] = v; return n; })}
+                            >
+                              <SelectTrigger className={`flex-1 h-9 text-sm ${!val ? "border-destructive/60 bg-destructive/5" : ""}`}>
+                                <SelectValue placeholder={`Select ${label}…`} />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {availableUnits.map(u => (
+                                  <SelectItem
+                                    key={u.id}
+                                    value={String(u.id)}
+                                    disabled={u.status !== "available" && assignedSlots[i] !== String(u.id)}
+                                  >
+                                    <span className="font-mono">{u.unitIdentifier}</span>
+                                    {u.label && <span className="text-muted-foreground ml-1.5">— {u.label}</span>}
+                                    {u.status !== "available" && (
+                                      <span className="ml-1.5 text-xs text-amber-600">({u.status})</span>
+                                    )}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          ) : (
+                            <Input
+                              className={`flex-1 h-9 text-sm font-mono ${!val.trim() ? "border-destructive/60 bg-destructive/5" : ""}`}
+                              placeholder={`Enter ${label} for unit ${i + 1}`}
+                              value={val}
+                              onChange={e => setAssignedSlots(prev => { const n = [...prev]; n[i] = e.target.value; return n; })}
+                            />
+                          )}
+                          {!val && (
+                            <span className="text-[10px] text-destructive font-semibold shrink-0">Required</span>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                  {availableUnits.length === 0 && (
+                    <p className="text-xs text-muted-foreground">
+                      No units registered for this listing. Enter identifiers manually, or add units in the listing detail.
+                    </p>
+                  )}
+                </div>
+              )}
             </CardContent>
           </Card>
 

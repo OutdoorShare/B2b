@@ -65,11 +65,13 @@ router.post("/bookings", async (req, res) => {
     const totalPrice = basePrice + addonsTotal;
     const addonsData = addons.length > 0 ? JSON.stringify(addons) : null;
 
-    const { addons: _addons, ...restBody } = body;
+    const { addons: _addons, assignedUnitIds: rawUnitIds, ...restBody } = body;
+    const assignedUnitIds = Array.isArray(rawUnitIds) && rawUnitIds.length > 0 ? JSON.stringify(rawUnitIds) : null;
     const [created] = await db.insert(bookingsTable).values({
       ...restBody,
       totalPrice: String(totalPrice),
       addonsData,
+      assignedUnitIds,
     }).returning();
 
     res.status(201).json(formatBooking(created, listing.title));
@@ -111,6 +113,11 @@ router.put("/bookings/:id", async (req, res) => {
     if (body.quantity !== undefined) updateData.quantity = Number(body.quantity);
     if (body.notes !== undefined) updateData.notes = body.notes || null;
     if (body.source !== undefined) updateData.source = body.source;
+    if (body.assignedUnitIds !== undefined) {
+      updateData.assignedUnitIds = Array.isArray(body.assignedUnitIds) && body.assignedUnitIds.length > 0
+        ? JSON.stringify(body.assignedUnitIds)
+        : null;
+    }
 
     // Recalculate total if dates/qty/listingId changed
     if (body.startDate !== undefined || body.endDate !== undefined || body.quantity !== undefined || body.listingId !== undefined) {
