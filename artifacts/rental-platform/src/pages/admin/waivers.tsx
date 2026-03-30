@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
 import { Link } from "wouter";
-import { FileSignature, Search, ChevronDown, ChevronUp, ExternalLink } from "lucide-react";
+import { FileSignature, Search, ChevronDown, ChevronUp, ExternalLink, Download } from "lucide-react";
 import { format } from "date-fns";
 
 export default function AdminWaivers() {
@@ -87,13 +87,28 @@ export default function AdminWaivers() {
                         {booking.customerEmail}
                       </div>
                     </div>
-                    <div className="text-right shrink-0">
-                      <div className="text-xs text-muted-foreground">Booking</div>
-                      <Link href={`/admin/bookings/${booking.id}`}>
-                        <span className="text-sm font-medium text-primary hover:underline flex items-center gap-1 justify-end">
-                          #{booking.id} <ExternalLink className="w-3 h-3" />
-                        </span>
-                      </Link>
+                    <div className="flex items-center gap-2 shrink-0">
+                      {booking.agreementPdfPath && (
+                        <a
+                          href={`${import.meta.env.BASE_URL.replace(/\/$/, "")}/api/bookings/${booking.id}/agreement-pdf`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          download={`rental-agreement-${booking.id}.pdf`}
+                        >
+                          <Button variant="outline" size="sm" className="gap-1.5">
+                            <Download className="w-3.5 h-3.5" />
+                            PDF
+                          </Button>
+                        </a>
+                      )}
+                      <div className="text-right">
+                        <div className="text-xs text-muted-foreground">Booking</div>
+                        <Link href={`/admin/bookings/${booking.id}`}>
+                          <span className="text-sm font-medium text-primary hover:underline flex items-center gap-1 justify-end">
+                            #{booking.id} <ExternalLink className="w-3 h-3" />
+                          </span>
+                        </Link>
+                      </div>
                     </div>
                   </div>
                 </CardHeader>
@@ -123,6 +138,22 @@ export default function AdminWaivers() {
                       </div>
                     </div>
                   </div>
+
+                  {/* Signature preview */}
+                  {booking.agreementSignature && (
+                    <div className="flex items-center gap-3">
+                      <div>
+                        <div className="text-xs text-muted-foreground mb-1">Signature</div>
+                        <div className="border rounded-lg bg-white p-2 inline-block">
+                          <img
+                            src={booking.agreementSignature}
+                            alt="Customer signature"
+                            className="max-h-10 w-auto max-w-[180px]"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  )}
 
                   {booking.agreementText && (
                     <>

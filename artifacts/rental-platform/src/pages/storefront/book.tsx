@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useRef, useCallback } from "react";
 import { useLocation, useParams } from "wouter";
 import type { DateRange } from "react-day-picker";
 import { 
@@ -129,9 +129,11 @@ export default function StorefrontBook() {
   const [billingZip, setBillingZip] = useState(session?.billingZip ?? "");
 
   // Step 3: agreement
-  const [agreeSigned, setAgreeSigned] = useState("");
   const [agreeChecked, setAgreeChecked] = useState(false);
   const [agreementText, setAgreementText] = useState("");
+  const sigCanvasRef = useRef<HTMLCanvasElement>(null);
+  const isDrawingRef = useRef(false);
+  const [sigHasContent, setSigHasContent] = useState(false);
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [confirmedBooking, setConfirmedBooking] = useState<{ id: number; totalPrice: number } | null>(null);
@@ -279,13 +281,66 @@ export default function StorefrontBook() {
     setStep("agreement");
   };
 
+  // ── Signature canvas helpers ─────────────────────────────────────────────
+  const getSigPos = useCallback((e: MouseEvent | TouchEvent, canvas: HTMLCanvasElement) => {
+    const rect = canvas.getBoundingClientRect();
+    const scaleX = canvas.width / rect.width;
+    const scaleY = canvas.height / rect.height;
+    const clientX = "touches" in e ? e.touches[0].clientX : e.clientX;
+    const clientY = "touches" in e ? e.touches[0].clientY : e.clientY;
+    return { x: (clientX - rect.left) * scaleX, y: (clientY - rect.top) * scaleY };
+  }, []);
+
+  const startSigDraw = useCallback((e: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>) => {
+    e.preventDefault();
+    const canvas = sigCanvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+    isDrawingRef.current = true;
+    const pos = getSigPos(e.nativeEvent, canvas);
+    ctx.beginPath();
+    ctx.moveTo(pos.x, pos.y);
+  }, [getSigPos]);
+
+  const drawSig = useCallback((e: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>) => {
+    e.preventDefault();
+    if (!isDrawingRef.current) return;
+    const canvas = sigCanvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+    const pos = getSigPos(e.nativeEvent, canvas);
+    ctx.lineWidth = 2.5;
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
+    ctx.strokeStyle = "#111111";
+    ctx.lineTo(pos.x, pos.y);
+    ctx.stroke();
+    setSigHasContent(true);
+  }, [getSigPos]);
+
+  const stopSigDraw = useCallback(() => { isDrawingRef.current = false; }, []);
+
+  const clearSig = useCallback(() => {
+    const canvas = sigCanvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    setSigHasContent(false);
+  }, []);
+
+  // ── Final booking submission ──────────────────────────────────────────────
   const handleFinalSubmit = async () => {
-    if (!agreeSigned.trim() || agreeSigned.trim().toLowerCase() !== name.trim().toLowerCase()) {
-      toast({ title: "Please type your full name to sign the agreement", variant: "destructive" }); return;
+    if (!sigHasContent) {
+      toast({ title: "Please draw your signature to proceed", variant: "destructive" }); return;
     }
     if (!agreeChecked) {
       toast({ title: "Please accept the rental terms", variant: "destructive" }); return;
     }
+
+    const signatureDataUrl = sigCanvasRef.current?.toDataURL("image/png") ?? "";
 
     setIsSubmitting(true);
     try {
@@ -312,8 +367,9 @@ export default function StorefrontBook() {
           notes: notes || undefined,
           source: "online",
           addons: selectedAddons,
-          agreementSignerName: agreeSigned.trim(),
+          agreementSignerName: name.trim(),
           agreementText: agreementText || undefined,
+          agreementSignatureDataUrl: signatureDataUrl,
         })
       });
       const data = await res.json();
@@ -790,20 +846,56 @@ export default function StorefrontBook() {
                 </div>
 
                 <div className="bg-background rounded-2xl border shadow-sm p-6 space-y-4">
-                  <div className="flex items-center gap-2">
-                    <FileText className="w-4 h-4 text-primary" />
-                    <h3 className="font-semibold">Sign the Agreement</h3>
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <FileText className="w-4 h-4 text-primary" />
+                      <h3 className="font-semibold">Sign the Agreement</h3>
+                    </div>
+                    {sigHasContent && (
+                      <button
+                        type="button"
+                        onClick={clearSig}
+                        className="text-xs text-muted-foreground hover:text-destructive underline"
+                      >
+                        Clear
+                      </button>
+                    )}
                   </div>
-                  <p className="text-sm text-muted-foreground">Type your full legal name below to sign</p>
-                  <Input
-                    placeholder={`Type your name: ${name}`}
-                    value={agreeSigned}
-                    onChange={e => setAgreeSigned(e.target.value)}
-                    className="h-11 font-medium"
-                  />
-                  {agreeSigned && agreeSigned.trim().toLowerCase() !== name.trim().toLowerCase() && (
-                    <p className="text-xs text-amber-600">Must match exactly: <strong>{name}</strong></p>
-                  )}
+                  <p className="text-sm text-muted-foreground">
+                    Draw your signature below using your mouse or finger
+                  </p>
+
+                  {/* Signature canvas */}
+                  <div className={`relative border-2 rounded-xl overflow-hidden bg-white transition-colors ${sigHasContent ? "border-primary" : "border-dashed border-muted-foreground/40"}`} style={{ touchAction: "none" }}>
+                    <canvas
+                      ref={sigCanvasRef}
+                      width={800}
+                      height={200}
+                      className="w-full block cursor-crosshair"
+                      style={{ height: "160px" }}
+                      onMouseDown={startSigDraw}
+                      onMouseMove={drawSig}
+                      onMouseUp={stopSigDraw}
+                      onMouseLeave={stopSigDraw}
+                      onTouchStart={startSigDraw}
+                      onTouchMove={drawSig}
+                      onTouchEnd={stopSigDraw}
+                    />
+                    {!sigHasContent && (
+                      <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none select-none">
+                        <span className="text-muted-foreground/50 text-sm font-light italic">Sign here</span>
+                        <span className="text-muted-foreground/30 text-xs mt-1">{name}</span>
+                      </div>
+                    )}
+                    {/* Bottom border line simulating a signature line */}
+                    <div className="absolute bottom-8 left-8 right-8 border-b border-muted-foreground/20 pointer-events-none" />
+                  </div>
+
+                  <p className="text-xs text-muted-foreground flex items-center gap-1.5">
+                    <User className="w-3 h-3" />
+                    Signing as: <strong>{name}</strong>
+                  </p>
+
                   <label className="flex items-start gap-3 cursor-pointer">
                     <input type="checkbox" checked={agreeChecked} onChange={e => setAgreeChecked(e.target.checked)} className="mt-0.5 w-4 h-4 accent-primary" />
                     <span className="text-sm">I have read and agree to all terms in the rental agreement above, including the cancellation policy and damage liability.</span>
@@ -814,7 +906,7 @@ export default function StorefrontBook() {
                   size="lg"
                   className="w-full h-13 text-base font-bold rounded-xl"
                   onClick={handleFinalSubmit}
-                  disabled={isSubmitting || !agreeChecked || agreeSigned.trim().toLowerCase() !== name.trim().toLowerCase()}
+                  disabled={isSubmitting || !agreeChecked || !sigHasContent}
                 >
                   {isSubmitting ? "Submitting..." : "Sign & Submit Booking Request"}
                   <CheckCircle2 className="w-4 h-4 ml-2" />

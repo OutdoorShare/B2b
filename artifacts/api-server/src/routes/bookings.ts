@@ -1,7 +1,12 @@
 import { Router, type IRouter } from "express";
+import fs from "fs";
+import path from "path";
 import { db } from "@workspace/db";
-import { bookingsTable, listingsTable } from "@workspace/db/schema";
+import { bookingsTable, listingsTable, businessProfileTable } from "@workspace/db/schema";
 import { eq, and, gte, lte } from "drizzle-orm";
+import { generateAgreementPdf } from "../lib/generate-agreement-pdf";
+
+const UPLOADS_DIR_BOOKINGS = path.resolve(process.cwd(), "uploads");
 
 const router: IRouter = Router();
 
@@ -72,7 +77,7 @@ router.post("/bookings", async (req, res) => {
     const totalPrice = basePrice + addonsTotal;
     const addonsData = addons.length > 0 ? JSON.stringify(addons) : null;
 
-    const { addons: _addons, assignedUnitIds: rawUnitIds, agreementSignedAt: _ignoredTs, ...restBody } = body;
+    const { addons: _addons, assignedUnitIds: rawUnitIds, agreementSignedAt: _ignoredTs, agreementSignatureDataUrl, ...restBody } = body;
     const assignedUnitIds = Array.isArray(rawUnitIds) && rawUnitIds.length > 0 ? JSON.stringify(rawUnitIds) : null;
     // Set agreementSignedAt server-side when the customer provides their signature
     const agreementSignedAt = restBody.agreementSignerName ? new Date() : null;
@@ -83,7 +88,42 @@ router.post("/bookings", async (req, res) => {
       addonsData,
       assignedUnitIds,
       agreementSignedAt,
+      agreementSignature: agreementSignatureDataUrl ?? null,
     }).returning();
+
+    // Generate and save agreement PDF in the background
+    if (agreementSignatureDataUrl && restBody.agreementSignerName && restBody.agreementText) {
+      try {
+        // Fetch company name for the PDF header
+        let companyName = "Rental Company";
+        if (req.tenantId) {
+          const [biz] = await db.select({ businessName: businessProfileTable.businessName })
+            .from(businessProfileTable)
+            .where(eq(businessProfileTable.tenantId, req.tenantId));
+          if (biz?.businessName) companyName = biz.businessName;
+        }
+        const signedAtDate = agreementSignedAt ?? new Date();
+        const pdfFilename = await generateAgreementPdf({
+          bookingId: created.id,
+          companyName,
+          customerName: created.customerName,
+          customerEmail: created.customerEmail,
+          listingTitle: listing.title,
+          startDate: created.startDate,
+          endDate: created.endDate,
+          agreementText: restBody.agreementText,
+          signerName: restBody.agreementSignerName,
+          signedAt: signedAtDate,
+          signatureDataUrl: agreementSignatureDataUrl,
+        });
+        await db.update(bookingsTable)
+          .set({ agreementPdfPath: pdfFilename })
+          .where(eq(bookingsTable.id, created.id));
+        created.agreementPdfPath = pdfFilename;
+      } catch (pdfErr) {
+        req.log.error(pdfErr, "Failed to generate agreement PDF");
+      }
+    }
 
     res.status(201).json(formatBooking(created, listing.title));
   } catch (err) {
@@ -104,6 +144,26 @@ router.get("/bookings/:id", async (req, res) => {
   } catch (err) {
     req.log.error(err);
     res.status(500).json({ error: "Failed to fetch booking" });
+  }
+});
+
+router.get("/bookings/:id/agreement-pdf", async (req, res) => {
+  try {
+    const conditions = [eq(bookingsTable.id, Number(req.params.id))];
+    if (req.tenantId) conditions.push(eq(bookingsTable.tenantId, req.tenantId));
+    const [booking] = await db.select().from(bookingsTable).where(and(...conditions));
+    if (!booking) { res.status(404).json({ error: "Not found" }); return; }
+    if (!booking.agreementPdfPath) { res.status(404).json({ error: "No PDF available for this booking" }); return; }
+
+    const filepath = path.join(UPLOADS_DIR_BOOKINGS, booking.agreementPdfPath);
+    if (!fs.existsSync(filepath)) { res.status(404).json({ error: "PDF file not found" }); return; }
+
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader("Content-Disposition", `attachment; filename="rental-agreement-${booking.id}.pdf"`);
+    fs.createReadStream(filepath).pipe(res);
+  } catch (err) {
+    req.log.error(err);
+    res.status(500).json({ error: "Failed to serve PDF" });
   }
 });
 

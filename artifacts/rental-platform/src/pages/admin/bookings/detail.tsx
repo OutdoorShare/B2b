@@ -15,7 +15,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { Link, useLocation } from "wouter";
-import { ArrowLeft, User, Phone, Mail, Calendar, Package, StickyNote, ShieldAlert, Pencil, FileSignature, ChevronDown, ChevronUp } from "lucide-react";
+import { ArrowLeft, User, Phone, Mail, Calendar, Package, StickyNote, ShieldAlert, Pencil, FileSignature, ChevronDown, ChevronUp, Download } from "lucide-react";
 import { format, differenceInDays } from "date-fns";
 
 export default function AdminBookingDetail() {
@@ -257,9 +257,24 @@ export default function AdminBookingDetail() {
                     <FileSignature className="w-5 h-5 text-green-600" />
                     Signed Rental Agreement
                   </CardTitle>
-                  <Badge variant="outline" className="border-green-300 text-green-700 bg-green-50">
-                    Signed
-                  </Badge>
+                  <div className="flex items-center gap-2">
+                    {(booking as any).agreementPdfPath && (
+                      <a
+                        href={`${import.meta.env.BASE_URL.replace(/\/$/, "")}/api/bookings/${id}/agreement-pdf`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        download={`rental-agreement-${id}.pdf`}
+                      >
+                        <Button variant="outline" size="sm" className="gap-1.5">
+                          <Download className="w-3.5 h-3.5" />
+                          Download PDF
+                        </Button>
+                      </a>
+                    )}
+                    <Badge variant="outline" className="border-green-300 text-green-700 bg-green-50">
+                      Signed
+                    </Badge>
+                  </div>
                 </div>
               </CardHeader>
               <CardContent className="space-y-3">
@@ -277,6 +292,23 @@ export default function AdminBookingDetail() {
                     </div>
                   </div>
                 </div>
+
+                {/* Signature preview */}
+                {(booking as any).agreementSignature && (
+                  <>
+                    <Separator />
+                    <div>
+                      <div className="text-xs text-muted-foreground mb-1.5">Signature</div>
+                      <div className="border rounded-lg bg-white p-2 inline-block max-w-xs">
+                        <img
+                          src={(booking as any).agreementSignature}
+                          alt="Customer signature"
+                          className="max-h-16 w-auto"
+                        />
+                      </div>
+                    </div>
+                  </>
+                )}
 
                 {(booking as any).agreementText && (
                   <>

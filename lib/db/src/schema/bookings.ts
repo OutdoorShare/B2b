@@ -23,6 +23,8 @@ export const bookingsTable = pgTable("bookings", {
   agreementSignerName: text("agreement_signer_name"),
   agreementSignedAt: timestamp("agreement_signed_at"),
   agreementText: text("agreement_text"),
+  agreementSignature: text("agreement_signature"),
+  agreementPdfPath: text("agreement_pdf_path"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
