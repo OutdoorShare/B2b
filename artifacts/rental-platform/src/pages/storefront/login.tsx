@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useLocation, Link } from "wouter";
+import { useLocation, useParams, Link } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -28,10 +28,11 @@ function saveSession(c: CustomerSession) {
 
 export default function LoginPage() {
   const [, setLocation] = useLocation();
+  const { slug } = useParams<{ slug: string }>();
   const { toast } = useToast();
 
   const searchParams = new URLSearchParams(window.location.search);
-  const redirectTo = searchParams.get("redirect") || "/";
+  const redirectTo = searchParams.get("redirect") || (slug ? `/${slug}` : "/");
 
   // Redirect if already logged in
   useEffect(() => {
