@@ -120,6 +120,18 @@ export default function StorefrontBook() {
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [confirmedBooking, setConfirmedBooking] = useState<{ id: number; totalPrice: number } | null>(null);
+  const [customerBookings, setCustomerBookings] = useState<any[]>([]);
+  const [bookingsLoading, setBookingsLoading] = useState(false);
+
+  useEffect(() => {
+    if (step !== "confirmation" || !email) return;
+    setBookingsLoading(true);
+    fetch(`${BASE}/api/bookings?customerEmail=${encodeURIComponent(email)}`)
+      .then(r => r.json())
+      .then(data => { if (Array.isArray(data)) setCustomerBookings(data.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())); })
+      .catch(() => {})
+      .finally(() => setBookingsLoading(false));
+  }, [step, email]);
 
   const days = useMemo(() => {
     if (!dateRange?.from || !dateRange?.to) return 1;
@@ -293,9 +305,9 @@ export default function StorefrontBook() {
           {step === "dates" ? "Back to listing" : "Back"}
         </Button>
 
-        <div className="grid grid-cols-1 lg:grid-cols-5 gap-8">
+        <div className={`grid grid-cols-1 gap-8 ${step !== "confirmation" ? "lg:grid-cols-5" : ""}`}>
           {/* Main content */}
-          <div className="lg:col-span-3">
+          <div className={step !== "confirmation" ? "lg:col-span-3" : ""}>
 
             {/* ── STEP 1: DATES & INFO ── */}
             {step === "dates" && (
@@ -547,25 +559,111 @@ export default function StorefrontBook() {
 
             {/* ── CONFIRMATION ── */}
             {step === "confirmation" && (
-              <div className="py-8 text-center space-y-6">
-                <div className="w-20 h-20 bg-green-100 text-green-600 rounded-full flex items-center justify-center mx-auto">
-                  <CheckCircle2 className="w-10 h-10" />
+              <div className="space-y-8">
+                {/* Success banner */}
+                <div className="bg-green-50 border border-green-200 rounded-2xl p-6 flex items-center gap-5">
+                  <div className="w-14 h-14 bg-green-100 text-green-600 rounded-full flex items-center justify-center shrink-0">
+                    <CheckCircle2 className="w-7 h-7" />
+                  </div>
+                  <div>
+                    <h1 className="text-xl font-black tracking-tight text-green-900">Booking Requested!</h1>
+                    {confirmedBooking && <p className="text-green-700 text-sm mt-0.5">Reference #{confirmedBooking.id} · {listing.title}</p>}
+                    <p className="text-green-700/80 text-sm mt-1">
+                      We'll review and email a confirmation to <strong>{email}</strong>. Bring a valid ID on {startFormatted}.
+                    </p>
+                  </div>
                 </div>
-                <div>
-                  <h1 className="text-3xl font-black tracking-tight">Booking Requested!</h1>
-                  {confirmedBooking && <p className="text-muted-foreground mt-1">Reference #{confirmedBooking.id}</p>}
-                </div>
-                <p className="text-muted-foreground max-w-md mx-auto">
-                  We've received your signed request for the <strong>{listing.title}</strong>. Our team will review and email you a confirmation at <strong>{email}</strong>.
-                </p>
-                <div className="bg-muted/40 rounded-2xl p-5 text-left inline-block mx-auto text-sm space-y-2">
-                  <p className="font-semibold mb-3">What happens next</p>
-                  <p className="text-muted-foreground">1. Our team reviews your booking request</p>
-                  <p className="text-muted-foreground">2. You'll receive an email confirmation</p>
-                  <p className="text-muted-foreground">3. Bring valid ID to pickup on {startFormatted}</p>
-                </div>
-                <div className="pt-2">
-                  <Button size="lg" className="rounded-full px-8" onClick={() => setLocation("/")}>Browse More Listings</Button>
+
+                {/* Profile + bookings split */}
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                  {/* Profile card */}
+                  <div className="lg:col-span-1 space-y-4">
+                    <div className="bg-background rounded-2xl border shadow-sm p-5 space-y-4">
+                      <div className="flex items-center gap-3">
+                        <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center">
+                          <User className="w-6 h-6 text-primary" />
+                        </div>
+                        <div>
+                          <p className="font-bold leading-tight">{name}</p>
+                          <p className="text-xs text-muted-foreground">{email}</p>
+                        </div>
+                      </div>
+                      <Separator />
+                      {phone && (
+                        <div className="text-sm">
+                          <p className="text-xs text-muted-foreground uppercase tracking-wider font-semibold mb-0.5">Phone</p>
+                          <p>{phone}</p>
+                        </div>
+                      )}
+                      {session?.billingAddress && (
+                        <div className="text-sm">
+                          <p className="text-xs text-muted-foreground uppercase tracking-wider font-semibold mb-0.5">Billing Address</p>
+                          <p>{session.billingAddress}</p>
+                          <p>{session.billingCity}, {session.billingState} {session.billingZip}</p>
+                        </div>
+                      )}
+                      {session?.cardLastFour && (
+                        <div className="text-sm">
+                          <p className="text-xs text-muted-foreground uppercase tracking-wider font-semibold mb-0.5">Payment Method</p>
+                          <div className="flex items-center gap-2">
+                            <CreditCard className="w-4 h-4 text-muted-foreground" />
+                            <span>{session.cardBrand} •••• {session.cardLastFour}</span>
+                          </div>
+                        </div>
+                      )}
+                      <Separator />
+                      <Button variant="outline" size="sm" className="w-full" onClick={() => setLocation("/")}>
+                        Browse More Listings
+                      </Button>
+                    </div>
+                  </div>
+
+                  {/* Bookings list */}
+                  <div className="lg:col-span-2 space-y-4">
+                    <h2 className="font-bold text-lg">My Bookings</h2>
+                    {bookingsLoading ? (
+                      <div className="space-y-3">
+                        {[1,2,3].map(i => <div key={i} className="animate-pulse bg-muted rounded-xl h-20" />)}
+                      </div>
+                    ) : customerBookings.length === 0 ? (
+                      <div className="bg-muted/30 rounded-2xl p-8 text-center text-muted-foreground text-sm">No bookings found</div>
+                    ) : (
+                      <div className="space-y-3">
+                        {customerBookings.map(b => {
+                          const isNew = b.id === confirmedBooking?.id;
+                          const statusColors: Record<string, string> = {
+                            pending: "bg-amber-100 text-amber-800",
+                            confirmed: "bg-blue-100 text-blue-800",
+                            active: "bg-green-100 text-green-800",
+                            completed: "bg-muted text-muted-foreground",
+                            cancelled: "bg-red-100 text-red-800",
+                          };
+                          return (
+                            <div key={b.id} className={`bg-background rounded-2xl border p-4 flex items-center gap-4 ${isNew ? "border-primary ring-1 ring-primary/20" : ""}`}>
+                              <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
+                                <CalendarIcon className="w-5 h-5 text-primary" />
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-center gap-2 mb-0.5">
+                                  <p className="font-semibold text-sm truncate">{b.listingTitle}</p>
+                                  {isNew && <span className="text-[10px] font-bold bg-primary text-primary-foreground px-1.5 py-0.5 rounded-full">NEW</span>}
+                                </div>
+                                <p className="text-xs text-muted-foreground">
+                                  {b.startDate} → {b.endDate}
+                                </p>
+                              </div>
+                              <div className="text-right shrink-0 space-y-1">
+                                <span className={`text-xs font-semibold px-2 py-0.5 rounded-full capitalize ${statusColors[b.status] ?? "bg-muted text-muted-foreground"}`}>
+                                  {b.status}
+                                </span>
+                                <p className="text-xs font-bold text-foreground">${parseFloat(b.totalPrice).toFixed(2)}</p>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
             )}

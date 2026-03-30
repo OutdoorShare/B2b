@@ -18,12 +18,13 @@ function formatBooking(b: typeof bookingsTable.$inferSelect, listingTitle: strin
 
 router.get("/bookings", async (req, res) => {
   try {
-    const { status, listingId, startDate, endDate } = req.query;
+    const { status, listingId, startDate, endDate, customerEmail } = req.query;
     const conditions = [];
     if (status) conditions.push(eq(bookingsTable.status, status as any));
     if (listingId) conditions.push(eq(bookingsTable.listingId, Number(listingId)));
     if (startDate) conditions.push(gte(bookingsTable.startDate, String(startDate)));
     if (endDate) conditions.push(lte(bookingsTable.endDate, String(endDate)));
+    if (customerEmail) conditions.push(eq(bookingsTable.customerEmail, String(customerEmail)));
 
     const bookings = await db
       .select()
