@@ -17,16 +17,14 @@ import { Users, Plus, Pencil, Trash2, Eye, EyeOff, Shield, UserCheck, UserX } fr
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
-function getKey() { return localStorage.getItem("superadmin_key") ?? ""; }
 function getToken() { return localStorage.getItem("superadmin_token") ?? ""; }
 
 async function apiFetch(path: string, opts?: RequestInit) {
-  const key = getKey();
   const token = getToken();
-  const headers: Record<string, string> = { "Content-Type": "application/json" };
-  if (key) headers["x-superadmin-key"] = key;
-  if (token && !key) headers["x-superadmin-token"] = token;
-  return fetch(`${BASE}/api${path}`, { ...opts, headers: { ...headers, ...(opts?.headers as any) } });
+  return fetch(`${BASE}/api${path}`, {
+    ...opts,
+    headers: { "Content-Type": "application/json", "x-superadmin-token": token, ...(opts?.headers as any) },
+  });
 }
 
 type SARole = "super_admin" | "admin";

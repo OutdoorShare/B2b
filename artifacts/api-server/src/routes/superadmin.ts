@@ -8,8 +8,6 @@ import { promisify } from "util";
 const scryptAsync = promisify(scrypt);
 const router: IRouter = Router();
 
-const SUPER_ADMIN_KEY = process.env.SUPER_ADMIN_KEY ?? "superadmin";
-
 // ── Auth helpers ──────────────────────────────────────────────────────────────
 async function hashPassword(password: string): Promise<string> {
   const salt = randomBytes(16).toString("hex");
@@ -51,12 +49,9 @@ function safeSAUser(u: typeof superadminUsersTable.$inferSelect) {
   return { ...safe, createdAt: u.createdAt.toISOString(), updatedAt: u.updatedAt.toISOString() };
 }
 
-// ── Super admin auth middleware (key OR sub-admin token) ───────────────────────
+// ── Super admin auth middleware (token only) ───────────────────────────────────
 async function requireSuperAdminFn(req: Request, res: Response, next: NextFunction) {
-  const key = req.headers["x-superadmin-key"] as string | undefined;
   const token = req.headers["x-superadmin-token"] as string | undefined;
-
-  if (key && key === SUPER_ADMIN_KEY) { (req as any).isMasterKey = true; next(); return; }
 
   if (token) {
     const [user] = await db.select().from(superadminUsersTable)
@@ -74,15 +69,32 @@ function requireSuperAdmin(req: Request, res: Response, next: NextFunction) {
   requireSuperAdminFn(req, res, next).catch(() => res.status(500).json({ error: "Auth error" }));
 }
 
-// ── POST /superadmin/login ─────────────────────────────────────────────────────
-router.post("/superadmin/login", (req, res) => {
-  const { key } = req.body;
-  if (!key || key !== SUPER_ADMIN_KEY) {
-    res.status(401).json({ error: "Invalid super admin key" });
-    return;
+// ── Seed owner account on startup ─────────────────────────────────────────────
+export async function seedOwnerAccount() {
+  try {
+    const [existing] = await db.select()
+      .from(superadminUsersTable)
+      .where(eq(superadminUsersTable.role, "super_admin"))
+      .limit(1);
+
+    if (!existing) {
+      const ownerEmail = process.env.SA_OWNER_EMAIL ?? "owner@platform.com";
+      const ownerPassword = process.env.SA_OWNER_PASSWORD ?? "superadmin123";
+      const ownerName = process.env.SA_OWNER_NAME ?? "Platform Owner";
+      const passwordHash = await hashSAPassword(ownerPassword);
+      await db.insert(superadminUsersTable).values({
+        name: ownerName,
+        email: ownerEmail,
+        passwordHash,
+        role: "super_admin",
+        status: "active",
+      });
+      console.log(`[superadmin] Owner account seeded: ${ownerEmail} (change password after first login)`);
+    }
+  } catch (err) {
+    console.error("[superadmin] Failed to seed owner account:", err);
   }
-  res.json({ ok: true, key: SUPER_ADMIN_KEY });
-});
+}
 
 // ── GET /superadmin/tenants ────────────────────────────────────────────────────
 router.get("/superadmin/tenants", requireSuperAdmin, async (_req, res) => {

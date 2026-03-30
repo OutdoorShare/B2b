@@ -24,18 +24,13 @@ import { format } from "date-fns";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
-function getKey() { return localStorage.getItem("superadmin_key") ?? ""; }
 function getToken() { return localStorage.getItem("superadmin_token") ?? ""; }
 
 async function apiFetch(path: string, opts?: RequestInit) {
-  const key = getKey();
   const token = getToken();
-  const authHeaders: Record<string, string> = {};
-  if (key) authHeaders["x-superadmin-key"] = key;
-  else if (token) authHeaders["x-superadmin-token"] = token;
   return fetch(`${BASE}/api${path}`, {
     ...opts,
-    headers: { "Content-Type": "application/json", ...authHeaders, ...opts?.headers },
+    headers: { "Content-Type": "application/json", "x-superadmin-token": token, ...opts?.headers },
   });
 }
 
@@ -82,9 +77,8 @@ export default function SuperAdminDashboard() {
   const [showPassword, setShowPassword] = useState(false);
 
   const loadData = useCallback(async () => {
-    const key = getKey();
     const token = getToken();
-    if (!key && !token) { setLocation("/superadmin"); return; }
+    if (!token) { setLocation("/superadmin"); return; }
     setLoading(true);
     try {
       const [statsRes, tenantsRes] = await Promise.all([
