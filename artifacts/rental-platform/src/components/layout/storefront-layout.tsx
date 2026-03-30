@@ -4,7 +4,25 @@ import { useGetBusinessProfile } from "@workspace/api-client-react";
 import { PoweredByBadge } from "@/components/powered-by-badge";
 
 const OS_GREEN = "#3ab549";
-const OS_BLUE = "#29b4d4";
+
+/** Returns true if a hex color is perceptually light */
+function isLight(hex: string): boolean {
+  const c = hex.replace("#", "").padEnd(6, "0");
+  const r = parseInt(c.slice(0, 2), 16);
+  const g = parseInt(c.slice(2, 4), 16);
+  const b = parseInt(c.slice(4, 6), 16);
+  return (r * 299 + g * 587 + b * 114) / 1000 > 145;
+}
+
+/** Darken a hex color by a given amount (0–255) */
+function darken(hex: string, amt = 20): string {
+  const c = hex.replace("#", "").padEnd(6, "0");
+  const clamp = (v: number) => Math.max(0, Math.min(255, v));
+  const r = clamp(parseInt(c.slice(0, 2), 16) - amt).toString(16).padStart(2, "0");
+  const g = clamp(parseInt(c.slice(2, 4), 16) - amt).toString(16).padStart(2, "0");
+  const b = clamp(parseInt(c.slice(4, 6), 16) - amt).toString(16).padStart(2, "0");
+  return `#${r}${g}${b}`;
+}
 
 function TrialExpiredPaywall({ companyName }: { companyName: string }) {
   return (
@@ -76,40 +94,75 @@ export function StorefrontLayout({ children }: { children: React.ReactNode }) {
   const plan = (profile as any)?.plan as string | undefined;
   const isPaid = plan && plan !== "starter";
 
+  // Brand colors from admin settings
+  const primaryColor = profile?.primaryColor || "#1b4332";
+  const accentColor  = profile?.accentColor  || "#52b788";
+
+  // Auto-contrast text colors
+  const headerText     = isLight(primaryColor) ? "#111111" : "#ffffff";
+  const headerTextMuted = isLight(primaryColor) ? "rgba(0,0,0,0.55)" : "rgba(255,255,255,0.65)";
+  const headerBorder   = isLight(primaryColor) ? "rgba(0,0,0,0.08)" : "rgba(255,255,255,0.10)";
+  const btnText        = isLight(accentColor)  ? "#111111" : "#ffffff";
+  const btnHoverBg     = darken(accentColor, 18);
+
   return (
     <div className="min-h-[100dvh] flex flex-col bg-background">
-      {/* Trial expired paywall — blocks entire storefront */}
+      {/* Trial expired paywall */}
       {trialExpired && (
         <TrialExpiredPaywall companyName={profile?.name || "This company"} />
       )}
 
-      {/* OutdoorShare platform bar — shown only during trial */}
+      {/* Subtle trial bar */}
       {trialActive && trialEndsAt && (
         <TrialBanner trialEndsAt={trialEndsAt} />
       )}
 
-      {/* Tenant header */}
-      <header className="sticky top-0 z-50 w-full border-b border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+      {/* ── Tenant header ── */}
+      <header
+        className="sticky top-0 z-50 w-full border-b"
+        style={{
+          backgroundColor: primaryColor,
+          borderBottomColor: headerBorder,
+        }}
+      >
         <div className="container mx-auto px-4 h-16 flex items-center justify-between">
-          <Link href={base || "/"} className="flex items-center gap-2.5">
+          {/* Logo / name */}
+          <Link href={base || "/"} className="flex items-center gap-2.5 min-w-0">
             {profile?.logoUrl ? (
-              <img src={profile.logoUrl} alt={profile.name} className="h-8 object-contain" />
+              <img
+                src={profile.logoUrl}
+                alt={profile.name}
+                className="h-8 object-contain shrink-0"
+              />
             ) : (
-              <Tent className="w-6 h-6" style={{ color: OS_GREEN }} />
+              <Tent className="w-6 h-6 shrink-0" style={{ color: accentColor }} />
             )}
-            <span className="font-bold text-lg tracking-tight">
+            <span
+              className="font-bold text-lg tracking-tight truncate"
+              style={{ color: headerText }}
+            >
               {profile?.name || "Outdoor Rentals"}
             </span>
           </Link>
 
-          <nav className="flex items-center gap-6">
-            <Link href={base || "/"} className="text-sm font-medium text-foreground/80 hover:text-foreground">
+          {/* Nav */}
+          <nav className="flex items-center gap-6 shrink-0">
+            <Link
+              href={base || "/"}
+              className="text-sm font-medium transition-opacity hover:opacity-100"
+              style={{ color: headerTextMuted }}
+            >
               Listings
             </Link>
             <Link
               href={`${base}/login`}
-              className="text-sm font-semibold px-4 py-1.5 rounded-full text-white transition-opacity hover:opacity-90"
-              style={{ backgroundColor: OS_GREEN }}
+              className="text-sm font-semibold px-4 py-1.5 rounded-full transition-colors"
+              style={{
+                backgroundColor: accentColor,
+                color: btnText,
+              }}
+              onMouseEnter={e => (e.currentTarget.style.backgroundColor = btnHoverBg)}
+              onMouseLeave={e => (e.currentTarget.style.backgroundColor = accentColor)}
             >
               Login
             </Link>
@@ -134,7 +187,6 @@ export function StorefrontLayout({ children }: { children: React.ReactNode }) {
               <span className="font-bold text-white/70 text-sm">{profile?.name || "Outdoor Rentals"}</span>
             </div>
 
-            {/* Only show OutdoorShare co-brand on free/trial plans */}
             {!isPaid && (
               <div className="flex items-center gap-2">
                 <img src="/outdoorshare-logo.png" alt="OutdoorShare" className="w-5 h-5 object-contain" />
