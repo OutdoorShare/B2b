@@ -11,13 +11,17 @@ router.get("/categories", async (req, res) => {
     const cats = await db.select().from(categoriesTable).where(catWhere).orderBy(categoriesTable.name);
     
     const withCounts = await Promise.all(cats.map(async (cat) => {
-      const listingWhere = req.tenantId
-        ? and(eq(listingsTable.categoryId, cat.id), eq(listingsTable.tenantId, req.tenantId!))
-        : eq(listingsTable.categoryId, cat.id);
+      // Only count *active* listings so that the storefront filter bar
+      // only surfaces categories that actually have bookable items.
+      const listingConditions = [
+        eq(listingsTable.categoryId, cat.id),
+        eq(listingsTable.status, "active"),
+      ];
+      if (req.tenantId) listingConditions.push(eq(listingsTable.tenantId, req.tenantId));
       const [result] = await db
         .select({ count: count() })
         .from(listingsTable)
-        .where(listingWhere);
+        .where(and(...listingConditions));
       return {
         ...cat,
         listingCount: Number(result?.count ?? 0),
