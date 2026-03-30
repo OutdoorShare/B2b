@@ -15,6 +15,7 @@ export const tenantsTable = pgTable("tenants", {
   phone: text("phone"),
   notes: text("notes"),
   adminToken: text("admin_token"),
+  trialEndsAt: timestamp("trial_ends_at"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });

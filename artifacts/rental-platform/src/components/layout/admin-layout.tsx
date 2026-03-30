@@ -10,9 +10,12 @@ import {
   Settings,
   ShieldAlert,
   Users,
-  MessageSquare
+  MessageSquare,
+  Clock,
+  AlertTriangle,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useGetBusinessProfile } from "@workspace/api-client-react";
 
 const navigation = [
   { name: "Dashboard", href: "/admin", icon: LayoutDashboard },
@@ -27,6 +30,59 @@ const navigation = [
   { name: "Kiosk Mode", href: "/admin/kiosk", icon: MonitorSmartphone },
   { name: "Settings", href: "/admin/settings", icon: Settings },
 ];
+
+function TrialStatusBanner() {
+  const { data: profile } = useGetBusinessProfile({
+    query: { queryKey: ["/api/business", "admin"] }
+  });
+
+  const trialActive = (profile as any)?.trialActive as boolean | undefined;
+  const trialExpired = (profile as any)?.trialExpired as boolean | undefined;
+  const trialEndsAt = (profile as any)?.trialEndsAt as string | null | undefined;
+  const plan = (profile as any)?.plan as string | undefined;
+
+  if (!trialActive && !trialExpired) return null;
+  if (plan && plan !== "starter") return null;
+
+  if (trialExpired) {
+    return (
+      <div className="w-full bg-red-600 text-white text-xs font-semibold px-4 py-2 flex items-center justify-between gap-4">
+        <span className="flex items-center gap-1.5">
+          <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
+          Your free trial has expired. Upgrade to keep your storefront running.
+        </span>
+        <a
+          href="/get-started"
+          className="shrink-0 bg-white text-red-600 rounded px-2.5 py-0.5 text-xs font-bold hover:bg-red-50 transition-colors"
+        >
+          Upgrade Now
+        </a>
+      </div>
+    );
+  }
+
+  if (trialActive && trialEndsAt) {
+    const endsAt = new Date(trialEndsAt);
+    const hoursLeft = Math.max(0, Math.ceil((endsAt.getTime() - Date.now()) / (1000 * 60 * 60)));
+    const label = hoursLeft <= 1 ? "less than 1 hour" : `${hoursLeft} hours`;
+    return (
+      <div className="w-full bg-amber-500 text-white text-xs font-semibold px-4 py-2 flex items-center justify-between gap-4">
+        <span className="flex items-center gap-1.5">
+          <Clock className="w-3.5 h-3.5 shrink-0" />
+          Free trial: {label} remaining. Upgrade to remove OutdoorShare branding and avoid disruption.
+        </span>
+        <a
+          href="/get-started"
+          className="shrink-0 bg-white text-amber-600 rounded px-2.5 py-0.5 text-xs font-bold hover:bg-amber-50 transition-colors"
+        >
+          Upgrade
+        </a>
+      </div>
+    );
+  }
+
+  return null;
+}
 
 export function AdminLayout({ children }: { children: React.ReactNode }) {
   const [location] = useLocation();
@@ -68,6 +124,9 @@ export function AdminLayout({ children }: { children: React.ReactNode }) {
 
       {/* Main Content */}
       <main className="flex-1 flex flex-col min-w-0 overflow-hidden">
+        {/* Trial status banner */}
+        <TrialStatusBanner />
+
         <header className="h-16 flex items-center justify-between px-8 border-b border-border bg-card">
           <h1 className="text-xl font-semibold text-foreground">
             {navigation.find(n => location === n.href || (n.href !== "/admin" && location.startsWith(n.href)))?.name || "Dashboard"}

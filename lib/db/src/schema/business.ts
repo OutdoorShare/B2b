@@ -1,9 +1,10 @@
-import { pgTable, serial, text, boolean, decimal, timestamp } from "drizzle-orm/pg-core";
+import { pgTable, serial, text, boolean, decimal, timestamp, integer } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 
 export const businessProfileTable = pgTable("business_profile", {
   id: serial("id").primaryKey(),
+  tenantId: integer("tenant_id"),
   name: text("name").notNull().default("My Rental Company"),
   tagline: text("tagline").notNull().default("Quality gear for your next adventure"),
   description: text("description").notNull().default("We provide top-quality rental gear for outdoor adventures."),
