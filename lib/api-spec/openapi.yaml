@@ -1,22 +1,33 @@
 openapi: 3.1.0
 info:
-  # Do not change the title, if the title changes, the import paths will be broken
   title: Api
   version: 0.1.0
-  description: API specification
+  description: Rental Platform API
 servers:
   - url: /api
     description: Base API path
 tags:
   - name: health
     description: Health operations
+  - name: business
+    description: Business profile management
+  - name: listings
+    description: Equipment listings management
+  - name: bookings
+    description: Booking management
+  - name: quotes
+    description: Custom quotes
+  - name: analytics
+    description: Analytics and reporting
+  - name: categories
+    description: Equipment categories
+
 paths:
   /healthz:
     get:
       operationId: healthCheck
       tags: [health]
       summary: Health check
-      description: Returns server health status
       responses:
         "200":
           description: Healthy
@@ -24,6 +35,391 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+
+  /business:
+    get:
+      operationId: getBusinessProfile
+      tags: [business]
+      summary: Get business profile
+      responses:
+        "200":
+          description: Business profile
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BusinessProfile"
+    put:
+      operationId: updateBusinessProfile
+      tags: [business]
+      summary: Update business profile
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateBusinessProfile"
+      responses:
+        "200":
+          description: Updated business profile
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BusinessProfile"
+
+  /categories:
+    get:
+      operationId: getCategories
+      tags: [categories]
+      summary: Get all categories
+      responses:
+        "200":
+          description: List of categories
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Category"
+    post:
+      operationId: createCategory
+      tags: [categories]
+      summary: Create a category
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateCategory"
+      responses:
+        "201":
+          description: Created category
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Category"
+
+  /listings:
+    get:
+      operationId: getListings
+      tags: [listings]
+      summary: Get all listings
+      parameters:
+        - name: categoryId
+          in: query
+          schema:
+            type: number
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [active, inactive, draft]
+        - name: search
+          in: query
+          schema:
+            type: string
+        - name: minPrice
+          in: query
+          schema:
+            type: number
+        - name: maxPrice
+          in: query
+          schema:
+            type: number
+      responses:
+        "200":
+          description: List of listings
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Listing"
+    post:
+      operationId: createListing
+      tags: [listings]
+      summary: Create a listing
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateListing"
+      responses:
+        "201":
+          description: Created listing
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Listing"
+
+  /listings/{id}:
+    get:
+      operationId: getListing
+      tags: [listings]
+      summary: Get a listing
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: number
+      responses:
+        "200":
+          description: Listing
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Listing"
+    put:
+      operationId: updateListing
+      tags: [listings]
+      summary: Update a listing
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: number
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateListing"
+      responses:
+        "200":
+          description: Updated listing
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Listing"
+    delete:
+      operationId: deleteListing
+      tags: [listings]
+      summary: Delete a listing
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: number
+      responses:
+        "204":
+          description: Deleted
+
+  /bookings:
+    get:
+      operationId: getBookings
+      tags: [bookings]
+      summary: Get all bookings
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [pending, confirmed, active, completed, cancelled]
+        - name: listingId
+          in: query
+          schema:
+            type: number
+        - name: startDate
+          in: query
+          schema:
+            type: string
+        - name: endDate
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: List of bookings
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Booking"
+    post:
+      operationId: createBooking
+      tags: [bookings]
+      summary: Create a booking
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateBooking"
+      responses:
+        "201":
+          description: Created booking
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Booking"
+
+  /bookings/{id}:
+    get:
+      operationId: getBooking
+      tags: [bookings]
+      summary: Get a booking
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: number
+      responses:
+        "200":
+          description: Booking
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Booking"
+    put:
+      operationId: updateBooking
+      tags: [bookings]
+      summary: Update a booking status
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: number
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateBooking"
+      responses:
+        "200":
+          description: Updated booking
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Booking"
+
+  /quotes:
+    get:
+      operationId: getQuotes
+      tags: [quotes]
+      summary: Get all custom quotes
+      responses:
+        "200":
+          description: List of quotes
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Quote"
+    post:
+      operationId: createQuote
+      tags: [quotes]
+      summary: Create a custom quote
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateQuote"
+      responses:
+        "201":
+          description: Created quote
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Quote"
+
+  /quotes/{id}:
+    put:
+      operationId: updateQuote
+      tags: [quotes]
+      summary: Update a quote
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: number
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateQuote"
+      responses:
+        "200":
+          description: Updated quote
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Quote"
+
+  /analytics/summary:
+    get:
+      operationId: getAnalyticsSummary
+      tags: [analytics]
+      summary: Get dashboard analytics summary
+      responses:
+        "200":
+          description: Analytics summary
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AnalyticsSummary"
+
+  /analytics/revenue:
+    get:
+      operationId: getRevenueAnalytics
+      tags: [analytics]
+      summary: Get revenue analytics by period
+      parameters:
+        - name: period
+          in: query
+          schema:
+            type: string
+            enum: [7d, 30d, 90d, 12m]
+      responses:
+        "200":
+          description: Revenue analytics
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/RevenueDataPoint"
+
+  /analytics/top-listings:
+    get:
+      operationId: getTopListings
+      tags: [analytics]
+      summary: Get top performing listings
+      responses:
+        "200":
+          description: Top listings by revenue
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/TopListing"
+
+  /analytics/booking-status:
+    get:
+      operationId: getBookingStatusBreakdown
+      tags: [analytics]
+      summary: Get booking status breakdown
+      responses:
+        "200":
+          description: Booking status counts
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/StatusCount"
+
 components:
   schemas:
     HealthStatus:
@@ -31,6 +427,726 @@ components:
       properties:
         status:
           type: string
-      required:
-        - status
+      required: [status]
 
+    BusinessProfile:
+      type: object
+      properties:
+        id:
+          type: number
+        name:
+          type: string
+        tagline:
+          type: string
+        description:
+          type: string
+        logoUrl:
+          type: string
+          nullable: true
+        coverImageUrl:
+          type: string
+          nullable: true
+        primaryColor:
+          type: string
+        accentColor:
+          type: string
+        email:
+          type: string
+        phone:
+          type: string
+        website:
+          type: string
+          nullable: true
+        location:
+          type: string
+        address:
+          type: string
+          nullable: true
+        city:
+          type: string
+          nullable: true
+        state:
+          type: string
+          nullable: true
+        zipCode:
+          type: string
+          nullable: true
+        country:
+          type: string
+          nullable: true
+        socialInstagram:
+          type: string
+          nullable: true
+        socialFacebook:
+          type: string
+          nullable: true
+        socialTwitter:
+          type: string
+          nullable: true
+        depositRequired:
+          type: boolean
+        depositPercent:
+          type: number
+        cancellationPolicy:
+          type: string
+        rentalTerms:
+          type: string
+          nullable: true
+        kioskModeEnabled:
+          type: boolean
+        embedCode:
+          type: string
+          nullable: true
+        createdAt:
+          type: string
+        updatedAt:
+          type: string
+      required:
+        - id
+        - name
+        - tagline
+        - description
+        - primaryColor
+        - accentColor
+        - email
+        - phone
+        - location
+        - depositRequired
+        - depositPercent
+        - cancellationPolicy
+        - kioskModeEnabled
+        - createdAt
+        - updatedAt
+
+    UpdateBusinessProfile:
+      type: object
+      properties:
+        name:
+          type: string
+        tagline:
+          type: string
+        description:
+          type: string
+        logoUrl:
+          type: string
+          nullable: true
+        coverImageUrl:
+          type: string
+          nullable: true
+        primaryColor:
+          type: string
+        accentColor:
+          type: string
+        email:
+          type: string
+        phone:
+          type: string
+        website:
+          type: string
+          nullable: true
+        location:
+          type: string
+        address:
+          type: string
+          nullable: true
+        city:
+          type: string
+          nullable: true
+        state:
+          type: string
+          nullable: true
+        zipCode:
+          type: string
+          nullable: true
+        country:
+          type: string
+          nullable: true
+        socialInstagram:
+          type: string
+          nullable: true
+        socialFacebook:
+          type: string
+          nullable: true
+        socialTwitter:
+          type: string
+          nullable: true
+        depositRequired:
+          type: boolean
+        depositPercent:
+          type: number
+        cancellationPolicy:
+          type: string
+        rentalTerms:
+          type: string
+          nullable: true
+        kioskModeEnabled:
+          type: boolean
+
+    Category:
+      type: object
+      properties:
+        id:
+          type: number
+        name:
+          type: string
+        slug:
+          type: string
+        icon:
+          type: string
+          nullable: true
+        description:
+          type: string
+          nullable: true
+        listingCount:
+          type: number
+        createdAt:
+          type: string
+      required: [id, name, slug, listingCount, createdAt]
+
+    CreateCategory:
+      type: object
+      properties:
+        name:
+          type: string
+        slug:
+          type: string
+        icon:
+          type: string
+          nullable: true
+        description:
+          type: string
+          nullable: true
+      required: [name, slug]
+
+    Listing:
+      type: object
+      properties:
+        id:
+          type: number
+        title:
+          type: string
+        description:
+          type: string
+        categoryId:
+          type: number
+          nullable: true
+        categoryName:
+          type: string
+          nullable: true
+        status:
+          type: string
+          enum: [active, inactive, draft]
+        pricePerDay:
+          type: number
+        pricePerWeek:
+          type: number
+          nullable: true
+        pricePerHour:
+          type: number
+          nullable: true
+        depositAmount:
+          type: number
+          nullable: true
+        quantity:
+          type: number
+        availableQuantity:
+          type: number
+        imageUrls:
+          type: array
+          items:
+            type: string
+        location:
+          type: string
+          nullable: true
+        weight:
+          type: string
+          nullable: true
+        dimensions:
+          type: string
+          nullable: true
+        brand:
+          type: string
+          nullable: true
+        model:
+          type: string
+          nullable: true
+        condition:
+          type: string
+          enum: [excellent, good, fair]
+          nullable: true
+        includedItems:
+          type: array
+          items:
+            type: string
+        requirements:
+          type: string
+          nullable: true
+        ageRestriction:
+          type: number
+          nullable: true
+        totalBookings:
+          type: number
+        totalRevenue:
+          type: number
+        rating:
+          type: number
+          nullable: true
+        reviewCount:
+          type: number
+        createdAt:
+          type: string
+        updatedAt:
+          type: string
+      required:
+        - id
+        - title
+        - description
+        - status
+        - pricePerDay
+        - quantity
+        - availableQuantity
+        - imageUrls
+        - includedItems
+        - totalBookings
+        - totalRevenue
+        - reviewCount
+        - createdAt
+        - updatedAt
+
+    CreateListing:
+      type: object
+      properties:
+        title:
+          type: string
+        description:
+          type: string
+        categoryId:
+          type: number
+          nullable: true
+        status:
+          type: string
+          enum: [active, inactive, draft]
+        pricePerDay:
+          type: number
+        pricePerWeek:
+          type: number
+          nullable: true
+        pricePerHour:
+          type: number
+          nullable: true
+        depositAmount:
+          type: number
+          nullable: true
+        quantity:
+          type: number
+        imageUrls:
+          type: array
+          items:
+            type: string
+        location:
+          type: string
+          nullable: true
+        weight:
+          type: string
+          nullable: true
+        dimensions:
+          type: string
+          nullable: true
+        brand:
+          type: string
+          nullable: true
+        model:
+          type: string
+          nullable: true
+        condition:
+          type: string
+          enum: [excellent, good, fair]
+          nullable: true
+        includedItems:
+          type: array
+          items:
+            type: string
+        requirements:
+          type: string
+          nullable: true
+        ageRestriction:
+          type: number
+          nullable: true
+      required: [title, description, status, pricePerDay, quantity]
+
+    UpdateListing:
+      type: object
+      properties:
+        title:
+          type: string
+        description:
+          type: string
+        categoryId:
+          type: number
+          nullable: true
+        status:
+          type: string
+          enum: [active, inactive, draft]
+        pricePerDay:
+          type: number
+        pricePerWeek:
+          type: number
+          nullable: true
+        pricePerHour:
+          type: number
+          nullable: true
+        depositAmount:
+          type: number
+          nullable: true
+        quantity:
+          type: number
+        imageUrls:
+          type: array
+          items:
+            type: string
+        location:
+          type: string
+          nullable: true
+        weight:
+          type: string
+          nullable: true
+        dimensions:
+          type: string
+          nullable: true
+        brand:
+          type: string
+          nullable: true
+        model:
+          type: string
+          nullable: true
+        condition:
+          type: string
+          enum: [excellent, good, fair]
+          nullable: true
+        includedItems:
+          type: array
+          items:
+            type: string
+        requirements:
+          type: string
+          nullable: true
+        ageRestriction:
+          type: number
+          nullable: true
+
+    Booking:
+      type: object
+      properties:
+        id:
+          type: number
+        listingId:
+          type: number
+        listingTitle:
+          type: string
+        customerName:
+          type: string
+        customerEmail:
+          type: string
+        customerPhone:
+          type: string
+          nullable: true
+        startDate:
+          type: string
+        endDate:
+          type: string
+        quantity:
+          type: number
+        totalPrice:
+          type: number
+        depositPaid:
+          type: number
+          nullable: true
+        status:
+          type: string
+          enum: [pending, confirmed, active, completed, cancelled]
+        notes:
+          type: string
+          nullable: true
+        adminNotes:
+          type: string
+          nullable: true
+        source:
+          type: string
+          enum: [online, kiosk, phone, walkin]
+        createdAt:
+          type: string
+        updatedAt:
+          type: string
+      required:
+        - id
+        - listingId
+        - listingTitle
+        - customerName
+        - customerEmail
+        - startDate
+        - endDate
+        - quantity
+        - totalPrice
+        - status
+        - source
+        - createdAt
+        - updatedAt
+
+    CreateBooking:
+      type: object
+      properties:
+        listingId:
+          type: number
+        customerName:
+          type: string
+        customerEmail:
+          type: string
+        customerPhone:
+          type: string
+          nullable: true
+        startDate:
+          type: string
+        endDate:
+          type: string
+        quantity:
+          type: number
+        notes:
+          type: string
+          nullable: true
+        source:
+          type: string
+          enum: [online, kiosk, phone, walkin]
+      required:
+        - listingId
+        - customerName
+        - customerEmail
+        - startDate
+        - endDate
+        - quantity
+        - source
+
+    UpdateBooking:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [pending, confirmed, active, completed, cancelled]
+        adminNotes:
+          type: string
+          nullable: true
+        depositPaid:
+          type: number
+          nullable: true
+
+    Quote:
+      type: object
+      properties:
+        id:
+          type: number
+        customerName:
+          type: string
+        customerEmail:
+          type: string
+        customerPhone:
+          type: string
+          nullable: true
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/QuoteItem"
+        startDate:
+          type: string
+        endDate:
+          type: string
+        subtotal:
+          type: number
+        discount:
+          type: number
+        totalPrice:
+          type: number
+        status:
+          type: string
+          enum: [draft, sent, accepted, declined, expired]
+        notes:
+          type: string
+          nullable: true
+        validUntil:
+          type: string
+          nullable: true
+        createdAt:
+          type: string
+        updatedAt:
+          type: string
+      required:
+        - id
+        - customerName
+        - customerEmail
+        - items
+        - startDate
+        - endDate
+        - subtotal
+        - discount
+        - totalPrice
+        - status
+        - createdAt
+        - updatedAt
+
+    QuoteItem:
+      type: object
+      properties:
+        listingId:
+          type: number
+        listingTitle:
+          type: string
+        quantity:
+          type: number
+        pricePerDay:
+          type: number
+        days:
+          type: number
+        subtotal:
+          type: number
+      required:
+        - listingId
+        - listingTitle
+        - quantity
+        - pricePerDay
+        - days
+        - subtotal
+
+    CreateQuote:
+      type: object
+      properties:
+        customerName:
+          type: string
+        customerEmail:
+          type: string
+        customerPhone:
+          type: string
+          nullable: true
+        items:
+          type: array
+          items:
+            type: object
+            properties:
+              listingId:
+                type: number
+              quantity:
+                type: number
+              pricePerDay:
+                type: number
+              days:
+                type: number
+            required: [listingId, quantity, pricePerDay, days]
+        startDate:
+          type: string
+        endDate:
+          type: string
+        discount:
+          type: number
+        notes:
+          type: string
+          nullable: true
+        validUntil:
+          type: string
+          nullable: true
+      required:
+        - customerName
+        - customerEmail
+        - items
+        - startDate
+        - endDate
+        - discount
+
+    UpdateQuote:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [draft, sent, accepted, declined, expired]
+        discount:
+          type: number
+        notes:
+          type: string
+          nullable: true
+        validUntil:
+          type: string
+          nullable: true
+
+    AnalyticsSummary:
+      type: object
+      properties:
+        totalRevenue:
+          type: number
+        totalBookings:
+          type: number
+        activeBookings:
+          type: number
+        totalListings:
+          type: number
+        activeListings:
+          type: number
+        pendingBookings:
+          type: number
+        revenueThisMonth:
+          type: number
+        revenueLastMonth:
+          type: number
+        bookingsThisMonth:
+          type: number
+        bookingsLastMonth:
+          type: number
+        averageBookingValue:
+          type: number
+        utilization:
+          type: number
+      required:
+        - totalRevenue
+        - totalBookings
+        - activeBookings
+        - totalListings
+        - activeListings
+        - pendingBookings
+        - revenueThisMonth
+        - revenueLastMonth
+        - bookingsThisMonth
+        - bookingsLastMonth
+        - averageBookingValue
+        - utilization
+
+    RevenueDataPoint:
+      type: object
+      properties:
+        date:
+          type: string
+        revenue:
+          type: number
+        bookings:
+          type: number
+      required: [date, revenue, bookings]
+
+    TopListing:
+      type: object
+      properties:
+        id:
+          type: number
+        title:
+          type: string
+        totalRevenue:
+          type: number
+        totalBookings:
+          type: number
+        pricePerDay:
+          type: number
+      required: [id, title, totalRevenue, totalBookings, pricePerDay]
+
+    StatusCount:
+      type: object
+      properties:
+        status:
+          type: string
+        count:
+          type: number
+        percentage:
+          type: number
+      required: [status, count, percentage]
