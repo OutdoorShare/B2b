@@ -1,7 +1,7 @@
 import { Link } from "wouter";
 import {
   CalendarDays, BarChart3, Users, Package, Shield, Zap,
-  CheckCircle2, ArrowRight, Star, Globe
+  CheckCircle2, ArrowRight, Star, Star as StarFull, TrendingDown
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -19,43 +19,17 @@ const features = [
   { icon: Zap, title: "Kiosk Mode", desc: "Self-service check-in terminal for customers to pick up gear without staff." },
 ];
 
-const plans = [
-  {
-    name: "Starter",
-    price: 49,
-    period: "month",
-    description: "Perfect for small rental businesses just getting started.",
-    features: ["Up to 10 listings", "Booking management", "Customer storefront", "Analytics dashboard", "Email support"],
-    cta: "Start Free Trial",
-    highlighted: false,
-    badge: null,
-  },
-  {
-    name: "Professional",
-    price: 99,
-    period: "month",
-    description: "For growing businesses that need more power and flexibility.",
-    features: ["Up to 50 listings", "Everything in Starter", "Team members (5 seats)", "Custom branding & colors", "Claims management", "Priority support"],
-    cta: "Get Started",
-    highlighted: true,
-    badge: "Most Popular",
-  },
-  {
-    name: "Enterprise",
-    price: 249,
-    period: "month",
-    description: "Full-featured for large fleets and multi-location operations.",
-    features: ["Unlimited listings", "Everything in Professional", "Unlimited team seats", "Kiosk mode", "API access", "Dedicated account manager"],
-    cta: "Contact Sales",
-    highlighted: false,
-    badge: null,
-  },
-];
-
 const testimonials = [
   { name: "Jake Winters", company: "Summit Gear Rentals", text: "Set up our entire booking system in one afternoon. Bookings went up 40% in the first month.", stars: 5 },
   { name: "Maria Chen", company: "Coastal Watersports", text: "The kiosk mode alone saved us 2 hours of staff time per day. Our customers love it.", stars: 5 },
   { name: "Derek Park", company: "Trail Wheels MTB", text: "Finally a platform built for rental companies, not adapted from something else.", stars: 5 },
+];
+
+const revenueTiers = [
+  { rate: "20%", threshold: "Under $25K /year", label: "Starting rate", best: false },
+  { rate: "15%", threshold: "$50K+ /year", label: null, best: false },
+  { rate: "10%", threshold: "$100K+ /year", label: null, best: false },
+  { rate: "7%", threshold: "$150K+ /year", label: "Best rate", best: true },
 ];
 
 export default function GetStartedPage() {
@@ -119,7 +93,7 @@ export default function GetStartedPage() {
         <p className="text-sm text-muted-foreground mt-5">No credit card required for trial · Cancel anytime</p>
       </section>
 
-      {/* Stats bar — deep green with logo-green highlights */}
+      {/* Stats bar */}
       <section className="py-10" style={{ background: `linear-gradient(135deg, #1a6b2e 0%, #1c7a32 50%, #1a6b2e 100%)` }}>
         <div className="max-w-4xl mx-auto px-6 grid grid-cols-2 md:grid-cols-4 gap-8 text-center">
           {[["500+", "Rental Companies"], ["50k+", "Bookings Processed"], ["98%", "Uptime SLA"], ["< 2 min", "Average Setup"]].map(([val, label]) => (
@@ -142,7 +116,6 @@ export default function GetStartedPage() {
             <div
               key={f.title}
               className="p-6 rounded-2xl border border-gray-100 bg-gray-50 transition-colors"
-              style={{ ["--tw-hover-border" as string]: `${OS_GREEN}50` }}
               onMouseEnter={e => (e.currentTarget.style.borderColor = `${OS_GREEN}40`)}
               onMouseLeave={e => (e.currentTarget.style.borderColor = "")}
             >
@@ -166,55 +139,161 @@ export default function GetStartedPage() {
             <h2 className="text-4xl font-black text-gray-900 mb-4">Simple, transparent pricing</h2>
             <p className="text-lg text-muted-foreground">Start free, upgrade when you're ready. All plans include a 14-day trial.</p>
           </div>
-          <div className="grid md:grid-cols-3 gap-8 items-start">
-            {plans.map(plan => (
-              <div
-                key={plan.name}
-                className={`rounded-2xl p-8 ${plan.highlighted ? "text-white shadow-xl scale-105" : "bg-white border border-gray-200"}`}
-                style={plan.highlighted ? { background: `linear-gradient(135deg, ${OS_GREEN} 0%, ${OS_GREEN_DARK} 100%)`, boxShadow: `0 20px 60px ${OS_GREEN}40` } : {}}
-              >
-                {plan.badge && (
-                  <span className="inline-block bg-white/20 text-white text-xs font-bold px-3 py-1 rounded-full mb-4">
-                    {plan.badge}
-                  </span>
-                )}
-                <h3 className={`text-xl font-black mb-1 ${plan.highlighted ? "text-white" : "text-gray-900"}`}>
-                  {plan.name}
-                </h3>
-                <div className="flex items-baseline gap-1 mb-3">
-                  <span className={`text-4xl font-black ${plan.highlighted ? "text-white" : "text-gray-900"}`}>
-                    ${plan.price}
-                  </span>
-                  <span className={`text-sm ${plan.highlighted ? "text-white/70" : "text-muted-foreground"}`}>
-                    /{plan.period}
-                  </span>
+
+          <div className="grid md:grid-cols-3 gap-6 items-start">
+
+            {/* Half Throttle */}
+            <div className="bg-white rounded-2xl p-8 border border-gray-200 flex flex-col">
+              <div>
+                <p className="text-sm font-semibold text-gray-500 mb-1">Half Throttle</p>
+                <div className="flex items-baseline gap-1 mb-1">
+                  <span className="text-5xl font-black text-gray-900">$25</span>
+                  <span className="text-base text-muted-foreground font-medium">/mo</span>
                 </div>
-                <p className={`text-sm mb-6 ${plan.highlighted ? "text-white/80" : "text-muted-foreground"}`}>
-                  {plan.description}
-                </p>
-                <ul className="space-y-3 mb-8">
-                  {plan.features.map(f => (
-                    <li key={f} className="flex items-center gap-2.5 text-sm">
-                      <CheckCircle2
-                        className="w-4 h-4 shrink-0"
-                        style={{ color: plan.highlighted ? "rgba(255,255,255,0.9)" : OS_GREEN }}
-                      />
-                      <span className={plan.highlighted ? "text-white/90" : "text-gray-700"}>{f}</span>
-                    </li>
-                  ))}
-                </ul>
-                <Link href={plan.name === "Enterprise" ? "/contact" : "/signup"}>
-                  <Button
-                    className="w-full font-bold"
-                    style={plan.highlighted
-                      ? { backgroundColor: "white", color: OS_GREEN_DARK }
-                      : { backgroundColor: OS_GREEN, color: "white" }}
-                  >
-                    {plan.cta}
-                  </Button>
-                </Link>
+                <p className="text-sm text-muted-foreground mb-1">or $250/year — includes 1 month free</p>
+                <p className="text-sm font-bold mb-6" style={{ color: OS_GREEN }}>No fee on your first rental!</p>
               </div>
-            ))}
+              <ul className="space-y-3 mb-6 flex-1">
+                {[
+                  "Protection plan on every booking",
+                  "Priority OutdoorShare listings",
+                  "Tiered revenue share — as low as 7%",
+                  "Customer management tools",
+                  "Marketing tools included",
+                  "Booking software with custom garage",
+                  "Automated bookings",
+                  "Mobile app management",
+                ].map(f => (
+                  <li key={f} className="flex items-start gap-2.5 text-sm text-gray-700">
+                    <CheckCircle2 className="w-4 h-4 mt-0.5 shrink-0" style={{ color: OS_GREEN }} />
+                    {f}
+                  </li>
+                ))}
+              </ul>
+              <p className="text-xs text-muted-foreground italic mb-5">Typically pays for itself with 1 booking.</p>
+              <Link href="/signup">
+                <Button variant="outline" className="w-full font-bold border-gray-300 hover:border-gray-400">
+                  Get Started
+                </Button>
+              </Link>
+            </div>
+
+            {/* Full Throttle — highlighted */}
+            <div className="rounded-2xl p-8 flex flex-col relative" style={{ backgroundColor: "#1a1f2e" }}>
+              <div className="absolute -top-3.5 left-1/2 -translate-x-1/2">
+                <span className="inline-flex items-center gap-1.5 text-xs font-bold px-4 py-1.5 rounded-full text-white shadow-lg" style={{ backgroundColor: OS_GREEN }}>
+                  <StarFull className="w-3 h-3 fill-white" /> Most Popular
+                </span>
+              </div>
+              <div>
+                <p className="text-sm font-semibold text-gray-400 mb-1 mt-2">Full Throttle</p>
+                <div className="flex items-baseline gap-1 mb-1">
+                  <span className="text-5xl font-black text-white">$895</span>
+                  <span className="text-base text-gray-400 font-medium">/year</span>
+                </div>
+                <p className="text-sm text-gray-400 mb-1">+ Revenue share (decreases as you grow)</p>
+                <p className="text-sm font-bold mb-6" style={{ color: OS_GREEN }}>Revenue share as low as 7%</p>
+              </div>
+              <ul className="space-y-3 mb-6 flex-1">
+                {[
+                  "Everything in Half Throttle",
+                  "White-labeled OutdoorShare website",
+                  "Build your own brand",
+                  "Custom branded booking page",
+                  "AI assistants included",
+                  "Tiered revenue share — as low as 7%",
+                  "Custom scheduling",
+                  "In-person setup support",
+                ].map(f => (
+                  <li key={f} className="flex items-start gap-2.5 text-sm text-gray-200">
+                    <CheckCircle2 className="w-4 h-4 mt-0.5 shrink-0" style={{ color: OS_GREEN }} />
+                    {f}
+                  </li>
+                ))}
+              </ul>
+              <p className="text-xs text-gray-500 italic mb-5">Typically pays for itself with 2–3 bookings.</p>
+              <Link href="/signup">
+                <Button className="w-full font-bold text-white hover:opacity-90" style={{ backgroundColor: OS_GREEN }}>
+                  Get Started
+                </Button>
+              </Link>
+            </div>
+
+            {/* Growth & Scale */}
+            <div className="bg-white rounded-2xl p-8 border border-gray-200 flex flex-col">
+              <div>
+                <p className="text-sm font-semibold text-gray-500 mb-1">Growth &amp; Scale</p>
+                <div className="mb-1">
+                  <span className="text-5xl font-black text-gray-900">Custom</span>
+                </div>
+                <p className="text-sm text-muted-foreground mb-6">Schedule a free consultation for your business</p>
+              </div>
+              <ul className="space-y-3 mb-6 flex-1">
+                {[
+                  "Everything in Full Throttle",
+                  "Marketing partnership included",
+                  "Manage renter relationships",
+                  "Social media post management",
+                  "Marketing funnels & automations",
+                  "AI agents & resources",
+                  "Email & text campaigns",
+                  "Reputation management",
+                  "Tracking & analytics",
+                  "Ad management",
+                ].map(f => (
+                  <li key={f} className="flex items-start gap-2.5 text-sm text-gray-700">
+                    <CheckCircle2 className="w-4 h-4 mt-0.5 shrink-0" style={{ color: OS_GREEN }} />
+                    {f}
+                  </li>
+                ))}
+              </ul>
+              <Link href="/signup">
+                <Button variant="outline" className="w-full font-bold border-gray-300 hover:border-gray-400">
+                  Schedule a Consultation
+                </Button>
+              </Link>
+            </div>
+
+          </div>
+        </div>
+      </section>
+
+      {/* Tiered Revenue Share */}
+      <section className="py-16 bg-gray-50">
+        <div className="max-w-4xl mx-auto px-6">
+          <div className="rounded-2xl p-8 md:p-10" style={{ backgroundColor: "#1a1f2e" }}>
+            <div className="text-center mb-8">
+              <div className="flex items-center justify-center gap-2 mb-3">
+                <TrendingDown className="w-5 h-5" style={{ color: OS_GREEN }} />
+                <h3 className="text-2xl font-black text-white">Tiered Revenue Share</h3>
+              </div>
+              <p className="text-gray-400 text-sm max-w-md mx-auto">
+                Your commission rate decreases automatically as your revenue grows — no renegotiating required.
+              </p>
+            </div>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              {revenueTiers.map(tier => (
+                <div
+                  key={tier.rate}
+                  className="rounded-xl p-5 text-center"
+                  style={tier.best
+                    ? { backgroundColor: "#1e3a1f", border: `1px solid ${OS_GREEN}50` }
+                    : { backgroundColor: "#232936" }
+                  }
+                >
+                  <div className="text-3xl font-black mb-1" style={{ color: tier.best ? OS_GREEN : "white" }}>
+                    {tier.rate}
+                  </div>
+                  <div className="text-xs text-gray-400 mb-2">{tier.threshold}</div>
+                  {tier.label && (
+                    <div className="text-xs font-bold" style={{ color: OS_GREEN }}>{tier.label}</div>
+                  )}
+                </div>
+              ))}
+            </div>
+            <p className="text-center text-xs text-gray-500 mt-6">
+              Tiered revenue share applies to Half Throttle and Full Throttle plans. Not applicable on the Growth &amp; Scale plan.
+            </p>
           </div>
         </div>
       </section>

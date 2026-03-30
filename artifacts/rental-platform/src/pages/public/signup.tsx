@@ -11,9 +11,9 @@ const OS_GREEN = "#3ab549";
 const OS_GREEN_DARK = "#2e9a3d";
 
 const PLANS = [
-  { id: "starter", name: "Starter", price: 49, features: ["Up to 10 listings", "Booking management", "Customer storefront", "Analytics"] },
-  { id: "professional", name: "Professional", price: 99, features: ["Up to 50 listings", "Team members (5 seats)", "Custom branding", "Claims management"], popular: true },
-  { id: "enterprise", name: "Enterprise", price: 249, features: ["Unlimited listings", "Unlimited team seats", "Kiosk mode", "API access"] },
+  { id: "half_throttle", name: "Half Throttle", price: 25, priceSuffix: "/mo", features: ["Protection plan on every booking", "Priority OutdoorShare listings", "Tiered revenue share — as low as 7%", "Booking software with custom garage"] },
+  { id: "full_throttle", name: "Full Throttle", price: 895, priceSuffix: "/year", features: ["Everything in Half Throttle", "White-labeled OutdoorShare website", "AI assistants included", "In-person setup support"], popular: true },
+  { id: "growth_scale", name: "Growth & Scale", price: null, priceSuffix: "", features: ["Everything in Full Throttle", "Marketing partnership included", "Social media post management", "Ad management"] },
 ];
 
 type Step = "info" | "plan" | "payment" | "done";
@@ -240,7 +240,10 @@ export default function SignupPage() {
                       <span className="font-bold text-gray-900">{plan.name}</span>
                       {plan.popular && <Badge className="text-white text-xs" style={{ backgroundColor: OS_GREEN }}>Popular</Badge>}
                     </div>
-                    <span className="font-black text-gray-900">${plan.price}<span className="text-sm font-normal text-muted-foreground">/mo</span></span>
+                    <span className="font-black text-gray-900">
+                      {plan.price ? `$${plan.price}` : "Custom"}
+                      <span className="text-sm font-normal text-muted-foreground">{(plan as any).priceSuffix}</span>
+                    </span>
                   </div>
                   <ul className="grid grid-cols-2 gap-1 pl-7">
                     {plan.features.map(f => (
