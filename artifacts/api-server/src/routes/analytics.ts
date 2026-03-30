@@ -1,7 +1,7 @@
 import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
-import { bookingsTable, listingsTable } from "@workspace/db/schema";
-import { count, sum, eq, and, gte, sql } from "drizzle-orm";
+import { bookingsTable, listingsTable, customersTable } from "@workspace/db/schema";
+import { count, sum, eq, and, gte, sql, isNotNull } from "drizzle-orm";
 
 const router: IRouter = Router();
 
@@ -198,6 +198,104 @@ router.get("/analytics/booking-status", async (req, res) => {
   } catch (err) {
     req.log.error(err);
     res.status(500).json({ error: "Failed to fetch booking status breakdown" });
+  }
+});
+
+// Booking volume grouped by period (reuses same logic as revenue but returns count-focused data)
+router.get("/analytics/booking-volume", async (req, res) => {
+  try {
+    const period = (req.query.period as string) ?? "30d";
+
+    let daysBack = 30;
+    if (period === "7d") daysBack = 7;
+    else if (period === "90d") daysBack = 90;
+    else if (period === "12m") daysBack = 365;
+
+    const cutoff = new Date();
+    cutoff.setDate(cutoff.getDate() - daysBack);
+
+    const bookings = await db
+      .select({ startDate: bookingsTable.startDate })
+      .from(bookingsTable)
+      .where(and(
+        gte(bookingsTable.startDate, cutoff.toISOString().split("T")[0]),
+        sql`${bookingsTable.status} != 'cancelled'`
+      ));
+
+    const grouped: Record<string, number> = {};
+
+    for (let i = daysBack >= 365 ? 11 : daysBack - 1; i >= 0; i--) {
+      const d = new Date();
+      if (daysBack >= 365) {
+        d.setMonth(d.getMonth() - i);
+        const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+        grouped[key] = 0;
+      } else {
+        d.setDate(d.getDate() - i);
+        grouped[d.toISOString().split("T")[0]] = 0;
+      }
+    }
+
+    for (const b of bookings) {
+      const key = daysBack >= 365 ? b.startDate.substring(0, 7) : b.startDate;
+      if (grouped[key] !== undefined) grouped[key] += 1;
+    }
+
+    res.json(Object.entries(grouped).map(([date, bookings]) => ({ date, bookings })));
+  } catch (err) {
+    req.log.error(err);
+    res.status(500).json({ error: "Failed to fetch booking volume" });
+  }
+});
+
+// Renter locations — joins bookings with customer billing state/city
+router.get("/analytics/renter-locations", async (req, res) => {
+  try {
+    // Group by state first for the top-level breakdown
+    const byState = await db
+      .select({
+        state: customersTable.billingState,
+        count: count(),
+      })
+      .from(bookingsTable)
+      .innerJoin(customersTable, eq(bookingsTable.customerEmail, customersTable.email))
+      .where(and(
+        isNotNull(customersTable.billingState),
+        sql`${customersTable.billingState} != ''`,
+        sql`${bookingsTable.status} != 'cancelled'`
+      ))
+      .groupBy(customersTable.billingState)
+      .orderBy(sql`count(*) desc`)
+      .limit(15);
+
+    // Group by city+state for a more granular breakdown
+    const byCity = await db
+      .select({
+        city: customersTable.billingCity,
+        state: customersTable.billingState,
+        count: count(),
+      })
+      .from(bookingsTable)
+      .innerJoin(customersTable, eq(bookingsTable.customerEmail, customersTable.email))
+      .where(and(
+        isNotNull(customersTable.billingCity),
+        sql`${customersTable.billingCity} != ''`,
+        sql`${bookingsTable.status} != 'cancelled'`
+      ))
+      .groupBy(customersTable.billingCity, customersTable.billingState)
+      .orderBy(sql`count(*) desc`)
+      .limit(15);
+
+    res.json({
+      byState: byState.map(r => ({ location: r.state ?? "Unknown", count: Number(r.count) })),
+      byCity: byCity.map(r => ({
+        location: r.city && r.state ? `${r.city}, ${r.state}` : r.city ?? r.state ?? "Unknown",
+        count: Number(r.count),
+      })),
+    });
+  } catch (err) {
+    req.log.error(err);
+    res.status(500).json({ error: "Failed to fetch renter locations" });
   }
 });
 
