@@ -1,27 +1,83 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useLocation } from "wouter";
+import type { DateRange } from "react-day-picker";
 import { 
   useGetListing,
-  useCreateBooking,
   getGetListingQueryKey
 } from "@workspace/api-client-react";
-import { useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Card, CardContent } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
+import { Calendar } from "@/components/ui/calendar";
 import { useToast } from "@/hooks/use-toast";
-import { CalendarIcon, ArrowLeft, CheckCircle2 } from "lucide-react";
+import { 
+  ArrowLeft, ArrowRight, CheckCircle2, Calendar as CalendarIcon,
+  Lock, User, CreditCard, FileText, Eye, EyeOff, ShieldCheck
+} from "lucide-react";
 import { differenceInDays, format, addDays } from "date-fns";
 
-export default function StorefrontBook() {
-  const [location, setLocation] = useLocation();
-  const { toast } = useToast();
-  const queryClient = useQueryClient();
+const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
-  // Parse listingId from URL params (e.g. ?listingId=1)
+type Step = "dates" | "payment" | "agreement" | "confirmation";
+
+interface CustomerSession {
+  id: number;
+  email: string;
+  name: string;
+  phone?: string;
+  billingAddress?: string;
+  billingCity?: string;
+  billingState?: string;
+  billingZip?: string;
+  cardLastFour?: string;
+  cardBrand?: string;
+}
+
+function loadSession(): CustomerSession | null {
+  try {
+    const raw = localStorage.getItem("rental_customer");
+    return raw ? JSON.parse(raw) : null;
+  } catch { return null; }
+}
+
+function saveSession(c: CustomerSession) {
+  localStorage.setItem("rental_customer", JSON.stringify(c));
+}
+
+function getCardBrand(num: string): string {
+  const n = num.replace(/\s/g, "");
+  if (/^4/.test(n)) return "Visa";
+  if (/^5[1-5]/.test(n)) return "Mastercard";
+  if (/^3[47]/.test(n)) return "Amex";
+  if (/^6(?:011|5)/.test(n)) return "Discover";
+  return "Card";
+}
+
+function formatCardNumber(value: string): string {
+  const digits = value.replace(/\D/g, "").slice(0, 16);
+  return digits.replace(/(\d{4})(?=\d)/g, "$1 ");
+}
+
+function formatExpiry(value: string): string {
+  const digits = value.replace(/\D/g, "").slice(0, 4);
+  if (digits.length >= 3) return `${digits.slice(0, 2)}/${digits.slice(2)}`;
+  return digits;
+}
+
+const STEP_LABELS: Record<Step, string> = {
+  dates: "Dates & Info",
+  payment: "Payment",
+  agreement: "Agreement",
+  confirmation: "Confirmed",
+};
+const STEPS: Step[] = ["dates", "payment", "agreement", "confirmation"];
+
+export default function StorefrontBook() {
+  const [, setLocation] = useLocation();
+  const { toast } = useToast();
+
   const searchParams = new URLSearchParams(window.location.search);
   const listingIdStr = searchParams.get("listingId");
   const listingId = listingIdStr ? parseInt(listingIdStr) : 0;
@@ -30,57 +86,67 @@ export default function StorefrontBook() {
     query: { enabled: !!listingId, queryKey: getGetListingQueryKey(listingId) }
   });
 
-  const createBooking = useCreateBooking();
+  const [step, setStep] = useState<Step>("dates");
+  const [session, setSession] = useState<CustomerSession | null>(loadSession);
 
-  const [formData, setFormData] = useState({
-    customerName: '',
-    customerEmail: '',
-    customerPhone: '',
-    startDate: format(new Date(), 'yyyy-MM-dd'),
-    endDate: format(addDays(new Date(), 3), 'yyyy-MM-dd'),
-    quantity: 1,
-    notes: ''
+  // Step 1: dates + personal + account
+  const [dateRange, setDateRange] = useState<DateRange | undefined>({
+    from: new Date(),
+    to: addDays(new Date(), 3),
   });
+  const [notes, setNotes] = useState("");
+  const [name, setName] = useState(session?.name ?? "");
+  const [email, setEmail] = useState(session?.email ?? "");
+  const [phone, setPhone] = useState(session?.phone ?? "");
+  const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+  const [isLogin, setIsLogin] = useState(false);
+  const [authError, setAuthError] = useState("");
 
-  const [isSuccess, setIsSuccess] = useState(false);
+  // Step 2: payment
+  const [cardNumber, setCardNumber] = useState("");
+  const [cardExpiry, setCardExpiry] = useState("");
+  const [cardCvc, setCardCvc] = useState("");
+  const [billingName, setBillingName] = useState(session?.name ?? "");
+  const [billingAddress, setBillingAddress] = useState(session?.billingAddress ?? "");
+  const [billingCity, setBillingCity] = useState(session?.billingCity ?? "");
+  const [billingState, setBillingState] = useState(session?.billingState ?? "");
+  const [billingZip, setBillingZip] = useState(session?.billingZip ?? "");
+
+  // Step 3: agreement
+  const [agreeSigned, setAgreeSigned] = useState("");
+  const [agreeChecked, setAgreeChecked] = useState(false);
+
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [confirmedBooking, setConfirmedBooking] = useState<{ id: number; totalPrice: number } | null>(null);
 
   const days = useMemo(() => {
-    try {
-      const diff = differenceInDays(new Date(formData.endDate), new Date(formData.startDate));
-      return diff > 0 ? diff : 1;
-    } catch {
-      return 1;
-    }
-  }, [formData.startDate, formData.endDate]);
+    if (!dateRange?.from || !dateRange?.to) return 1;
+    const diff = differenceInDays(dateRange.to, dateRange.from);
+    return diff > 0 ? diff : 1;
+  }, [dateRange]);
 
-  const subtotal = (listing?.pricePerDay || 0) * days * formData.quantity;
-  const deposit = listing?.depositAmount || 0;
+  const subtotal = (listing?.pricePerDay ? parseFloat(String(listing.pricePerDay)) : 0) * days;
+  const deposit = listing?.depositAmount ? parseFloat(String(listing.depositAmount)) : 0;
   const total = subtotal + deposit;
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    
-    if (!listingId) return;
-
-    createBooking.mutate(
-      { 
-        data: {
-          listingId,
-          ...formData,
-          source: 'online'
-        } 
-      },
-      {
-        onSuccess: () => {
-          setIsSuccess(true);
-          window.scrollTo(0, 0);
-        },
-        onError: () => {
-          toast({ title: "Booking failed", description: "Please try again later.", variant: "destructive" });
-        }
+  useEffect(() => {
+    if (session) {
+      setName(session.name);
+      setEmail(session.email);
+      setPhone(session.phone ?? "");
+      setBillingName(session.name);
+      setBillingAddress(session.billingAddress ?? "");
+      setBillingCity(session.billingCity ?? "");
+      setBillingState(session.billingState ?? "");
+      setBillingZip(session.billingZip ?? "");
+      if (session.cardLastFour) {
+        setCardNumber(`•••• •••• •••• ${session.cardLastFour}`);
+        setCardExpiry("••/••");
       }
-    );
-  };
+    }
+  }, [session]);
 
   if (!listingIdStr) {
     return (
@@ -91,192 +157,472 @@ export default function StorefrontBook() {
     );
   }
 
-  if (isLoading) return <div className="container mx-auto px-4 py-16 text-center">Loading booking details...</div>;
+  if (isLoading) return <div className="container mx-auto px-4 py-16 text-center">Loading...</div>;
   if (!listing) return <div className="container mx-auto px-4 py-16 text-center">Listing not found</div>;
 
-  if (isSuccess) {
-    return (
-      <div className="container mx-auto px-4 py-24 max-w-xl text-center space-y-6">
-        <div className="w-20 h-20 bg-green-100 text-green-600 rounded-full flex items-center justify-center mx-auto mb-8">
-          <CheckCircle2 className="w-10 h-10" />
-        </div>
-        <h1 className="text-4xl font-black tracking-tight">Booking Requested!</h1>
-        <p className="text-xl text-muted-foreground">
-          We've received your request for the {listing.title}. We'll review it and email you a confirmation shortly.
-        </p>
-        <div className="bg-muted/50 rounded-2xl p-6 text-left my-8">
-          <p className="font-semibold mb-2">Next steps:</p>
-          <ul className="list-disc list-inside text-muted-foreground space-y-2 ml-4">
-            <li>Check your email for the confirmation</li>
-            <li>Review the pickup instructions</li>
-            <li>Bring a valid ID to pickup</li>
-          </ul>
-        </div>
-        <Button size="lg" className="rounded-full" onClick={() => setLocation("/")}>
-          Return to Store
-        </Button>
-      </div>
-    );
-  }
+  const startFormatted = dateRange?.from ? format(dateRange.from, "MMM d, yyyy") : "—";
+  const endFormatted = dateRange?.to ? format(dateRange.to, "MMM d, yyyy") : "—";
+
+  const handleDatesNext = async () => {
+    setAuthError("");
+    if (!dateRange?.from || !dateRange?.to) {
+      toast({ title: "Please select pickup and return dates", variant: "destructive" }); return;
+    }
+    if (!name || !email || !phone) {
+      toast({ title: "Please fill in your name, email, and phone", variant: "destructive" }); return;
+    }
+    if (session) { setStep("payment"); return; }
+
+    setIsSubmitting(true);
+    try {
+      if (isLogin) {
+        const res = await fetch(`${BASE}/api/customers/login`, {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email, password })
+        });
+        const data = await res.json();
+        if (!res.ok) { setAuthError(data.error || "Login failed"); return; }
+        saveSession(data); setSession(data); setStep("payment");
+      } else {
+        if (password.length < 6) { setAuthError("Password must be at least 6 characters"); return; }
+        if (password !== confirmPassword) { setAuthError("Passwords don't match"); return; }
+        const res = await fetch(`${BASE}/api/customers/register`, {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email, password, name, phone })
+        });
+        const data = await res.json();
+        if (!res.ok) { setAuthError(data.error || "Registration failed"); return; }
+        saveSession(data); setSession(data); setStep("payment");
+      }
+    } catch {
+      setAuthError("Connection error, please try again");
+    } finally { setIsSubmitting(false); }
+  };
+
+  const handlePaymentNext = async () => {
+    const isSavedCard = cardNumber.startsWith("••••");
+    const rawCard = cardNumber.replace(/\s/g, "");
+    if (!isSavedCard && (rawCard.length < 15 || !cardExpiry || cardCvc.length < 3)) {
+      toast({ title: "Please complete payment details", variant: "destructive" }); return;
+    }
+    if (!billingAddress || !billingCity || !billingState || !billingZip) {
+      toast({ title: "Please fill in billing address", variant: "destructive" }); return;
+    }
+
+    if (session && !isSavedCard) {
+      const lastFour = rawCard.slice(-4);
+      const brand = getCardBrand(rawCard);
+      try {
+        const res = await fetch(`${BASE}/api/customers/${session.id}`, {
+          method: "PUT", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ billingAddress, billingCity, billingState, billingZip, cardLastFour: lastFour, cardBrand: brand })
+        });
+        if (res.ok) {
+          const updated = await res.json();
+          saveSession(updated); setSession(updated);
+        }
+      } catch { /* non-critical */ }
+    }
+    setStep("agreement");
+  };
+
+  const handleFinalSubmit = async () => {
+    if (!agreeSigned.trim() || agreeSigned.trim().toLowerCase() !== name.trim().toLowerCase()) {
+      toast({ title: "Please type your full name to sign the agreement", variant: "destructive" }); return;
+    }
+    if (!agreeChecked) {
+      toast({ title: "Please accept the rental terms", variant: "destructive" }); return;
+    }
+
+    setIsSubmitting(true);
+    try {
+      const res = await fetch(`${BASE}/api/bookings`, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          listingId: listing.id,
+          customerName: name,
+          customerEmail: email,
+          customerPhone: phone,
+          startDate: format(dateRange!.from!, "yyyy-MM-dd"),
+          endDate: format(dateRange!.to!, "yyyy-MM-dd"),
+          quantity: 1,
+          notes: notes || undefined,
+          source: "online",
+        })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+      setConfirmedBooking({ id: data.id, totalPrice: data.totalPrice });
+      setStep("confirmation");
+      window.scrollTo(0, 0);
+    } catch {
+      toast({ title: "Booking failed", description: "Please try again.", variant: "destructive" });
+    } finally { setIsSubmitting(false); }
+  };
+
+  const stepIndex = STEPS.indexOf(step);
 
   return (
-    <div className="container mx-auto px-4 py-12 max-w-5xl">
-      <Button variant="ghost" className="mb-8 pl-0 hover:bg-transparent" onClick={() => window.history.back()}>
-        <ArrowLeft className="w-4 h-4 mr-2" /> Back
-      </Button>
-
-      <h1 className="text-3xl md:text-4xl font-black tracking-tight mb-8">Complete Your Booking</h1>
-
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-12">
-        {/* Form Column */}
-        <div className="lg:col-span-7">
-          <form onSubmit={handleSubmit} className="space-y-8">
-            <div className="space-y-6">
-              <h2 className="text-xl font-bold border-b pb-2">1. Your Information</h2>
-              <div className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="customerName">Full Name</Label>
-                  <Input 
-                    id="customerName" 
-                    value={formData.customerName} 
-                    onChange={e => setFormData({...formData, customerName: e.target.value})} 
-                    required 
-                    className="h-12"
-                  />
-                </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="customerEmail">Email Address</Label>
-                    <Input 
-                      id="customerEmail" 
-                      type="email" 
-                      value={formData.customerEmail} 
-                      onChange={e => setFormData({...formData, customerEmail: e.target.value})} 
-                      required 
-                      className="h-12"
-                    />
+    <div className="min-h-screen bg-muted/20">
+      {/* Progress bar */}
+      <div className="sticky top-16 z-10 bg-background border-b shadow-sm">
+        <div className="max-w-3xl mx-auto px-4 py-3">
+          <div className="flex items-center gap-0">
+            {STEPS.filter(s => s !== "confirmation").map((s, i) => (
+              <div key={s} className="flex items-center flex-1">
+                <div className={`flex items-center gap-1.5 text-xs font-semibold transition-colors
+                  ${stepIndex > i ? "text-primary" : stepIndex === i ? "text-foreground" : "text-muted-foreground"}`}>
+                  <div className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold transition-colors
+                    ${stepIndex > i ? "bg-primary text-primary-foreground" 
+                    : stepIndex === i ? "bg-foreground text-background" 
+                    : "bg-muted text-muted-foreground"}`}>
+                    {stepIndex > i ? "✓" : i + 1}
                   </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="customerPhone">Phone Number</Label>
-                    <Input 
-                      id="customerPhone" 
-                      type="tel" 
-                      value={formData.customerPhone} 
-                      onChange={e => setFormData({...formData, customerPhone: e.target.value})} 
-                      required 
-                      className="h-12"
-                    />
-                  </div>
+                  <span className="hidden sm:inline">{STEP_LABELS[s]}</span>
                 </div>
+                {i < 2 && <div className={`flex-1 h-0.5 mx-2 rounded transition-colors ${stepIndex > i ? "bg-primary" : "bg-muted"}`} />}
               </div>
-            </div>
-
-            <div className="space-y-6">
-              <h2 className="text-xl font-bold border-b pb-2">2. Rental Details</h2>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="startDate">Pickup Date</Label>
-                  <Input 
-                    id="startDate" 
-                    type="date" 
-                    value={formData.startDate} 
-                    onChange={e => setFormData({...formData, startDate: e.target.value})} 
-                    min={format(new Date(), 'yyyy-MM-dd')}
-                    required 
-                    className="h-12"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="endDate">Return Date</Label>
-                  <Input 
-                    id="endDate" 
-                    type="date" 
-                    value={formData.endDate} 
-                    onChange={e => setFormData({...formData, endDate: e.target.value})} 
-                    min={formData.startDate}
-                    required 
-                    className="h-12"
-                  />
-                </div>
-              </div>
-              
-              <div className="space-y-2">
-                <Label htmlFor="notes">Additional Notes (Optional)</Label>
-                <Textarea 
-                  id="notes" 
-                  placeholder="Any special requests or questions?" 
-                  value={formData.notes} 
-                  onChange={e => setFormData({...formData, notes: e.target.value})} 
-                  rows={3}
-                />
-              </div>
-            </div>
-
-            <Button 
-              type="submit" 
-              size="lg" 
-              className="w-full h-14 text-lg font-bold rounded-xl"
-              disabled={createBooking.isPending}
-            >
-              {createBooking.isPending ? "Processing..." : "Request Booking"}
-            </Button>
-            <p className="text-xs text-center text-muted-foreground">
-              No charge will be made until your booking is confirmed by our team.
-            </p>
-          </form>
-        </div>
-
-        {/* Summary Column */}
-        <div className="lg:col-span-5">
-          <div className="sticky top-24">
-            <Card className="overflow-hidden border-2">
-              <div className="aspect-[2/1] bg-muted relative">
-                {listing.imageUrls?.[0] && (
-                  <img src={listing.imageUrls[0]} alt={listing.title} className="w-full h-full object-cover" />
-                )}
-              </div>
-              <CardContent className="p-6 space-y-6">
-                <div>
-                  <h3 className="font-bold text-xl mb-1">{listing.title}</h3>
-                  <p className="text-muted-foreground">${listing.pricePerDay}/day</p>
-                </div>
-
-                <Separator />
-
-                <div className="space-y-3 text-sm">
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Dates</span>
-                    <span className="font-medium">
-                      {format(new Date(formData.startDate), 'MMM d')} - {format(new Date(formData.endDate), 'MMM d')}
-                    </span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Duration</span>
-                    <span className="font-medium">{days} day{days > 1 ? 's' : ''}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Rental Fee</span>
-                    <span className="font-medium">${subtotal.toFixed(2)}</span>
-                  </div>
-                  {deposit > 0 && (
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground flex items-center">
-                        Refundable Deposit
-                      </span>
-                      <span className="font-medium">${deposit.toFixed(2)}</span>
-                    </div>
-                  )}
-                </div>
-
-                <Separator />
-
-                <div className="flex justify-between items-center text-lg font-bold">
-                  <span>Total Due Today</span>
-                  <span>${total.toFixed(2)}</span>
-                </div>
-              </CardContent>
-            </Card>
+            ))}
           </div>
+        </div>
+      </div>
+
+      <div className="max-w-5xl mx-auto px-4 py-8">
+        <Button variant="ghost" className="mb-6 pl-0 hover:bg-transparent text-muted-foreground" onClick={() => step === "dates" ? window.history.back() : setStep(STEPS[stepIndex - 1])}>
+          <ArrowLeft className="w-4 h-4 mr-2" />
+          {step === "dates" ? "Back to listing" : "Back"}
+        </Button>
+
+        <div className="grid grid-cols-1 lg:grid-cols-5 gap-8">
+          {/* Main content */}
+          <div className="lg:col-span-3">
+
+            {/* ── STEP 1: DATES & INFO ── */}
+            {step === "dates" && (
+              <div className="space-y-8">
+                <h1 className="text-2xl font-bold">Select Your Dates</h1>
+
+                {/* Calendar */}
+                <div className="bg-background rounded-2xl border shadow-sm p-4 flex justify-center">
+                  <Calendar
+                    mode="range"
+                    selected={dateRange}
+                    onSelect={setDateRange}
+                    disabled={{ before: new Date() }}
+                    numberOfMonths={1}
+                    className="[--cell-size:2.5rem]"
+                  />
+                </div>
+
+                {dateRange?.from && dateRange?.to && (
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="bg-background rounded-xl border p-4 text-center">
+                      <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider mb-1">Pickup</p>
+                      <p className="font-bold text-base">{format(dateRange.from, "EEE, MMM d")}</p>
+                    </div>
+                    <div className="bg-background rounded-xl border p-4 text-center">
+                      <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider mb-1">Return</p>
+                      <p className="font-bold text-base">{format(dateRange.to, "EEE, MMM d")}</p>
+                    </div>
+                  </div>
+                )}
+
+                <div className="space-y-2">
+                  <Label htmlFor="notes">Notes (optional)</Label>
+                  <Textarea id="notes" value={notes} onChange={e => setNotes(e.target.value)} placeholder="Any special requests?" rows={2} />
+                </div>
+
+                <Separator />
+
+                <h2 className="text-lg font-semibold">Your Information</h2>
+                <div className="space-y-4">
+                  <div>
+                    <Label htmlFor="name">Full Name</Label>
+                    <Input id="name" value={name} onChange={e => setName(e.target.value)} className="mt-1.5 h-11" required />
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <Label htmlFor="email">Email</Label>
+                      <Input id="email" type="email" value={email} onChange={e => setEmail(e.target.value)} className="mt-1.5 h-11" required disabled={!!session} />
+                    </div>
+                    <div>
+                      <Label htmlFor="phone">Phone</Label>
+                      <Input id="phone" type="tel" value={phone} onChange={e => setPhone(e.target.value)} className="mt-1.5 h-11" required />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Account section */}
+                {!session ? (
+                  <div className="bg-muted/40 rounded-2xl p-5 space-y-4 border">
+                    <div className="flex items-center gap-2">
+                      <Lock className="w-4 h-4 text-primary" />
+                      <h3 className="font-semibold text-sm">
+                        {isLogin ? "Log in to your account" : "Create your account"}
+                      </h3>
+                      <button onClick={() => { setIsLogin(!isLogin); setAuthError(""); }} className="ml-auto text-xs text-primary hover:underline">
+                        {isLogin ? "Need an account? Sign up" : "Already have one? Log in"}
+                      </button>
+                    </div>
+                    {isLogin ? (
+                      <div className="relative">
+                        <Input type={showPassword ? "text" : "password"} placeholder="Password" value={password} onChange={e => setPassword(e.target.value)} className="h-11 pr-10" />
+                        <button type="button" onClick={() => setShowPassword(v => !v)} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground">
+                          {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="space-y-3">
+                        <div className="relative">
+                          <Input type={showPassword ? "text" : "password"} placeholder="Create password (min 6 chars)" value={password} onChange={e => setPassword(e.target.value)} className="h-11 pr-10" />
+                          <button type="button" onClick={() => setShowPassword(v => !v)} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground">
+                            {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                          </button>
+                        </div>
+                        <Input type="password" placeholder="Confirm password" value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} className="h-11" />
+                      </div>
+                    )}
+                    {authError && <p className="text-destructive text-sm">{authError}</p>}
+                    <p className="text-xs text-muted-foreground">
+                      Your info and payment details will be saved for future bookings.
+                    </p>
+                  </div>
+                ) : (
+                  <div className="bg-primary/5 border border-primary/20 rounded-xl p-4 flex items-center gap-3">
+                    <ShieldCheck className="w-5 h-5 text-primary shrink-0" />
+                    <div>
+                      <p className="font-semibold text-sm">Logged in as {session.name}</p>
+                      <p className="text-xs text-muted-foreground">{session.email}</p>
+                    </div>
+                    <button onClick={() => { localStorage.removeItem("rental_customer"); setSession(null); }} className="ml-auto text-xs text-muted-foreground hover:text-foreground underline">Log out</button>
+                  </div>
+                )}
+
+                <Button size="lg" className="w-full h-13 text-base font-bold rounded-xl" onClick={handleDatesNext} disabled={isSubmitting}>
+                  {isSubmitting ? "Saving..." : "Continue to Payment"}
+                  <ArrowRight className="w-4 h-4 ml-2" />
+                </Button>
+              </div>
+            )}
+
+            {/* ── STEP 2: PAYMENT ── */}
+            {step === "payment" && (
+              <div className="space-y-6">
+                <h1 className="text-2xl font-bold">Payment Information</h1>
+
+                {session?.cardLastFour && (
+                  <div className="bg-primary/5 border border-primary/20 rounded-xl p-4 flex items-center gap-3">
+                    <CreditCard className="w-5 h-5 text-primary shrink-0" />
+                    <div>
+                      <p className="font-semibold text-sm">Saved card ending in {session.cardLastFour}</p>
+                      <p className="text-xs text-muted-foreground">{session.cardBrand}</p>
+                    </div>
+                    <button onClick={() => { setCardNumber(""); setCardExpiry(""); setCardCvc(""); }} className="ml-auto text-xs text-primary underline">Use a different card</button>
+                  </div>
+                )}
+
+                <div className="bg-background rounded-2xl border shadow-sm p-6 space-y-5">
+                  <h2 className="font-semibold flex items-center gap-2">
+                    <CreditCard className="w-4 h-4 text-primary" />
+                    Card Details
+                  </h2>
+
+                  <div className="space-y-1.5">
+                    <Label>Card Number</Label>
+                    <Input
+                      value={cardNumber}
+                      onChange={e => setCardNumber(formatCardNumber(e.target.value))}
+                      placeholder="1234 5678 9012 3456"
+                      className="h-11 font-mono tracking-wider"
+                      maxLength={19}
+                    />
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-1.5">
+                      <Label>Expiry Date</Label>
+                      <Input value={cardExpiry} onChange={e => setCardExpiry(formatExpiry(e.target.value))} placeholder="MM/YY" className="h-11" maxLength={5} />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label>CVC</Label>
+                      <Input value={cardCvc} onChange={e => setCardCvc(e.target.value.replace(/\D/g, "").slice(0, 4))} placeholder="123" className="h-11" />
+                    </div>
+                  </div>
+                </div>
+
+                <div className="bg-background rounded-2xl border shadow-sm p-6 space-y-5">
+                  <h2 className="font-semibold flex items-center gap-2">
+                    <User className="w-4 h-4 text-primary" />
+                    Billing Address
+                  </h2>
+
+                  <div className="space-y-1.5">
+                    <Label>Name on Card</Label>
+                    <Input value={billingName} onChange={e => setBillingName(e.target.value)} className="h-11" />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label>Street Address</Label>
+                    <Input value={billingAddress} onChange={e => setBillingAddress(e.target.value)} className="h-11" />
+                  </div>
+                  <div className="grid grid-cols-3 gap-3">
+                    <div className="col-span-1 space-y-1.5">
+                      <Label>City</Label>
+                      <Input value={billingCity} onChange={e => setBillingCity(e.target.value)} className="h-11" />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label>State</Label>
+                      <Input value={billingState} onChange={e => setBillingState(e.target.value)} className="h-11" maxLength={2} placeholder="CA" />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label>ZIP</Label>
+                      <Input value={billingZip} onChange={e => setBillingZip(e.target.value.replace(/\D/g, "").slice(0, 5))} className="h-11" />
+                    </div>
+                  </div>
+                </div>
+
+                <p className="text-xs text-muted-foreground flex items-center gap-1.5">
+                  <Lock className="w-3.5 h-3.5" />
+                  Your payment info is saved securely to your account for future bookings. No charge is made until your booking is confirmed.
+                </p>
+
+                <Button size="lg" className="w-full h-13 text-base font-bold rounded-xl" onClick={handlePaymentNext}>
+                  Continue to Agreement
+                  <ArrowRight className="w-4 h-4 ml-2" />
+                </Button>
+              </div>
+            )}
+
+            {/* ── STEP 3: RENTAL AGREEMENT ── */}
+            {step === "agreement" && (
+              <div className="space-y-6">
+                <h1 className="text-2xl font-bold">Rental Agreement</h1>
+
+                <div className="bg-background rounded-2xl border shadow-sm p-6 space-y-4 max-h-96 overflow-y-auto text-sm text-muted-foreground leading-relaxed">
+                  <h2 className="text-base font-bold text-foreground">Vehicle Rental Agreement</h2>
+                  <p><strong className="text-foreground">Rental Period:</strong> {startFormatted} — {endFormatted} ({days} day{days > 1 ? "s" : ""})</p>
+                  <p><strong className="text-foreground">Vehicle:</strong> {listing.title}</p>
+                  <p><strong className="text-foreground">Renter:</strong> {name} ({email})</p>
+                  <Separator />
+                  <p><strong className="text-foreground">1. Use of Vehicle.</strong> The renter agrees to use the vehicle only for lawful purposes and in a safe manner. The vehicle shall not be used off-road unless specifically permitted, sub-rented, or used to tow any object unless specifically authorized.</p>
+                  <p><strong className="text-foreground">2. Damage & Liability.</strong> The renter accepts full financial responsibility for any damage to the vehicle during the rental period, including but not limited to collisions, theft, vandalism, and weather damage. The security deposit of ${deposit.toFixed(2)} will be held against damages and returned within 5 business days of vehicle return if no damage is found.</p>
+                  <p><strong className="text-foreground">3. Age & License.</strong> The renter certifies they are of legal age to operate this vehicle and hold a valid license or certification required by law.</p>
+                  <p><strong className="text-foreground">4. Fuel & Condition.</strong> The vehicle must be returned with the same fuel level and in the same general condition as when received. Cleaning fees may apply if the vehicle is returned excessively dirty.</p>
+                  <p><strong className="text-foreground">5. Cancellation.</strong> Cancellations made more than 48 hours before the rental start date are eligible for a full refund. Cancellations within 48 hours may forfeit the deposit.</p>
+                  <p><strong className="text-foreground">6. Payment.</strong> The total rental fee is <strong className="text-foreground">${total.toFixed(2)}</strong> (${subtotal.toFixed(2)} rental + ${deposit.toFixed(2)} refundable deposit). No charge will be processed until this booking is confirmed by our team.</p>
+                  <p><strong className="text-foreground">7. Governing Law.</strong> This agreement shall be governed by the laws of the state where the rental business is located. Any disputes shall be resolved through binding arbitration.</p>
+                  <p className="text-xs italic">By signing below, you confirm you have read, understood, and agree to all terms in this rental agreement.</p>
+                </div>
+
+                <div className="bg-background rounded-2xl border shadow-sm p-6 space-y-4">
+                  <div className="flex items-center gap-2">
+                    <FileText className="w-4 h-4 text-primary" />
+                    <h3 className="font-semibold">Sign the Agreement</h3>
+                  </div>
+                  <p className="text-sm text-muted-foreground">Type your full legal name below to sign</p>
+                  <Input
+                    placeholder={`Type your name: ${name}`}
+                    value={agreeSigned}
+                    onChange={e => setAgreeSigned(e.target.value)}
+                    className="h-11 font-medium"
+                  />
+                  {agreeSigned && agreeSigned.trim().toLowerCase() !== name.trim().toLowerCase() && (
+                    <p className="text-xs text-amber-600">Must match exactly: <strong>{name}</strong></p>
+                  )}
+                  <label className="flex items-start gap-3 cursor-pointer">
+                    <input type="checkbox" checked={agreeChecked} onChange={e => setAgreeChecked(e.target.checked)} className="mt-0.5 w-4 h-4 accent-primary" />
+                    <span className="text-sm">I have read and agree to all terms in the rental agreement above, including the cancellation policy and damage liability.</span>
+                  </label>
+                </div>
+
+                <Button
+                  size="lg"
+                  className="w-full h-13 text-base font-bold rounded-xl"
+                  onClick={handleFinalSubmit}
+                  disabled={isSubmitting || !agreeChecked || agreeSigned.trim().toLowerCase() !== name.trim().toLowerCase()}
+                >
+                  {isSubmitting ? "Submitting..." : "Sign & Submit Booking Request"}
+                  <CheckCircle2 className="w-4 h-4 ml-2" />
+                </Button>
+              </div>
+            )}
+
+            {/* ── CONFIRMATION ── */}
+            {step === "confirmation" && (
+              <div className="py-8 text-center space-y-6">
+                <div className="w-20 h-20 bg-green-100 text-green-600 rounded-full flex items-center justify-center mx-auto">
+                  <CheckCircle2 className="w-10 h-10" />
+                </div>
+                <div>
+                  <h1 className="text-3xl font-black tracking-tight">Booking Requested!</h1>
+                  {confirmedBooking && <p className="text-muted-foreground mt-1">Reference #{confirmedBooking.id}</p>}
+                </div>
+                <p className="text-muted-foreground max-w-md mx-auto">
+                  We've received your signed request for the <strong>{listing.title}</strong>. Our team will review and email you a confirmation at <strong>{email}</strong>.
+                </p>
+                <div className="bg-muted/40 rounded-2xl p-5 text-left inline-block mx-auto text-sm space-y-2">
+                  <p className="font-semibold mb-3">What happens next</p>
+                  <p className="text-muted-foreground">1. Our team reviews your booking request</p>
+                  <p className="text-muted-foreground">2. You'll receive an email confirmation</p>
+                  <p className="text-muted-foreground">3. Bring valid ID to pickup on {startFormatted}</p>
+                </div>
+                <div className="pt-2">
+                  <Button size="lg" className="rounded-full px-8" onClick={() => setLocation("/")}>Browse More Listings</Button>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* ── SIDEBAR SUMMARY ── */}
+          {step !== "confirmation" && (
+            <div className="lg:col-span-2">
+              <div className="sticky top-32">
+                <div className="bg-background rounded-2xl border shadow-sm overflow-hidden">
+                  <div className="aspect-[4/3] bg-muted relative">
+                    {listing.imageUrls?.[0] ? (
+                      <img src={listing.imageUrls[0]} alt={listing.title} className="w-full h-full object-cover" />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center text-muted-foreground text-sm">No image</div>
+                    )}
+                  </div>
+                  <div className="p-5 space-y-4">
+                    <div>
+                      <p className="text-xs font-semibold text-primary uppercase tracking-wider mb-0.5">{listing.categoryName}</p>
+                      <h3 className="font-bold text-base leading-snug">{listing.title}</h3>
+                    </div>
+                    {dateRange?.from && dateRange?.to && (
+                      <>
+                        <Separator />
+                        <div className="space-y-2 text-sm">
+                          <div className="flex justify-between">
+                            <span className="text-muted-foreground flex items-center gap-1.5">
+                              <CalendarIcon className="w-3.5 h-3.5" /> {startFormatted}
+                            </span>
+                            <span className="text-muted-foreground">→</span>
+                            <span className="text-muted-foreground">{endFormatted}</span>
+                          </div>
+                          <div className="flex justify-between text-muted-foreground">
+                            <span>${listing.pricePerDay}/day × {days} day{days > 1 ? "s" : ""}</span>
+                            <span>${subtotal.toFixed(2)}</span>
+                          </div>
+                          {deposit > 0 && (
+                            <div className="flex justify-between text-muted-foreground">
+                              <span>Refundable deposit</span>
+                              <span>${deposit.toFixed(2)}</span>
+                            </div>
+                          )}
+                          <Separator />
+                          <div className="flex justify-between font-bold text-base">
+                            <span>Total</span>
+                            <span>${total.toFixed(2)}</span>
+                          </div>
+                          <p className="text-xs text-muted-foreground">No charge until confirmed</p>
+                        </div>
+                      </>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </div>
