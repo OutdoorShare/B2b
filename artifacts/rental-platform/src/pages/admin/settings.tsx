@@ -79,7 +79,9 @@ export default function AdminSettings() {
   };
 
   const copyEmbedCode = () => {
-    const code = formData.embedCode || `<iframe src="${window.location.origin}/" width="100%" height="800px" frameborder="0"></iframe>`;
+    const slug = (profile as any)?.siteSlug ?? "";
+    const src = slug ? `${window.location.origin}/${slug}` : window.location.origin;
+    const code = `<iframe src="${src}" width="100%" height="800px" frameborder="0"></iframe>`;
     navigator.clipboard.writeText(code);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
@@ -495,25 +497,63 @@ export default function AdminSettings() {
           <TabsContent value="integration" className="space-y-6 pt-6">
             <Card>
               <CardHeader>
-                <CardTitle>Storefront Integration</CardTitle>
-                <CardDescription>Share or embed your booking page.</CardDescription>
+                <CardTitle>Your Booking Site</CardTitle>
+                <CardDescription>Share this link with your customers so they can browse and book your rentals.</CardDescription>
               </CardHeader>
               <CardContent className="space-y-6">
-                <div className="space-y-2">
-                  <Label>Public Storefront URL</Label>
-                  <div className="flex items-center gap-2">
-                    <code className="flex-1 p-3 rounded-md bg-muted text-sm font-mono overflow-x-auto">
-                      {window.location.origin}/
-                    </code>
-                    <Button type="button" variant="outline" onClick={() => window.open("/", "_blank")}>Visit</Button>
-                  </div>
-                </div>
-                <div className="space-y-2">
+                {(() => {
+                  const slug = (profile as any)?.siteSlug ?? "";
+                  const storefrontUrl = slug
+                    ? `${window.location.origin}/${slug}`
+                    : window.location.origin;
+                  const copyUrl = () => {
+                    navigator.clipboard.writeText(storefrontUrl);
+                    setCopied(true);
+                    setTimeout(() => setCopied(false), 2000);
+                    toast({ title: "Link copied to clipboard!" });
+                  };
+                  return (
+                    <div className="space-y-3">
+                      <div className="flex items-center gap-2 p-4 rounded-xl bg-muted border">
+                        <div className="flex-1 min-w-0">
+                          <p className="text-xs text-muted-foreground mb-1 font-medium uppercase tracking-wide">Customer booking link</p>
+                          <p className="text-sm font-mono font-semibold text-foreground truncate">{storefrontUrl}</p>
+                        </div>
+                        <div className="flex gap-2 shrink-0">
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            className="gap-2"
+                            onClick={copyUrl}
+                          >
+                            {copied ? <CheckCircle2 className="w-4 h-4 text-green-500" /> : <Copy className="w-4 h-4" />}
+                            {copied ? "Copied!" : "Copy"}
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            className="gap-2"
+                            onClick={() => window.open(storefrontUrl, "_blank")}
+                          >
+                            <Eye className="w-4 h-4" /> Preview
+                          </Button>
+                        </div>
+                      </div>
+                      <p className="text-xs text-muted-foreground">
+                        Send this link to your customers. They'll see your branded storefront where they can browse gear and make bookings.
+                      </p>
+                    </div>
+                  );
+                })()}
+
+                <div className="space-y-2 pt-2">
                   <Label>Embed Code</Label>
-                  <p className="text-sm text-muted-foreground mb-2">Copy this HTML to embed the booking flow on your existing website.</p>
+                  <p className="text-sm text-muted-foreground mb-2">Copy this HTML snippet to embed the booking flow directly on your own website.</p>
                   <div className="relative">
-                    <pre className="p-4 rounded-md bg-slate-950 text-slate-50 text-sm font-mono overflow-x-auto">
-                      {formData.embedCode || `<iframe src="${window.location.origin}/" width="100%" height="800px" frameborder="0"></iframe>`}
+                    <pre className="p-4 rounded-md bg-slate-950 text-slate-50 text-sm font-mono overflow-x-auto whitespace-pre-wrap break-all">
+                      {`<iframe src="${(profile as any)?.siteSlug ? `${window.location.origin}/${(profile as any).siteSlug}` : window.location.origin}" width="100%" height="800px" frameborder="0"></iframe>`}
                     </pre>
                     <Button type="button" size="icon" variant="secondary" className="absolute top-2 right-2" onClick={copyEmbedCode}>
                       {copied ? <CheckCircle2 className="w-4 h-4 text-green-500" /> : <Copy className="w-4 h-4" />}
