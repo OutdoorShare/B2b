@@ -24,6 +24,7 @@ import AdminListingsForm from "@/pages/admin/listings/form";
 import AdminListingDetail from "@/pages/admin/listings/detail";
 import AdminBookings from "@/pages/admin/bookings/index";
 import AdminBookingDetail from "@/pages/admin/bookings/detail";
+import AdminBookingForm from "@/pages/admin/bookings/form";
 import AdminQuotes from "@/pages/admin/quotes/index";
 import AdminQuotesNew from "@/pages/admin/quotes/new";
 import AdminAnalytics from "@/pages/admin/analytics";
@@ -70,6 +71,12 @@ function Router() {
       </Route>
       <Route path="/admin/listings/:id">
         <AdminLayout><AdminListingDetail /></AdminLayout>
+      </Route>
+      <Route path="/admin/bookings/new">
+        <AdminLayout><AdminBookingForm /></AdminLayout>
+      </Route>
+      <Route path="/admin/bookings/:id/edit">
+        <AdminLayout><AdminBookingForm /></AdminLayout>
       </Route>
       <Route path="/admin/bookings">
         <AdminLayout><AdminBookings /></AdminLayout>

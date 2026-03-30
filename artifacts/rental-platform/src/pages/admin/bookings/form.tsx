@@ -1,0 +1,388 @@
+import { useState, useEffect, useMemo } from "react";
+import { useLocation, useRoute } from "wouter";
+import {
+  useGetListings, useGetBooking,
+  getGetListingsQueryKey, getGetBookingQueryKey, getGetBookingsQueryKey
+} from "@workspace/api-client-react";
+import { useQueryClient } from "@tanstack/react-query";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Separator } from "@/components/ui/separator";
+import { useToast } from "@/hooks/use-toast";
+import { ArrowLeft, CalendarDays, User, DollarSign, Package, Info } from "lucide-react";
+import { format, addDays, differenceInDays } from "date-fns";
+
+const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
+
+const defaultForm = {
+  listingId: "",
+  customerName: "",
+  customerEmail: "",
+  customerPhone: "",
+  startDate: format(new Date(), "yyyy-MM-dd"),
+  endDate: format(addDays(new Date(), 3), "yyyy-MM-dd"),
+  quantity: "1",
+  status: "confirmed",
+  source: "walkin",
+  notes: "",
+  adminNotes: "",
+  depositPaid: "",
+};
+
+export default function AdminBookingForm() {
+  const [matchNew] = useRoute("/admin/bookings/new");
+  const [matchEdit, editParams] = useRoute("/admin/bookings/:id/edit");
+  const isEditing = matchEdit;
+  const editId = editParams?.id ? parseInt(editParams.id) : 0;
+
+  const [, setLocation] = useLocation();
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+
+  const [form, setForm] = useState(defaultForm);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+  const [listingDetails, setListingDetails] = useState<any | null>(null);
+
+  const { data: listings } = useGetListings(
+    {},
+    { query: { queryKey: getGetListingsQueryKey({}) } }
+  );
+
+  const { data: existingBooking } = useGetBooking(editId, {
+    query: { enabled: isEditing && !!editId, queryKey: getGetBookingQueryKey(editId) }
+  });
+
+  // Prefill on edit
+  useEffect(() => {
+    if (isEditing && existingBooking) {
+      setForm({
+        listingId: String(existingBooking.listingId),
+        customerName: existingBooking.customerName,
+        customerEmail: existingBooking.customerEmail,
+        customerPhone: existingBooking.customerPhone ?? "",
+        startDate: existingBooking.startDate,
+        endDate: existingBooking.endDate,
+        quantity: String(existingBooking.quantity),
+        status: existingBooking.status,
+        source: existingBooking.source ?? "walkin",
+        notes: existingBooking.notes ?? "",
+        adminNotes: existingBooking.adminNotes ?? "",
+        depositPaid: existingBooking.depositPaid != null ? String(existingBooking.depositPaid) : "",
+      });
+    }
+  }, [isEditing, existingBooking]);
+
+  // Fetch listing pricing when listingId changes
+  useEffect(() => {
+    if (!form.listingId) { setListingDetails(null); return; }
+    const listing = listings?.find(l => l.id === Number(form.listingId));
+    if (listing) setListingDetails(listing);
+  }, [form.listingId, listings]);
+
+  const days = useMemo(() => {
+    try {
+      return Math.max(1, differenceInDays(new Date(form.endDate), new Date(form.startDate)));
+    } catch { return 1; }
+  }, [form.startDate, form.endDate]);
+
+  const basePrice = useMemo(() => {
+    if (!listingDetails) return 0;
+    return parseFloat(String(listingDetails.pricePerDay)) * days * Number(form.quantity || 1);
+  }, [listingDetails, days, form.quantity]);
+
+  const deposit = useMemo(() => {
+    if (!listingDetails?.depositAmount) return 0;
+    return parseFloat(String(listingDetails.depositAmount));
+  }, [listingDetails]);
+
+  const estimatedTotal = basePrice + deposit;
+
+  const handleChange = (field: string, value: string) => {
+    setForm(f => ({ ...f, [field]: value }));
+    setError("");
+  };
+
+  const handleSubmit = async () => {
+    setError("");
+    if (!form.listingId) { setError("Please select a listing."); return; }
+    if (!form.customerName.trim()) { setError("Customer name is required."); return; }
+    if (!form.customerEmail.trim()) { setError("Customer email is required."); return; }
+    if (!form.startDate || !form.endDate) { setError("Start and end dates are required."); return; }
+    if (form.endDate <= form.startDate) { setError("End date must be after start date."); return; }
+
+    setSaving(true);
+    try {
+      const payload: any = {
+        listingId: Number(form.listingId),
+        customerName: form.customerName.trim(),
+        customerEmail: form.customerEmail.trim().toLowerCase(),
+        customerPhone: form.customerPhone || null,
+        startDate: form.startDate,
+        endDate: form.endDate,
+        quantity: Number(form.quantity),
+        status: form.status,
+        source: form.source,
+        notes: form.notes || null,
+        adminNotes: form.adminNotes || null,
+        depositPaid: form.depositPaid ? Number(form.depositPaid) : null,
+      };
+
+      const url = isEditing ? `${BASE}/api/bookings/${editId}` : `${BASE}/api/bookings`;
+      const method = isEditing ? "PUT" : "POST";
+
+      const res = await fetch(url, {
+        method,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const data = await res.json();
+      if (!res.ok) { setError(data.error || "Failed to save booking"); return; }
+
+      queryClient.invalidateQueries({ queryKey: getGetBookingsQueryKey() });
+      if (isEditing) queryClient.setQueryData(getGetBookingQueryKey(editId), data);
+
+      toast({ title: isEditing ? "Booking updated" : "Booking created", description: isEditing ? `Booking #${editId} has been updated.` : `Booking #${data.id} created for ${data.customerName}.` });
+      setLocation(isEditing ? `/admin/bookings/${editId}` : `/admin/bookings/${data.id}`);
+    } catch {
+      setError("Connection error. Please try again.");
+    } finally { setSaving(false); }
+  };
+
+  if (isEditing && !existingBooking) {
+    return <div className="p-8 text-muted-foreground">Loading booking…</div>;
+  }
+
+  return (
+    <div className="space-y-8 max-w-4xl mx-auto pb-12">
+      {/* Header */}
+      <div className="flex items-center gap-4">
+        <Button variant="ghost" size="icon" onClick={() => window.history.back()}>
+          <ArrowLeft className="w-5 h-5" />
+        </Button>
+        <div>
+          <h2 className="text-3xl font-bold tracking-tight">
+            {isEditing ? `Edit Booking #${editId}` : "New Booking"}
+          </h2>
+          <p className="text-muted-foreground mt-1">
+            {isEditing ? "Update customer or rental details." : "Create a manual booking for a walk-in or phone order."}
+          </p>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        <div className="lg:col-span-2 space-y-6">
+
+          {/* Listing */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-base">
+                <Package className="w-4 h-4 text-primary" /> Rental Item
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="space-y-1.5">
+                <Label>Listing <span className="text-destructive">*</span></Label>
+                <Select value={form.listingId} onValueChange={v => handleChange("listingId", v)}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select a listing…" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {listings?.filter(l => l.status === "active").map(l => (
+                      <SelectItem key={l.id} value={String(l.id)}>
+                        {l.title} — ${parseFloat(String(l.pricePerDay)).toFixed(2)}/day
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {listingDetails && (
+                <div className="flex items-center gap-2 text-sm text-muted-foreground bg-muted/50 rounded-lg px-3 py-2">
+                  <Info className="w-4 h-4 shrink-0" />
+                  <span>Stock: <strong>{listingDetails.quantity}</strong> unit{listingDetails.quantity > 1 ? "s" : ""} · ${parseFloat(String(listingDetails.pricePerDay)).toFixed(2)}/day{listingDetails.depositAmount ? ` · $${parseFloat(String(listingDetails.depositAmount)).toFixed(2)} deposit` : ""}</span>
+                </div>
+              )}
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-1.5">
+                  <Label>Quantity <span className="text-destructive">*</span></Label>
+                  <Input
+                    type="number" min="1" max={listingDetails?.quantity ?? 99}
+                    value={form.quantity}
+                    onChange={e => handleChange("quantity", e.target.value)}
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Source</Label>
+                  <Select value={form.source} onValueChange={v => handleChange("source", v)}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="walkin">Walk-in</SelectItem>
+                      <SelectItem value="phone">Phone</SelectItem>
+                      <SelectItem value="online">Online</SelectItem>
+                      <SelectItem value="kiosk">Kiosk</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Dates */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-base">
+                <CalendarDays className="w-4 h-4 text-primary" /> Rental Dates
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-1.5">
+                  <Label>Pickup Date <span className="text-destructive">*</span></Label>
+                  <Input type="date" value={form.startDate} onChange={e => handleChange("startDate", e.target.value)} />
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Return Date <span className="text-destructive">*</span></Label>
+                  <Input type="date" value={form.endDate} onChange={e => handleChange("endDate", e.target.value)} />
+                </div>
+              </div>
+              {days > 0 && (
+                <p className="text-sm text-muted-foreground">
+                  Duration: <strong>{days} day{days > 1 ? "s" : ""}</strong>
+                </p>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Customer */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-base">
+                <User className="w-4 h-4 text-primary" /> Customer Details
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-1.5">
+                  <Label>Full Name <span className="text-destructive">*</span></Label>
+                  <Input value={form.customerName} onChange={e => handleChange("customerName", e.target.value)} placeholder="Jane Smith" />
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Email <span className="text-destructive">*</span></Label>
+                  <Input type="email" value={form.customerEmail} onChange={e => handleChange("customerEmail", e.target.value)} placeholder="jane@example.com" />
+                </div>
+              </div>
+              <div className="space-y-1.5">
+                <Label>Phone</Label>
+                <Input type="tel" value={form.customerPhone} onChange={e => handleChange("customerPhone", e.target.value)} placeholder="+1 (555) 000-0000" />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Customer Notes</Label>
+                <Textarea value={form.notes} onChange={e => handleChange("notes", e.target.value)} placeholder="Any requests or notes from the customer…" rows={3} />
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Internal */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">Internal Notes</CardTitle>
+              <CardDescription>Only visible to staff.</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Textarea value={form.adminNotes} onChange={e => handleChange("adminNotes", e.target.value)} placeholder="Condition notes, deposit tracking, special handling…" rows={3} />
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Right: Summary & Status */}
+        <div className="space-y-6">
+          {/* Pricing summary */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-base">
+                <DollarSign className="w-4 h-4 text-primary" /> Price Summary
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {listingDetails ? (
+                <>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-muted-foreground">Base rate</span>
+                    <span>${parseFloat(String(listingDetails.pricePerDay)).toFixed(2)}/day</span>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-muted-foreground">Days × Qty</span>
+                    <span>{days}d × {form.quantity || 1}</span>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-muted-foreground">Rental fee</span>
+                    <span>${basePrice.toFixed(2)}</span>
+                  </div>
+                  {deposit > 0 && (
+                    <div className="flex justify-between text-sm">
+                      <span className="text-muted-foreground">Deposit</span>
+                      <span>${deposit.toFixed(2)}</span>
+                    </div>
+                  )}
+                  <Separator />
+                  <div className="flex justify-between font-bold">
+                    <span>Estimated Total</span>
+                    <span className="text-lg">${estimatedTotal.toFixed(2)}</span>
+                  </div>
+                  <div className="space-y-1.5 pt-2">
+                    <Label className="text-xs">Deposit Paid ($)</Label>
+                    <Input
+                      type="number" min="0" step="0.01"
+                      value={form.depositPaid}
+                      onChange={e => handleChange("depositPaid", e.target.value)}
+                      placeholder="0.00"
+                      className="h-8 text-sm"
+                    />
+                  </div>
+                </>
+              ) : (
+                <p className="text-sm text-muted-foreground">Select a listing to see pricing.</p>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Status */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">Booking Status</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <Select value={form.status} onValueChange={v => handleChange("status", v)}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="pending">Pending</SelectItem>
+                  <SelectItem value="confirmed">Confirmed</SelectItem>
+                  <SelectItem value="active">Active (Picked Up)</SelectItem>
+                  <SelectItem value="completed">Completed</SelectItem>
+                  <SelectItem value="cancelled">Cancelled</SelectItem>
+                </SelectContent>
+              </Select>
+            </CardContent>
+          </Card>
+
+          {/* Actions */}
+          <div className="space-y-3">
+            {error && <p className="text-sm text-destructive font-medium">{error}</p>}
+            <Button className="w-full" onClick={handleSubmit} disabled={saving}>
+              {saving ? "Saving…" : (isEditing ? "Save Changes" : "Create Booking")}
+            </Button>
+            <Button variant="outline" className="w-full" onClick={() => window.history.back()}>
+              Cancel
+            </Button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}

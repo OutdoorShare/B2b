@@ -96,9 +96,42 @@ router.put("/bookings/:id", async (req, res) => {
   try {
     const body = req.body;
     const updateData: Record<string, any> = { updatedAt: new Date() };
-    if (body.status) updateData.status = body.status;
+
+    // Status & notes (existing)
+    if (body.status !== undefined) updateData.status = body.status;
     if (body.adminNotes !== undefined) updateData.adminNotes = body.adminNotes;
     if (body.depositPaid !== undefined) updateData.depositPaid = body.depositPaid != null ? String(body.depositPaid) : null;
+
+    // Full edit fields
+    if (body.customerName !== undefined) updateData.customerName = body.customerName;
+    if (body.customerEmail !== undefined) updateData.customerEmail = body.customerEmail;
+    if (body.customerPhone !== undefined) updateData.customerPhone = body.customerPhone || null;
+    if (body.startDate !== undefined) updateData.startDate = body.startDate;
+    if (body.endDate !== undefined) updateData.endDate = body.endDate;
+    if (body.quantity !== undefined) updateData.quantity = Number(body.quantity);
+    if (body.notes !== undefined) updateData.notes = body.notes || null;
+    if (body.source !== undefined) updateData.source = body.source;
+
+    // Recalculate total if dates/qty/listingId changed
+    if (body.startDate !== undefined || body.endDate !== undefined || body.quantity !== undefined || body.listingId !== undefined) {
+      const bookingId = Number(req.params.id);
+      const [existing] = await db.select().from(bookingsTable).where(eq(bookingsTable.id, bookingId));
+      if (!existing) { res.status(404).json({ error: "Not found" }); return; }
+
+      const listingId = body.listingId ?? existing.listingId;
+      if (body.listingId !== undefined) updateData.listingId = Number(body.listingId);
+
+      const [listing] = await db.select().from(listingsTable).where(eq(listingsTable.id, listingId));
+      if (listing) {
+        const start = new Date(body.startDate ?? existing.startDate);
+        const end = new Date(body.endDate ?? existing.endDate);
+        const days = Math.max(1, Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)));
+        const qty = body.quantity ?? existing.quantity;
+        const basePrice = parseFloat(listing.pricePerDay) * days * qty;
+        const deposit = listing.depositAmount ? parseFloat(listing.depositAmount) : 0;
+        updateData.totalPrice = String(basePrice + deposit);
+      }
+    }
 
     const [updated] = await db
       .update(bookingsTable)

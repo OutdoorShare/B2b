@@ -14,14 +14,15 @@ import { Separator } from "@/components/ui/separator";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
-import { Link } from "wouter";
-import { ArrowLeft, User, Phone, Mail, Calendar, MapPin, Package, StickyNote, ShieldAlert } from "lucide-react";
+import { Link, useLocation } from "wouter";
+import { ArrowLeft, User, Phone, Mail, Calendar, Package, StickyNote, ShieldAlert, Pencil } from "lucide-react";
 import { format, differenceInDays } from "date-fns";
 
 export default function AdminBookingDetail() {
   const [, params] = useRoute("/admin/bookings/:id");
   const id = params?.id ? parseInt(params.id) : 0;
   const { toast } = useToast();
+  const [, setLocation] = useLocation();
   const queryClient = useQueryClient();
 
   const { data: booking, isLoading } = useGetBooking(id, {
@@ -96,6 +97,9 @@ export default function AdminBookingDetail() {
       </div>
 
       <div className="flex flex-wrap gap-3 items-center">
+        <Button variant="outline" className="gap-2" onClick={() => setLocation(`/admin/bookings/${id}/edit`)}>
+          <Pencil className="w-4 h-4" /> Edit Booking
+        </Button>
         <Button 
           variant={booking.status === 'confirmed' ? "default" : "outline"}
           onClick={() => handleStatusChange('confirmed')}

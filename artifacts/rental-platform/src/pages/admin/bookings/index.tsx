@@ -16,7 +16,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useToast } from "@/hooks/use-toast";
 import {
   CalendarDays, Eye, MoreHorizontal, CheckCircle,
-  List, ChevronLeft, ChevronRight
+  List, ChevronLeft, ChevronRight, Plus
 } from "lucide-react";
 import {
   format, startOfMonth, endOfMonth, startOfWeek, endOfWeek,
@@ -120,6 +120,9 @@ export default function AdminBookings() {
           <p className="text-muted-foreground mt-1">Manage reservations and customer pickups</p>
         </div>
         <div className="flex items-center gap-3">
+          <Button onClick={() => setLocation("/admin/bookings/new")} className="gap-2">
+            <Plus className="w-4 h-4" /> New Booking
+          </Button>
           <Select value={statusFilter} onValueChange={setStatusFilter}>
             <SelectTrigger className="w-[180px]">
               <SelectValue placeholder="Filter by status" />
@@ -311,6 +314,9 @@ export default function AdminBookings() {
                                 <Link href={`/admin/bookings/${booking.id}`} className="cursor-pointer flex items-center">
                                   <Eye className="w-4 h-4 mr-2" /> View Details
                                 </Link>
+                              </DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => setLocation(`/admin/bookings/${booking.id}/edit`)}>
+                                Edit Booking
                               </DropdownMenuItem>
                               <DropdownMenuSeparator />
                               <DropdownMenuLabel>Update Status</DropdownMenuLabel>
