@@ -102,6 +102,7 @@ export default function StorefrontBook() {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [isLogin, setIsLogin] = useState(false);
+  const [showLoginPanel, setShowLoginPanel] = useState(false);
   const [authError, setAuthError] = useState("");
 
   // Step 2: payment
@@ -183,29 +184,22 @@ export default function StorefrontBook() {
     if (!name || !email || !phone) {
       toast({ title: "Please fill in your name, email, and phone", variant: "destructive" }); return;
     }
+    // Already logged in — go straight to payment
     if (session) { setStep("payment"); return; }
+
+    // Register new account
+    if (password.length < 6) { setAuthError("Password must be at least 6 characters"); return; }
+    if (password !== confirmPassword) { setAuthError("Passwords don't match"); return; }
 
     setIsSubmitting(true);
     try {
-      if (isLogin) {
-        const res = await fetch(`${BASE}/api/customers/login`, {
-          method: "POST", headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ email, password })
-        });
-        const data = await res.json();
-        if (!res.ok) { setAuthError(data.error || "Login failed"); return; }
-        saveSession(data); setSession(data); setStep("payment");
-      } else {
-        if (password.length < 6) { setAuthError("Password must be at least 6 characters"); return; }
-        if (password !== confirmPassword) { setAuthError("Passwords don't match"); return; }
-        const res = await fetch(`${BASE}/api/customers/register`, {
-          method: "POST", headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ email, password, name, phone })
-        });
-        const data = await res.json();
-        if (!res.ok) { setAuthError(data.error || "Registration failed"); return; }
-        saveSession(data); setSession(data); setStep("payment");
-      }
+      const res = await fetch(`${BASE}/api/customers/register`, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, password, name, phone })
+      });
+      const data = await res.json();
+      if (!res.ok) { setAuthError(data.error || "Registration failed"); return; }
+      saveSession(data); setSession(data); setStep("payment");
     } catch {
       setAuthError("Connection error, please try again");
     } finally { setIsSubmitting(false); }
@@ -346,7 +340,103 @@ export default function StorefrontBook() {
 
                 <Separator />
 
-                <h2 className="text-lg font-semibold">Your Information</h2>
+                <div className="flex items-center justify-between">
+                  <h2 className="text-lg font-semibold">Your Information</h2>
+                </div>
+
+                {/* ── Login / Account status banner ── */}
+                {!session ? (
+                  showLoginPanel ? (
+                    /* Expanded login form */
+                    <div className="bg-background border-2 border-primary/20 rounded-2xl p-5 space-y-4 shadow-sm">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <Lock className="w-4 h-4 text-primary" />
+                          <h3 className="font-semibold text-sm">Log in to your account</h3>
+                        </div>
+                        <button onClick={() => { setShowLoginPanel(false); setAuthError(""); setPassword(""); }} className="text-xs text-muted-foreground hover:text-foreground">Cancel</button>
+                      </div>
+                      <div className="space-y-3">
+                        <div>
+                          <Label className="text-xs">Email</Label>
+                          <Input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="your@email.com" className="mt-1 h-11" />
+                        </div>
+                        <div>
+                          <Label className="text-xs">Password</Label>
+                          <div className="relative mt-1">
+                            <Input type={showPassword ? "text" : "password"} value={password} onChange={e => setPassword(e.target.value)} placeholder="Your password" className="h-11 pr-10" />
+                            <button type="button" onClick={() => setShowPassword(v => !v)} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground">
+                              {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                      {authError && <p className="text-destructive text-sm">{authError}</p>}
+                      <Button
+                        className="w-full h-11"
+                        disabled={isSubmitting}
+                        onClick={async () => {
+                          setAuthError("");
+                          if (!email || !password) { setAuthError("Enter your email and password"); return; }
+                          setIsSubmitting(true);
+                          try {
+                            const res = await fetch(`${BASE}/api/customers/login`, {
+                              method: "POST", headers: { "Content-Type": "application/json" },
+                              body: JSON.stringify({ email, password })
+                            });
+                            const data = await res.json();
+                            if (!res.ok) { setAuthError(data.error || "Login failed"); return; }
+                            saveSession(data); setSession(data);
+                            setName(data.name); setPhone(data.phone ?? "");
+                            setBillingName(data.name);
+                            setBillingAddress(data.billingAddress ?? "");
+                            setBillingCity(data.billingCity ?? "");
+                            setBillingState(data.billingState ?? "");
+                            setBillingZip(data.billingZip ?? "");
+                            if (data.cardLastFour) { setCardNumber(`•••• •••• •••• ${data.cardLastFour}`); setCardExpiry("••/••"); }
+                            setShowLoginPanel(false);
+                            setPassword("");
+                          } catch { setAuthError("Connection error, please try again"); }
+                          finally { setIsSubmitting(false); }
+                        }}
+                      >
+                        {isSubmitting ? "Signing in…" : "Sign In"}
+                      </Button>
+                      <p className="text-center text-xs text-muted-foreground">
+                        No account yet?{" "}
+                        <button onClick={() => { setShowLoginPanel(false); setAuthError(""); }} className="text-primary hover:underline font-medium">
+                          Continue as new customer
+                        </button>
+                      </p>
+                    </div>
+                  ) : (
+                    /* Collapsed "returning customer" prompt */
+                    <button
+                      onClick={() => { setShowLoginPanel(true); setAuthError(""); }}
+                      className="w-full flex items-center gap-3 bg-muted/50 hover:bg-muted border border-border hover:border-primary/40 rounded-xl px-4 py-3 transition-all group text-left"
+                    >
+                      <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
+                        <User className="w-4 h-4 text-primary" />
+                      </div>
+                      <div className="flex-1">
+                        <p className="text-sm font-semibold text-foreground">Returning customer?</p>
+                        <p className="text-xs text-muted-foreground">Log in to pre-fill your details</p>
+                      </div>
+                      <ArrowRight className="w-4 h-4 text-muted-foreground group-hover:text-primary transition-colors" />
+                    </button>
+                  )
+                ) : (
+                  <div className="bg-primary/5 border border-primary/20 rounded-xl p-4 flex items-center gap-3">
+                    <ShieldCheck className="w-5 h-5 text-primary shrink-0" />
+                    <div>
+                      <p className="font-semibold text-sm">Signed in as {session.name}</p>
+                      <p className="text-xs text-muted-foreground">{session.email}</p>
+                    </div>
+                    <button onClick={() => { localStorage.removeItem("rental_customer"); setSession(null); setName(""); setEmail(""); setPhone(""); }} className="ml-auto text-xs text-muted-foreground hover:text-foreground underline">Log out</button>
+                  </div>
+                )}
+
+                {/* Personal info fields */}
                 <div className="space-y-4">
                   <div>
                     <Label htmlFor="name">Full Name</Label>
@@ -364,49 +454,26 @@ export default function StorefrontBook() {
                   </div>
                 </div>
 
-                {/* Account section */}
-                {!session ? (
-                  <div className="bg-muted/40 rounded-2xl p-5 space-y-4 border">
+                {/* New-customer account creation (only when not logged in) */}
+                {!session && !showLoginPanel && (
+                  <div className="bg-muted/40 rounded-2xl p-5 space-y-3 border">
                     <div className="flex items-center gap-2">
                       <Lock className="w-4 h-4 text-primary" />
-                      <h3 className="font-semibold text-sm">
-                        {isLogin ? "Log in to your account" : "Create your account"}
-                      </h3>
-                      <button onClick={() => { setIsLogin(!isLogin); setAuthError(""); }} className="ml-auto text-xs text-primary hover:underline">
-                        {isLogin ? "Need an account? Sign up" : "Already have one? Log in"}
-                      </button>
+                      <h3 className="font-semibold text-sm">Create your account</h3>
                     </div>
-                    {isLogin ? (
+                    <div className="space-y-3">
                       <div className="relative">
-                        <Input type={showPassword ? "text" : "password"} placeholder="Password" value={password} onChange={e => setPassword(e.target.value)} className="h-11 pr-10" />
+                        <Input type={showPassword ? "text" : "password"} placeholder="Create password (min 6 chars)" value={password} onChange={e => setPassword(e.target.value)} className="h-11 pr-10" />
                         <button type="button" onClick={() => setShowPassword(v => !v)} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground">
                           {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                         </button>
                       </div>
-                    ) : (
-                      <div className="space-y-3">
-                        <div className="relative">
-                          <Input type={showPassword ? "text" : "password"} placeholder="Create password (min 6 chars)" value={password} onChange={e => setPassword(e.target.value)} className="h-11 pr-10" />
-                          <button type="button" onClick={() => setShowPassword(v => !v)} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground">
-                            {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                          </button>
-                        </div>
-                        <Input type="password" placeholder="Confirm password" value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} className="h-11" />
-                      </div>
-                    )}
+                      <Input type="password" placeholder="Confirm password" value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} className="h-11" />
+                    </div>
                     {authError && <p className="text-destructive text-sm">{authError}</p>}
                     <p className="text-xs text-muted-foreground">
-                      Your info and payment details will be saved for future bookings.
+                      Saves your info and payment details for future bookings.
                     </p>
-                  </div>
-                ) : (
-                  <div className="bg-primary/5 border border-primary/20 rounded-xl p-4 flex items-center gap-3">
-                    <ShieldCheck className="w-5 h-5 text-primary shrink-0" />
-                    <div>
-                      <p className="font-semibold text-sm">Logged in as {session.name}</p>
-                      <p className="text-xs text-muted-foreground">{session.email}</p>
-                    </div>
-                    <button onClick={() => { localStorage.removeItem("rental_customer"); setSession(null); }} className="ml-auto text-xs text-muted-foreground hover:text-foreground underline">Log out</button>
                   </div>
                 )}
 
