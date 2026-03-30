@@ -161,8 +161,8 @@ export default function StorefrontBook() {
         if (!Array.isArray(data)) return;
         const active = data.filter(a => a.isActive);
         setAvailableAddons(active);
-        // auto-select required addons
-        const required = new Set(active.filter(a => a.isRequired).map(a => a.id));
+        // auto-select required addons + all protection plan addons (always required)
+        const required = new Set(active.filter(a => a.isRequired || a.name.toLowerCase().includes("protection")).map(a => a.id));
         setSelectedAddonIds(required);
       })
       .catch(() => {});
@@ -209,6 +209,56 @@ export default function StorefrontBook() {
       }
     }
   }, [session]);
+
+  // ── Signature canvas helpers (must be defined before early returns) ───────
+  const getSigPos = useCallback((e: MouseEvent | TouchEvent, canvas: HTMLCanvasElement) => {
+    const rect = canvas.getBoundingClientRect();
+    const scaleX = canvas.width / rect.width;
+    const scaleY = canvas.height / rect.height;
+    const clientX = "touches" in e ? e.touches[0].clientX : e.clientX;
+    const clientY = "touches" in e ? e.touches[0].clientY : e.clientY;
+    return { x: (clientX - rect.left) * scaleX, y: (clientY - rect.top) * scaleY };
+  }, []);
+
+  const startSigDraw = useCallback((e: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>) => {
+    e.preventDefault();
+    const canvas = sigCanvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+    isDrawingRef.current = true;
+    const pos = getSigPos(e.nativeEvent, canvas);
+    ctx.beginPath();
+    ctx.moveTo(pos.x, pos.y);
+  }, [getSigPos]);
+
+  const drawSig = useCallback((e: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>) => {
+    e.preventDefault();
+    if (!isDrawingRef.current) return;
+    const canvas = sigCanvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+    const pos = getSigPos(e.nativeEvent, canvas);
+    ctx.lineWidth = 2.5;
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
+    ctx.strokeStyle = "#111111";
+    ctx.lineTo(pos.x, pos.y);
+    ctx.stroke();
+    setSigHasContent(true);
+  }, [getSigPos]);
+
+  const stopSigDraw = useCallback(() => { isDrawingRef.current = false; }, []);
+
+  const clearSig = useCallback(() => {
+    const canvas = sigCanvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    setSigHasContent(false);
+  }, []);
 
   if (!listingIdStr) {
     return (
@@ -280,56 +330,6 @@ export default function StorefrontBook() {
     }
     setStep("agreement");
   };
-
-  // ── Signature canvas helpers ─────────────────────────────────────────────
-  const getSigPos = useCallback((e: MouseEvent | TouchEvent, canvas: HTMLCanvasElement) => {
-    const rect = canvas.getBoundingClientRect();
-    const scaleX = canvas.width / rect.width;
-    const scaleY = canvas.height / rect.height;
-    const clientX = "touches" in e ? e.touches[0].clientX : e.clientX;
-    const clientY = "touches" in e ? e.touches[0].clientY : e.clientY;
-    return { x: (clientX - rect.left) * scaleX, y: (clientY - rect.top) * scaleY };
-  }, []);
-
-  const startSigDraw = useCallback((e: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>) => {
-    e.preventDefault();
-    const canvas = sigCanvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
-    isDrawingRef.current = true;
-    const pos = getSigPos(e.nativeEvent, canvas);
-    ctx.beginPath();
-    ctx.moveTo(pos.x, pos.y);
-  }, [getSigPos]);
-
-  const drawSig = useCallback((e: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>) => {
-    e.preventDefault();
-    if (!isDrawingRef.current) return;
-    const canvas = sigCanvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
-    const pos = getSigPos(e.nativeEvent, canvas);
-    ctx.lineWidth = 2.5;
-    ctx.lineCap = "round";
-    ctx.lineJoin = "round";
-    ctx.strokeStyle = "#111111";
-    ctx.lineTo(pos.x, pos.y);
-    ctx.stroke();
-    setSigHasContent(true);
-  }, [getSigPos]);
-
-  const stopSigDraw = useCallback(() => { isDrawingRef.current = false; }, []);
-
-  const clearSig = useCallback(() => {
-    const canvas = sigCanvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-    setSigHasContent(false);
-  }, []);
 
   // ── Final booking submission ──────────────────────────────────────────────
   const handleFinalSubmit = async () => {
@@ -460,8 +460,8 @@ export default function StorefrontBook() {
                   const protectionAddons = availableAddons.filter(a => a.name.toLowerCase().includes("protection"));
                   const regularAddons = availableAddons.filter(a => !a.name.toLowerCase().includes("protection"));
 
-                  const toggleAddon = (id: number, isRequired: boolean) => {
-                    if (isRequired) return;
+                  const toggleAddon = (id: number, isProtection: boolean, isRequired: boolean) => {
+                    if (isRequired || isProtection) return;
                     setSelectedAddonIds(prev => {
                       const next = new Set(prev);
                       if (next.has(id)) next.delete(id); else next.add(id);
@@ -472,48 +472,41 @@ export default function StorefrontBook() {
                   return (
                     <>
                       {protectionAddons.map(addon => {
-                        const selected = selectedAddonIds.has(addon.id);
                         const addonPrice = addon.priceType === "per_day" ? addon.price * days : addon.price;
                         return (
-                          <button
+                          <div
                             key={addon.id}
-                            type="button"
-                            onClick={() => toggleAddon(addon.id, addon.isRequired)}
-                            className={`w-full text-left rounded-2xl border-2 transition-all overflow-hidden
-                              ${selected
-                                ? "border-emerald-500 shadow-lg shadow-emerald-100"
-                                : "border-amber-400 hover:border-amber-500 shadow-md"
-                              }`}
+                            className="w-full text-left rounded-2xl border-2 border-emerald-500 shadow-lg shadow-emerald-100 overflow-hidden"
                           >
                             {/* Header bar */}
-                            <div className={`px-5 py-3 flex items-center justify-between ${selected ? "bg-emerald-500" : "bg-amber-400"}`}>
+                            <div className="px-5 py-3 bg-emerald-600 flex items-center justify-between">
                               <div className="flex items-center gap-2">
                                 <ShieldCheck className="w-5 h-5 text-white" />
-                                <span className="font-black text-white text-sm tracking-wide uppercase">Protection Plan</span>
+                                <span className="font-black text-white text-sm tracking-wide uppercase">Damage Protection Plan</span>
                               </div>
                               <div className="flex items-center gap-2">
-                                <span className="bg-white/25 text-white text-xs font-bold px-2 py-0.5 rounded-full flex items-center gap-1">
-                                  <Star className="w-3 h-3 fill-white" /> Highly Recommended
+                                <span className="bg-white/20 text-white text-xs font-bold px-2.5 py-1 rounded-full flex items-center gap-1 border border-white/30">
+                                  <Lock className="w-3 h-3" /> Required
                                 </span>
                               </div>
                             </div>
 
                             {/* Body */}
-                            <div className={`p-5 ${selected ? "bg-emerald-50" : "bg-amber-50"}`}>
+                            <div className="p-5 bg-emerald-50">
                               <div className="flex items-start justify-between gap-4">
                                 <div className="flex-1">
                                   <p className="text-sm text-gray-700 mb-3">
-                                    {addon.description || "Full coverage against accidents, damage, and disasters during your entire rental period."}
+                                    All rentals include our Damage Protection Plan. It covers you against unexpected accidents, weather events, and disasters — so you can enjoy your adventure worry-free.
                                   </p>
                                   <div className="grid grid-cols-2 gap-x-4 gap-y-1.5">
                                     {[
-                                      { icon: AlertTriangle, text: "Accident & rollover damage" },
+                                      { icon: AlertTriangle, text: "Accident & collision damage" },
                                       { icon: Umbrella, text: "Weather & water damage" },
                                       { icon: Zap, text: "Mechanical breakdown" },
-                                      { icon: ShieldCheck, text: "Theft protection" },
+                                      { icon: ShieldCheck, text: "Disaster & fire coverage" },
                                     ].map(({ icon: Icon, text }) => (
                                       <div key={text} className="flex items-center gap-1.5">
-                                        <Icon className={`w-3.5 h-3.5 shrink-0 ${selected ? "text-emerald-600" : "text-amber-600"}`} />
+                                        <Icon className="w-3.5 h-3.5 shrink-0 text-emerald-600" />
                                         <span className="text-xs text-gray-700">{text}</span>
                                       </div>
                                     ))}
@@ -521,25 +514,17 @@ export default function StorefrontBook() {
                                 </div>
 
                                 <div className="shrink-0 text-right">
-                                  <p className={`text-3xl font-black ${selected ? "text-emerald-700" : "text-amber-700"}`}>
+                                  <p className="text-3xl font-black text-emerald-700">
                                     ${addonPrice.toFixed(0)}
                                   </p>
                                   <p className="text-xs text-gray-500">flat fee</p>
-                                  <div className={`mt-3 flex items-center justify-center gap-1.5 rounded-lg px-4 py-2 font-bold text-sm text-white ${selected ? "bg-emerald-500" : "bg-amber-500"}`}>
-                                    {selected ? (
-                                      <>
-                                        <CheckCircle2 className="w-4 h-4" /> Added
-                                      </>
-                                    ) : (
-                                      <>
-                                        <ShieldCheck className="w-4 h-4" /> Add
-                                      </>
-                                    )}
+                                  <div className="mt-3 flex items-center justify-center gap-1.5 rounded-lg px-4 py-2 font-bold text-sm text-white bg-emerald-500 cursor-default">
+                                    <CheckCircle2 className="w-4 h-4" /> Included
                                   </div>
                                 </div>
                               </div>
                             </div>
-                          </button>
+                          </div>
                         );
                       })}
 
@@ -559,7 +544,7 @@ export default function StorefrontBook() {
                                   key={addon.id}
                                   type="button"
                                   disabled={addon.isRequired}
-                                  onClick={() => toggleAddon(addon.id, addon.isRequired)}
+                                  onClick={() => toggleAddon(addon.id, false, addon.isRequired)}
                                   className={`w-full flex items-start gap-4 border-2 rounded-xl p-4 text-left transition-all
                                     ${selected ? "border-primary bg-primary/5" : "border-border hover:border-primary/50 hover:bg-muted/30"}
                                     ${addon.isRequired ? "cursor-default" : "cursor-pointer"}`}
