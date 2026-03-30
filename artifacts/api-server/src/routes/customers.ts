@@ -1,7 +1,7 @@
 import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
 import { customersTable } from "@workspace/db/schema";
-import { eq } from "drizzle-orm";
+import { eq, and } from "drizzle-orm";
 import { scrypt, randomBytes, timingSafeEqual } from "crypto";
 import { promisify } from "util";
 
@@ -32,16 +32,23 @@ function safeCustomer(c: typeof customersTable.$inferSelect) {
 
 router.post("/customers/register", async (req, res) => {
   try {
-    const { email, password, name, phone } = req.body;
+    const { email, password, name, phone, slug } = req.body;
     if (!email || !password || !name) {
       res.status(400).json({ error: "email, password and name are required" });
       return;
     }
 
+    const tenantSlug = (slug ?? "").trim().toLowerCase();
+    const normalEmail = email.toLowerCase().trim();
+
+    // Check uniqueness within this tenant
     const [existing] = await db
       .select()
       .from(customersTable)
-      .where(eq(customersTable.email, email.toLowerCase().trim()));
+      .where(and(
+        eq(customersTable.email, normalEmail),
+        eq(customersTable.tenantSlug, tenantSlug),
+      ));
 
     if (existing) {
       res.status(409).json({ error: "An account with this email already exists" });
@@ -51,7 +58,7 @@ router.post("/customers/register", async (req, res) => {
     const passwordHash = await hashPassword(password);
     const [customer] = await db
       .insert(customersTable)
-      .values({ email: email.toLowerCase().trim(), passwordHash, name, phone })
+      .values({ email: normalEmail, passwordHash, name, phone, tenantSlug })
       .returning();
 
     res.status(201).json(safeCustomer(customer));
@@ -63,16 +70,22 @@ router.post("/customers/register", async (req, res) => {
 
 router.post("/customers/login", async (req, res) => {
   try {
-    const { email, password } = req.body;
+    const { email, password, slug } = req.body;
     if (!email || !password) {
       res.status(400).json({ error: "email and password are required" });
       return;
     }
 
+    const tenantSlug = (slug ?? "").trim().toLowerCase();
+    const normalEmail = email.toLowerCase().trim();
+
     const [customer] = await db
       .select()
       .from(customersTable)
-      .where(eq(customersTable.email, email.toLowerCase().trim()));
+      .where(and(
+        eq(customersTable.email, normalEmail),
+        eq(customersTable.tenantSlug, tenantSlug),
+      ));
 
     if (!customer) {
       res.status(401).json({ error: "Invalid email or password" });

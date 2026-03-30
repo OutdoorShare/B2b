@@ -77,8 +77,8 @@ export default function LoginPage() {
         : `${BASE}/api/customers/register`;
 
       const body = tab === "login"
-        ? { email, password }
-        : { email, password, name, phone };
+        ? { email, password, slug: slug ?? "" }
+        : { email, password, name, phone, slug: slug ?? "" };
 
       const res = await fetch(endpoint, {
         method: "POST",
