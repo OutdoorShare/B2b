@@ -11,7 +11,7 @@ import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import {
   ArrowLeft, Check, Shield, MapPin, AlertTriangle,
-  Tag, ChevronRight, Package
+  Tag, ChevronRight, Package, ShieldCheck, Star, Umbrella, Zap
 } from "lucide-react";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
@@ -219,34 +219,74 @@ export default function StorefrontGearDetail() {
             {/* Add-ons */}
             {addons.length > 0 && (
               <div className="space-y-3">
-                <div className="flex items-center gap-2">
-                  <Tag className="w-4 h-4 text-primary" />
-                  <h3 className="font-semibold">Available Add-ons</h3>
-                </div>
-                <div className="space-y-2">
-                  {addons.map(addon => {
-                    const unitLabel = addon.priceType === "per_day" ? "/day" : "flat";
-                    return (
-                      <div key={addon.id} className="flex items-start justify-between gap-3 bg-muted/30 rounded-xl border px-4 py-3">
-                        <div>
-                          <div className="flex items-center gap-1.5">
-                            <span className="font-semibold text-sm">{addon.name}</span>
-                            {addon.isRequired && (
-                              <span className="text-[10px] font-bold bg-amber-100 text-amber-800 px-1.5 py-0.5 rounded-full">Required</span>
-                            )}
-                          </div>
-                          {addon.description && (
-                            <p className="text-xs text-muted-foreground mt-0.5">{addon.description}</p>
-                          )}
-                        </div>
-                        <div className="text-right shrink-0">
-                          <p className="font-bold text-sm text-primary">+${addon.price.toFixed(2)}</p>
-                          <p className="text-xs text-muted-foreground">{unitLabel}</p>
+                {/* Protection Plan — prominent card */}
+                {addons.filter(a => a.name.toLowerCase().includes("protection")).map(addon => (
+                  <div key={addon.id} className="rounded-2xl border-2 border-amber-400 overflow-hidden shadow-md">
+                    <div className="bg-amber-400 px-4 py-2.5 flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <ShieldCheck className="w-4 h-4 text-white" />
+                        <span className="font-black text-white text-xs tracking-widest uppercase">Protection Plan</span>
+                      </div>
+                      <span className="bg-white/25 text-white text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1">
+                        <Star className="w-2.5 h-2.5 fill-white" /> Highly Recommended
+                      </span>
+                    </div>
+                    <div className="bg-amber-50 px-4 py-3 flex items-start justify-between gap-4">
+                      <div className="flex-1">
+                        <p className="text-xs text-gray-700 mb-2">{addon.description || "Full coverage against accidents and disasters."}</p>
+                        <div className="grid grid-cols-2 gap-x-3 gap-y-1">
+                          {[
+                            { icon: AlertTriangle, text: "Accident damage" },
+                            { icon: Umbrella, text: "Weather events" },
+                            { icon: Zap, text: "Mechanical failure" },
+                            { icon: ShieldCheck, text: "Theft coverage" },
+                          ].map(({ icon: Icon, text }) => (
+                            <div key={text} className="flex items-center gap-1">
+                              <Icon className="w-3 h-3 text-amber-600 shrink-0" />
+                              <span className="text-[11px] text-gray-600">{text}</span>
+                            </div>
+                          ))}
                         </div>
                       </div>
-                    );
-                  })}
-                </div>
+                      <div className="text-right shrink-0">
+                        <p className="text-2xl font-black text-amber-700">${addon.price.toFixed(0)}</p>
+                        <p className="text-[10px] text-gray-500">flat fee</p>
+                        <p className="text-[10px] text-amber-600 font-medium mt-1">Add at checkout →</p>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+
+                {/* Regular add-ons */}
+                {addons.filter(a => !a.name.toLowerCase().includes("protection")).length > 0 && (
+                  <>
+                    <div className="flex items-center gap-2">
+                      <Tag className="w-4 h-4 text-primary" />
+                      <h3 className="font-semibold">Available Add-ons</h3>
+                    </div>
+                    <div className="space-y-2">
+                      {addons.filter(a => !a.name.toLowerCase().includes("protection")).map(addon => {
+                        const unitLabel = addon.priceType === "per_day" ? "/day" : "flat";
+                        return (
+                          <div key={addon.id} className="flex items-start justify-between gap-3 bg-muted/30 rounded-xl border px-4 py-3">
+                            <div>
+                              <div className="flex items-center gap-1.5">
+                                <span className="font-semibold text-sm">{addon.name}</span>
+                                {addon.isRequired && <span className="text-[10px] font-bold bg-amber-100 text-amber-800 px-1.5 py-0.5 rounded-full">Required</span>}
+                              </div>
+                              {addon.description && <p className="text-xs text-muted-foreground mt-0.5">{addon.description}</p>}
+                            </div>
+                            <div className="text-right shrink-0">
+                              <p className="font-bold text-sm text-primary">+${addon.price.toFixed(2)}</p>
+                              <p className="text-xs text-muted-foreground">{unitLabel}</p>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </>
+                )}
+
                 <p className="text-xs text-muted-foreground">Select add-ons during checkout.</p>
               </div>
             )}

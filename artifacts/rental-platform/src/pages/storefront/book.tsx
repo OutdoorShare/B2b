@@ -14,7 +14,8 @@ import { Calendar } from "@/components/ui/calendar";
 import { useToast } from "@/hooks/use-toast";
 import { 
   ArrowLeft, ArrowRight, CheckCircle2, Calendar as CalendarIcon,
-  Lock, User, CreditCard, FileText, Eye, EyeOff, ShieldCheck
+  Lock, User, CreditCard, FileText, Eye, EyeOff, ShieldCheck,
+  Zap, AlertTriangle, Umbrella, Star
 } from "lucide-react";
 import { differenceInDays, format, addDays } from "date-fns";
 
@@ -387,71 +388,143 @@ export default function StorefrontBook() {
                   <Textarea id="notes" value={notes} onChange={e => setNotes(e.target.value)} placeholder="Any special requests?" rows={2} />
                 </div>
 
-                {/* ── ADD-ONS ── */}
-                {availableAddons.length > 0 && (
-                  <div className="bg-background rounded-2xl border shadow-sm p-6 space-y-4">
-                    <div>
-                      <h2 className="font-bold text-base">Add-ons & Extras</h2>
-                      <p className="text-sm text-muted-foreground mt-0.5">Enhance your rental with optional upgrades.</p>
-                    </div>
-                    <div className="space-y-3">
-                      {availableAddons.map(addon => {
+                {/* ── PROTECTION PLAN ── */}
+                {(() => {
+                  const protectionAddons = availableAddons.filter(a => a.name.toLowerCase().includes("protection"));
+                  const regularAddons = availableAddons.filter(a => !a.name.toLowerCase().includes("protection"));
+
+                  const toggleAddon = (id: number, isRequired: boolean) => {
+                    if (isRequired) return;
+                    setSelectedAddonIds(prev => {
+                      const next = new Set(prev);
+                      if (next.has(id)) next.delete(id); else next.add(id);
+                      return next;
+                    });
+                  };
+
+                  return (
+                    <>
+                      {protectionAddons.map(addon => {
                         const selected = selectedAddonIds.has(addon.id);
                         const addonPrice = addon.priceType === "per_day" ? addon.price * days : addon.price;
                         return (
                           <button
                             key={addon.id}
                             type="button"
-                            disabled={addon.isRequired}
-                            onClick={() => {
-                              if (addon.isRequired) return;
-                              setSelectedAddonIds(prev => {
-                                const next = new Set(prev);
-                                if (next.has(addon.id)) next.delete(addon.id);
-                                else next.add(addon.id);
-                                return next;
-                              });
-                            }}
-                            className={`w-full flex items-start gap-4 border-2 rounded-xl p-4 text-left transition-all
+                            onClick={() => toggleAddon(addon.id, addon.isRequired)}
+                            className={`w-full text-left rounded-2xl border-2 transition-all overflow-hidden
                               ${selected
-                                ? "border-primary bg-primary/5"
-                                : "border-border hover:border-primary/50 hover:bg-muted/30"
-                              }
-                              ${addon.isRequired ? "cursor-default" : "cursor-pointer"}
-                            `}
+                                ? "border-emerald-500 shadow-lg shadow-emerald-100"
+                                : "border-amber-400 hover:border-amber-500 shadow-md"
+                              }`}
                           >
-                            <div className={`w-5 h-5 rounded border-2 shrink-0 mt-0.5 flex items-center justify-center transition-colors
-                              ${selected ? "bg-primary border-primary" : "border-muted-foreground/40"}
-                            `}>
-                              {selected && (
-                                <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 12 12">
-                                  <path d="M2 6l3 3 5-5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                                </svg>
-                              )}
-                            </div>
-                            <div className="flex-1 min-w-0">
-                              <div className="flex items-center gap-2 flex-wrap">
-                                <span className="font-semibold text-sm">{addon.name}</span>
-                                {addon.isRequired && (
-                                  <span className="text-[10px] font-bold bg-amber-100 text-amber-800 px-1.5 py-0.5 rounded-full">Required</span>
-                                )}
+                            {/* Header bar */}
+                            <div className={`px-5 py-3 flex items-center justify-between ${selected ? "bg-emerald-500" : "bg-amber-400"}`}>
+                              <div className="flex items-center gap-2">
+                                <ShieldCheck className="w-5 h-5 text-white" />
+                                <span className="font-black text-white text-sm tracking-wide uppercase">Protection Plan</span>
                               </div>
-                              {addon.description && (
-                                <p className="text-xs text-muted-foreground mt-0.5">{addon.description}</p>
-                              )}
+                              <div className="flex items-center gap-2">
+                                <span className="bg-white/25 text-white text-xs font-bold px-2 py-0.5 rounded-full flex items-center gap-1">
+                                  <Star className="w-3 h-3 fill-white" /> Highly Recommended
+                                </span>
+                              </div>
                             </div>
-                            <div className="text-right shrink-0">
-                              <p className="font-bold text-sm text-primary">+${addonPrice.toFixed(2)}</p>
-                              <p className="text-xs text-muted-foreground">
-                                {addon.priceType === "per_day" ? `$${addon.price.toFixed(2)}/day` : "flat fee"}
-                              </p>
+
+                            {/* Body */}
+                            <div className={`p-5 ${selected ? "bg-emerald-50" : "bg-amber-50"}`}>
+                              <div className="flex items-start justify-between gap-4">
+                                <div className="flex-1">
+                                  <p className="text-sm text-gray-700 mb-3">
+                                    {addon.description || "Full coverage against accidents, damage, and disasters during your entire rental period."}
+                                  </p>
+                                  <div className="grid grid-cols-2 gap-x-4 gap-y-1.5">
+                                    {[
+                                      { icon: AlertTriangle, text: "Accident & rollover damage" },
+                                      { icon: Umbrella, text: "Weather & water damage" },
+                                      { icon: Zap, text: "Mechanical breakdown" },
+                                      { icon: ShieldCheck, text: "Theft protection" },
+                                    ].map(({ icon: Icon, text }) => (
+                                      <div key={text} className="flex items-center gap-1.5">
+                                        <Icon className={`w-3.5 h-3.5 shrink-0 ${selected ? "text-emerald-600" : "text-amber-600"}`} />
+                                        <span className="text-xs text-gray-700">{text}</span>
+                                      </div>
+                                    ))}
+                                  </div>
+                                </div>
+
+                                <div className="shrink-0 text-right">
+                                  <p className={`text-3xl font-black ${selected ? "text-emerald-700" : "text-amber-700"}`}>
+                                    ${addonPrice.toFixed(0)}
+                                  </p>
+                                  <p className="text-xs text-gray-500">flat fee</p>
+                                  <div className={`mt-3 flex items-center justify-center gap-1.5 rounded-lg px-4 py-2 font-bold text-sm text-white ${selected ? "bg-emerald-500" : "bg-amber-500"}`}>
+                                    {selected ? (
+                                      <>
+                                        <CheckCircle2 className="w-4 h-4" /> Added
+                                      </>
+                                    ) : (
+                                      <>
+                                        <ShieldCheck className="w-4 h-4" /> Add
+                                      </>
+                                    )}
+                                  </div>
+                                </div>
+                              </div>
                             </div>
                           </button>
                         );
                       })}
-                    </div>
-                  </div>
-                )}
+
+                      {/* ── REGULAR ADD-ONS ── */}
+                      {regularAddons.length > 0 && (
+                        <div className="bg-background rounded-2xl border shadow-sm p-6 space-y-4">
+                          <div>
+                            <h2 className="font-bold text-base">Add-ons & Extras</h2>
+                            <p className="text-sm text-muted-foreground mt-0.5">Enhance your rental with optional upgrades.</p>
+                          </div>
+                          <div className="space-y-3">
+                            {regularAddons.map(addon => {
+                              const selected = selectedAddonIds.has(addon.id);
+                              const addonPrice = addon.priceType === "per_day" ? addon.price * days : addon.price;
+                              return (
+                                <button
+                                  key={addon.id}
+                                  type="button"
+                                  disabled={addon.isRequired}
+                                  onClick={() => toggleAddon(addon.id, addon.isRequired)}
+                                  className={`w-full flex items-start gap-4 border-2 rounded-xl p-4 text-left transition-all
+                                    ${selected ? "border-primary bg-primary/5" : "border-border hover:border-primary/50 hover:bg-muted/30"}
+                                    ${addon.isRequired ? "cursor-default" : "cursor-pointer"}`}
+                                >
+                                  <div className={`w-5 h-5 rounded border-2 shrink-0 mt-0.5 flex items-center justify-center transition-colors
+                                    ${selected ? "bg-primary border-primary" : "border-muted-foreground/40"}`}>
+                                    {selected && (
+                                      <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 12 12">
+                                        <path d="M2 6l3 3 5-5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                                      </svg>
+                                    )}
+                                  </div>
+                                  <div className="flex-1 min-w-0">
+                                    <div className="flex items-center gap-2 flex-wrap">
+                                      <span className="font-semibold text-sm">{addon.name}</span>
+                                      {addon.isRequired && <span className="text-[10px] font-bold bg-amber-100 text-amber-800 px-1.5 py-0.5 rounded-full">Required</span>}
+                                    </div>
+                                    {addon.description && <p className="text-xs text-muted-foreground mt-0.5">{addon.description}</p>}
+                                  </div>
+                                  <div className="text-right shrink-0">
+                                    <p className="font-bold text-sm text-primary">+${addonPrice.toFixed(2)}</p>
+                                    <p className="text-xs text-muted-foreground">{addon.priceType === "per_day" ? `$${addon.price.toFixed(2)}/day` : "flat fee"}</p>
+                                  </div>
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
+                    </>
+                  );
+                })()}
 
                 <Separator />
 
