@@ -303,14 +303,14 @@ export default function StorefrontBook() {
                 <h1 className="text-2xl font-bold">Select Your Dates</h1>
 
                 {/* Calendar */}
-                <div className="bg-background rounded-2xl border shadow-sm p-4 flex justify-center">
+                <div className="bg-background rounded-2xl border shadow-sm p-6 flex justify-center">
                   <Calendar
                     mode="range"
                     selected={dateRange}
                     onSelect={setDateRange}
                     disabled={{ before: new Date() }}
                     numberOfMonths={1}
-                    className="[--cell-size:2.5rem]"
+                    className="[--cell-size:3.5rem] text-base w-full"
                   />
                 </div>
 
