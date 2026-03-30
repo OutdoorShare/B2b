@@ -12,6 +12,7 @@ import claimsRouter from "./claims";
 import superadminRouter from "./superadmin";
 import unitsRouter from "./units";
 import adminTeamRouter from "./admin-team";
+import signupRouter from "./signup";
 
 const router: IRouter = Router();
 
@@ -28,5 +29,6 @@ router.use(claimsRouter);
 router.use(superadminRouter);
 router.use(unitsRouter);
 router.use(adminTeamRouter);
+router.use(signupRouter);
 
 export default router;

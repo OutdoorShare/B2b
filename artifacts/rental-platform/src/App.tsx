@@ -14,6 +14,9 @@ import StorefrontGearDetail from "@/pages/storefront/gear-detail";
 import StorefrontBook from "@/pages/storefront/book";
 import StorefrontLogin from "@/pages/storefront/login";
 
+import GetStartedPage from "@/pages/public/get-started";
+import SignupPage from "@/pages/public/signup";
+import AdminOnboarding from "@/pages/admin/onboarding";
 import SuperAdminLogin from "@/pages/superadmin/login";
 import SuperAdminDashboard from "@/pages/superadmin/dashboard";
 import { SuperAdminLayout } from "@/components/layout/superadmin-layout";
@@ -42,6 +45,19 @@ const queryClient = new QueryClient();
 function Router() {
   return (
     <Switch>
+      {/* Public SaaS Routes */}
+      <Route path="/get-started">
+        <GetStartedPage />
+      </Route>
+      <Route path="/signup">
+        <SignupPage />
+      </Route>
+
+      {/* Admin Onboarding */}
+      <Route path="/admin/onboarding">
+        <AdminOnboarding />
+      </Route>
+
       {/* Super Admin Routes */}
       <Route path="/superadmin">
         <SuperAdminLogin />
