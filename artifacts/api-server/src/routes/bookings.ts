@@ -45,7 +45,7 @@ router.get("/bookings", async (req, res) => {
 router.post("/bookings", async (req, res) => {
   try {
     const body = req.body;
-    
+
     // Calculate total price
     const [listing] = await db.select().from(listingsTable).where(eq(listingsTable.id, body.listingId));
     if (!listing) { res.status(404).json({ error: "Listing not found" }); return; }
@@ -53,11 +53,23 @@ router.post("/bookings", async (req, res) => {
     const start = new Date(body.startDate);
     const end = new Date(body.endDate);
     const days = Math.max(1, Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)));
-    const totalPrice = parseFloat(listing.pricePerDay) * days * (body.quantity ?? 1);
+    const basePrice = parseFloat(listing.pricePerDay) * days * (body.quantity ?? 1);
 
+    // Sum selected addon prices
+    const addons: Array<{ id: number; name: string; price: number; priceType: string; subtotal: number }> = body.addons ?? [];
+    const addonsTotal = addons.reduce((sum, a) => {
+      const subtotal = a.priceType === "per_day" ? a.price * days : a.price;
+      return sum + subtotal;
+    }, 0);
+
+    const totalPrice = basePrice + addonsTotal;
+    const addonsData = addons.length > 0 ? JSON.stringify(addons) : null;
+
+    const { addons: _addons, ...restBody } = body;
     const [created] = await db.insert(bookingsTable).values({
-      ...body,
+      ...restBody,
       totalPrice: String(totalPrice),
+      addonsData,
     }).returning();
 
     res.status(201).json(formatBooking(created, listing.title));

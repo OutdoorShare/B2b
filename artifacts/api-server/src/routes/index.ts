@@ -7,6 +7,7 @@ import bookingsRouter from "./bookings";
 import quotesRouter from "./quotes";
 import analyticsRouter from "./analytics";
 import customersRouter from "./customers";
+import addonsRouter from "./addons";
 
 const router: IRouter = Router();
 
@@ -18,5 +19,6 @@ router.use(bookingsRouter);
 router.use(quotesRouter);
 router.use(analyticsRouter);
 router.use(customersRouter);
+router.use(addonsRouter);
 
 export default router;

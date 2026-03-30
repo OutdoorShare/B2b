@@ -4,3 +4,4 @@ export * from "./listings";
 export * from "./bookings";
 export * from "./quotes";
 export * from "./customers";
+export * from "./listing-addons";

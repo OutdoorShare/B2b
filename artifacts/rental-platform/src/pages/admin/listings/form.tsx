@@ -18,6 +18,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { ArrowLeft, Upload, X } from "lucide-react";
+import { AddonManager } from "@/components/addon-manager";
 
 export default function AdminListingsForm() {
   const [match, params] = useRoute("/admin/listings/:id/edit");
@@ -405,6 +406,17 @@ export default function AdminListingsForm() {
           </div>
         </div>
       </form>
+
+      {/* Add-ons manager — only available after the listing is created */}
+      {isEditing && id ? (
+        <div className="max-w-2xl mt-8">
+          <AddonManager listingId={id} />
+        </div>
+      ) : (
+        <div className="max-w-2xl mt-6 p-4 border border-dashed rounded-xl text-sm text-muted-foreground text-center">
+          Save the listing first, then you can add optional or required add-ons (insurance, GPS, helmets, etc.)
+        </div>
+      )}
     </div>
   );
 }

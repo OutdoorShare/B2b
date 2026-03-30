@@ -47,22 +47,30 @@ artifacts-monorepo/
 - `/admin` — Dashboard with live analytics: revenue, bookings, top gear, pending actions
 - `/admin/listings` — Manage all gear listings: create, edit, delete, photos, pricing, category
 - `/admin/listings/new` — New listing form
-- `/admin/listings/:id/edit` — Edit listing form
-- `/admin/bookings` — All bookings with status filters; confirm/cancel/complete actions
+- `/admin/listings/:id/edit` — Edit listing form + Add-ons manager
+- `/admin/bookings` — All bookings; list and calendar (month view, color-coded pills, status legend)
 - `/admin/bookings/:id` — Booking detail with customer info and admin notes
 - `/admin/quotes` — Custom quote builder and list
 - `/admin/quotes/new` — Build multi-item quotes with discounts
-- `/admin/analytics` — Revenue charts (recharts), booking status breakdown, top listings
+- `/admin/analytics` — Revenue, booking volume (bar chart), renter locations, status breakdown, top listings
 - `/admin/categories` — Manage gear categories
-- `/admin/settings` — Business profile, branding (colors, logo, cover), kiosk mode, policies, embed code
-- `/admin/kiosk` — Full-screen kiosk mode for in-store tablet use
+- `/admin/settings` — Business profile, branding (colors, logo, cover, preset themes), kiosk mode, policies, embed code
+- `/admin/kiosk` — Full-screen kiosk mode with QR code overlay and idle auto-close
 
 ### Tools Available in Admin
-- **Kiosk Mode** — Full-screen self-service booking for in-store iPad use
+- **Kiosk Mode** — Full-screen self-service booking for in-store iPad use; QR code for mobile completion
 - **Custom Quotes** — Build and send custom multi-item quotes with discounts
-- **Analytics** — Revenue over time, booking status breakdown, top performers, utilization
+- **Analytics** — Revenue over time, booking volume, renter locations (state/city), status breakdown, top performers
 - **Embed Code** — HTML snippet to embed booking page on external website
 - **Business Profile Editor** — Full white-label control: name, tagline, colors, logo, policies
+- **White-label Theming** — CSS variable-based theming; 8 preset themes; live color picker preview
+
+### Booking Storefront Features
+- Customer accounts with saved billing/card info (`rental_customer` in localStorage)
+- Multi-step booking: Dates + Add-ons → Payment → Agreement → Confirmation
+- Add-ons selection in Step 1 with live price update in sidebar
+- Required add-ons auto-selected and locked
+- Customer booking history on confirmation page
 
 ## Database Schema
 
@@ -70,8 +78,10 @@ Tables:
 - `business_profile` — Single-row business settings and branding
 - `categories` — Equipment categories
 - `listings` — Gear inventory with pricing, photos, specs
-- `bookings` — Customer reservations with status tracking
+- `bookings` — Customer reservations with status tracking; `addonsData` (JSON) column stores selected add-ons
 - `quotes` — Custom quotes with line items and discounts
+- `customers` — Customer accounts with saved billing info
+- `listing_addons` — Optional/required add-ons per listing (flat or per-day pricing)
 
 ## API Routes
 
@@ -79,12 +89,16 @@ All routes prefixed with `/api`:
 - `GET/PUT /business` — Business profile
 - `GET/POST /categories` — Categories
 - `GET/POST /listings`, `GET/PUT/DELETE /listings/:id` — Listings CRUD
-- `GET/POST /bookings`, `GET/PUT /bookings/:id` — Bookings
+- `GET/POST /bookings`, `GET/PUT /bookings/:id` — Bookings (POST accepts `addons` array)
 - `GET/POST /quotes`, `PUT /quotes/:id` — Quotes
+- `GET/POST /listings/:id/addons`, `PUT/DELETE /listings/:id/addons/:addonId` — Listing add-ons CRUD
 - `GET /analytics/summary` — Dashboard stats
 - `GET /analytics/revenue` — Revenue over time (7d/30d/90d/12m)
 - `GET /analytics/top-listings` — Top revenue listings
 - `GET /analytics/booking-status` — Status breakdown
+- `GET /analytics/booking-volume` — Bookings count by period
+- `GET /analytics/renter-locations` — Customer locations (state/city)
+- `POST /customers/register`, `POST /customers/login`, `GET/PUT /customers/:id` — Customer auth + profile
 
 ## TypeScript & Composite Projects
 

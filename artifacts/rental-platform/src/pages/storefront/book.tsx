@@ -22,6 +22,16 @@ const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
 type Step = "dates" | "payment" | "agreement" | "confirmation";
 
+type Addon = {
+  id: number;
+  name: string;
+  description: string | null;
+  price: number;
+  priceType: "flat" | "per_day";
+  isRequired: boolean;
+  isActive: boolean;
+};
+
 interface CustomerSession {
   id: number;
   email: string;
@@ -124,6 +134,26 @@ export default function StorefrontBook() {
   const [customerBookings, setCustomerBookings] = useState<any[]>([]);
   const [bookingsLoading, setBookingsLoading] = useState(false);
 
+  // Add-ons
+  const [availableAddons, setAvailableAddons] = useState<Addon[]>([]);
+  const [selectedAddonIds, setSelectedAddonIds] = useState<Set<number>>(new Set());
+
+  // Fetch addons for the listing; auto-select required ones
+  useEffect(() => {
+    if (!listingId) return;
+    fetch(`${BASE}/api/listings/${listingId}/addons`)
+      .then(r => r.json())
+      .then((data: Addon[]) => {
+        if (!Array.isArray(data)) return;
+        const active = data.filter(a => a.isActive);
+        setAvailableAddons(active);
+        // auto-select required addons
+        const required = new Set(active.filter(a => a.isRequired).map(a => a.id));
+        setSelectedAddonIds(required);
+      })
+      .catch(() => {});
+  }, [listingId]);
+
   useEffect(() => {
     if (step !== "confirmation" || !email) return;
     setBookingsLoading(true);
@@ -142,7 +172,12 @@ export default function StorefrontBook() {
 
   const subtotal = (listing?.pricePerDay ? parseFloat(String(listing.pricePerDay)) : 0) * days;
   const deposit = listing?.depositAmount ? parseFloat(String(listing.depositAmount)) : 0;
-  const total = subtotal + deposit;
+  const addonsSubtotal = useMemo(() => {
+    return availableAddons
+      .filter(a => selectedAddonIds.has(a.id))
+      .reduce((sum, a) => sum + (a.priceType === "per_day" ? a.price * days : a.price), 0);
+  }, [availableAddons, selectedAddonIds, days]);
+  const total = subtotal + addonsSubtotal + deposit;
 
   useEffect(() => {
     if (session) {
@@ -242,6 +277,16 @@ export default function StorefrontBook() {
 
     setIsSubmitting(true);
     try {
+      const selectedAddons = availableAddons
+        .filter(a => selectedAddonIds.has(a.id))
+        .map(a => ({
+          id: a.id,
+          name: a.name,
+          price: a.price,
+          priceType: a.priceType,
+          subtotal: a.priceType === "per_day" ? a.price * days : a.price,
+        }));
+
       const res = await fetch(`${BASE}/api/bookings`, {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -254,6 +299,7 @@ export default function StorefrontBook() {
           quantity: 1,
           notes: notes || undefined,
           source: "online",
+          addons: selectedAddons,
         })
       });
       const data = await res.json();
@@ -337,6 +383,72 @@ export default function StorefrontBook() {
                   <Label htmlFor="notes">Notes (optional)</Label>
                   <Textarea id="notes" value={notes} onChange={e => setNotes(e.target.value)} placeholder="Any special requests?" rows={2} />
                 </div>
+
+                {/* ── ADD-ONS ── */}
+                {availableAddons.length > 0 && (
+                  <div className="bg-background rounded-2xl border shadow-sm p-6 space-y-4">
+                    <div>
+                      <h2 className="font-bold text-base">Add-ons & Extras</h2>
+                      <p className="text-sm text-muted-foreground mt-0.5">Enhance your rental with optional upgrades.</p>
+                    </div>
+                    <div className="space-y-3">
+                      {availableAddons.map(addon => {
+                        const selected = selectedAddonIds.has(addon.id);
+                        const addonPrice = addon.priceType === "per_day" ? addon.price * days : addon.price;
+                        return (
+                          <button
+                            key={addon.id}
+                            type="button"
+                            disabled={addon.isRequired}
+                            onClick={() => {
+                              if (addon.isRequired) return;
+                              setSelectedAddonIds(prev => {
+                                const next = new Set(prev);
+                                if (next.has(addon.id)) next.delete(addon.id);
+                                else next.add(addon.id);
+                                return next;
+                              });
+                            }}
+                            className={`w-full flex items-start gap-4 border-2 rounded-xl p-4 text-left transition-all
+                              ${selected
+                                ? "border-primary bg-primary/5"
+                                : "border-border hover:border-primary/50 hover:bg-muted/30"
+                              }
+                              ${addon.isRequired ? "cursor-default" : "cursor-pointer"}
+                            `}
+                          >
+                            <div className={`w-5 h-5 rounded border-2 shrink-0 mt-0.5 flex items-center justify-center transition-colors
+                              ${selected ? "bg-primary border-primary" : "border-muted-foreground/40"}
+                            `}>
+                              {selected && (
+                                <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 12 12">
+                                  <path d="M2 6l3 3 5-5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                                </svg>
+                              )}
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <span className="font-semibold text-sm">{addon.name}</span>
+                                {addon.isRequired && (
+                                  <span className="text-[10px] font-bold bg-amber-100 text-amber-800 px-1.5 py-0.5 rounded-full">Required</span>
+                                )}
+                              </div>
+                              {addon.description && (
+                                <p className="text-xs text-muted-foreground mt-0.5">{addon.description}</p>
+                              )}
+                            </div>
+                            <div className="text-right shrink-0">
+                              <p className="font-bold text-sm text-primary">+${addonPrice.toFixed(2)}</p>
+                              <p className="text-xs text-muted-foreground">
+                                {addon.priceType === "per_day" ? `$${addon.price.toFixed(2)}/day` : "flat fee"}
+                              </p>
+                            </div>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
 
                 <Separator />
 
@@ -768,6 +880,12 @@ export default function StorefrontBook() {
                             <span>${listing.pricePerDay}/day × {days} day{days > 1 ? "s" : ""}</span>
                             <span>${subtotal.toFixed(2)}</span>
                           </div>
+                          {availableAddons.filter(a => selectedAddonIds.has(a.id)).map(a => (
+                            <div key={a.id} className="flex justify-between text-muted-foreground">
+                              <span className="truncate mr-2">{a.name}</span>
+                              <span>+${(a.priceType === "per_day" ? a.price * days : a.price).toFixed(2)}</span>
+                            </div>
+                          ))}
                           {deposit > 0 && (
                             <div className="flex justify-between text-muted-foreground">
                               <span>Refundable deposit</span>
