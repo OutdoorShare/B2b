@@ -51,8 +51,12 @@ export default function LoginPage() {
 
   // Admin section
   const [showAdminSection, setShowAdminSection] = useState(false);
+  const [adminTab, setAdminTab] = useState<"code" | "team">("code");
   const [adminCode, setAdminCode] = useState("");
   const [adminError, setAdminError] = useState("");
+  const [staffEmail, setStaffEmail] = useState("");
+  const [staffPassword, setStaffPassword] = useState("");
+  const [staffLoading, setStaffLoading] = useState(false);
 
   const handleCustomerAuth = async () => {
     setError("");
@@ -96,12 +100,31 @@ export default function LoginPage() {
   const handleAdminAccess = () => {
     setAdminError("");
     if (!adminCode.trim()) { setAdminError("Enter your admin code."); return; }
-    // Admin code validated client-side; in production this would be server-verified
     if (adminCode.trim() === "admin") {
       setLocation("/admin");
     } else {
       setAdminError("Invalid admin code.");
     }
+  };
+
+  const handleTeamLogin = async () => {
+    setAdminError("");
+    if (!staffEmail || !staffPassword) { setAdminError("Email and password are required."); return; }
+    setStaffLoading(true);
+    try {
+      const res = await fetch(`${BASE}/api/admin/auth/login`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: staffEmail, password: staffPassword }),
+      });
+      const data = await res.json();
+      if (!res.ok) { setAdminError(data.error || "Login failed."); return; }
+      localStorage.setItem("admin_session", JSON.stringify({ type: "user", token: data.token, id: data.user.id, name: data.user.name, email: data.user.email, role: data.user.role }));
+      toast({ title: `Welcome, ${data.user.name}!`, description: `Logged in as ${data.user.role}` });
+      setLocation("/admin");
+    } catch {
+      setAdminError("Connection error. Please try again.");
+    } finally { setStaffLoading(false); }
   };
 
   return (
@@ -236,31 +259,73 @@ export default function LoginPage() {
           </button>
 
           {showAdminSection && (
-            <div className="px-5 pb-5 space-y-3 border-t border-dashed border-slate-300 dark:border-slate-700 pt-4">
-              <p className="text-xs text-slate-500 dark:text-slate-400">
-                Enter your admin access code to reach the management dashboard.
-              </p>
-              <div className="space-y-1.5">
-                <Label className="text-slate-600 dark:text-slate-300 text-xs">Admin Code</Label>
-                <Input
-                  value={adminCode}
-                  onChange={e => setAdminCode(e.target.value)}
-                  type="password"
-                  placeholder="••••••"
-                  className="h-10 bg-white dark:bg-slate-800 border-slate-300 dark:border-slate-600 text-sm"
-                  onKeyDown={e => { if (e.key === "Enter") handleAdminAccess(); }}
-                />
+            <div className="border-t border-dashed border-slate-300 dark:border-slate-700">
+              {/* Sub-tabs */}
+              <div className="flex border-b border-slate-200 dark:border-slate-700">
+                {(["code", "team"] as const).map(t => (
+                  <button
+                    key={t}
+                    onClick={() => { setAdminTab(t); setAdminError(""); }}
+                    className={`flex-1 py-2.5 text-xs font-semibold transition-colors border-b-2 -mb-px
+                      ${adminTab === t ? "border-primary text-foreground" : "border-transparent text-slate-500 hover:text-slate-700"}`}
+                  >
+                    {t === "code" ? "Access Code" : "Staff Login"}
+                  </button>
+                ))}
               </div>
-              {adminError && <p className="text-xs text-destructive font-medium">{adminError}</p>}
-              <Button
-                variant="outline"
-                size="sm"
-                className="w-full border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800"
-                onClick={handleAdminAccess}
-              >
-                Access Dashboard
-              </Button>
-              <p className="text-[11px] text-slate-400 text-center">Default code: <code className="font-mono">admin</code></p>
+
+              <div className="px-5 py-4 space-y-3">
+                {adminTab === "code" ? (
+                  <>
+                    <p className="text-xs text-slate-500 dark:text-slate-400">Enter your admin access code to reach the management dashboard.</p>
+                    <div className="space-y-1.5">
+                      <Label className="text-slate-600 dark:text-slate-300 text-xs">Admin Code</Label>
+                      <Input
+                        value={adminCode}
+                        onChange={e => setAdminCode(e.target.value)}
+                        type="password"
+                        placeholder="••••••"
+                        className="h-10 bg-white dark:bg-slate-800 border-slate-300 dark:border-slate-600 text-sm"
+                        onKeyDown={e => { if (e.key === "Enter") handleAdminAccess(); }}
+                      />
+                    </div>
+                    {adminError && <p className="text-xs text-destructive font-medium">{adminError}</p>}
+                    <Button variant="outline" size="sm" className="w-full border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800" onClick={handleAdminAccess}>
+                      Access Dashboard
+                    </Button>
+                    <p className="text-[11px] text-slate-400 text-center">Default code: <code className="font-mono">admin</code></p>
+                  </>
+                ) : (
+                  <>
+                    <p className="text-xs text-slate-500 dark:text-slate-400">Sign in with your staff account credentials.</p>
+                    <div className="space-y-1.5">
+                      <Label className="text-slate-600 dark:text-slate-300 text-xs">Email</Label>
+                      <Input
+                        type="email"
+                        value={staffEmail}
+                        onChange={e => setStaffEmail(e.target.value)}
+                        placeholder="you@company.com"
+                        className="h-10 bg-white dark:bg-slate-800 border-slate-300 dark:border-slate-600 text-sm"
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label className="text-slate-600 dark:text-slate-300 text-xs">Password</Label>
+                      <Input
+                        type="password"
+                        value={staffPassword}
+                        onChange={e => setStaffPassword(e.target.value)}
+                        placeholder="••••••"
+                        className="h-10 bg-white dark:bg-slate-800 border-slate-300 dark:border-slate-600 text-sm"
+                        onKeyDown={e => { if (e.key === "Enter") handleTeamLogin(); }}
+                      />
+                    </div>
+                    {adminError && <p className="text-xs text-destructive font-medium">{adminError}</p>}
+                    <Button variant="outline" size="sm" className="w-full border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800" onClick={handleTeamLogin} disabled={staffLoading}>
+                      {staffLoading ? "Signing in…" : "Sign In"}
+                    </Button>
+                  </>
+                )}
+              </div>
             </div>
           )}
         </div>

@@ -9,7 +9,8 @@ import {
   MonitorSmartphone, 
   Settings,
   Tent,
-  ShieldAlert
+  ShieldAlert,
+  Users
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -21,6 +22,7 @@ const navigation = [
   { name: "Claims", href: "/admin/claims", icon: ShieldAlert },
   { name: "Analytics", href: "/admin/analytics", icon: BarChart3 },
   { name: "Categories", href: "/admin/categories", icon: Tags },
+  { name: "Team", href: "/admin/team", icon: Users },
   { name: "Kiosk Mode", href: "/admin/kiosk", icon: MonitorSmartphone },
   { name: "Settings", href: "/admin/settings", icon: Settings },
 ];

@@ -2,17 +2,20 @@ import { useState } from "react";
 import { Link, useLocation } from "wouter";
 import {
   LayoutDashboard, Building2, LogOut, ChevronRight,
-  Shield, Menu, X
+  Shield, Menu, X, Users
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const navigation = [
   { name: "Overview", href: "/superadmin/dashboard", icon: LayoutDashboard },
   { name: "Companies", href: "/superadmin/tenants", icon: Building2 },
+  { name: "Team", href: "/superadmin/team", icon: Users },
 ];
 
 function logout(setLocation: (to: string) => void) {
   localStorage.removeItem("superadmin_key");
+  localStorage.removeItem("superadmin_token");
+  localStorage.removeItem("superadmin_user");
   setLocation("/superadmin");
 }
 

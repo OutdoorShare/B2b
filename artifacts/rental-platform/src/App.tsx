@@ -33,6 +33,8 @@ import AdminKiosk from "@/pages/admin/kiosk";
 import AdminClaims from "@/pages/admin/claims/index";
 import AdminClaimDetail from "@/pages/admin/claims/detail";
 import AdminClaimsNew from "@/pages/admin/claims/new";
+import AdminTeam from "@/pages/admin/team";
+import SuperAdminTeam from "@/pages/superadmin/team";
 
 const queryClient = new QueryClient();
 
@@ -48,6 +50,9 @@ function Router() {
       </Route>
       <Route path="/superadmin/tenants">
         <SuperAdminLayout><SuperAdminDashboard /></SuperAdminLayout>
+      </Route>
+      <Route path="/superadmin/team">
+        <SuperAdminLayout><SuperAdminTeam /></SuperAdminLayout>
       </Route>
 
       {/* Admin Routes */}
@@ -98,6 +103,9 @@ function Router() {
       </Route>
       <Route path="/admin/claims/:id">
         <AdminLayout><AdminClaimDetail /></AdminLayout>
+      </Route>
+      <Route path="/admin/team">
+        <AdminLayout><AdminTeam /></AdminLayout>
       </Route>
 
       {/* Storefront Routes */}

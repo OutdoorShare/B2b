@@ -11,6 +11,7 @@ import addonsRouter from "./addons";
 import claimsRouter from "./claims";
 import superadminRouter from "./superadmin";
 import unitsRouter from "./units";
+import adminTeamRouter from "./admin-team";
 
 const router: IRouter = Router();
 
@@ -26,5 +27,6 @@ router.use(addonsRouter);
 router.use(claimsRouter);
 router.use(superadminRouter);
 router.use(unitsRouter);
+router.use(adminTeamRouter);
 
 export default router;
