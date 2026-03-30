@@ -8,7 +8,8 @@ import {
   Tags, 
   MonitorSmartphone, 
   Settings,
-  Tent
+  Tent,
+  ShieldAlert
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -17,6 +18,7 @@ const navigation = [
   { name: "Listings", href: "/admin/listings", icon: Package },
   { name: "Bookings", href: "/admin/bookings", icon: CalendarDays },
   { name: "Quotes", href: "/admin/quotes", icon: FileText },
+  { name: "Claims", href: "/admin/claims", icon: ShieldAlert },
   { name: "Analytics", href: "/admin/analytics", icon: BarChart3 },
   { name: "Categories", href: "/admin/categories", icon: Tags },
   { name: "Kiosk Mode", href: "/admin/kiosk", icon: MonitorSmartphone },

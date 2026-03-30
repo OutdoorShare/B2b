@@ -24,6 +24,9 @@ import AdminAnalytics from "@/pages/admin/analytics";
 import AdminCategories from "@/pages/admin/categories";
 import AdminSettings from "@/pages/admin/settings";
 import AdminKiosk from "@/pages/admin/kiosk";
+import AdminClaims from "@/pages/admin/claims/index";
+import AdminClaimDetail from "@/pages/admin/claims/detail";
+import AdminClaimsNew from "@/pages/admin/claims/new";
 
 const queryClient = new QueryClient();
 
@@ -66,6 +69,15 @@ function Router() {
       </Route>
       <Route path="/admin/kiosk">
         <AdminKiosk /> {/* Kiosk is full screen */}
+      </Route>
+      <Route path="/admin/claims">
+        <AdminLayout><AdminClaims /></AdminLayout>
+      </Route>
+      <Route path="/admin/claims/new">
+        <AdminLayout><AdminClaimsNew /></AdminLayout>
+      </Route>
+      <Route path="/admin/claims/:id">
+        <AdminLayout><AdminClaimDetail /></AdminLayout>
       </Route>
 
       {/* Storefront Routes */}

@@ -8,6 +8,7 @@ import quotesRouter from "./quotes";
 import analyticsRouter from "./analytics";
 import customersRouter from "./customers";
 import addonsRouter from "./addons";
+import claimsRouter from "./claims";
 
 const router: IRouter = Router();
 
@@ -20,5 +21,6 @@ router.use(quotesRouter);
 router.use(analyticsRouter);
 router.use(customersRouter);
 router.use(addonsRouter);
+router.use(claimsRouter);
 
 export default router;

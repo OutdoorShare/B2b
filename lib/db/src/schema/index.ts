@@ -5,3 +5,4 @@ export * from "./bookings";
 export * from "./quotes";
 export * from "./customers";
 export * from "./listing-addons";
+export * from "./claims";
