@@ -11,10 +11,9 @@ import {
 } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
 import { 
   ArrowLeft, Search, Car, Smartphone, Monitor, X, 
-  QrCode, Clock, ChevronRight
+  Clock, ChevronRight
 } from "lucide-react";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
@@ -51,9 +50,10 @@ export default function AdminKiosk() {
     { query: { queryKey: getGetListingsQueryKey({ status: "active", search: search || undefined, categoryId: activeCategory || undefined }) } }
   );
 
-  // Build the full booking URL for the QR code
-  const bookingUrl = selected
-    ? `${window.location.origin}${BASE}/book?listingId=${selected.id}`
+  // Build the full booking URL — uses the tenant's slug so it routes correctly
+  const tenantSlug = (profile as any)?.siteSlug ?? (profile as any)?.slug ?? "";
+  const bookingUrl = selected && tenantSlug
+    ? `${window.location.origin}${BASE}/${tenantSlug}/book?listingId=${selected.id}`
     : "";
 
   // Idle countdown — resets on any interaction
@@ -279,10 +279,22 @@ export default function AdminKiosk() {
                 <Button
                   size="lg"
                   className="w-full h-14 text-lg font-bold rounded-xl"
-                  onClick={() => setLocation(`/book?listingId=${selected.id}`)}
+                  disabled={!tenantSlug}
+                  onClick={() => {
+                    if (tenantSlug) setLocation(`/${tenantSlug}/book?listingId=${selected.id}`);
+                  }}
                 >
-                  <QrCode className="w-5 h-5 mr-2" />
+                  <Monitor className="w-5 h-5 mr-2" />
                   Book on This Kiosk
+                </Button>
+                <Button
+                  size="lg"
+                  variant="outline"
+                  className="w-full h-12 text-base font-semibold rounded-xl border-2"
+                  onClick={() => setSelected(null)}
+                >
+                  <Smartphone className="w-4 h-4 mr-2" />
+                  Done — Booked on My Phone
                 </Button>
               </div>
             </div>
