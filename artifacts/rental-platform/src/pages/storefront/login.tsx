@@ -160,12 +160,19 @@ export default function LoginPage() {
             ))}
           </div>
 
-          <div className="p-6 space-y-4">
+          <form
+            className="p-6 space-y-4"
+            onSubmit={e => { e.preventDefault(); handleCustomerAuth(); }}
+            autoComplete="on"
+          >
             {tab === "register" && (
               <>
                 <div className="space-y-1.5">
-                  <Label>Full Name</Label>
+                  <Label htmlFor="reg-name">Full Name</Label>
                   <Input
+                    id="reg-name"
+                    name="name"
+                    autoComplete="name"
                     value={name}
                     onChange={e => setName(e.target.value)}
                     placeholder="Jane Smith"
@@ -173,8 +180,11 @@ export default function LoginPage() {
                   />
                 </div>
                 <div className="space-y-1.5">
-                  <Label>Phone</Label>
+                  <Label htmlFor="reg-phone">Phone</Label>
                   <Input
+                    id="reg-phone"
+                    name="tel"
+                    autoComplete="tel"
                     value={phone}
                     onChange={e => setPhone(e.target.value)}
                     placeholder="+1 (555) 000-0000"
@@ -186,8 +196,11 @@ export default function LoginPage() {
             )}
 
             <div className="space-y-1.5">
-              <Label>Email</Label>
+              <Label htmlFor="login-email">Email</Label>
               <Input
+                id="login-email"
+                name="email"
+                autoComplete="email"
                 value={email}
                 onChange={e => setEmail(e.target.value)}
                 placeholder="you@example.com"
@@ -197,9 +210,12 @@ export default function LoginPage() {
             </div>
 
             <div className="space-y-1.5">
-              <Label>Password</Label>
+              <Label htmlFor="login-password">Password</Label>
               <div className="relative">
                 <Input
+                  id="login-password"
+                  name="password"
+                  autoComplete={tab === "register" ? "new-password" : "current-password"}
                   value={password}
                   onChange={e => setPassword(e.target.value)}
                   type={showPassword ? "text" : "password"}
@@ -218,8 +234,11 @@ export default function LoginPage() {
 
             {tab === "register" && (
               <div className="space-y-1.5">
-                <Label>Confirm Password</Label>
+                <Label htmlFor="login-confirm">Confirm Password</Label>
                 <Input
+                  id="login-confirm"
+                  name="confirm-password"
+                  autoComplete="new-password"
                   value={confirmPassword}
                   onChange={e => setConfirmPassword(e.target.value)}
                   type={showPassword ? "text" : "password"}
@@ -234,15 +253,15 @@ export default function LoginPage() {
             )}
 
             <Button
+              type="submit"
               className="w-full h-11 font-bold"
-              onClick={handleCustomerAuth}
               disabled={isSubmitting}
             >
               {isSubmitting
                 ? (tab === "login" ? "Signing in…" : "Creating account…")
                 : (tab === "login" ? "Sign In" : "Create Account")}
             </Button>
-          </div>
+          </form>
         </div>
 
         {/* Admin access — visually distinct */}
@@ -296,34 +315,41 @@ export default function LoginPage() {
                     <p className="text-[11px] text-slate-400 text-center">Default code: <code className="font-mono">admin</code></p>
                   </>
                 ) : (
-                  <>
-                    <p className="text-xs text-slate-500 dark:text-slate-400">Sign in with your staff account credentials.</p>
-                    <div className="space-y-1.5">
-                      <Label className="text-slate-600 dark:text-slate-300 text-xs">Email</Label>
-                      <Input
-                        type="email"
-                        value={staffEmail}
-                        onChange={e => setStaffEmail(e.target.value)}
-                        placeholder="you@company.com"
-                        className="h-10 bg-white dark:bg-slate-800 border-slate-300 dark:border-slate-600 text-sm"
-                      />
+                  <form onSubmit={e => { e.preventDefault(); handleTeamLogin(); }} autoComplete="on">
+                    <p className="text-xs text-slate-500 dark:text-slate-400 mb-3">Sign in with your staff account credentials.</p>
+                    <div className="space-y-3">
+                      <div className="space-y-1.5">
+                        <Label className="text-slate-600 dark:text-slate-300 text-xs" htmlFor="staff-email">Email</Label>
+                        <Input
+                          id="staff-email"
+                          name="email"
+                          autoComplete="email"
+                          type="email"
+                          value={staffEmail}
+                          onChange={e => setStaffEmail(e.target.value)}
+                          placeholder="you@company.com"
+                          className="h-10 bg-white dark:bg-slate-800 border-slate-300 dark:border-slate-600 text-sm"
+                        />
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label className="text-slate-600 dark:text-slate-300 text-xs" htmlFor="staff-password">Password</Label>
+                        <Input
+                          id="staff-password"
+                          name="password"
+                          autoComplete="current-password"
+                          type="password"
+                          value={staffPassword}
+                          onChange={e => setStaffPassword(e.target.value)}
+                          placeholder="••••••"
+                          className="h-10 bg-white dark:bg-slate-800 border-slate-300 dark:border-slate-600 text-sm"
+                        />
+                      </div>
+                      {adminError && <p className="text-xs text-destructive font-medium">{adminError}</p>}
+                      <Button type="submit" variant="outline" size="sm" className="w-full border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800" disabled={staffLoading}>
+                        {staffLoading ? "Signing in…" : "Sign In"}
+                      </Button>
                     </div>
-                    <div className="space-y-1.5">
-                      <Label className="text-slate-600 dark:text-slate-300 text-xs">Password</Label>
-                      <Input
-                        type="password"
-                        value={staffPassword}
-                        onChange={e => setStaffPassword(e.target.value)}
-                        placeholder="••••••"
-                        className="h-10 bg-white dark:bg-slate-800 border-slate-300 dark:border-slate-600 text-sm"
-                        onKeyDown={e => { if (e.key === "Enter") handleTeamLogin(); }}
-                      />
-                    </div>
-                    {adminError && <p className="text-xs text-destructive font-medium">{adminError}</p>}
-                    <Button variant="outline" size="sm" className="w-full border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800" onClick={handleTeamLogin} disabled={staffLoading}>
-                      {staffLoading ? "Signing in…" : "Sign In"}
-                    </Button>
-                  </>
+                  </form>
                 )}
               </div>
             </div>
