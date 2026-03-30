@@ -382,6 +382,59 @@ router.put("/superadmin/tenants/:id/bookings/:bid", requireSuperAdmin, async (re
   } catch { res.status(500).json({ error: "Failed to update booking" }); }
 });
 
+// ── GET /superadmin/listings ───────────────────────────────────────────────────
+router.get("/superadmin/listings", requireSuperAdmin, async (_req, res) => {
+  try {
+    const listings = await db.select().from(listingsTable).orderBy(listingsTable.createdAt);
+    res.json(listings.map(l => ({
+      ...l,
+      pricePerDay: parseFloat(l.pricePerDay),
+      pricePerWeek: l.pricePerWeek ? parseFloat(l.pricePerWeek) : null,
+      depositAmount: l.depositAmount ? parseFloat(l.depositAmount) : null,
+      createdAt: l.createdAt.toISOString(),
+      updatedAt: l.updatedAt.toISOString(),
+    })));
+  } catch { res.status(500).json({ error: "Failed to fetch listings" }); }
+});
+
+// ── PUT /superadmin/listings/:id ───────────────────────────────────────────────
+router.put("/superadmin/listings/:id", requireSuperAdmin, async (req, res) => {
+  try {
+    const id = parseInt(req.params.id);
+    const {
+      title, description, status, pricePerDay, pricePerWeek, depositAmount,
+      quantity, brand, model, condition, location, requirements, ageRestriction,
+    } = req.body;
+    const updates: any = { updatedAt: new Date() };
+    if (title !== undefined) updates.title = title.trim();
+    if (description !== undefined) updates.description = description.trim();
+    if (status !== undefined) updates.status = status;
+    if (pricePerDay !== undefined) updates.pricePerDay = String(pricePerDay);
+    if (pricePerWeek !== undefined) updates.pricePerWeek = pricePerWeek ? String(pricePerWeek) : null;
+    if (depositAmount !== undefined) updates.depositAmount = depositAmount ? String(depositAmount) : null;
+    if (quantity !== undefined) updates.quantity = Number(quantity);
+    if (brand !== undefined) updates.brand = brand || null;
+    if (model !== undefined) updates.model = model || null;
+    if (condition !== undefined) updates.condition = condition || null;
+    if (location !== undefined) updates.location = location || null;
+    if (requirements !== undefined) updates.requirements = requirements || null;
+    if (ageRestriction !== undefined) updates.ageRestriction = ageRestriction ? Number(ageRestriction) : null;
+    const [updated] = await db.update(listingsTable).set(updates).where(eq(listingsTable.id, id)).returning();
+    if (!updated) { res.status(404).json({ error: "Listing not found" }); return; }
+    res.json({ ...updated, pricePerDay: parseFloat(updated.pricePerDay), depositAmount: updated.depositAmount ? parseFloat(updated.depositAmount) : null, createdAt: updated.createdAt.toISOString(), updatedAt: updated.updatedAt.toISOString() });
+  } catch { res.status(500).json({ error: "Failed to update listing" }); }
+});
+
+// ── DELETE /superadmin/listings/:id ───────────────────────────────────────────
+router.delete("/superadmin/listings/:id", requireSuperAdmin, async (req, res) => {
+  try {
+    const id = parseInt(req.params.id);
+    const [deleted] = await db.delete(listingsTable).where(eq(listingsTable.id, id)).returning();
+    if (!deleted) { res.status(404).json({ error: "Listing not found" }); return; }
+    res.json({ ok: true });
+  } catch { res.status(500).json({ error: "Failed to delete listing" }); }
+});
+
 // ── GET /superadmin/stats ──────────────────────────────────────────────────────
 router.get("/superadmin/stats", requireSuperAdmin, async (_req, res) => {
   try {

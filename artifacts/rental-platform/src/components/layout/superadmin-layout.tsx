@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Link, useLocation } from "wouter";
 import {
   LayoutDashboard, Building2, LogOut, ChevronRight,
-  Menu, X, Users
+  Menu, X, Users, Package
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -11,6 +11,7 @@ const OS_GREEN = "#3ab549";
 const navigation = [
   { name: "Overview", href: "/superadmin/dashboard", icon: LayoutDashboard },
   { name: "Companies", href: "/superadmin/tenants", icon: Building2 },
+  { name: "All Products", href: "/superadmin/listings", icon: Package },
   { name: "Team", href: "/superadmin/team", icon: Users },
 ];
 
