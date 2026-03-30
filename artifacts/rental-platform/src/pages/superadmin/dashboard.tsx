@@ -4,7 +4,7 @@ import {
   Building2, Users, BarChart3, Package,
   Plus, Edit, Trash2, CheckCircle2, XCircle,
   AlertTriangle, RefreshCcw, Eye, EyeOff,
-  ChevronRight, Search
+  ChevronRight, Search, ExternalLink
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -275,7 +275,15 @@ export default function SuperAdminDashboard() {
                       {format(new Date(t.createdAt), "MMM d, yyyy")}
                     </td>
                     <td className="px-4 py-3.5">
-                      <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <div className="flex items-center gap-1">
+                        <Link href={`/superadmin/companies/${t.id}`}>
+                          <button
+                            title="Manage company"
+                            className="flex items-center gap-1 px-2.5 py-1 rounded text-xs font-semibold bg-violet-600/20 text-violet-300 hover:bg-violet-600/40 transition-colors"
+                          >
+                            Manage <ChevronRight className="w-3 h-3" />
+                          </button>
+                        </Link>
                         <button
                           onClick={() => handleStatusToggle(t)}
                           title={t.status === "active" ? "Deactivate" : "Activate"}
@@ -287,7 +295,7 @@ export default function SuperAdminDashboard() {
                         </button>
                         <button
                           onClick={() => openEdit(t)}
-                          title="Edit"
+                          title="Quick edit"
                           className="p-1.5 rounded text-slate-400 hover:text-white hover:bg-slate-700 transition-colors"
                         >
                           <Edit className="w-4 h-4" />

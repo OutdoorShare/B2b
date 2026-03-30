@@ -39,6 +39,7 @@ import AdminClaimDetail from "@/pages/admin/claims/detail";
 import AdminClaimsNew from "@/pages/admin/claims/new";
 import AdminTeam from "@/pages/admin/team";
 import SuperAdminTeam from "@/pages/superadmin/team";
+import CompanyDetailPage from "@/pages/superadmin/company-detail";
 
 const queryClient = new QueryClient();
 
@@ -70,6 +71,9 @@ function Router() {
       </Route>
       <Route path="/superadmin/team">
         <SuperAdminLayout><SuperAdminTeam /></SuperAdminLayout>
+      </Route>
+      <Route path="/superadmin/companies/:id">
+        <SuperAdminLayout><CompanyDetailPage /></SuperAdminLayout>
       </Route>
 
       {/* Admin Routes */}

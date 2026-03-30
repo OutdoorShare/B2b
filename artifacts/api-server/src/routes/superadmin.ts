@@ -1,7 +1,7 @@
 import { Router, type IRouter, type Request, type Response, type NextFunction } from "express";
 import { db } from "@workspace/db";
-import { tenantsTable, listingsTable, bookingsTable, superadminUsersTable } from "@workspace/db/schema";
-import { eq, sql } from "drizzle-orm";
+import { tenantsTable, listingsTable, bookingsTable, superadminUsersTable, businessProfileTable } from "@workspace/db/schema";
+import { eq, sql, desc } from "drizzle-orm";
 import { scrypt, randomBytes, timingSafeEqual } from "crypto";
 import { promisify } from "util";
 
@@ -269,6 +269,117 @@ router.delete("/superadmin/team/:id", requireSuperAdmin, async (req, res) => {
   } catch {
     res.status(500).json({ error: "Failed to delete team member" });
   }
+});
+
+// ── GET /superadmin/tenants/:id (single tenant) ───────────────────────────────
+router.get("/superadmin/tenants/:id", requireSuperAdmin, async (req, res) => {
+  try {
+    const id = parseInt(req.params.id);
+    const [t] = await db.select().from(tenantsTable).where(eq(tenantsTable.id, id)).limit(1);
+    if (!t) { res.status(404).json({ error: "Not found" }); return; }
+    const [{ listingCount }] = await db.select({ listingCount: sql<number>`count(*)::int` }).from(listingsTable);
+    const [{ bookingCount }] = await db.select({ bookingCount: sql<number>`count(*)::int` }).from(bookingsTable);
+    res.json({ ...safeTenant(t), listingCount, bookingCount });
+  } catch { res.status(500).json({ error: "Failed to fetch tenant" }); }
+});
+
+// ── GET/PUT /superadmin/tenants/:id/business ───────────────────────────────────
+router.get("/superadmin/tenants/:id/business", requireSuperAdmin, async (_req, res) => {
+  try {
+    let [p] = await db.select().from(businessProfileTable).limit(1);
+    if (!p) {
+      const [created] = await db.insert(businessProfileTable).values({}).returning();
+      p = created;
+    }
+    res.json({ ...p, depositPercent: parseFloat(p.depositPercent ?? "25"), createdAt: p.createdAt.toISOString(), updatedAt: p.updatedAt.toISOString() });
+  } catch { res.status(500).json({ error: "Failed to fetch business profile" }); }
+});
+
+router.put("/superadmin/tenants/:id/business", requireSuperAdmin, async (req, res) => {
+  try {
+    let [p] = await db.select().from(businessProfileTable).limit(1);
+    const body = req.body;
+    if (!p) {
+      const [created] = await db.insert(businessProfileTable).values({ ...body, depositPercent: String(body.depositPercent ?? "25") }).returning();
+      p = created;
+    } else {
+      const [updated] = await db.update(businessProfileTable).set({ ...body, depositPercent: body.depositPercent !== undefined ? String(body.depositPercent) : undefined, updatedAt: new Date() }).where(eq(businessProfileTable.id, p.id)).returning();
+      p = updated;
+    }
+    res.json({ ...p, depositPercent: parseFloat(p.depositPercent ?? "25"), createdAt: p.createdAt.toISOString(), updatedAt: p.updatedAt.toISOString() });
+  } catch { res.status(500).json({ error: "Failed to update business profile" }); }
+});
+
+// ── GET/POST/PUT/DELETE /superadmin/tenants/:id/listings ──────────────────────
+router.get("/superadmin/tenants/:id/listings", requireSuperAdmin, async (_req, res) => {
+  try {
+    const rows = await db.select().from(listingsTable).orderBy(desc(listingsTable.createdAt));
+    res.json(rows.map(l => ({ ...l, pricePerDay: parseFloat(l.pricePerDay ?? "0"), pricePerWeek: l.pricePerWeek ? parseFloat(l.pricePerWeek) : null, createdAt: l.createdAt.toISOString(), updatedAt: l.updatedAt.toISOString() })));
+  } catch { res.status(500).json({ error: "Failed to fetch listings" }); }
+});
+
+router.post("/superadmin/tenants/:id/listings", requireSuperAdmin, async (req, res) => {
+  try {
+    const { title, description, pricePerDay, pricePerWeek, quantity, status, categoryId, condition, brand, model, location, requirements, depositAmount } = req.body;
+    if (!title || !pricePerDay) { res.status(400).json({ error: "title and pricePerDay required" }); return; }
+    const [created] = await db.insert(listingsTable).values({
+      title, description: description || "", pricePerDay: String(pricePerDay),
+      pricePerWeek: pricePerWeek ? String(pricePerWeek) : null,
+      quantity: quantity ?? 1, status: status ?? "active",
+      categoryId: categoryId ?? null, condition: condition ?? null,
+      brand: brand ?? null, model: model ?? null, location: location ?? null,
+      requirements: requirements ?? null, depositAmount: depositAmount ? String(depositAmount) : null,
+    }).returning();
+    res.status(201).json({ ...created, pricePerDay: parseFloat(created.pricePerDay), createdAt: created.createdAt.toISOString(), updatedAt: created.updatedAt.toISOString() });
+  } catch { res.status(500).json({ error: "Failed to create listing" }); }
+});
+
+router.put("/superadmin/tenants/:id/listings/:lid", requireSuperAdmin, async (req, res) => {
+  try {
+    const lid = parseInt(req.params.lid);
+    const body = req.body;
+    const updates: any = { updatedAt: new Date() };
+    const fields = ["title","description","status","quantity","categoryId","condition","brand","model","location","requirements"];
+    fields.forEach(f => { if (body[f] !== undefined) updates[f] = body[f]; });
+    if (body.pricePerDay !== undefined) updates.pricePerDay = String(body.pricePerDay);
+    if (body.pricePerWeek !== undefined) updates.pricePerWeek = body.pricePerWeek ? String(body.pricePerWeek) : null;
+    if (body.depositAmount !== undefined) updates.depositAmount = body.depositAmount ? String(body.depositAmount) : null;
+    const [updated] = await db.update(listingsTable).set(updates).where(eq(listingsTable.id, lid)).returning();
+    if (!updated) { res.status(404).json({ error: "Listing not found" }); return; }
+    res.json({ ...updated, pricePerDay: parseFloat(updated.pricePerDay), createdAt: updated.createdAt.toISOString(), updatedAt: updated.updatedAt.toISOString() });
+  } catch { res.status(500).json({ error: "Failed to update listing" }); }
+});
+
+router.delete("/superadmin/tenants/:id/listings/:lid", requireSuperAdmin, async (req, res) => {
+  try {
+    const lid = parseInt(req.params.lid);
+    const [deleted] = await db.delete(listingsTable).where(eq(listingsTable.id, lid)).returning();
+    if (!deleted) { res.status(404).json({ error: "Listing not found" }); return; }
+    res.json({ ok: true });
+  } catch { res.status(500).json({ error: "Failed to delete listing" }); }
+});
+
+// ── GET /superadmin/tenants/:id/bookings ──────────────────────────────────────
+router.get("/superadmin/tenants/:id/bookings", requireSuperAdmin, async (req, res) => {
+  try {
+    const { limit = "50", status } = req.query as Record<string, string>;
+    let query = db.select().from(bookingsTable).orderBy(desc(bookingsTable.createdAt)).limit(parseInt(limit));
+    const rows = await (status ? db.select().from(bookingsTable).where(eq(bookingsTable.status, status as any)).orderBy(desc(bookingsTable.createdAt)).limit(parseInt(limit)) : query);
+    res.json(rows.map(b => ({ ...b, totalPrice: parseFloat(b.totalPrice ?? "0"), createdAt: b.createdAt.toISOString(), updatedAt: b.updatedAt.toISOString() })));
+  } catch { res.status(500).json({ error: "Failed to fetch bookings" }); }
+});
+
+router.put("/superadmin/tenants/:id/bookings/:bid", requireSuperAdmin, async (req, res) => {
+  try {
+    const bid = parseInt(req.params.bid);
+    const { status, adminNotes } = req.body;
+    const updates: any = { updatedAt: new Date() };
+    if (status) updates.status = status;
+    if (adminNotes !== undefined) updates.adminNotes = adminNotes;
+    const [updated] = await db.update(bookingsTable).set(updates).where(eq(bookingsTable.id, bid)).returning();
+    if (!updated) { res.status(404).json({ error: "Booking not found" }); return; }
+    res.json({ ...updated, totalPrice: parseFloat(updated.totalPrice ?? "0"), createdAt: updated.createdAt.toISOString(), updatedAt: updated.updatedAt.toISOString() });
+  } catch { res.status(500).json({ error: "Failed to update booking" }); }
 });
 
 // ── GET /superadmin/stats ──────────────────────────────────────────────────────

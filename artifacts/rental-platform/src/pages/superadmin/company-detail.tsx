@@ -1,0 +1,586 @@
+import { useState, useEffect, useCallback } from "react";
+import { useParams, useLocation } from "wouter";
+import {
+  ArrowLeft, Building2, Package, CalendarDays, Settings2,
+  Plus, Edit2, Trash2, Save, X, CheckCircle2, XCircle,
+  AlertTriangle, Eye, EyeOff, ExternalLink, RefreshCcw,
+  Globe, Phone, Mail, MapPin, Palette
+} from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { Badge } from "@/components/ui/badge";
+import { Separator } from "@/components/ui/separator";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { useToast } from "@/hooks/use-toast";
+import { format } from "date-fns";
+
+const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
+function getToken() { return localStorage.getItem("superadmin_token") ?? ""; }
+async function sa(path: string, opts?: RequestInit) {
+  return fetch(`${BASE}/api${path}`, {
+    ...opts,
+    headers: { "Content-Type": "application/json", "x-superadmin-token": getToken(), ...opts?.headers },
+  });
+}
+
+// ─── Types ───────────────────────────────────────────────────────────────────
+type Tenant = { id: number; name: string; slug: string; email: string; plan: string; status: string; maxListings: number; contactName?: string; phone?: string; notes?: string; createdAt: string; listingCount: number; bookingCount: number };
+type BizProfile = { name: string; tagline: string; description: string; logoUrl?: string; primaryColor: string; accentColor: string; email: string; phone: string; website?: string; location: string; address?: string; city?: string; state?: string; zipCode?: string; socialInstagram?: string; socialFacebook?: string; depositRequired: boolean; depositPercent: number; cancellationPolicy: string; rentalTerms?: string };
+type Listing = { id: number; title: string; description: string; pricePerDay: number; pricePerWeek?: number | null; quantity: number; status: string; brand?: string; model?: string; condition?: string; location?: string; requirements?: string; depositAmount?: number | null; createdAt: string };
+type Booking = { id: number; customerName: string; customerEmail: string; startDate: string; endDate: string; quantity: number; totalPrice: number; status: string; source: string; adminNotes?: string; createdAt: string; listingId: number };
+
+const PLAN_COLORS: Record<string, string> = { starter: "bg-slate-700 text-slate-200", professional: "bg-blue-900/60 text-blue-300", enterprise: "bg-violet-900/60 text-violet-300" };
+const STATUS_COLORS: Record<string, string> = { active: "bg-green-900/50 text-green-300", inactive: "bg-slate-700 text-slate-400", suspended: "bg-red-900/50 text-red-300" };
+const BOOKING_COLORS: Record<string, string> = { pending: "bg-amber-900/50 text-amber-300", confirmed: "bg-blue-900/50 text-blue-300", active: "bg-green-900/50 text-green-300", completed: "bg-slate-700 text-slate-300", cancelled: "bg-red-900/50 text-red-300" };
+
+// ─── Account Tab ─────────────────────────────────────────────────────────────
+function AccountTab({ tenant, tenantId, onSaved }: { tenant: Tenant; tenantId: number; onSaved: () => void }) {
+  const { toast } = useToast();
+  const [saving, setSaving] = useState(false);
+  const [showPw, setShowPw] = useState(false);
+  const [form, setForm] = useState({ name: tenant.name, slug: tenant.slug, email: tenant.email, plan: tenant.plan, status: tenant.status, maxListings: String(tenant.maxListings), contactName: tenant.contactName ?? "", phone: tenant.phone ?? "", notes: tenant.notes ?? "", password: "" });
+  const set = (k: string, v: string) => setForm(f => ({ ...f, [k]: v }));
+
+  const save = async () => {
+    setSaving(true);
+    try {
+      const body: any = { name: form.name, slug: form.slug, email: form.email, plan: form.plan, status: form.status, maxListings: parseInt(form.maxListings), contactName: form.contactName || null, phone: form.phone || null, notes: form.notes || null };
+      if (form.password) body.password = form.password;
+      const res = await sa(`/superadmin/tenants/${tenantId}`, { method: "PUT", body: JSON.stringify(body) });
+      if (!res.ok) { const d = await res.json(); toast({ title: d.error ?? "Save failed", variant: "destructive" }); return; }
+      toast({ title: "Account saved" });
+      setForm(f => ({ ...f, password: "" }));
+      onSaved();
+    } finally { setSaving(false); }
+  };
+
+  return (
+    <div className="space-y-6 max-w-2xl">
+      <div className="grid grid-cols-2 gap-4">
+        <div className="col-span-2 space-y-1.5">
+          <Label className="text-slate-300 text-xs">Company Name</Label>
+          <Input value={form.name} onChange={e => set("name", e.target.value)} className="bg-slate-800 border-slate-600 text-white" />
+        </div>
+        <div className="space-y-1.5">
+          <Label className="text-slate-300 text-xs">URL Slug</Label>
+          <Input value={form.slug} onChange={e => set("slug", e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ""))} className="bg-slate-800 border-slate-600 text-white font-mono" />
+        </div>
+        <div className="space-y-1.5">
+          <Label className="text-slate-300 text-xs">Plan</Label>
+          <Select value={form.plan} onValueChange={v => set("plan", v)}>
+            <SelectTrigger className="bg-slate-800 border-slate-600 text-white"><SelectValue /></SelectTrigger>
+            <SelectContent className="bg-slate-800 border-slate-700 text-white">
+              {["starter","professional","enterprise"].map(p => <SelectItem key={p} value={p} className="capitalize focus:bg-slate-700">{p}</SelectItem>)}
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="col-span-2 space-y-1.5">
+          <Label className="text-slate-300 text-xs">Admin Email</Label>
+          <Input type="email" value={form.email} onChange={e => set("email", e.target.value)} className="bg-slate-800 border-slate-600 text-white" />
+        </div>
+        <div className="space-y-1.5">
+          <Label className="text-slate-300 text-xs">New Password <span className="text-slate-500">(leave blank to keep)</span></Label>
+          <div className="relative">
+            <Input type={showPw ? "text" : "password"} value={form.password} onChange={e => set("password", e.target.value)} placeholder="New password…" className="bg-slate-800 border-slate-600 text-white pr-9" />
+            <button type="button" onClick={() => setShowPw(v => !v)} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400">{showPw ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}</button>
+          </div>
+        </div>
+        <div className="space-y-1.5">
+          <Label className="text-slate-300 text-xs">Status</Label>
+          <Select value={form.status} onValueChange={v => set("status", v)}>
+            <SelectTrigger className="bg-slate-800 border-slate-600 text-white"><SelectValue /></SelectTrigger>
+            <SelectContent className="bg-slate-800 border-slate-700 text-white">
+              {["active","inactive","suspended"].map(s => <SelectItem key={s} value={s} className="capitalize focus:bg-slate-700">{s}</SelectItem>)}
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="space-y-1.5">
+          <Label className="text-slate-300 text-xs">Contact Name</Label>
+          <Input value={form.contactName} onChange={e => set("contactName", e.target.value)} className="bg-slate-800 border-slate-600 text-white" />
+        </div>
+        <div className="space-y-1.5">
+          <Label className="text-slate-300 text-xs">Phone</Label>
+          <Input value={form.phone} onChange={e => set("phone", e.target.value)} className="bg-slate-800 border-slate-600 text-white" />
+        </div>
+        <div className="space-y-1.5">
+          <Label className="text-slate-300 text-xs">Max Listings</Label>
+          <Input type="number" min="1" value={form.maxListings} onChange={e => set("maxListings", e.target.value)} className="bg-slate-800 border-slate-600 text-white" />
+        </div>
+        <div className="col-span-2 space-y-1.5">
+          <Label className="text-slate-300 text-xs">Internal Notes</Label>
+          <Textarea value={form.notes} onChange={e => set("notes", e.target.value)} rows={2} className="bg-slate-800 border-slate-600 text-white resize-none" />
+        </div>
+      </div>
+      <Button onClick={save} disabled={saving} className="bg-violet-600 hover:bg-violet-700 text-white gap-1.5">
+        <Save className="w-4 h-4" />{saving ? "Saving…" : "Save Account"}
+      </Button>
+    </div>
+  );
+}
+
+// ─── Business Profile Tab ─────────────────────────────────────────────────────
+function StorefrontTab({ tenantId }: { tenantId: number }) {
+  const { toast } = useToast();
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [f, setF] = useState<Partial<BizProfile>>({});
+  const set = (k: string, v: any) => setF(p => ({ ...p, [k]: v }));
+
+  useEffect(() => {
+    sa(`/superadmin/tenants/${tenantId}/business`).then(r => r.json()).then(d => { setF(d); setLoading(false); });
+  }, [tenantId]);
+
+  const save = async () => {
+    setSaving(true);
+    try {
+      const res = await sa(`/superadmin/tenants/${tenantId}/business`, { method: "PUT", body: JSON.stringify(f) });
+      if (!res.ok) { toast({ title: "Save failed", variant: "destructive" }); return; }
+      toast({ title: "Business profile saved" });
+    } finally { setSaving(false); }
+  };
+
+  if (loading) return <div className="text-slate-400 py-8">Loading…</div>;
+
+  const field = (label: string, key: keyof BizProfile, type = "text", placeholder?: string) => (
+    <div className="space-y-1.5">
+      <Label className="text-slate-300 text-xs">{label}</Label>
+      <Input type={type} value={(f[key] as string) ?? ""} onChange={e => set(key, e.target.value)} placeholder={placeholder} className="bg-slate-800 border-slate-600 text-white placeholder:text-slate-500" />
+    </div>
+  );
+
+  return (
+    <div className="space-y-6 max-w-2xl">
+      {/* Identity */}
+      <div>
+        <p className="text-xs font-bold uppercase tracking-widest text-slate-500 mb-3">Identity</p>
+        <div className="grid grid-cols-2 gap-4">
+          <div className="col-span-2 space-y-1.5">
+            <Label className="text-slate-300 text-xs">Business Name</Label>
+            <Input value={f.name ?? ""} onChange={e => set("name", e.target.value)} className="bg-slate-800 border-slate-600 text-white" />
+          </div>
+          {field("Tagline", "tagline", "text", "Your next adventure starts here")}
+          {field("Website", "website", "url", "https://")}
+          <div className="col-span-2 space-y-1.5">
+            <Label className="text-slate-300 text-xs">Description</Label>
+            <Textarea value={f.description ?? ""} onChange={e => set("description", e.target.value)} rows={3} className="bg-slate-800 border-slate-600 text-white resize-none" />
+          </div>
+          {field("Logo URL", "logoUrl", "url", "https://...")}
+        </div>
+      </div>
+
+      <Separator className="bg-slate-800" />
+
+      {/* Branding */}
+      <div>
+        <p className="text-xs font-bold uppercase tracking-widest text-slate-500 mb-3 flex items-center gap-1.5"><Palette className="w-3 h-3" />Branding</p>
+        <div className="grid grid-cols-2 gap-4">
+          <div className="space-y-1.5">
+            <Label className="text-slate-300 text-xs">Primary Color</Label>
+            <div className="flex gap-2">
+              <input type="color" value={f.primaryColor ?? "#2d6a4f"} onChange={e => set("primaryColor", e.target.value)} className="w-10 h-10 rounded border border-slate-600 bg-slate-800 p-0.5 cursor-pointer" />
+              <Input value={f.primaryColor ?? ""} onChange={e => set("primaryColor", e.target.value)} className="bg-slate-800 border-slate-600 text-white font-mono" />
+            </div>
+          </div>
+          <div className="space-y-1.5">
+            <Label className="text-slate-300 text-xs">Accent Color</Label>
+            <div className="flex gap-2">
+              <input type="color" value={f.accentColor ?? "#52b788"} onChange={e => set("accentColor", e.target.value)} className="w-10 h-10 rounded border border-slate-600 bg-slate-800 p-0.5 cursor-pointer" />
+              <Input value={f.accentColor ?? ""} onChange={e => set("accentColor", e.target.value)} className="bg-slate-800 border-slate-600 text-white font-mono" />
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <Separator className="bg-slate-800" />
+
+      {/* Contact */}
+      <div>
+        <p className="text-xs font-bold uppercase tracking-widest text-slate-500 mb-3 flex items-center gap-1.5"><Mail className="w-3 h-3" />Contact</p>
+        <div className="grid grid-cols-2 gap-4">
+          {field("Contact Email", "email", "email")}
+          {field("Phone", "phone", "tel")}
+          {field("Location Display", "location", "text", "Denver, CO")}
+          {field("Street Address", "address")}
+          {field("City", "city")}
+          {field("State", "state")}
+          {field("Zip", "zipCode")}
+        </div>
+      </div>
+
+      <Separator className="bg-slate-800" />
+
+      {/* Social */}
+      <div>
+        <p className="text-xs font-bold uppercase tracking-widest text-slate-500 mb-3 flex items-center gap-1.5"><Globe className="w-3 h-3" />Social Media</p>
+        <div className="grid grid-cols-2 gap-4">
+          {field("Instagram", "socialInstagram", "text", "@handle")}
+          {field("Facebook", "socialFacebook", "text", "fb.com/page")}
+        </div>
+      </div>
+
+      <Separator className="bg-slate-800" />
+
+      {/* Policies */}
+      <div>
+        <p className="text-xs font-bold uppercase tracking-widest text-slate-500 mb-3">Policies</p>
+        <div className="grid grid-cols-2 gap-4">
+          <div className="space-y-1.5">
+            <Label className="text-slate-300 text-xs">Deposit %</Label>
+            <Input type="number" min="0" max="100" value={f.depositPercent ?? ""} onChange={e => set("depositPercent", parseFloat(e.target.value))} className="bg-slate-800 border-slate-600 text-white" />
+          </div>
+          <div className="col-span-2 space-y-1.5">
+            <Label className="text-slate-300 text-xs">Cancellation Policy</Label>
+            <Textarea value={f.cancellationPolicy ?? ""} onChange={e => set("cancellationPolicy", e.target.value)} rows={2} className="bg-slate-800 border-slate-600 text-white resize-none" />
+          </div>
+          <div className="col-span-2 space-y-1.5">
+            <Label className="text-slate-300 text-xs">Rental Terms</Label>
+            <Textarea value={f.rentalTerms ?? ""} onChange={e => set("rentalTerms", e.target.value)} rows={3} className="bg-slate-800 border-slate-600 text-white resize-none" />
+          </div>
+        </div>
+      </div>
+
+      <Button onClick={save} disabled={saving} className="bg-violet-600 hover:bg-violet-700 text-white gap-1.5">
+        <Save className="w-4 h-4" />{saving ? "Saving…" : "Save Storefront Settings"}
+      </Button>
+    </div>
+  );
+}
+
+// ─── Listings Tab ─────────────────────────────────────────────────────────────
+const emptyListing = { title: "", description: "", pricePerDay: "", pricePerWeek: "", quantity: "1", status: "active", brand: "", model: "", condition: "", location: "", requirements: "", depositAmount: "" };
+
+function ListingsTab({ tenantId }: { tenantId: number }) {
+  const { toast } = useToast();
+  const [listings, setListings] = useState<Listing[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [showForm, setShowForm] = useState(false);
+  const [editListing, setEditListing] = useState<Listing | null>(null);
+  const [deleteId, setDeleteId] = useState<number | null>(null);
+  const [form, setForm] = useState({ ...emptyListing });
+  const [saving, setSaving] = useState(false);
+  const setF = (k: string, v: string) => setForm(f => ({ ...f, [k]: v }));
+
+  const load = useCallback(async () => {
+    const r = await sa(`/superadmin/tenants/${tenantId}/listings`);
+    setListings(await r.json());
+    setLoading(false);
+  }, [tenantId]);
+
+  useEffect(() => { load(); }, [load]);
+
+  const openCreate = () => { setEditListing(null); setForm({ ...emptyListing }); setShowForm(true); };
+  const openEdit = (l: Listing) => {
+    setEditListing(l);
+    setForm({ title: l.title, description: l.description ?? "", pricePerDay: String(l.pricePerDay), pricePerWeek: l.pricePerWeek ? String(l.pricePerWeek) : "", quantity: String(l.quantity), status: l.status, brand: l.brand ?? "", model: l.model ?? "", condition: l.condition ?? "", location: l.location ?? "", requirements: l.requirements ?? "", depositAmount: l.depositAmount ? String(l.depositAmount) : "" });
+    setShowForm(true);
+  };
+
+  const save = async () => {
+    if (!form.title || !form.pricePerDay) { toast({ title: "Title and price required", variant: "destructive" }); return; }
+    setSaving(true);
+    try {
+      const body = { title: form.title, description: form.description, pricePerDay: parseFloat(form.pricePerDay), pricePerWeek: form.pricePerWeek ? parseFloat(form.pricePerWeek) : null, quantity: parseInt(form.quantity) || 1, status: form.status, brand: form.brand || null, model: form.model || null, condition: form.condition || null, location: form.location || null, requirements: form.requirements || null, depositAmount: form.depositAmount ? parseFloat(form.depositAmount) : null };
+      const res = editListing
+        ? await sa(`/superadmin/tenants/${tenantId}/listings/${editListing.id}`, { method: "PUT", body: JSON.stringify(body) })
+        : await sa(`/superadmin/tenants/${tenantId}/listings`, { method: "POST", body: JSON.stringify(body) });
+      if (!res.ok) { const d = await res.json(); toast({ title: d.error ?? "Save failed", variant: "destructive" }); return; }
+      toast({ title: editListing ? "Listing updated" : "Listing created" });
+      setShowForm(false);
+      load();
+    } finally { setSaving(false); }
+  };
+
+  const deleteListing = async () => {
+    if (!deleteId) return;
+    await sa(`/superadmin/tenants/${tenantId}/listings/${deleteId}`, { method: "DELETE" });
+    toast({ title: "Listing deleted" });
+    setDeleteId(null);
+    load();
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <p className="text-slate-400 text-sm">{listings.length} listings</p>
+        <Button onClick={openCreate} size="sm" className="bg-violet-600 hover:bg-violet-700 text-white gap-1.5"><Plus className="w-4 h-4" />New Listing</Button>
+      </div>
+
+      {loading ? <div className="text-slate-400 py-8">Loading…</div> : listings.length === 0 ? (
+        <div className="bg-slate-900 border border-slate-800 rounded-xl p-12 text-center">
+          <Package className="w-10 h-10 text-slate-700 mx-auto mb-3" />
+          <p className="text-slate-400 font-semibold">No listings yet</p>
+          <Button onClick={openCreate} size="sm" className="mt-4 bg-violet-600 hover:bg-violet-700 text-white gap-1.5"><Plus className="w-4 h-4" />Create First Listing</Button>
+        </div>
+      ) : (
+        <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden">
+          <table className="w-full text-sm">
+            <thead><tr className="border-b border-slate-800"><th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">Title</th><th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">Price/Day</th><th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">Qty</th><th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">Status</th><th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">Actions</th></tr></thead>
+            <tbody>
+              {listings.map(l => (
+                <tr key={l.id} className="border-b border-slate-800/50 hover:bg-slate-800/30 group">
+                  <td className="px-4 py-3">
+                    <p className="font-medium text-white">{l.title}</p>
+                    {l.brand && <p className="text-xs text-slate-500">{l.brand}{l.model ? ` — ${l.model}` : ""}</p>}
+                  </td>
+                  <td className="px-4 py-3 text-slate-300">${l.pricePerDay.toFixed(2)}</td>
+                  <td className="px-4 py-3 text-slate-300">{l.quantity}</td>
+                  <td className="px-4 py-3">
+                    <span className={`text-[11px] font-bold px-2 py-0.5 rounded-full capitalize ${l.status === "active" ? "bg-green-900/50 text-green-300" : "bg-slate-700 text-slate-400"}`}>{l.status}</span>
+                  </td>
+                  <td className="px-4 py-3">
+                    <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <button onClick={() => openEdit(l)} className="p-1.5 rounded text-slate-400 hover:text-white hover:bg-slate-700"><Edit2 className="w-3.5 h-3.5" /></button>
+                      <button onClick={() => setDeleteId(l.id)} className="p-1.5 rounded text-slate-400 hover:text-red-400 hover:bg-slate-700"><Trash2 className="w-3.5 h-3.5" /></button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {/* Listing Form Dialog */}
+      <Dialog open={showForm} onOpenChange={v => { if (!v) setShowForm(false); }}>
+        <DialogContent className="bg-slate-900 border-slate-700 text-white max-w-lg max-h-[90vh] overflow-y-auto">
+          <DialogHeader><DialogTitle className="text-white">{editListing ? "Edit Listing" : "New Listing"}</DialogTitle></DialogHeader>
+          <div className="space-y-3 py-2">
+            <div className="space-y-1.5"><Label className="text-slate-300 text-xs">Title *</Label><Input value={form.title} onChange={e => setF("title", e.target.value)} className="bg-slate-800 border-slate-600 text-white" /></div>
+            <div className="space-y-1.5"><Label className="text-slate-300 text-xs">Description</Label><Textarea value={form.description} onChange={e => setF("description", e.target.value)} rows={2} className="bg-slate-800 border-slate-600 text-white resize-none" /></div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5"><Label className="text-slate-300 text-xs">Price / Day *</Label><Input type="number" min="0" step="0.01" value={form.pricePerDay} onChange={e => setF("pricePerDay", e.target.value)} className="bg-slate-800 border-slate-600 text-white" /></div>
+              <div className="space-y-1.5"><Label className="text-slate-300 text-xs">Price / Week</Label><Input type="number" min="0" step="0.01" value={form.pricePerWeek} onChange={e => setF("pricePerWeek", e.target.value)} className="bg-slate-800 border-slate-600 text-white" /></div>
+              <div className="space-y-1.5"><Label className="text-slate-300 text-xs">Quantity</Label><Input type="number" min="1" value={form.quantity} onChange={e => setF("quantity", e.target.value)} className="bg-slate-800 border-slate-600 text-white" /></div>
+              <div className="space-y-1.5"><Label className="text-slate-300 text-xs">Deposit Amount</Label><Input type="number" min="0" step="0.01" value={form.depositAmount} onChange={e => setF("depositAmount", e.target.value)} className="bg-slate-800 border-slate-600 text-white" /></div>
+              <div className="space-y-1.5"><Label className="text-slate-300 text-xs">Status</Label>
+                <Select value={form.status} onValueChange={v => setF("status", v)}>
+                  <SelectTrigger className="bg-slate-800 border-slate-600 text-white"><SelectValue /></SelectTrigger>
+                  <SelectContent className="bg-slate-800 border-slate-700 text-white">{["active","inactive","draft"].map(s => <SelectItem key={s} value={s} className="capitalize focus:bg-slate-700">{s}</SelectItem>)}</SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1.5"><Label className="text-slate-300 text-xs">Condition</Label>
+                <Select value={form.condition || "_none"} onValueChange={v => setF("condition", v === "_none" ? "" : v)}>
+                  <SelectTrigger className="bg-slate-800 border-slate-600 text-white"><SelectValue placeholder="Select…" /></SelectTrigger>
+                  <SelectContent className="bg-slate-800 border-slate-700 text-white"><SelectItem value="_none" className="focus:bg-slate-700">— None —</SelectItem>{["excellent","good","fair"].map(c => <SelectItem key={c} value={c} className="capitalize focus:bg-slate-700">{c}</SelectItem>)}</SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1.5"><Label className="text-slate-300 text-xs">Brand</Label><Input value={form.brand} onChange={e => setF("brand", e.target.value)} className="bg-slate-800 border-slate-600 text-white" /></div>
+              <div className="space-y-1.5"><Label className="text-slate-300 text-xs">Model</Label><Input value={form.model} onChange={e => setF("model", e.target.value)} className="bg-slate-800 border-slate-600 text-white" /></div>
+            </div>
+            <div className="space-y-1.5"><Label className="text-slate-300 text-xs">Location</Label><Input value={form.location} onChange={e => setF("location", e.target.value)} className="bg-slate-800 border-slate-600 text-white" /></div>
+            <div className="space-y-1.5"><Label className="text-slate-300 text-xs">Requirements</Label><Textarea value={form.requirements} onChange={e => setF("requirements", e.target.value)} rows={2} className="bg-slate-800 border-slate-600 text-white resize-none" /></div>
+          </div>
+          <DialogFooter className="gap-2">
+            <Button variant="ghost" onClick={() => setShowForm(false)} className="text-slate-400 hover:text-white hover:bg-slate-800">Cancel</Button>
+            <Button onClick={save} disabled={saving} className="bg-violet-600 hover:bg-violet-700 text-white">{saving ? "Saving…" : editListing ? "Save Changes" : "Create Listing"}</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <AlertDialog open={!!deleteId} onOpenChange={v => { if (!v) setDeleteId(null); }}>
+        <AlertDialogContent className="bg-slate-900 border-slate-700 text-white">
+          <AlertDialogHeader><AlertDialogTitle className="text-white flex items-center gap-2"><AlertTriangle className="w-5 h-5 text-red-400" />Delete Listing</AlertDialogTitle><AlertDialogDescription className="text-slate-400">This listing will be permanently deleted.</AlertDialogDescription></AlertDialogHeader>
+          <AlertDialogFooter><AlertDialogCancel className="bg-slate-800 border-slate-700 text-slate-300">Cancel</AlertDialogCancel><AlertDialogAction onClick={deleteListing} className="bg-red-600 hover:bg-red-700 text-white">Delete</AlertDialogAction></AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </div>
+  );
+}
+
+// ─── Bookings Tab ─────────────────────────────────────────────────────────────
+function BookingsTab({ tenantId }: { tenantId: number }) {
+  const { toast } = useToast();
+  const [bookings, setBookings] = useState<Booking[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null);
+  const [newStatus, setNewStatus] = useState("");
+  const [adminNotes, setAdminNotes] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  const load = useCallback(async () => {
+    const r = await sa(`/superadmin/tenants/${tenantId}/bookings?limit=100`);
+    setBookings(await r.json());
+    setLoading(false);
+  }, [tenantId]);
+
+  useEffect(() => { load(); }, [load]);
+
+  const openBooking = (b: Booking) => { setSelectedBooking(b); setNewStatus(b.status); setAdminNotes(b.adminNotes ?? ""); };
+
+  const saveBooking = async () => {
+    if (!selectedBooking) return;
+    setSaving(true);
+    try {
+      const res = await sa(`/superadmin/tenants/${tenantId}/bookings/${selectedBooking.id}`, { method: "PUT", body: JSON.stringify({ status: newStatus, adminNotes }) });
+      if (!res.ok) { toast({ title: "Update failed", variant: "destructive" }); return; }
+      toast({ title: "Booking updated" });
+      setSelectedBooking(null);
+      load();
+    } finally { setSaving(false); }
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <p className="text-slate-400 text-sm">{bookings.length} bookings</p>
+        <Button variant="ghost" size="sm" onClick={load} className="text-slate-400 hover:text-white hover:bg-slate-800"><RefreshCcw className="w-3.5 h-3.5" /></Button>
+      </div>
+
+      {loading ? <div className="text-slate-400 py-8">Loading…</div> : bookings.length === 0 ? (
+        <div className="bg-slate-900 border border-slate-800 rounded-xl p-12 text-center">
+          <CalendarDays className="w-10 h-10 text-slate-700 mx-auto mb-3" />
+          <p className="text-slate-400 font-semibold">No bookings yet</p>
+        </div>
+      ) : (
+        <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden">
+          <table className="w-full text-sm">
+            <thead><tr className="border-b border-slate-800"><th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">Customer</th><th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">Dates</th><th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">Total</th><th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">Status</th><th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">Source</th><th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">Actions</th></tr></thead>
+            <tbody>
+              {bookings.map(b => (
+                <tr key={b.id} className="border-b border-slate-800/50 hover:bg-slate-800/30 group">
+                  <td className="px-4 py-3">
+                    <p className="font-medium text-white">{b.customerName}</p>
+                    <p className="text-xs text-slate-500">{b.customerEmail}</p>
+                  </td>
+                  <td className="px-4 py-3 text-slate-300 text-xs">{b.startDate} → {b.endDate}</td>
+                  <td className="px-4 py-3 text-slate-300">${b.totalPrice.toFixed(2)}</td>
+                  <td className="px-4 py-3">
+                    <span className={`text-[11px] font-bold px-2 py-0.5 rounded-full capitalize ${BOOKING_COLORS[b.status] ?? "bg-slate-700 text-slate-300"}`}>{b.status}</span>
+                  </td>
+                  <td className="px-4 py-3 text-slate-500 text-xs capitalize">{b.source}</td>
+                  <td className="px-4 py-3">
+                    <button onClick={() => openBooking(b)} className="p-1.5 rounded text-slate-400 hover:text-white hover:bg-slate-700 opacity-0 group-hover:opacity-100 transition-opacity"><Edit2 className="w-3.5 h-3.5" /></button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {/* Booking Edit Dialog */}
+      <Dialog open={!!selectedBooking} onOpenChange={v => { if (!v) setSelectedBooking(null); }}>
+        <DialogContent className="bg-slate-900 border-slate-700 text-white max-w-md">
+          <DialogHeader><DialogTitle className="text-white">Edit Booking #{selectedBooking?.id}</DialogTitle></DialogHeader>
+          {selectedBooking && (
+            <div className="space-y-4 py-2">
+              <div className="bg-slate-800 rounded-lg p-3 text-sm space-y-1">
+                <p className="text-white font-medium">{selectedBooking.customerName}</p>
+                <p className="text-slate-400">{selectedBooking.customerEmail}</p>
+                <p className="text-slate-400">{selectedBooking.startDate} → {selectedBooking.endDate}</p>
+                <p className="text-white font-semibold">${selectedBooking.totalPrice.toFixed(2)}</p>
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-slate-300 text-xs">Status</Label>
+                <Select value={newStatus} onValueChange={setNewStatus}>
+                  <SelectTrigger className="bg-slate-800 border-slate-600 text-white"><SelectValue /></SelectTrigger>
+                  <SelectContent className="bg-slate-800 border-slate-700 text-white">{["pending","confirmed","active","completed","cancelled"].map(s => <SelectItem key={s} value={s} className="capitalize focus:bg-slate-700">{s}</SelectItem>)}</SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-slate-300 text-xs">Admin Notes</Label>
+                <Textarea value={adminNotes} onChange={e => setAdminNotes(e.target.value)} rows={3} className="bg-slate-800 border-slate-600 text-white resize-none" />
+              </div>
+            </div>
+          )}
+          <DialogFooter className="gap-2">
+            <Button variant="ghost" onClick={() => setSelectedBooking(null)} className="text-slate-400 hover:text-white hover:bg-slate-800">Cancel</Button>
+            <Button onClick={saveBooking} disabled={saving} className="bg-violet-600 hover:bg-violet-700 text-white">{saving ? "Saving…" : "Save"}</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}
+
+// ─── Main Page ────────────────────────────────────────────────────────────────
+export default function CompanyDetailPage() {
+  const params = useParams<{ id: string }>();
+  const tenantId = parseInt(params.id ?? "0");
+  const [, setLocation] = useLocation();
+  const [tenant, setTenant] = useState<Tenant | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  const loadTenant = useCallback(async () => {
+    const token = getToken();
+    if (!token) { setLocation("/superadmin"); return; }
+    const r = await sa(`/superadmin/tenants/${tenantId}`);
+    if (r.status === 401) { setLocation("/superadmin"); return; }
+    if (r.status === 404) { setLocation("/superadmin/dashboard"); return; }
+    setTenant(await r.json());
+    setLoading(false);
+  }, [tenantId, setLocation]);
+
+  useEffect(() => { loadTenant(); }, [loadTenant]);
+
+  if (loading || !tenant) return (
+    <div className="p-6 text-slate-400">Loading company…</div>
+  );
+
+  return (
+    <div className="p-6 space-y-6 max-w-5xl mx-auto">
+      {/* Header */}
+      <div className="flex items-start justify-between flex-wrap gap-4">
+        <div className="flex items-center gap-3">
+          <button onClick={() => setLocation("/superadmin/dashboard")} className="p-2 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors">
+            <ArrowLeft className="w-5 h-5" />
+          </button>
+          <div className="w-10 h-10 rounded-xl bg-slate-800 border border-slate-700 flex items-center justify-center">
+            <Building2 className="w-5 h-5 text-slate-400" />
+          </div>
+          <div>
+            <h1 className="text-xl font-black text-white">{tenant.name}</h1>
+            <p className="text-slate-500 text-sm font-mono">/{tenant.slug}</p>
+          </div>
+        </div>
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className={`text-xs font-bold px-2.5 py-1 rounded-full capitalize ${PLAN_COLORS[tenant.plan] ?? ""}`}>{tenant.plan}</span>
+          <span className={`text-xs font-bold px-2.5 py-1 rounded-full capitalize ${STATUS_COLORS[tenant.status] ?? ""}`}>{tenant.status}</span>
+          <div className="flex gap-2 text-xs text-slate-500">
+            <span className="flex items-center gap-1"><Package className="w-3.5 h-3.5" />{tenant.listingCount} listings</span>
+            <span className="flex items-center gap-1"><CalendarDays className="w-3.5 h-3.5" />{tenant.bookingCount} bookings</span>
+          </div>
+          <Button size="sm" variant="outline" asChild className="border-slate-700 text-slate-300 hover:bg-slate-800 gap-1.5">
+            <a href="/admin" target="_blank" rel="noopener noreferrer"><ExternalLink className="w-3.5 h-3.5" />Open Admin</a>
+          </Button>
+        </div>
+      </div>
+
+      {/* Tabs */}
+      <Tabs defaultValue="account">
+        <TabsList className="bg-slate-900 border border-slate-800">
+          <TabsTrigger value="account" className="data-[state=active]:bg-slate-800 data-[state=active]:text-white text-slate-400 gap-1.5">
+            <Settings2 className="w-3.5 h-3.5" />Account
+          </TabsTrigger>
+          <TabsTrigger value="storefront" className="data-[state=active]:bg-slate-800 data-[state=active]:text-white text-slate-400 gap-1.5">
+            <Globe className="w-3.5 h-3.5" />Storefront
+          </TabsTrigger>
+          <TabsTrigger value="listings" className="data-[state=active]:bg-slate-800 data-[state=active]:text-white text-slate-400 gap-1.5">
+            <Package className="w-3.5 h-3.5" />Listings
+          </TabsTrigger>
+          <TabsTrigger value="bookings" className="data-[state=active]:bg-slate-800 data-[state=active]:text-white text-slate-400 gap-1.5">
+            <CalendarDays className="w-3.5 h-3.5" />Bookings
+          </TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="account" className="mt-6">
+          <AccountTab tenant={tenant} tenantId={tenantId} onSaved={loadTenant} />
+        </TabsContent>
+        <TabsContent value="storefront" className="mt-6">
+          <StorefrontTab tenantId={tenantId} />
+        </TabsContent>
+        <TabsContent value="listings" className="mt-6">
+          <ListingsTab tenantId={tenantId} />
+        </TabsContent>
+        <TabsContent value="bookings" className="mt-6">
+          <BookingsTab tenantId={tenantId} />
+        </TabsContent>
+      </Tabs>
+    </div>
+  );
+}
