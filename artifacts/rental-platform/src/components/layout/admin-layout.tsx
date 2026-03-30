@@ -86,6 +86,11 @@ function TrialStatusBanner() {
 
 export function AdminLayout({ children }: { children: React.ReactNode }) {
   const [location] = useLocation();
+  const { data: profile } = useGetBusinessProfile({
+    query: { queryKey: ["/api/business", "admin-layout"] }
+  });
+  const siteSlug = (profile as any)?.siteSlug as string | null | undefined;
+  const storefrontHref = siteSlug ? `/${siteSlug}` : "/";
 
   return (
     <div className="min-h-[100dvh] flex flex-col md:flex-row bg-background">
@@ -132,9 +137,14 @@ export function AdminLayout({ children }: { children: React.ReactNode }) {
             {navigation.find(n => location === n.href || (n.href !== "/admin" && location.startsWith(n.href)))?.name || "Dashboard"}
           </h1>
           <div className="flex items-center gap-4">
-            <Link href="/" className="text-sm text-muted-foreground hover:text-foreground transition-colors">
-              View Storefront
-            </Link>
+            <a
+              href={storefrontHref}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-sm text-muted-foreground hover:text-foreground transition-colors"
+            >
+              View Storefront ↗
+            </a>
           </div>
         </header>
         <div className="flex-1 overflow-y-auto p-8">
