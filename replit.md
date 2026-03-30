@@ -65,12 +65,28 @@ artifacts-monorepo/
 - **Business Profile Editor** — Full white-label control: name, tagline, colors, logo, policies
 - **White-label Theming** — CSS variable-based theming; 8 preset themes; live color picker preview
 
+## URL Routing Structure
+
+- `/` — SaaS marketing landing page (pricing plans, features, sign-up CTA)
+- `/get-started` — Same as root (alias)
+- `/signup` — 3-step SaaS self-registration wizard
+- `/demo` — Side-by-side test environment: Customer View (listings + storefront links) + Admin View (live booking feed, auto-refreshes every 5s)
+- `/admin/*` — Tenant admin dashboard
+- `/superadmin` — Super admin login
+- `/superadmin/dashboard` — Super admin company management
+- `/superadmin/companies/:id` — Full company management (Account / Storefront / Listings / Bookings tabs)
+- `/:slug` — Customer-facing storefront for the company with that URL slug
+- `/:slug/listings/:id` — Individual listing detail + Book button
+- `/:slug/book` — Multi-step booking form (requires `?listingId=` query param)
+- `/:slug/login` — Customer login/register
+
 ### Booking Storefront Features
 - Customer accounts with saved billing/card info (`rental_customer` in localStorage)
 - Multi-step booking: Dates + Add-ons → Payment → Agreement → Confirmation
 - Add-ons selection in Step 1 with live price update in sidebar
 - Required add-ons auto-selected and locked
 - Customer booking history on confirmation page
+- Slug-aware navigation: all storefront links stay within the `/:slug/` path prefix
 
 ## Database Schema
 

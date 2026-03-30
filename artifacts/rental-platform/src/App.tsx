@@ -16,6 +16,7 @@ import StorefrontLogin from "@/pages/storefront/login";
 
 import GetStartedPage from "@/pages/public/get-started";
 import SignupPage from "@/pages/public/signup";
+import DemoPage from "@/pages/demo";
 import AdminOnboarding from "@/pages/admin/onboarding";
 import SuperAdminLogin from "@/pages/superadmin/login";
 import SuperAdminDashboard from "@/pages/superadmin/dashboard";
@@ -135,18 +136,28 @@ function Router() {
         <AdminLayout><AdminTeam /></AdminLayout>
       </Route>
 
-      {/* Storefront Routes */}
-      <Route path="/">
+      {/* Demo / Test page */}
+      <Route path="/demo">
+        <DemoPage />
+      </Route>
+
+      {/* Storefront Routes — tenant-specific via slug prefix */}
+      <Route path="/:slug">
         <StorefrontLayout><StorefrontHome /></StorefrontLayout>
       </Route>
-      <Route path="/listings/:id">
+      <Route path="/:slug/listings/:id">
         <StorefrontLayout><StorefrontGearDetail /></StorefrontLayout>
       </Route>
-      <Route path="/book">
+      <Route path="/:slug/book">
         <StorefrontLayout><StorefrontBook /></StorefrontLayout>
       </Route>
-      <Route path="/login">
+      <Route path="/:slug/login">
         <StorefrontLayout><StorefrontLogin /></StorefrontLayout>
+      </Route>
+
+      {/* Root → SaaS marketing landing */}
+      <Route path="/">
+        <GetStartedPage />
       </Route>
 
       <Route component={NotFound} />

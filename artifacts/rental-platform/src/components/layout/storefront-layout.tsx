@@ -1,9 +1,12 @@
-import { Link } from "wouter";
+import { Link, useParams } from "wouter";
 import { Tent } from "lucide-react";
 import { useGetBusinessProfile } from "@workspace/api-client-react";
 import { PoweredByBadge } from "@/components/powered-by-badge";
 
 export function StorefrontLayout({ children }: { children: React.ReactNode }) {
+  const { slug } = useParams<{ slug: string }>();
+  const base = slug ? `/${slug}` : "";
+
   const { data: profile } = useGetBusinessProfile({
     query: { queryKey: ["/api/business"] }
   });
@@ -12,7 +15,7 @@ export function StorefrontLayout({ children }: { children: React.ReactNode }) {
     <div className="min-h-[100dvh] flex flex-col bg-background">
       <header className="sticky top-0 z-50 w-full border-b border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
         <div className="container mx-auto px-4 h-16 flex items-center justify-between">
-          <Link href="/" className="flex items-center gap-2">
+          <Link href={base || "/"} className="flex items-center gap-2">
             {profile?.logoUrl ? (
               <img src={profile.logoUrl} alt={profile.name} className="h-8 object-contain" />
             ) : (
@@ -23,10 +26,10 @@ export function StorefrontLayout({ children }: { children: React.ReactNode }) {
             </span>
           </Link>
           <nav className="flex items-center gap-6">
-            <Link href="/" className="text-sm font-medium text-foreground/80 hover:text-foreground">
+            <Link href={base || "/"} className="text-sm font-medium text-foreground/80 hover:text-foreground">
               Listings
             </Link>
-            <Link href="/login" className="text-sm font-medium text-muted-foreground hover:text-foreground">
+            <Link href={`${base}/login`} className="text-sm font-medium text-muted-foreground hover:text-foreground">
               Login
             </Link>
           </nav>

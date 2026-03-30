@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useRoute, Link, useLocation } from "wouter";
+import { Link, useLocation, useParams } from "wouter";
 import {
   useGetListing,
   useGetBusinessProfile,
@@ -32,9 +32,10 @@ const CONDITION_LABEL: Record<string, string> = {
 };
 
 export default function StorefrontGearDetail() {
-  const [, params] = useRoute("/listings/:id");
+  const { slug, id: idParam } = useParams<{ slug: string; id: string }>();
   const [, setLocation] = useLocation();
-  const id = params?.id ? parseInt(params.id) : 0;
+  const sfBase = slug ? `/${slug}` : "";
+  const id = idParam ? parseInt(idParam) : 0;
 
   const [activeImage, setActiveImage] = useState(0);
   const [addons, setAddons] = useState<Addon[]>([]);
@@ -80,7 +81,7 @@ export default function StorefrontGearDetail() {
       <div className="min-h-screen flex items-center justify-center flex-col gap-4 text-muted-foreground">
         <Package className="w-12 h-12 text-muted" />
         <p className="font-semibold text-lg">Listing not found</p>
-        <Button variant="outline" onClick={() => setLocation("/")}>Browse all gear</Button>
+        <Button variant="outline" onClick={() => setLocation(sfBase || "/")}>Browse all gear</Button>
       </div>
     );
   }
@@ -92,7 +93,7 @@ export default function StorefrontGearDetail() {
     <div className="min-h-screen bg-background">
       <div className="container mx-auto px-4 py-8">
         {/* Back */}
-        <Link href="/">
+        <Link href={sfBase || "/"}>
           <Button variant="ghost" className="mb-6 pl-0 hover:bg-transparent text-muted-foreground hover:text-foreground gap-2">
             <ArrowLeft className="w-4 h-4" /> Back to listings
           </Button>
@@ -202,7 +203,7 @@ export default function StorefrontGearDetail() {
               <Button
                 size="lg"
                 className="w-full h-13 text-base font-bold rounded-xl"
-                onClick={() => setLocation(`/book?listingId=${listing.id}`)}
+                onClick={() => setLocation(`${sfBase}/book?listingId=${listing.id}`)}
                 disabled={!isAvailable}
               >
                 {isAvailable ? (

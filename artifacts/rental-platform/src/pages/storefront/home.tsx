@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Link } from "wouter";
+import { Link, useParams } from "wouter";
 import { 
   useGetBusinessProfile, 
   useGetListings,
@@ -36,6 +36,8 @@ function getCategoryIcon(slug: string): React.ElementType {
 }
 
 export default function StorefrontHome() {
+  const { slug } = useParams<{ slug: string }>();
+  const sfBase = slug ? `/${slug}` : "";
   const [search, setSearch] = useState("");
   const [activeCategory, setActiveCategory] = useState<number | null>(null);
   const [activeCategorySlug, setActiveCategorySlug] = useState<string | null>(null);
@@ -232,7 +234,7 @@ export default function StorefrontHome() {
         ) : listings && listings.length > 0 ? (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
             {listings.map((listing) => (
-              <Link key={listing.id} href={`/listings/${listing.id}`}>
+              <Link key={listing.id} href={`${sfBase}/listings/${listing.id}`}>
                 <div
                   data-testid={`listing-card-${listing.id}`}
                   className="group flex flex-col h-full bg-card rounded-2xl overflow-hidden border border-border hover:border-primary/50 transition-all shadow-sm hover:shadow-lg hover:-translate-y-0.5"

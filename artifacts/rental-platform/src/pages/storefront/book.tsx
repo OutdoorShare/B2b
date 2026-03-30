@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect } from "react";
-import { useLocation } from "wouter";
+import { useLocation, useParams } from "wouter";
 import type { DateRange } from "react-day-picker";
 import { 
   useGetListing,
@@ -85,6 +85,8 @@ const STEP_LABELS: Record<Step, string> = {
 const STEPS: Step[] = ["dates", "payment", "agreement", "confirmation"];
 
 export default function StorefrontBook() {
+  const { slug } = useParams<{ slug: string }>();
+  const sfBase = slug ? `/${slug}` : "";
   const [, setLocation] = useLocation();
   const { toast } = useToast();
 
@@ -200,7 +202,7 @@ export default function StorefrontBook() {
     return (
       <div className="container mx-auto px-4 py-16 text-center">
         <h2 className="text-2xl font-bold mb-4">No listing selected</h2>
-        <Button onClick={() => setLocation("/")}>Browse Listings</Button>
+        <Button onClick={() => setLocation(sfBase || "/")}>Browse Listings</Button>
       </div>
     );
   }
@@ -792,7 +794,7 @@ export default function StorefrontBook() {
                         </div>
                       )}
                       <Separator />
-                      <Button variant="outline" size="sm" className="w-full" onClick={() => setLocation("/")}>
+                      <Button variant="outline" size="sm" className="w-full" onClick={() => setLocation(sfBase || "/")}>
                         Browse More Listings
                       </Button>
                     </div>
