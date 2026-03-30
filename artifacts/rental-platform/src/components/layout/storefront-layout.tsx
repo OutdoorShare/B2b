@@ -1,5 +1,6 @@
-import { Link, useParams } from "wouter";
-import { Tent, Clock, Lock } from "lucide-react";
+import { useState, useEffect } from "react";
+import { Link, useParams, useLocation } from "wouter";
+import { Tent, Clock, Lock, User, LogOut, BookOpen } from "lucide-react";
 import { useGetBusinessProfile } from "@workspace/api-client-react";
 import { PoweredByBadge } from "@/components/powered-by-badge";
 
@@ -80,9 +81,29 @@ function TrialBanner({ trialEndsAt }: { trialEndsAt: string }) {
   );
 }
 
+interface CustomerSession { id: number; email: string; name: string; }
+
+function loadCustomerSession(): CustomerSession | null {
+  try { const r = localStorage.getItem("rental_customer"); return r ? JSON.parse(r) : null; }
+  catch { return null; }
+}
+
 export function StorefrontLayout({ children }: { children: React.ReactNode }) {
   const { slug } = useParams<{ slug: string }>();
+  const [, setLocation] = useLocation();
   const base = slug ? `/${slug}` : "";
+
+  const [customer, setCustomer] = useState<CustomerSession | null>(null);
+  useEffect(() => { setCustomer(loadCustomerSession()); }, []);
+
+  const handleLogout = () => {
+    localStorage.removeItem("rental_customer");
+    setCustomer(null);
+    setLocation(`${base}/login`);
+  };
+
+  // initials for avatar
+  const initials = customer?.name?.split(" ").map(w => w[0]).join("").slice(0, 2).toUpperCase() ?? "";
 
   const { data: profile } = useGetBusinessProfile({
     query: { queryKey: ["/api/business", slug] }
@@ -146,26 +167,65 @@ export function StorefrontLayout({ children }: { children: React.ReactNode }) {
           </Link>
 
           {/* Nav */}
-          <nav className="flex items-center gap-6 shrink-0">
+          <nav className="flex items-center gap-4 shrink-0">
             <Link
               href={base || "/"}
-              className="text-sm font-medium transition-opacity hover:opacity-100"
+              className="text-sm font-medium transition-opacity hover:opacity-100 hidden sm:block"
               style={{ color: headerTextMuted }}
             >
               Listings
             </Link>
-            <Link
-              href={`${base}/login`}
-              className="text-sm font-semibold px-4 py-1.5 rounded-full transition-colors"
-              style={{
-                backgroundColor: accentColor,
-                color: btnText,
-              }}
-              onMouseEnter={e => (e.currentTarget.style.backgroundColor = btnHoverBg)}
-              onMouseLeave={e => (e.currentTarget.style.backgroundColor = accentColor)}
-            >
-              Login
-            </Link>
+
+            {customer ? (
+              /* Logged-in state */
+              <div className="flex items-center gap-2">
+                <Link
+                  href={`${base}/my-bookings`}
+                  className="flex items-center gap-1.5 text-sm font-medium transition-opacity hover:opacity-100"
+                  style={{ color: headerTextMuted }}
+                >
+                  <BookOpen className="w-3.5 h-3.5" />
+                  <span className="hidden sm:inline">My Bookings</span>
+                </Link>
+                {/* Avatar + name */}
+                <div
+                  className="flex items-center gap-2 pl-3 ml-1 border-l"
+                  style={{ borderColor: headerBorder }}
+                >
+                  <div
+                    className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold shrink-0"
+                    style={{ backgroundColor: accentColor, color: btnText }}
+                  >
+                    {initials || <User className="w-3.5 h-3.5" />}
+                  </div>
+                  <span
+                    className="text-sm font-medium hidden md:inline max-w-[100px] truncate"
+                    style={{ color: headerText }}
+                  >
+                    {customer.name.split(" ")[0]}
+                  </span>
+                  <button
+                    onClick={handleLogout}
+                    title="Sign out"
+                    className="transition-opacity hover:opacity-100 ml-1"
+                    style={{ color: headerTextMuted }}
+                  >
+                    <LogOut className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+            ) : (
+              /* Logged-out state */
+              <Link
+                href={`${base}/login`}
+                className="text-sm font-semibold px-4 py-1.5 rounded-full transition-colors"
+                style={{ backgroundColor: accentColor, color: btnText }}
+                onMouseEnter={e => (e.currentTarget.style.backgroundColor = btnHoverBg)}
+                onMouseLeave={e => (e.currentTarget.style.backgroundColor = accentColor)}
+              >
+                Login
+              </Link>
+            )}
           </nav>
         </div>
       </header>

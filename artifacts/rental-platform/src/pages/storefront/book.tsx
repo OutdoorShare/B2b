@@ -996,7 +996,11 @@ export default function StorefrontBook() {
                             cancelled: "bg-red-100 text-red-800",
                           };
                           return (
-                            <div key={b.id} className={`bg-background rounded-2xl border p-4 flex items-center gap-4 ${isNew ? "border-primary ring-1 ring-primary/20" : ""}`}>
+                            <div
+                              key={b.id}
+                              onClick={() => setLocation(`${sfBase}/my-bookings/${b.id}`)}
+                              className={`bg-background rounded-2xl border p-4 flex items-center gap-4 cursor-pointer hover:border-primary/40 hover:shadow-sm transition-all ${isNew ? "border-primary ring-1 ring-primary/20" : ""}`}
+                            >
                               <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
                                 <CalendarIcon className="w-5 h-5 text-primary" />
                               </div>
@@ -1018,6 +1022,15 @@ export default function StorefrontBook() {
                             </div>
                           );
                         })}
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="w-full mt-1"
+                          onClick={() => setLocation(`${sfBase}/my-bookings`)}
+                        >
+                          View All My Bookings
+                          <ArrowRight className="w-3.5 h-3.5 ml-1.5" />
+                        </Button>
                       </div>
                     )}
                   </div>

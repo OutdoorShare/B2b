@@ -14,6 +14,8 @@ import StorefrontHome from "@/pages/storefront/home";
 import StorefrontGearDetail from "@/pages/storefront/gear-detail";
 import StorefrontBook from "@/pages/storefront/book";
 import StorefrontLogin from "@/pages/storefront/login";
+import StorefrontMyBookings from "@/pages/storefront/my-bookings";
+import StorefrontMyBookingDetail from "@/pages/storefront/my-booking-detail";
 
 import GetStartedPage from "@/pages/public/get-started";
 import SignupPage from "@/pages/public/signup";
@@ -194,6 +196,12 @@ function Router() {
       </Route>
       <Route path="/:slug/login">
         <StorefrontLayout><StorefrontLogin /></StorefrontLayout>
+      </Route>
+      <Route path="/:slug/my-bookings/:id">
+        <StorefrontLayout><StorefrontMyBookingDetail /></StorefrontLayout>
+      </Route>
+      <Route path="/:slug/my-bookings">
+        <StorefrontLayout><StorefrontMyBookings /></StorefrontLayout>
       </Route>
 
       {/* Root → SaaS marketing landing */}
