@@ -1,6 +1,7 @@
 import { Link } from "wouter";
 import { Tent } from "lucide-react";
 import { useGetBusinessProfile } from "@workspace/api-client-react";
+import { PoweredByBadge } from "@/components/powered-by-badge";
 
 export function StorefrontLayout({ children }: { children: React.ReactNode }) {
   const { data: profile } = useGetBusinessProfile({
@@ -37,12 +38,18 @@ export function StorefrontLayout({ children }: { children: React.ReactNode }) {
       </main>
 
       <footer className="border-t border-border bg-card py-12 mt-16">
-        <div className="container mx-auto px-4 text-center text-muted-foreground">
-          <p className="text-sm">
+        <div className="container mx-auto px-4 text-center space-y-3">
+          <p className="text-sm text-muted-foreground">
             &copy; {new Date().getFullYear()} {profile?.name || "Outdoor Rentals"}. All rights reserved.
           </p>
+          <div className="flex justify-center">
+            <PoweredByBadge variant="footer" />
+          </div>
         </div>
       </footer>
+
+      {/* Fixed corner badge — always visible */}
+      <PoweredByBadge variant="fixed" />
     </div>
   );
 }
