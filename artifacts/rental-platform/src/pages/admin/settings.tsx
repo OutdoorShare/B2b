@@ -13,7 +13,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
-import { Copy, CheckCircle2, Paintbrush, RefreshCw, Upload, Eye } from "lucide-react";
+import { Copy, CheckCircle2, Paintbrush, RefreshCw, Upload, Eye, ImageIcon, X } from "lucide-react";
 import { applyBrandColors, PRESET_THEMES, isLight } from "@/lib/theme";
 
 export default function AdminSettings() {
@@ -86,11 +86,39 @@ export default function AdminSettings() {
     toast({ title: "Embed code copied to clipboard" });
   };
 
+  const logoFileRef  = useRef<HTMLInputElement>(null);
+  const coverFileRef = useRef<HTMLInputElement>(null);
+  const [logoUploading,  setLogoUploading]  = useState(false);
+  const [coverUploading, setCoverUploading] = useState(false);
+
+  const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
+
   if (isLoading) return <div className="p-8">Loading settings...</div>;
 
   const primary = formData.primaryColor || "#1b4332";
   const accent  = formData.accentColor  || "#52b788";
   const logoUrl = formData.logoUrl || "";
+  const coverUrl = formData.coverImageUrl || "";
+
+  const uploadImageFile = async (
+    file: File,
+    setUploading: (v: boolean) => void,
+    field: string
+  ) => {
+    setUploading(true);
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      const res = await fetch(`${BASE}/api/upload/image`, { method: "POST", body: fd });
+      if (!res.ok) { toast({ title: "Upload failed", variant: "destructive" }); return; }
+      const data = await res.json();
+      setFormData((prev: any) => ({ ...prev, [field]: data.url }));
+    } catch {
+      toast({ title: "Upload error", variant: "destructive" });
+    } finally {
+      setUploading(false);
+    }
+  };
 
   return (
     <div className="space-y-8 max-w-4xl mx-auto">
@@ -212,16 +240,11 @@ export default function AdminSettings() {
                 <CardDescription>Your logo appears in the storefront header, kiosk, and emails.</CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
+                {/* Logo upload */}
                 <div className="flex items-start gap-6">
-                  {/* Current logo preview */}
-                  <div className="w-24 h-24 rounded-xl border-2 border-dashed border-border flex items-center justify-center bg-muted shrink-0">
+                  <div className="w-24 h-24 rounded-xl border-2 border-dashed border-border flex items-center justify-center bg-muted shrink-0 overflow-hidden">
                     {logoUrl ? (
-                      <img
-                        src={logoUrl}
-                        alt="Logo"
-                        className="w-full h-full object-contain p-2 rounded-xl"
-                        onError={e => (e.currentTarget.style.display = "none")}
-                      />
+                      <img src={logoUrl} alt="Logo" className="w-full h-full object-contain p-2" onError={e => (e.currentTarget.style.display = "none")} />
                     ) : (
                       <div className="text-center">
                         <div className="w-10 h-10 rounded-full mx-auto flex items-center justify-center text-xl font-black text-white mb-1" style={{ backgroundColor: primary }}>
@@ -231,41 +254,86 @@ export default function AdminSettings() {
                       </div>
                     )}
                   </div>
-                  <div className="flex-1 space-y-3">
-                    <div className="space-y-1.5">
-                      <Label htmlFor="logoUrl">Logo URL</Label>
-                      <Input
-                        id="logoUrl"
-                        name="logoUrl"
-                        value={formData.logoUrl || ""}
-                        onChange={handleChange}
-                        placeholder="https://your-cdn.com/logo.png"
-                      />
-                      <p className="text-xs text-muted-foreground">Paste a direct link to your logo image (PNG or SVG recommended). Use a CDN or image hosting service like Imgur or Cloudinary.</p>
-                    </div>
-                    {logoUrl && (
+                  <div className="flex-1 space-y-2">
+                    <Label>Logo</Label>
+                    <input
+                      ref={logoFileRef}
+                      type="file"
+                      accept="image/jpeg,image/png,image/webp,image/svg+xml,image/gif"
+                      className="hidden"
+                      onChange={e => { const f = e.target.files?.[0]; if (f) uploadImageFile(f, setLogoUploading, "logoUrl"); }}
+                    />
+                    <div className="flex gap-2">
                       <Button
                         type="button"
                         variant="outline"
                         size="sm"
-                        onClick={() => handleColorChange("logoUrl", "")}
+                        className="gap-2"
+                        disabled={logoUploading}
+                        onClick={() => logoFileRef.current?.click()}
                       >
-                        Remove logo
+                        <Upload className="w-3.5 h-3.5" />
+                        {logoUploading ? "Uploading…" : logoUrl ? "Replace Logo" : "Upload Logo"}
                       </Button>
-                    )}
+                      {logoUrl && (
+                        <Button type="button" variant="ghost" size="sm" className="gap-1.5 text-muted-foreground" onClick={() => handleColorChange("logoUrl", "")}>
+                          <X className="w-3.5 h-3.5" /> Remove
+                        </Button>
+                      )}
+                    </div>
+                    <p className="text-xs text-muted-foreground">PNG, SVG, JPG or WebP · max 5 MB</p>
                   </div>
                 </div>
 
-                <div className="space-y-2">
-                  <Label htmlFor="coverImageUrl">Cover / Hero Image URL</Label>
-                  <Input
-                    id="coverImageUrl"
-                    name="coverImageUrl"
-                    value={formData.coverImageUrl || ""}
-                    onChange={handleChange}
-                    placeholder="https://your-cdn.com/hero.jpg"
+                {/* Cover / Hero image upload */}
+                <div className="space-y-2 pt-2">
+                  <Label>Cover / Hero Image</Label>
+                  <p className="text-xs text-muted-foreground">Displayed as the full-width background behind your storefront search bar. Recommended: 1440 × 600 px.</p>
+                  <input
+                    ref={coverFileRef}
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp,image/gif"
+                    className="hidden"
+                    onChange={e => { const f = e.target.files?.[0]; if (f) uploadImageFile(f, setCoverUploading, "coverImageUrl"); }}
                   />
-                  <p className="text-xs text-muted-foreground">Used as the background image on your storefront home page. Recommended size: 1440×600px.</p>
+                  {coverUrl ? (
+                    <div className="relative rounded-xl overflow-hidden border group">
+                      <img src={coverUrl} alt="Cover" className="w-full h-36 object-cover" />
+                      <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-3">
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="secondary"
+                          className="gap-2"
+                          disabled={coverUploading}
+                          onClick={() => coverFileRef.current?.click()}
+                        >
+                          <Upload className="w-3.5 h-3.5" />
+                          {coverUploading ? "Uploading…" : "Replace"}
+                        </Button>
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="destructive"
+                          className="gap-2"
+                          onClick={() => setFormData((prev: any) => ({ ...prev, coverImageUrl: "" }))}
+                        >
+                          <X className="w-3.5 h-3.5" /> Remove
+                        </Button>
+                      </div>
+                    </div>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => coverFileRef.current?.click()}
+                      disabled={coverUploading}
+                      className="w-full h-32 border-2 border-dashed rounded-xl flex flex-col items-center justify-center gap-2 text-muted-foreground hover:border-gray-400 hover:text-gray-600 transition-colors bg-gray-50 hover:bg-gray-100 disabled:opacity-50"
+                    >
+                      <ImageIcon className="w-6 h-6" />
+                      <span className="text-sm font-medium">{coverUploading ? "Uploading…" : "Upload cover photo"}</span>
+                      <span className="text-xs">PNG, JPG or WebP · max 5 MB</span>
+                    </button>
+                  )}
                 </div>
               </CardContent>
             </Card>
