@@ -18,10 +18,11 @@ export default function AdminClaimsNew() {
   const { toast } = useToast();
   const [saving, setSaving] = useState(false);
 
-  const [customerName, setCustomerName] = useState("");
-  const [customerEmail, setCustomerEmail] = useState("");
-  const [bookingId, setBookingId] = useState("");
-  const [listingId, setListingId] = useState("");
+  const params = new URLSearchParams(window.location.search);
+  const [customerName, setCustomerName] = useState(params.get("customerName") ?? "");
+  const [customerEmail, setCustomerEmail] = useState(params.get("customerEmail") ?? "");
+  const [bookingId, setBookingId] = useState(params.get("bookingId") ?? "");
+  const [listingId, setListingId] = useState(params.get("listingId") ?? "");
   const [type, setType] = useState<ClaimType>("damage");
   const [description, setDescription] = useState("");
   const [claimedAmount, setClaimedAmount] = useState("");
@@ -55,10 +56,16 @@ export default function AdminClaimsNew() {
     } finally { setSaving(false); }
   };
 
+  const isFromBooking = !!params.get("bookingId");
+
   return (
     <div className="p-6 max-w-2xl mx-auto space-y-6">
       <div className="flex items-center gap-3">
-        <Button variant="ghost" size="icon" onClick={() => setLocation("/admin/claims")} className="-ml-2">
+        <Button
+          variant="ghost" size="icon"
+          onClick={() => isFromBooking ? setLocation(`/admin/bookings/${params.get("bookingId")}`) : setLocation("/admin/claims")}
+          className="-ml-2"
+        >
           <ArrowLeft className="w-5 h-5" />
         </Button>
         <div>
@@ -68,6 +75,13 @@ export default function AdminClaimsNew() {
           <p className="text-sm text-muted-foreground">File a new damage, theft, or dispute claim.</p>
         </div>
       </div>
+
+      {isFromBooking && (
+        <div className="flex items-center gap-2.5 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 text-sm text-amber-800">
+          <ShieldAlert className="w-4 h-4 shrink-0 text-amber-600" />
+          <span>Pre-filled from <strong>Booking #{params.get("bookingId")}</strong>. Review details below and add any missing info.</span>
+        </div>
+      )}
 
       <form onSubmit={handleSubmit} className="space-y-5">
         <Card>

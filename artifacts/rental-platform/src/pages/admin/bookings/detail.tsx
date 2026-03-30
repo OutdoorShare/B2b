@@ -14,7 +14,8 @@ import { Separator } from "@/components/ui/separator";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
-import { ArrowLeft, User, Phone, Mail, Calendar, MapPin, Package, StickyNote } from "lucide-react";
+import { Link } from "wouter";
+import { ArrowLeft, User, Phone, Mail, Calendar, MapPin, Package, StickyNote, ShieldAlert } from "lucide-react";
 import { format, differenceInDays } from "date-fns";
 
 export default function AdminBookingDetail() {
@@ -94,7 +95,7 @@ export default function AdminBookingDetail() {
         </div>
       </div>
 
-      <div className="flex flex-wrap gap-3">
+      <div className="flex flex-wrap gap-3 items-center">
         <Button 
           variant={booking.status === 'confirmed' ? "default" : "outline"}
           onClick={() => handleStatusChange('confirmed')}
@@ -117,6 +118,16 @@ export default function AdminBookingDetail() {
         >
           Mark as Returned
         </Button>
+
+        {booking.status === 'completed' && (
+          <Link href={`/admin/claims/new?bookingId=${booking.id}&listingId=${booking.listingId}&customerName=${encodeURIComponent(booking.customerName)}&customerEmail=${encodeURIComponent(booking.customerEmail)}`}>
+            <Button variant="outline" className="gap-2 border-amber-300 text-amber-700 hover:bg-amber-50 hover:border-amber-400">
+              <ShieldAlert className="w-4 h-4" />
+              Submit Claim
+            </Button>
+          </Link>
+        )}
+
         <Button 
           variant="ghost"
           className="text-destructive hover:bg-destructive/10 hover:text-destructive ml-auto"
