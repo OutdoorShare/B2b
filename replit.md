@@ -88,33 +88,62 @@ artifacts-monorepo/
 - Customer booking history on confirmation page
 - Slug-aware navigation: all storefront links stay within the `/:slug/` path prefix
 
+## Multi-Tenancy Architecture
+
+Every rental company is a **tenant**. Each tenant has: id, name, slug, email, adminPasswordHash, adminToken.
+
+### Tenant Resolution Middleware (`resolveTenant`)
+Runs on all `/api` routes. Resolves `req.tenantId` from:
+1. `x-admin-token` header → looks up staff token in `admin_users` OR owner token in `tenants` table
+2. `x-tenant-slug` header → looks up tenant by slug
+
+### Frontend (`App.tsx` — `setExtraHeadersGetter`)
+- If `localStorage.admin_session` has a token → injects `x-admin-token` on all API calls
+- Otherwise → injects `x-tenant-slug` from the first URL path segment (storefront slug)
+
+### Auth Flows
+- **Owner login**: `POST /api/admin/auth/owner-login` — email+password against `tenantsTable`; stores/returns `adminToken`
+- **Staff login**: `POST /api/admin/auth/login` — email+password against `adminUsersTable`; stores/returns `token`
+- **Customer login**: `POST /api/customers/login` — scoped per tenant by slug
+
+### Demo Tenant
+- slug: `my-rental-company`, id: 4
+- Owner email: `admin@myrentalcompany.com` / password: `admin123`
+- Super admin: `owner@platform.com` / `superadmin123`
+
 ## Database Schema
 
 Tables:
-- `business_profile` — Single-row business settings and branding
-- `categories` — Equipment categories
-- `listings` — Gear inventory with pricing, photos, specs
-- `bookings` — Customer reservations with status tracking; `addonsData` (JSON) column stores selected add-ons
-- `quotes` — Custom quotes with line items and discounts
-- `customers` — Customer accounts with saved billing info
-- `listing_addons` — Optional/required add-ons per listing (flat or per-day pricing)
+- `tenants` — Rental companies (slug, email, adminPasswordHash, adminToken, plan, status)
+- `business_profile` — Per-tenant branding & settings (tenantId)
+- `categories` — Equipment categories (tenantId)
+- `listings` — Gear inventory (tenantId, pricing, photos, specs)
+- `bookings` — Customer reservations (tenantId, status tracking, addonsData JSON)
+- `quotes` — Custom quotes (tenantId, line items, discounts)
+- `claims` — Damage/lost claims (tenantId)
+- `customers` — Customer accounts (tenantId, scoped per company)
+- `admin_users` — Staff accounts (tenantId)
+- `listing_addons` — Optional/required add-ons per listing
 
 ## API Routes
 
-All routes prefixed with `/api`:
+All routes prefixed with `/api`. All data routes are tenant-scoped via the middleware.
 - `GET/PUT /business` — Business profile
-- `GET/POST /categories` — Categories
-- `GET/POST /listings`, `GET/PUT/DELETE /listings/:id` — Listings CRUD
-- `GET/POST /bookings`, `GET/PUT /bookings/:id` — Bookings (POST accepts `addons` array)
-- `GET/POST /quotes`, `PUT /quotes/:id` — Quotes
+- `GET/POST /categories` — Categories (tenant-scoped)
+- `GET/POST /listings`, `GET/PUT/DELETE /listings/:id` — Listings CRUD (tenant-scoped)
+- `GET/POST /bookings`, `GET/PUT /bookings/:id` — Bookings (tenant-scoped; POST accepts `addons` array)
+- `GET/POST /quotes`, `PUT /quotes/:id` — Quotes (tenant-scoped)
+- `GET/POST/PUT/DELETE /claims`, `GET/PUT /claims/:id` — Claims (tenant-scoped)
 - `GET/POST /listings/:id/addons`, `PUT/DELETE /listings/:id/addons/:addonId` — Listing add-ons CRUD
 - `GET /analytics/summary` — Dashboard stats
 - `GET /analytics/revenue` — Revenue over time (7d/30d/90d/12m)
-- `GET /analytics/top-listings` — Top revenue listings
-- `GET /analytics/booking-status` — Status breakdown
-- `GET /analytics/booking-volume` — Bookings count by period
-- `GET /analytics/renter-locations` — Customer locations (state/city)
+- `GET /analytics/top-listings`, `/booking-status`, `/booking-volume`, `/renter-locations` — Analytics
 - `POST /customers/register`, `POST /customers/login`, `GET/PUT /customers/:id` — Customer auth + profile
+- `POST /admin/auth/owner-login` — Tenant owner login (returns adminToken)
+- `POST /admin/auth/login` — Staff login (returns token)
+- `POST /admin/auth/logout` — Clears token
+- `GET/POST/PUT/DELETE /admin/team` — Team management (tenant-scoped)
+- `GET /admin/superadmin/*` — Super admin routes (x-superadmin-token required)
 
 ## TypeScript & Composite Projects
 

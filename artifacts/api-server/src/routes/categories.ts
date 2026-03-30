@@ -1,19 +1,23 @@
 import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
 import { categoriesTable, listingsTable } from "@workspace/db/schema";
-import { eq, count } from "drizzle-orm";
+import { eq, count, and } from "drizzle-orm";
 
 const router: IRouter = Router();
 
 router.get("/categories", async (req, res) => {
   try {
-    const cats = await db.select().from(categoriesTable).orderBy(categoriesTable.name);
+    const catWhere = req.tenantId ? eq(categoriesTable.tenantId, req.tenantId) : undefined;
+    const cats = await db.select().from(categoriesTable).where(catWhere).orderBy(categoriesTable.name);
     
     const withCounts = await Promise.all(cats.map(async (cat) => {
+      const listingWhere = req.tenantId
+        ? and(eq(listingsTable.categoryId, cat.id), eq(listingsTable.tenantId, req.tenantId!))
+        : eq(listingsTable.categoryId, cat.id);
       const [result] = await db
         .select({ count: count() })
         .from(listingsTable)
-        .where(eq(listingsTable.categoryId, cat.id));
+        .where(listingWhere);
       return {
         ...cat,
         listingCount: Number(result?.count ?? 0),
@@ -30,7 +34,10 @@ router.get("/categories", async (req, res) => {
 
 router.post("/categories", async (req, res) => {
   try {
-    const [created] = await db.insert(categoriesTable).values(req.body).returning();
+    const [created] = await db.insert(categoriesTable).values({
+      ...req.body,
+      tenantId: req.tenantId ?? null,
+    }).returning();
     res.status(201).json({
       ...created,
       listingCount: 0,

@@ -20,6 +20,7 @@ router.get("/bookings", async (req, res) => {
   try {
     const { status, listingId, startDate, endDate, customerEmail } = req.query;
     const conditions = [];
+    if (req.tenantId) conditions.push(eq(bookingsTable.tenantId, req.tenantId));
     if (status) conditions.push(eq(bookingsTable.status, status as any));
     if (listingId) conditions.push(eq(bookingsTable.listingId, Number(listingId)));
     if (startDate) conditions.push(gte(bookingsTable.startDate, String(startDate)));
@@ -69,6 +70,7 @@ router.post("/bookings", async (req, res) => {
     const assignedUnitIds = Array.isArray(rawUnitIds) && rawUnitIds.length > 0 ? JSON.stringify(rawUnitIds) : null;
     const [created] = await db.insert(bookingsTable).values({
       ...restBody,
+      tenantId: req.tenantId ?? null,
       totalPrice: String(totalPrice),
       addonsData,
       assignedUnitIds,

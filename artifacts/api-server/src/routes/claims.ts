@@ -20,6 +20,7 @@ router.get("/claims", async (req, res) => {
   try {
     const { status, type, customerEmail, startDate, endDate } = req.query;
     const conditions = [];
+    if (req.tenantId) conditions.push(eq(claimsTable.tenantId, req.tenantId));
     if (status) conditions.push(eq(claimsTable.status, status as any));
     if (type) conditions.push(eq(claimsTable.type, type as any));
     if (customerEmail) conditions.push(eq(claimsTable.customerEmail, String(customerEmail)));
@@ -83,6 +84,7 @@ router.post("/claims", async (req, res) => {
     const [created] = await db
       .insert(claimsTable)
       .values({
+        tenantId: req.tenantId ?? null,
         bookingId: bookingId ?? null,
         listingId: listingId ?? null,
         customerName,

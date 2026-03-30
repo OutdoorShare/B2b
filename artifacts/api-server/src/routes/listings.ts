@@ -32,6 +32,7 @@ router.get("/listings", async (req, res) => {
     const { categoryId, status, search, minPrice, maxPrice } = req.query;
     
     const conditions = [];
+    if (req.tenantId) conditions.push(eq(listingsTable.tenantId, req.tenantId));
     if (categoryId) conditions.push(eq(listingsTable.categoryId, Number(categoryId)));
     if (status) conditions.push(eq(listingsTable.status, status as any));
     if (minPrice) conditions.push(gte(listingsTable.pricePerDay, String(minPrice)));
@@ -86,6 +87,7 @@ router.post("/listings", async (req, res) => {
     const body = req.body;
     const [created] = await db.insert(listingsTable).values({
       ...body,
+      tenantId: req.tenantId ?? null,
       pricePerDay: String(body.pricePerDay),
       pricePerWeek: body.pricePerWeek != null ? String(body.pricePerWeek) : null,
       pricePerHour: body.pricePerHour != null ? String(body.pricePerHour) : null,

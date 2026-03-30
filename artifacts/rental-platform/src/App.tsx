@@ -3,6 +3,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import NotFound from "@/pages/not-found";
+import { setExtraHeadersGetter } from "@workspace/api-client-react";
 
 import { AdminLayout } from "@/components/layout/admin-layout";
 import { StorefrontLayout } from "@/components/layout/storefront-layout";
@@ -45,6 +46,30 @@ import SuperAdminListings from "@/pages/superadmin/listings";
 import CompanyDetailPage from "@/pages/superadmin/company-detail";
 
 const queryClient = new QueryClient();
+
+// Inject tenant context headers on every generated API call.
+// Admin sessions send x-admin-token; storefront pages derive x-tenant-slug from the URL.
+setExtraHeadersGetter(() => {
+  try {
+    const raw = localStorage.getItem("admin_session");
+    if (raw) {
+      const session = JSON.parse(raw);
+      if (session?.token) {
+        return { "x-admin-token": session.token };
+      }
+    }
+  } catch { /* ignore */ }
+
+  // Extract slug from pathname: first segment that isn't a reserved path
+  const base = import.meta.env.BASE_URL.replace(/\/$/, "");
+  const path = window.location.pathname.replace(base, "") || "/";
+  const firstSegment = path.split("/").filter(Boolean)[0];
+  const reserved = new Set(["admin", "superadmin", "get-started", "signup", "demo"]);
+  if (firstSegment && !reserved.has(firstSegment)) {
+    return { "x-tenant-slug": firstSegment };
+  }
+  return {};
+});
 
 function Router() {
   return (

@@ -52,9 +52,11 @@ export default function LoginPage() {
 
   // Admin section
   const [showAdminSection, setShowAdminSection] = useState(false);
-  const [adminTab, setAdminTab] = useState<"code" | "team">("code");
-  const [adminCode, setAdminCode] = useState("");
+  const [adminTab, setAdminTab] = useState<"owner" | "team">("owner");
   const [adminError, setAdminError] = useState("");
+  const [ownerEmail, setOwnerEmail] = useState("");
+  const [ownerPassword, setOwnerPassword] = useState("");
+  const [ownerLoading, setOwnerLoading] = useState(false);
   const [staffEmail, setStaffEmail] = useState("");
   const [staffPassword, setStaffPassword] = useState("");
   const [staffLoading, setStaffLoading] = useState(false);
@@ -98,14 +100,31 @@ export default function LoginPage() {
     }
   };
 
-  const handleAdminAccess = () => {
+  const handleOwnerLogin = async () => {
     setAdminError("");
-    if (!adminCode.trim()) { setAdminError("Enter your admin code."); return; }
-    if (adminCode.trim() === "admin") {
+    if (!ownerEmail || !ownerPassword) { setAdminError("Email and password are required."); return; }
+    setOwnerLoading(true);
+    try {
+      const res = await fetch(`${BASE}/api/admin/auth/owner-login`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: ownerEmail, password: ownerPassword }),
+      });
+      const data = await res.json();
+      if (!res.ok) { setAdminError(data.error || "Login failed."); return; }
+      localStorage.setItem("admin_session", JSON.stringify({
+        type: "owner",
+        token: data.token,
+        tenantId: data.tenantId,
+        tenantName: data.tenantName,
+        tenantSlug: data.tenantSlug,
+        email: data.email,
+      }));
+      toast({ title: `Welcome back!`, description: `Signed in as owner of ${data.tenantName}` });
       setLocation("/admin");
-    } else {
-      setAdminError("Invalid admin code.");
-    }
+    } catch {
+      setAdminError("Connection error. Please try again.");
+    } finally { setOwnerLoading(false); }
   };
 
   const handleTeamLogin = async () => {
@@ -282,39 +301,55 @@ export default function LoginPage() {
             <div className="border-t border-dashed border-slate-300 dark:border-slate-700">
               {/* Sub-tabs */}
               <div className="flex border-b border-slate-200 dark:border-slate-700">
-                {(["code", "team"] as const).map(t => (
+                {(["owner", "team"] as const).map(t => (
                   <button
                     key={t}
                     onClick={() => { setAdminTab(t); setAdminError(""); }}
                     className={`flex-1 py-2.5 text-xs font-semibold transition-colors border-b-2 -mb-px
                       ${adminTab === t ? "border-primary text-foreground" : "border-transparent text-slate-500 hover:text-slate-700"}`}
                   >
-                    {t === "code" ? "Access Code" : "Staff Login"}
+                    {t === "owner" ? "Owner Login" : "Staff Login"}
                   </button>
                 ))}
               </div>
 
               <div className="px-5 py-4 space-y-3">
-                {adminTab === "code" ? (
-                  <>
-                    <p className="text-xs text-slate-500 dark:text-slate-400">Enter your admin access code to reach the management dashboard.</p>
-                    <div className="space-y-1.5">
-                      <Label className="text-slate-600 dark:text-slate-300 text-xs">Admin Code</Label>
-                      <Input
-                        value={adminCode}
-                        onChange={e => setAdminCode(e.target.value)}
-                        type="password"
-                        placeholder="••••••"
-                        className="h-10 bg-white dark:bg-slate-800 border-slate-300 dark:border-slate-600 text-sm"
-                        onKeyDown={e => { if (e.key === "Enter") handleAdminAccess(); }}
-                      />
+                {adminTab === "owner" ? (
+                  <form onSubmit={e => { e.preventDefault(); handleOwnerLogin(); }} autoComplete="on">
+                    <p className="text-xs text-slate-500 dark:text-slate-400 mb-3">Sign in with your company owner account to access the management dashboard.</p>
+                    <div className="space-y-3">
+                      <div className="space-y-1.5">
+                        <Label className="text-slate-600 dark:text-slate-300 text-xs" htmlFor="owner-email">Owner Email</Label>
+                        <Input
+                          id="owner-email"
+                          name="email"
+                          autoComplete="email"
+                          type="email"
+                          value={ownerEmail}
+                          onChange={e => setOwnerEmail(e.target.value)}
+                          placeholder="owner@company.com"
+                          className="h-10 bg-white dark:bg-slate-800 border-slate-300 dark:border-slate-600 text-sm"
+                        />
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label className="text-slate-600 dark:text-slate-300 text-xs" htmlFor="owner-password">Password</Label>
+                        <Input
+                          id="owner-password"
+                          name="password"
+                          autoComplete="current-password"
+                          type="password"
+                          value={ownerPassword}
+                          onChange={e => setOwnerPassword(e.target.value)}
+                          placeholder="••••••"
+                          className="h-10 bg-white dark:bg-slate-800 border-slate-300 dark:border-slate-600 text-sm"
+                        />
+                      </div>
+                      {adminError && <p className="text-xs text-destructive font-medium">{adminError}</p>}
+                      <Button type="submit" variant="outline" size="sm" className="w-full border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800" disabled={ownerLoading}>
+                        {ownerLoading ? "Signing in…" : "Sign In to Dashboard"}
+                      </Button>
                     </div>
-                    {adminError && <p className="text-xs text-destructive font-medium">{adminError}</p>}
-                    <Button variant="outline" size="sm" className="w-full border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800" onClick={handleAdminAccess}>
-                      Access Dashboard
-                    </Button>
-                    <p className="text-[11px] text-slate-400 text-center">Default code: <code className="font-mono">admin</code></p>
-                  </>
+                  </form>
                 ) : (
                   <form onSubmit={e => { e.preventDefault(); handleTeamLogin(); }} autoComplete="on">
                     <p className="text-xs text-slate-500 dark:text-slate-400 mb-3">Sign in with your staff account credentials.</p>

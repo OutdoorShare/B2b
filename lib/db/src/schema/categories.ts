@@ -1,9 +1,10 @@
-import { pgTable, serial, text, timestamp } from "drizzle-orm/pg-core";
+import { pgTable, serial, text, integer, timestamp } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 
 export const categoriesTable = pgTable("categories", {
   id: serial("id").primaryKey(),
+  tenantId: integer("tenant_id"),
   name: text("name").notNull(),
   slug: text("slug").notNull().unique(),
   icon: text("icon"),

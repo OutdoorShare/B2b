@@ -14,6 +14,7 @@ export const tenantsTable = pgTable("tenants", {
   contactName: text("contact_name"),
   phone: text("phone"),
   notes: text("notes"),
+  adminToken: text("admin_token"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });

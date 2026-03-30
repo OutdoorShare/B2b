@@ -1,7 +1,7 @@
 import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
-import { adminUsersTable } from "@workspace/db/schema";
-import { eq } from "drizzle-orm";
+import { adminUsersTable, tenantsTable } from "@workspace/db/schema";
+import { eq, and } from "drizzle-orm";
 import { scrypt, randomBytes, timingSafeEqual } from "crypto";
 import { promisify } from "util";
 
@@ -14,10 +14,22 @@ async function hashPassword(password: string): Promise<string> {
 }
 
 async function verifyPassword(password: string, stored: string): Promise<boolean> {
-  const supplied = (await scryptAsync(password, SALT, 64)) as Buffer;
-  const storedBuf = Buffer.from(stored, "hex");
-  if (supplied.length !== storedBuf.length) return false;
-  return timingSafeEqual(supplied, storedBuf);
+  try {
+    if (stored.includes(":")) {
+      const [salt, storedHash] = stored.split(":");
+      const hash = (await scryptAsync(password, salt, 64)) as Buffer;
+      const storedBuf = Buffer.from(storedHash, "hex");
+      if (hash.length !== storedBuf.length) return false;
+      return timingSafeEqual(hash, storedBuf);
+    } else {
+      const supplied = (await scryptAsync(password, SALT, 64)) as Buffer;
+      const storedBuf = Buffer.from(stored, "hex");
+      if (supplied.length !== storedBuf.length) return false;
+      return timingSafeEqual(supplied, storedBuf);
+    }
+  } catch {
+    return false;
+  }
 }
 
 function safeUser(u: typeof adminUsersTable.$inferSelect) {
@@ -27,7 +39,51 @@ function safeUser(u: typeof adminUsersTable.$inferSelect) {
 
 const router: IRouter = Router();
 
-// POST /admin/auth/login
+// POST /admin/auth/owner-login — tenant owner login
+router.post("/admin/auth/owner-login", async (req, res) => {
+  try {
+    const { email, password } = req.body;
+    if (!email || !password) {
+      res.status(400).json({ error: "Email and password required" });
+      return;
+    }
+
+    const [tenant] = await db
+      .select()
+      .from(tenantsTable)
+      .where(eq(tenantsTable.email, email.toLowerCase().trim()))
+      .limit(1);
+
+    if (!tenant || tenant.status !== "active") {
+      res.status(401).json({ error: "Invalid email or password" });
+      return;
+    }
+
+    const valid = await verifyPassword(password, tenant.adminPasswordHash);
+    if (!valid) {
+      res.status(401).json({ error: "Invalid email or password" });
+      return;
+    }
+
+    const token = randomBytes(32).toString("hex");
+    await db
+      .update(tenantsTable)
+      .set({ adminToken: token, updatedAt: new Date() })
+      .where(eq(tenantsTable.id, tenant.id));
+
+    res.json({
+      token,
+      tenantId: tenant.id,
+      tenantName: tenant.name,
+      tenantSlug: tenant.slug,
+      email: tenant.email,
+    });
+  } catch {
+    res.status(500).json({ error: "Login failed" });
+  }
+});
+
+// POST /admin/auth/login — staff member login
 router.post("/admin/auth/login", async (req, res) => {
   try {
     const { email, password } = req.body;
@@ -50,6 +106,7 @@ router.post("/admin/auth/logout", async (req, res) => {
     const token = req.headers["x-admin-token"] as string;
     if (token) {
       await db.update(adminUsersTable).set({ token: null, updatedAt: new Date() }).where(eq(adminUsersTable.token, token));
+      await db.update(tenantsTable).set({ adminToken: null, updatedAt: new Date() }).where(eq(tenantsTable.adminToken, token));
     }
     res.json({ ok: true });
   } catch {
@@ -57,17 +114,18 @@ router.post("/admin/auth/logout", async (req, res) => {
   }
 });
 
-// GET /admin/team
-router.get("/admin/team", async (_req, res) => {
+// GET /admin/team — scoped to tenant
+router.get("/admin/team", async (req, res) => {
   try {
-    const users = await db.select().from(adminUsersTable).orderBy(adminUsersTable.createdAt);
+    const where = req.tenantId ? eq(adminUsersTable.tenantId, req.tenantId) : undefined;
+    const users = await db.select().from(adminUsersTable).where(where).orderBy(adminUsersTable.createdAt);
     res.json(users.map(safeUser));
   } catch {
     res.status(500).json({ error: "Failed to fetch team members" });
   }
 });
 
-// POST /admin/team
+// POST /admin/team — scoped to tenant
 router.post("/admin/team", async (req, res) => {
   try {
     const { name, email, password, role, notes } = req.body;
@@ -80,6 +138,7 @@ router.post("/admin/team", async (req, res) => {
       passwordHash,
       role: role ?? "staff",
       notes: notes ?? null,
+      tenantId: req.tenantId ?? null,
     }).returning();
     res.status(201).json(safeUser(user));
   } catch (err: any) {
@@ -88,7 +147,7 @@ router.post("/admin/team", async (req, res) => {
   }
 });
 
-// PUT /admin/team/:id
+// PUT /admin/team/:id — scoped to tenant
 router.put("/admin/team/:id", async (req, res) => {
   try {
     const id = parseInt(req.params.id);
@@ -104,7 +163,12 @@ router.put("/admin/team/:id", async (req, res) => {
     if (role) updates.role = role;
     if (status) updates.status = status;
     if (notes !== undefined) updates.notes = notes || null;
-    const [updated] = await db.update(adminUsersTable).set(updates).where(eq(adminUsersTable.id, id)).returning();
+
+    const whereClause = req.tenantId
+      ? and(eq(adminUsersTable.id, id), eq(adminUsersTable.tenantId, req.tenantId))
+      : eq(adminUsersTable.id, id);
+
+    const [updated] = await db.update(adminUsersTable).set(updates).where(whereClause).returning();
     if (!updated) { res.status(404).json({ error: "Team member not found" }); return; }
     res.json(safeUser(updated));
   } catch (err: any) {
@@ -113,11 +177,15 @@ router.put("/admin/team/:id", async (req, res) => {
   }
 });
 
-// DELETE /admin/team/:id
+// DELETE /admin/team/:id — scoped to tenant
 router.delete("/admin/team/:id", async (req, res) => {
   try {
     const id = parseInt(req.params.id);
-    const [deleted] = await db.delete(adminUsersTable).where(eq(adminUsersTable.id, id)).returning();
+    const whereClause = req.tenantId
+      ? and(eq(adminUsersTable.id, id), eq(adminUsersTable.tenantId, req.tenantId))
+      : eq(adminUsersTable.id, id);
+
+    const [deleted] = await db.delete(adminUsersTable).where(whereClause).returning();
     if (!deleted) { res.status(404).json({ error: "Team member not found" }); return; }
     res.json({ ok: true });
   } catch {

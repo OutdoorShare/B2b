@@ -19,7 +19,8 @@ function formatQuote(q: typeof quotesTable.$inferSelect) {
 
 router.get("/quotes", async (req, res) => {
   try {
-    const quotes = await db.select().from(quotesTable).orderBy(quotesTable.createdAt);
+    const where = req.tenantId ? eq(quotesTable.tenantId, req.tenantId) : undefined;
+    const quotes = await db.select().from(quotesTable).where(where).orderBy(quotesTable.createdAt);
     res.json(quotes.map(formatQuote));
   } catch (err) {
     req.log.error(err);
@@ -52,6 +53,7 @@ router.post("/quotes", async (req, res) => {
     const totalPrice = Math.max(0, subtotal - discount);
 
     const [created] = await db.insert(quotesTable).values({
+      tenantId: req.tenantId ?? null,
       customerName: body.customerName,
       customerEmail: body.customerEmail,
       customerPhone: body.customerPhone ?? null,
