@@ -43,22 +43,19 @@ function TrialExpiredPaywall({ companyName }: { companyName: string }) {
 function TrialBanner({ trialEndsAt }: { trialEndsAt: string }) {
   const endsAt = new Date(trialEndsAt);
   const hoursLeft = Math.max(0, Math.ceil((endsAt.getTime() - Date.now()) / (1000 * 60 * 60)));
-  const label = hoursLeft <= 1 ? "less than 1 hour" : `${hoursLeft} hour${hoursLeft === 1 ? "" : "s"}`;
+  const label = hoursLeft <= 1 ? "<1h" : `${hoursLeft}h`;
 
   return (
-    <div
-      className="w-full px-4 py-1.5 flex items-center justify-center gap-2 text-white text-xs font-semibold"
-      style={{ background: `linear-gradient(90deg, #1a6b2e 0%, ${OS_GREEN} 60%, ${OS_BLUE} 100%)` }}
-    >
-      <img src="/outdoorshare-logo.png" alt="OutdoorShare" className="w-4 h-4 object-contain brightness-200" />
-      <span>Powered by OutdoorShare</span>
-      <span className="opacity-50 mx-1">·</span>
-      <span className="flex items-center gap-1 opacity-80">
-        <Clock className="w-3 h-3" />
-        {label} left in free trial
+    <div className="w-full px-4 py-1 flex items-center justify-center gap-2 bg-gray-950 border-b border-white/5">
+      <Clock className="w-2.5 h-2.5 text-white/25 shrink-0" />
+      <span className="text-[11px] text-white/30 tracking-wide">
+        Free trial &mdash; {label} remaining
       </span>
-      <span className="opacity-50 mx-1">·</span>
-      <a href="/get-started" className="underline underline-offset-2 opacity-80 hover:opacity-100 transition-opacity">
+      <span className="text-white/10">·</span>
+      <a
+        href="/get-started"
+        className="text-[11px] text-white/35 hover:text-white/60 transition-colors underline underline-offset-2"
+      >
         Upgrade
       </a>
     </div>
