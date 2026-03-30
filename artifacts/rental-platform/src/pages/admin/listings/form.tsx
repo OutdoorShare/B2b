@@ -17,7 +17,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { ArrowLeft, Upload, X } from "lucide-react";
+import { ArrowLeft, Upload, X, CheckCircle2, AlertCircle, CircleDashed } from "lucide-react";
 import { AddonManager } from "@/components/addon-manager";
 import { UnitIdentifiersManager } from "@/components/unit-identifiers-manager";
 
@@ -135,12 +135,30 @@ export default function AdminListingsForm() {
     }));
   };
 
+  // Publish readiness checks — required when status is "active"
+  const publishChecks = [
+    { key: "title",       label: "Title",             done: formData.title.trim().length > 0 },
+    { key: "description", label: "Description",        done: formData.description.trim().length > 0 },
+    { key: "category",    label: "Category",           done: !!formData.categoryId },
+    { key: "price",       label: "Price per day > $0", done: formData.pricePerDay > 0 },
+    { key: "photos",      label: "At least one photo", done: formData.imageUrls.length > 0 },
+  ];
+  const publishBlocked = formData.status === "active" && publishChecks.some(c => !c.done);
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    
-    // Clean up empty optional number fields if needed
+
+    if (publishBlocked) {
+      toast({
+        title: "Cannot publish listing",
+        description: "Please complete all required sections before setting status to Active.",
+        variant: "destructive",
+      });
+      return;
+    }
+
     const payload = { ...formData };
-    
+
     if (isEditing) {
       updateListing.mutate(
         { id, data: payload },
@@ -396,11 +414,57 @@ export default function AdminListingsForm() {
               </CardContent>
             </Card>
 
+            {/* Publish checklist — shown any time to guide the admin */}
+            {(() => {
+              const allDone = publishChecks.every(c => c.done);
+              const cardClass = publishBlocked
+                ? "border-destructive/50 bg-destructive/5"
+                : allDone
+                  ? "border-green-200 bg-green-50/40"
+                  : "border-border";
+              return (
+            <Card className={cardClass}>
+              <CardHeader className="pb-3">
+                <CardTitle className="text-sm flex items-center gap-2">
+                  {publishBlocked
+                    ? <AlertCircle className="w-4 h-4 text-destructive" />
+                    : allDone
+                      ? <CheckCircle2 className="w-4 h-4 text-green-600" />
+                      : <CircleDashed className="w-4 h-4 text-muted-foreground" />}
+                  {publishBlocked ? "Complete to Publish" : allDone ? "Ready to Publish" : "Publish Checklist"}
+                </CardTitle>
+                {publishBlocked && (
+                  <CardDescription className="text-xs">
+                    Set status to <strong>Draft</strong> or fill in the missing sections below.
+                  </CardDescription>
+                )}
+                {!publishBlocked && !allDone && (
+                  <CardDescription className="text-xs">
+                    Complete all items before setting status to <strong>Active</strong>.
+                  </CardDescription>
+                )}
+              </CardHeader>
+              <CardContent className="pt-0 space-y-1.5">
+                {publishChecks.map(c => (
+                  <div key={c.key} className="flex items-center gap-2 text-sm">
+                    {c.done
+                      ? <CheckCircle2 className="w-3.5 h-3.5 text-green-600 shrink-0" />
+                      : <CircleDashed className="w-3.5 h-3.5 text-muted-foreground shrink-0" />}
+                    <span className={c.done ? "text-foreground" : "text-muted-foreground"}>{c.label}</span>
+                    {!c.done && formData.status === "active" && (
+                      <span className="ml-auto text-[10px] font-semibold text-destructive bg-destructive/10 px-1.5 py-0.5 rounded-full">Required</span>
+                    )}
+                  </div>
+                ))}
+              </CardContent>
+            </Card>
+            );})()}
+
             <div className="flex justify-end gap-4">
               <Button type="button" variant="outline" onClick={() => setLocation("/admin/listings")}>
                 Cancel
               </Button>
-              <Button type="submit" disabled={isPending}>
+              <Button type="submit" disabled={isPending || publishBlocked}>
                 {isPending ? 'Saving...' : (isEditing ? 'Save Changes' : 'Create Listing')}
               </Button>
             </div>
