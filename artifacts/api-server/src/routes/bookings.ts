@@ -133,6 +133,8 @@ router.put("/bookings/:id", async (req, res) => {
       }
     }
 
+    const previousStatus = (await db.select({ status: bookingsTable.status }).from(bookingsTable).where(eq(bookingsTable.id, Number(req.params.id))))[0]?.status;
+
     const [updated] = await db
       .update(bookingsTable)
       .set(updateData)
@@ -140,6 +142,24 @@ router.put("/bookings/:id", async (req, res) => {
       .returning();
 
     if (!updated) { res.status(404).json({ error: "Not found" }); return; }
+
+    // Fire automation if status changed
+    if (body.status && body.status !== previousStatus) {
+      const triggerMap: Record<string, string> = {
+        confirmed: "booking_confirmed",
+        active: "booking_activated",
+        completed: "booking_completed",
+        cancelled: "booking_cancelled",
+      };
+      const trigger = triggerMap[body.status];
+      if (trigger) {
+        fetch(`http://localhost:8080/api/communications/send-automation`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ trigger, bookingId: updated.id }),
+        }).catch(() => {}); // Fire and forget — don't block the response
+      }
+    }
 
     const [listing] = await db.select({ title: listingsTable.title }).from(listingsTable).where(eq(listingsTable.id, updated.listingId));
     res.json(formatBooking(updated, listing?.title ?? "Unknown"));

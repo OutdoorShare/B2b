@@ -39,6 +39,7 @@ import AdminClaims from "@/pages/admin/claims/index";
 import AdminClaimDetail from "@/pages/admin/claims/detail";
 import AdminClaimsNew from "@/pages/admin/claims/new";
 import AdminTeam from "@/pages/admin/team";
+import AdminCommunications from "@/pages/admin/communications";
 import SuperAdminTeam from "@/pages/superadmin/team";
 import CompanyDetailPage from "@/pages/superadmin/company-detail";
 
@@ -134,6 +135,9 @@ function Router() {
       </Route>
       <Route path="/admin/team">
         <AdminLayout><AdminTeam /></AdminLayout>
+      </Route>
+      <Route path="/admin/communications">
+        <AdminCommunications />
       </Route>
 
       {/* Demo / Test page */}
