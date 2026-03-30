@@ -1,7 +1,28 @@
 import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
 import { businessProfileTable, tenantsTable } from "@workspace/db/schema";
-import { eq } from "drizzle-orm";
+import { eq, ne, and } from "drizzle-orm";
+
+const RESERVED_SLUGS = new Set(["admin", "superadmin", "get-started", "signup", "demo", "api"]);
+
+function slugify(name: string): string {
+  return name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 40);
+}
+
+async function uniqueSlug(base: string, excludeTenantId: number): Promise<string> {
+  let candidate = base;
+  let counter = 1;
+  while (true) {
+    if (!RESERVED_SLUGS.has(candidate)) {
+      const [existing] = await db.select({ id: tenantsTable.id })
+        .from(tenantsTable)
+        .where(and(eq(tenantsTable.slug, candidate), ne(tenantsTable.id, excludeTenantId)))
+        .limit(1);
+      if (!existing) return candidate;
+    }
+    candidate = `${base}-${counter++}`;
+  }
+}
 
 const router: IRouter = Router();
 
@@ -132,12 +153,28 @@ router.put("/business", async (req, res) => {
       .where(eq(businessProfileTable.id, profiles[0].id))
       .returning();
 
+    // Auto-sync tenant slug and name when the business name changes
+    let newSlug: string | null = null;
+    if (name !== undefined && req.tenantId) {
+      const rawSlug = slugify(name);
+      if (rawSlug) {
+        newSlug = await uniqueSlug(rawSlug, req.tenantId);
+        await db.update(tenantsTable)
+          .set({ slug: newSlug, name, updatedAt: new Date() })
+          .where(eq(tenantsTable.id, req.tenantId));
+      }
+    }
+
+    // Re-fetch trial info with potentially new slug
+    const trialInfo = await getTenantTrialInfo(req.tenantId);
+
     const p = updated;
     res.json({
       ...p,
       depositPercent: parseFloat(p.depositPercent ?? "25"),
       createdAt: p.createdAt.toISOString(),
       updatedAt: p.updatedAt.toISOString(),
+      ...trialInfo,
     });
   } catch (err) {
     req.log.error(err);

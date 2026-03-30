@@ -16,6 +16,10 @@ import { useToast } from "@/hooks/use-toast";
 import { Copy, CheckCircle2, Paintbrush, RefreshCw, Upload, Eye, ImageIcon, X } from "lucide-react";
 import { applyBrandColors, PRESET_THEMES, isLight } from "@/lib/theme";
 
+function slugifyPreview(name: string): string {
+  return name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 40);
+}
+
 export default function AdminSettings() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -141,6 +145,39 @@ export default function AdminSettings() {
 
           {/* ── GENERAL ── */}
           <TabsContent value="general" className="space-y-6 pt-6">
+            {/* Storefront URL banner */}
+            {(() => {
+              const slug = (profile as any)?.siteSlug ?? "";
+              const liveSlug = slugifyPreview(formData.name || "");
+              const currentUrl = slug ? `${window.location.origin}/${slug}` : "";
+              const previewUrl = liveSlug ? `${window.location.origin}/${liveSlug}` : "";
+              const willChange = slug && liveSlug && liveSlug !== slug;
+              return (
+                <div className="rounded-xl border bg-primary/5 border-primary/20 px-5 py-4 flex items-start justify-between gap-4 flex-wrap">
+                  <div className="space-y-0.5 min-w-0">
+                    <p className="text-xs font-semibold text-primary uppercase tracking-wide">Your Storefront URL</p>
+                    <p className="text-sm font-mono font-semibold text-foreground truncate">{currentUrl || "—"}</p>
+                    {willChange && (
+                      <p className="text-xs text-muted-foreground mt-0.5">
+                        Will become <span className="font-mono font-medium text-foreground">{previewUrl}</span> when you save
+                      </p>
+                    )}
+                    {!willChange && (
+                      <p className="text-xs text-muted-foreground">Updates automatically when you change your Business Name.</p>
+                    )}
+                  </div>
+                  <div className="flex gap-2 shrink-0">
+                    <Button type="button" size="sm" variant="outline" onClick={() => { navigator.clipboard.writeText(currentUrl); toast({ title: "Copied!" }); }}>
+                      <Copy className="w-3.5 h-3.5 mr-1.5" /> Copy
+                    </Button>
+                    <Button type="button" size="sm" variant="outline" onClick={() => window.open(currentUrl, "_blank")}>
+                      <Eye className="w-3.5 h-3.5 mr-1.5" /> Preview
+                    </Button>
+                  </div>
+                </div>
+              );
+            })()}
+
             <Card>
               <CardHeader>
                 <CardTitle>Business Details</CardTitle>
@@ -151,6 +188,7 @@ export default function AdminSettings() {
                   <div className="space-y-2">
                     <Label htmlFor="name">Business Name</Label>
                     <Input id="name" name="name" value={formData.name || ""} onChange={handleChange} required />
+                    <p className="text-xs text-muted-foreground">This also sets your storefront URL.</p>
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="tagline">Tagline</Label>

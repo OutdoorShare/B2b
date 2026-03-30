@@ -118,8 +118,8 @@ export default function SuperAdminDashboard() {
     setForm(f => ({ ...f, [field]: value }));
     // Auto-set maxListings when plan changes
     if (field === "plan") setForm(f => ({ ...f, plan: value, maxListings: String(PLAN_LIMITS[value] ?? 10) }));
-    // Auto-generate slug from name
-    if (field === "name" && !editTenant) {
+    // Auto-generate slug from name (both create and edit)
+    if (field === "name") {
       const slug = value.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
       setForm(f => ({ ...f, name: value, slug }));
     }
