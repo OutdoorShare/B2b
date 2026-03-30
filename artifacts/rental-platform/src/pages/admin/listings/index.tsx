@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
 import { 
   useGetListings, 
   useDeleteListing,
@@ -19,7 +19,7 @@ import {
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, Search, Edit, Trash2, Package } from "lucide-react";
+import { Plus, Search, Edit, Trash2, Package, ChevronRight } from "lucide-react";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -34,6 +34,7 @@ import {
 
 export default function AdminListings() {
   const [search, setSearch] = useState("");
+  const [, setLocation] = useLocation();
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -105,9 +106,13 @@ export default function AdminListings() {
               </TableHeader>
               <TableBody>
                 {listings.map((listing) => (
-                  <TableRow key={listing.id}>
-                    <TableCell>
-                      <div className="w-12 h-12 bg-muted rounded overflow-hidden">
+                  <TableRow
+                    key={listing.id}
+                    className="cursor-pointer hover:bg-muted/40 transition-colors"
+                    onClick={() => setLocation(`/admin/listings/${listing.id}`)}
+                  >
+                    <TableCell onClick={e => e.stopPropagation()}>
+                      <div className="w-12 h-12 bg-muted rounded-lg overflow-hidden">
                         {listing.imageUrls?.[0] ? (
                           <img src={listing.imageUrls[0]} alt={listing.title} className="w-full h-full object-cover" />
                         ) : (
@@ -117,24 +122,27 @@ export default function AdminListings() {
                         )}
                       </div>
                     </TableCell>
-                    <TableCell className="font-medium">{listing.title}</TableCell>
-                    <TableCell className="text-muted-foreground">{listing.categoryName || '-'}</TableCell>
-                    <TableCell>${listing.pricePerDay.toFixed(2)}</TableCell>
+                    <TableCell>
+                      <p className="font-semibold">{listing.title}</p>
+                      <p className="text-xs text-muted-foreground">ID #{listing.id}</p>
+                    </TableCell>
+                    <TableCell className="text-muted-foreground">{listing.categoryName || '—'}</TableCell>
+                    <TableCell className="font-semibold">${listing.pricePerDay.toFixed(2)}</TableCell>
                     <TableCell>
                       <Badge variant={listing.status === 'active' ? 'default' : listing.status === 'draft' ? 'secondary' : 'outline'} className="capitalize">
                         {listing.status}
                       </Badge>
                     </TableCell>
-                    <TableCell className="text-right">
-                      <div className="flex justify-end gap-2">
+                    <TableCell className="text-right" onClick={e => e.stopPropagation()}>
+                      <div className="flex justify-end gap-1 items-center">
                         <Link href={`/admin/listings/${listing.id}/edit`}>
-                          <Button variant="ghost" size="icon">
+                          <Button variant="ghost" size="icon" title="Edit">
                             <Edit className="w-4 h-4" />
                           </Button>
                         </Link>
                         <AlertDialog>
                           <AlertDialogTrigger asChild>
-                            <Button variant="ghost" size="icon" className="text-destructive">
+                            <Button variant="ghost" size="icon" className="text-destructive" title="Delete">
                               <Trash2 className="w-4 h-4" />
                             </Button>
                           </AlertDialogTrigger>
@@ -142,7 +150,7 @@ export default function AdminListings() {
                             <AlertDialogHeader>
                               <AlertDialogTitle>Are you sure?</AlertDialogTitle>
                               <AlertDialogDescription>
-                                This will permanently delete the listing "{listing.title}". This action cannot be undone.
+                                This will permanently delete "{listing.title}". This cannot be undone.
                               </AlertDialogDescription>
                             </AlertDialogHeader>
                             <AlertDialogFooter>
@@ -156,6 +164,7 @@ export default function AdminListings() {
                             </AlertDialogFooter>
                           </AlertDialogContent>
                         </AlertDialog>
+                        <ChevronRight className="w-4 h-4 text-muted-foreground" />
                       </div>
                     </TableCell>
                   </TableRow>

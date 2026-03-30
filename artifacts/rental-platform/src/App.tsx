@@ -16,6 +16,7 @@ import StorefrontBook from "@/pages/storefront/book";
 import AdminDashboard from "@/pages/admin/dashboard";
 import AdminListings from "@/pages/admin/listings/index";
 import AdminListingsForm from "@/pages/admin/listings/form";
+import AdminListingDetail from "@/pages/admin/listings/detail";
 import AdminBookings from "@/pages/admin/bookings/index";
 import AdminBookingDetail from "@/pages/admin/bookings/detail";
 import AdminQuotes from "@/pages/admin/quotes/index";
@@ -45,6 +46,9 @@ function Router() {
       </Route>
       <Route path="/admin/listings/:id/edit">
         <AdminLayout><AdminListingsForm /></AdminLayout>
+      </Route>
+      <Route path="/admin/listings/:id">
+        <AdminLayout><AdminListingDetail /></AdminLayout>
       </Route>
       <Route path="/admin/bookings">
         <AdminLayout><AdminBookings /></AdminLayout>
