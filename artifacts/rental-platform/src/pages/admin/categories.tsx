@@ -76,7 +76,7 @@ export default function AdminCategories() {
           <DialogContent>
             <DialogHeader>
               <DialogTitle>Create Category</DialogTitle>
-              <DialogDescription>Add a new category to organize your gear.</DialogDescription>
+              <DialogDescription>Add a new category to organize your listings.</DialogDescription>
             </DialogHeader>
             <form onSubmit={handleCreate} className="space-y-4 pt-4">
               <div className="space-y-2">

@@ -85,14 +85,14 @@ export default function StorefrontBook() {
   if (!listingIdStr) {
     return (
       <div className="container mx-auto px-4 py-16 text-center">
-        <h2 className="text-2xl font-bold mb-4">No gear selected</h2>
-        <Button onClick={() => setLocation("/")}>Browse Gear</Button>
+        <h2 className="text-2xl font-bold mb-4">No listing selected</h2>
+        <Button onClick={() => setLocation("/")}>Browse Listings</Button>
       </div>
     );
   }
 
   if (isLoading) return <div className="container mx-auto px-4 py-16 text-center">Loading booking details...</div>;
-  if (!listing) return <div className="container mx-auto px-4 py-16 text-center">Gear not found</div>;
+  if (!listing) return <div className="container mx-auto px-4 py-16 text-center">Listing not found</div>;
 
   if (isSuccess) {
     return (

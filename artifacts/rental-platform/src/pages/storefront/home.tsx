@@ -209,7 +209,7 @@ export default function StorefrontHome() {
           <h2 className="text-2xl font-bold tracking-tight">
             {activeCategory 
               ? categories?.find(c => c.id === activeCategory)?.name 
-              : "Most Popular"}
+              : "Most Popular Listings"}
           </h2>
           <span className="text-sm text-muted-foreground">
             {listings?.length || 0} available
@@ -232,7 +232,7 @@ export default function StorefrontHome() {
         ) : listings && listings.length > 0 ? (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
             {listings.map((listing) => (
-              <Link key={listing.id} href={`/gear/${listing.id}`}>
+              <Link key={listing.id} href={`/listings/${listing.id}`}>
                 <div
                   data-testid={`listing-card-${listing.id}`}
                   className="group flex flex-col h-full bg-card rounded-2xl overflow-hidden border border-border hover:border-primary/50 transition-all shadow-sm hover:shadow-lg hover:-translate-y-0.5"

@@ -92,7 +92,7 @@ export default function AdminDashboard() {
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-7">
         <Card className="col-span-4">
           <CardHeader>
-            <CardTitle>Top Performing Gear</CardTitle>
+            <CardTitle>Top Performing Listings</CardTitle>
             <CardDescription>Your most profitable listings this month.</CardDescription>
           </CardHeader>
           <CardContent>

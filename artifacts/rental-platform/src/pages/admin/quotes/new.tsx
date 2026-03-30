@@ -209,7 +209,7 @@ export default function AdminQuotesNew() {
                 <div className="flex gap-2">
                   <Select value={selectedListingId} onValueChange={setSelectedListingId}>
                     <SelectTrigger className="flex-1">
-                      <SelectValue placeholder="Select gear to add..." />
+                      <SelectValue placeholder="Select a listing to add..." />
                     </SelectTrigger>
                     <SelectContent>
                       {listings?.map(l => (

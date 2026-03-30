@@ -188,7 +188,7 @@ export default function AdminListingsForm() {
             {isEditing ? 'Edit Listing' : 'Create Listing'}
           </h2>
           <p className="text-muted-foreground mt-1">
-            {isEditing ? 'Update gear information and pricing.' : 'Add new equipment to your rental inventory.'}
+            {isEditing ? 'Update listing information and pricing.' : 'Add a new listing to your rental inventory.'}
           </p>
         </div>
       </div>
@@ -200,7 +200,7 @@ export default function AdminListingsForm() {
             <Card>
               <CardHeader>
                 <CardTitle>Basic Information</CardTitle>
-                <CardDescription>Title, category, and description for this gear.</CardDescription>
+                <CardDescription>Title, category, and description for this listing.</CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="space-y-2">

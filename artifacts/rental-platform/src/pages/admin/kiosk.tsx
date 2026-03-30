@@ -87,7 +87,7 @@ export default function AdminKiosk() {
                 : 'hover:bg-muted text-foreground'
             }`}
           >
-            All Gear
+            All Listings
           </button>
           {categories?.map((category) => (
             <button
@@ -158,7 +158,7 @@ export default function AdminKiosk() {
           ) : (
             <div className="text-center py-32">
               <Tent className="w-24 h-24 mx-auto text-muted mb-6" />
-              <h2 className="text-2xl font-bold text-foreground">No gear found</h2>
+              <h2 className="text-2xl font-bold text-foreground">No listings found</h2>
               <p className="text-muted-foreground mt-2 text-lg">Try adjusting your search or category filters.</p>
               <Button size="lg" variant="outline" className="mt-8 rounded-full px-8" onClick={() => { setSearch(""); setActiveCategory(null); }}>
                 Clear Filters

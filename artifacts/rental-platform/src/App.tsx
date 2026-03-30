@@ -71,7 +71,7 @@ function Router() {
       <Route path="/">
         <StorefrontLayout><StorefrontHome /></StorefrontLayout>
       </Route>
-      <Route path="/gear/:id">
+      <Route path="/listings/:id">
         <StorefrontLayout><StorefrontGearDetail /></StorefrontLayout>
       </Route>
       <Route path="/book">

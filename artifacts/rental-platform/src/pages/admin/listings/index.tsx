@@ -166,7 +166,7 @@ export default function AdminListings() {
             <div className="py-24 text-center flex flex-col items-center">
               <Package className="w-12 h-12 text-muted mb-4" />
               <h3 className="text-lg font-medium mb-1">No listings found</h3>
-              <p className="text-muted-foreground mb-4">You haven't added any gear yet.</p>
+              <p className="text-muted-foreground mb-4">You haven't added any listings yet.</p>
               <Link href="/admin/listings/new">
                 <Button variant="outline">Create your first listing</Button>
               </Link>

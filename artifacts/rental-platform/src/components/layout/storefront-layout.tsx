@@ -23,7 +23,7 @@ export function StorefrontLayout({ children }: { children: React.ReactNode }) {
           </Link>
           <nav className="flex items-center gap-6">
             <Link href="/" className="text-sm font-medium text-foreground/80 hover:text-foreground">
-              Gear
+              Listings
             </Link>
             <Link href="/admin" className="text-sm font-medium text-muted-foreground hover:text-foreground">
               Admin Login

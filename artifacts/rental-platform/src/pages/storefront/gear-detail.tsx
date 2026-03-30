@@ -12,7 +12,7 @@ import { ArrowLeft, Check, Shield, Info, MapPin } from "lucide-react";
 import { format } from "date-fns";
 
 export default function StorefrontGearDetail() {
-  const [, params] = useRoute("/gear/:id");
+  const [, params] = useRoute("/listings/:id");
   const [, setLocation] = useLocation();
   const id = params?.id ? parseInt(params.id) : 0;
 
@@ -30,11 +30,11 @@ export default function StorefrontGearDetail() {
   });
 
   if (isLoadingListing) {
-    return <div className="min-h-screen pt-24 text-center">Loading gear details...</div>;
+    return <div className="min-h-screen pt-24 text-center">Loading listing details...</div>;
   }
 
   if (!listing) {
-    return <div className="min-h-screen pt-24 text-center">Gear not found</div>;
+    return <div className="min-h-screen pt-24 text-center">Listing not found</div>;
   }
 
   const handleBookNow = () => {
@@ -46,7 +46,7 @@ export default function StorefrontGearDetail() {
     <div className="container mx-auto px-4 py-8">
       <Link href="/">
         <Button variant="ghost" className="mb-6 pl-0 hover:bg-transparent hover:underline text-muted-foreground">
-          <ArrowLeft className="w-4 h-4 mr-2" /> Back to gear
+          <ArrowLeft className="w-4 h-4 mr-2" /> Back to listings
         </Button>
       </Link>
 
@@ -139,7 +139,7 @@ export default function StorefrontGearDetail() {
               onClick={handleBookNow}
               disabled={listing.status !== 'active'}
             >
-              {listing.status === 'active' ? 'Book This Gear' : 'Currently Unavailable'}
+              {listing.status === 'active' ? 'Book This' : 'Currently Unavailable'}
             </Button>
           </div>
 
