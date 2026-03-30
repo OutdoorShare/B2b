@@ -12,6 +12,7 @@ import { ThemeProvider } from "@/components/theme-provider";
 import StorefrontHome from "@/pages/storefront/home";
 import StorefrontGearDetail from "@/pages/storefront/gear-detail";
 import StorefrontBook from "@/pages/storefront/book";
+import StorefrontLogin from "@/pages/storefront/login";
 
 import AdminDashboard from "@/pages/admin/dashboard";
 import AdminListings from "@/pages/admin/listings/index";
@@ -93,6 +94,9 @@ function Router() {
       </Route>
       <Route path="/book">
         <StorefrontLayout><StorefrontBook /></StorefrontLayout>
+      </Route>
+      <Route path="/login">
+        <StorefrontLayout><StorefrontLogin /></StorefrontLayout>
       </Route>
 
       <Route component={NotFound} />

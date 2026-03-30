@@ -25,8 +25,8 @@ export function StorefrontLayout({ children }: { children: React.ReactNode }) {
             <Link href="/" className="text-sm font-medium text-foreground/80 hover:text-foreground">
               Listings
             </Link>
-            <Link href="/admin" className="text-sm font-medium text-muted-foreground hover:text-foreground">
-              Admin Login
+            <Link href="/login" className="text-sm font-medium text-muted-foreground hover:text-foreground">
+              Login
             </Link>
           </nav>
         </div>
