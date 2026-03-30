@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { useRoute, useLocation, Link } from "wouter";
+import type { DateRange } from "react-day-picker";
 import {
   useGetListing,
   useGetBookings,
@@ -7,14 +8,17 @@ import {
   getGetBookingsQueryKey,
 } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
+import { Calendar } from "@/components/ui/calendar";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
+import { useToast } from "@/hooks/use-toast";
 import {
   ArrowLeft, Edit, ExternalLink, Package, Tag, DollarSign,
-  CalendarDays, TrendingUp, Layers, Wrench, ShieldCheck,
-  AlertTriangle, Check, Users, BarChart3, Clock, ChevronRight
+  CalendarDays, TrendingUp, Wrench,
+  Check, ChevronRight, Ban, Trash2, CalendarOff
 } from "lucide-react";
-import { format } from "date-fns";
+import { format, addDays, startOfDay, isAfter } from "date-fns";
 import { UnitIdentifiersManager } from "@/components/unit-identifiers-manager";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
@@ -47,8 +51,16 @@ export default function AdminListingDetail() {
   const [, params] = useRoute("/admin/listings/:id");
   const id = params?.id ? parseInt(params.id) : 0;
 
+  const { toast } = useToast();
   const [activeImage, setActiveImage] = useState(0);
   const [addons, setAddons] = useState<Addon[]>([]);
+
+  // Blocked dates state
+  type BlockedDate = { id: number; startDate: string; endDate: string; reason: string | null };
+  const [blockedDates, setBlockedDates] = useState<BlockedDate[]>([]);
+  const [blockRange, setBlockRange] = useState<DateRange | undefined>(undefined);
+  const [blockReason, setBlockReason] = useState("");
+  const [blockSaving, setBlockSaving] = useState(false);
 
   const { data: listing, isLoading } = useGetListing(id, {
     query: { enabled: !!id, queryKey: getGetListingQueryKey(id) },
@@ -66,6 +78,53 @@ export default function AdminListingDetail() {
       .then(d => { if (Array.isArray(d)) setAddons(d); })
       .catch(() => {});
   }, [id]);
+
+  const fetchBlockedDates = () => {
+    if (!id) return;
+    fetch(`${BASE}/api/listings/${id}/blocked-dates`)
+      .then(r => r.json())
+      .then(d => { if (Array.isArray(d)) setBlockedDates(d); })
+      .catch(() => {});
+  };
+  useEffect(fetchBlockedDates, [id]);
+
+  const handleBlockSave = async () => {
+    if (!blockRange?.from || !blockRange?.to) {
+      toast({ title: "Select a date range to block", variant: "destructive" }); return;
+    }
+    setBlockSaving(true);
+    try {
+      const res = await fetch(`${BASE}/api/listings/${id}/blocked-dates`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          startDate: format(blockRange.from, "yyyy-MM-dd"),
+          endDate: format(blockRange.to, "yyyy-MM-dd"),
+          reason: blockReason || null,
+        }),
+      });
+      if (!res.ok) throw new Error();
+      toast({ title: "Dates blocked successfully" });
+      setBlockRange(undefined);
+      setBlockReason("");
+      fetchBlockedDates();
+    } catch {
+      toast({ title: "Failed to block dates", variant: "destructive" });
+    } finally {
+      setBlockSaving(false);
+    }
+  };
+
+  const handleBlockDelete = async (blockId: number) => {
+    try {
+      const res = await fetch(`${BASE}/api/listings/blocked-dates/${blockId}`, { method: "DELETE" });
+      if (!res.ok) throw new Error();
+      toast({ title: "Block removed" });
+      setBlockedDates(prev => prev.filter(b => b.id !== blockId));
+    } catch {
+      toast({ title: "Failed to remove block", variant: "destructive" });
+    }
+  };
 
   if (isLoading) {
     return (
@@ -357,6 +416,187 @@ export default function AdminListingDetail() {
           </div>
         </div>
       </div>
+
+      {/* ── Availability Management ─────────────────────────────────────────── */}
+      {(() => {
+        // Build disabled sets for the calendar preview
+        const bookedDays: Date[] = [];
+        const allBookings2 = allBookings ?? [];
+        allBookings2.filter(b => b.status !== "cancelled" && b.status !== "rejected").forEach(b => {
+          let cur = startOfDay(new Date(b.startDate));
+          const last = startOfDay(new Date(b.endDate));
+          while (!isAfter(cur, last)) { bookedDays.push(new Date(cur)); cur = addDays(cur, 1); }
+        });
+
+        const blockedDays: Date[] = [];
+        blockedDates.forEach(b => {
+          let cur = startOfDay(new Date(b.startDate));
+          const last = startOfDay(new Date(b.endDate));
+          while (!isAfter(cur, last)) { blockedDays.push(new Date(cur)); cur = addDays(cur, 1); }
+        });
+
+        const blockDays = blockRange?.from && blockRange?.to ? (() => {
+          const days: Date[] = [];
+          let cur = startOfDay(blockRange.from);
+          const last = startOfDay(blockRange.to);
+          while (!isAfter(cur, last)) { days.push(new Date(cur)); cur = addDays(cur, 1); }
+          return days;
+        })() : [];
+
+        return (
+          <div className="bg-background rounded-2xl border overflow-hidden">
+            {/* Section header */}
+            <div className="px-5 py-4 border-b flex items-center justify-between bg-muted/20">
+              <div className="flex items-center gap-2">
+                <CalendarOff className="w-4 h-4 text-primary" />
+                <h3 className="font-semibold text-sm">Availability Management</h3>
+              </div>
+              <div className="flex items-center gap-4 text-xs text-muted-foreground">
+                <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-sm bg-blue-100 border border-blue-300 inline-block" /> Customer bookings</span>
+                <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-sm bg-red-100 border border-red-300 inline-block" /> Blocked by you</span>
+                <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-sm bg-amber-200 border border-amber-400 inline-block" /> Selecting</span>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-0 divide-y lg:divide-y-0 lg:divide-x">
+
+              {/* Left: Calendar overview + selector */}
+              <div className="p-5 space-y-4">
+                <p className="text-sm text-muted-foreground">
+                  Select a date range below to block it. Blocked dates will appear as unavailable to renters.
+                </p>
+                <div className="flex justify-center">
+                  <Calendar
+                    mode="range"
+                    selected={blockRange}
+                    onSelect={setBlockRange}
+                    numberOfMonths={2}
+                    disabled={[{ before: new Date() }]}
+                    modifiers={{
+                      booked: bookedDays,
+                      blocked: blockedDays,
+                      selecting: blockDays,
+                    }}
+                    modifiersClassNames={{
+                      booked: "!bg-blue-100 !text-blue-700 rounded",
+                      blocked: "!bg-red-100 !text-red-600 !line-through rounded",
+                      selecting: "!bg-amber-100 !text-amber-800 rounded",
+                    }}
+                    className="rounded-xl"
+                  />
+                </div>
+
+                {/* Block form */}
+                {blockRange?.from && (
+                  <div className="border rounded-xl p-4 space-y-3 bg-muted/20">
+                    <div className="flex items-center gap-2 font-semibold text-sm">
+                      <Ban className="w-4 h-4 text-red-500" />
+                      Block {blockRange.to
+                        ? `${format(blockRange.from, "MMM d")} – ${format(blockRange.to, "MMM d, yyyy")}`
+                        : format(blockRange.from, "MMM d, yyyy")}
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label htmlFor="block-reason" className="text-xs">Reason (optional)</Label>
+                      <Input
+                        id="block-reason"
+                        value={blockReason}
+                        onChange={e => setBlockReason(e.target.value)}
+                        placeholder="e.g. Maintenance, personal use…"
+                        className="h-8 text-sm"
+                      />
+                    </div>
+                    <div className="flex gap-2">
+                      <Button
+                        size="sm"
+                        variant="destructive"
+                        className="gap-1.5"
+                        disabled={!blockRange?.to || blockSaving}
+                        onClick={handleBlockSave}
+                      >
+                        <Ban className="w-3.5 h-3.5" /> {blockSaving ? "Saving…" : "Block These Dates"}
+                      </Button>
+                      <Button size="sm" variant="outline" onClick={() => { setBlockRange(undefined); setBlockReason(""); }}>
+                        Cancel
+                      </Button>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Right: Current blocked dates list */}
+              <div className="p-5 space-y-4">
+                <div className="flex items-center justify-between">
+                  <h4 className="font-semibold text-sm flex items-center gap-2">
+                    <Ban className="w-4 h-4 text-red-500" /> Blocked Periods
+                    {blockedDates.length > 0 && (
+                      <span className="bg-red-100 text-red-700 text-[10px] font-bold px-1.5 py-0.5 rounded-full">{blockedDates.length}</span>
+                    )}
+                  </h4>
+                </div>
+
+                {blockedDates.length === 0 ? (
+                  <div className="text-center py-10 text-muted-foreground space-y-2">
+                    <CalendarDays className="w-8 h-8 mx-auto text-muted" />
+                    <p className="text-sm">No dates blocked.</p>
+                    <p className="text-xs">Select a range on the calendar to block dates for this listing.</p>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    {[...blockedDates].sort((a, b) => a.startDate.localeCompare(b.startDate)).map(block => (
+                      <div key={block.id} className="flex items-start justify-between gap-3 bg-red-50 border border-red-100 rounded-xl px-4 py-3">
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-1.5">
+                            <Ban className="w-3.5 h-3.5 text-red-500 shrink-0" />
+                            <p className="font-semibold text-sm">
+                              {format(new Date(block.startDate), "MMM d, yyyy")}
+                              {block.startDate !== block.endDate && (
+                                <> → {format(new Date(block.endDate), "MMM d, yyyy")}</>
+                              )}
+                            </p>
+                          </div>
+                          {block.reason && (
+                            <p className="text-xs text-muted-foreground mt-0.5 pl-5">{block.reason}</p>
+                          )}
+                        </div>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-7 w-7 text-red-400 hover:text-red-600 hover:bg-red-100 shrink-0"
+                          onClick={() => handleBlockDelete(block.id)}
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* Upcoming confirmed bookings summary */}
+                {allBookings2.filter(b => b.status === "confirmed" || b.status === "pending").length > 0 && (
+                  <div className="mt-4 pt-4 border-t space-y-2">
+                    <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Active Bookings on Calendar</h4>
+                    {allBookings2
+                      .filter(b => b.status === "confirmed" || b.status === "pending" || b.status === "active")
+                      .slice(0, 4)
+                      .map(b => (
+                        <div key={b.id} className="flex items-center justify-between bg-blue-50 border border-blue-100 rounded-xl px-3 py-2">
+                          <div className="flex items-center gap-2 text-xs">
+                            <CalendarDays className="w-3.5 h-3.5 text-blue-500" />
+                            <span className="font-medium">{b.customerName}</span>
+                            <span className="text-muted-foreground">{b.startDate} → {b.endDate}</span>
+                          </div>
+                          <Link href={`/admin/bookings/${b.id}`}>
+                            <span className="text-[10px] font-bold text-blue-600 hover:underline capitalize">{b.status}</span>
+                          </Link>
+                        </div>
+                      ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 }

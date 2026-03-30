@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
-import { listingsTable, categoriesTable, bookingsTable } from "@workspace/db/schema";
+import { listingsTable, categoriesTable, bookingsTable, blockedDatesTable } from "@workspace/db/schema";
 import { eq, and, gte, lte, ilike, or, count, sum } from "drizzle-orm";
 import { sql } from "drizzle-orm";
 
@@ -144,25 +144,97 @@ router.get("/listings/:id", async (req, res) => {
   }
 });
 
-// Returns booked date ranges for a listing so storefronts can show availability
+// Returns booked + admin-blocked date ranges for a listing (storefront use)
 router.get("/listings/:id/booked-dates", async (req, res) => {
   try {
     const listingId = Number(req.params.id);
-    const conditions = [
+
+    // Confirmed/pending bookings
+    const bookingConditions = [
       eq(bookingsTable.listingId, listingId),
       sql`${bookingsTable.status} NOT IN ('cancelled', 'rejected')`,
     ];
-    if (req.tenantId) conditions.push(eq(bookingsTable.tenantId, req.tenantId) as any);
-
+    if (req.tenantId) bookingConditions.push(eq(bookingsTable.tenantId, req.tenantId) as any);
     const bookings = await db
       .select({ startDate: bookingsTable.startDate, endDate: bookingsTable.endDate })
       .from(bookingsTable)
-      .where(and(...conditions));
+      .where(and(...bookingConditions));
 
-    res.json(bookings.map(b => ({ start: b.startDate, end: b.endDate })));
+    // Admin-blocked dates (for this listing OR global blocks with no listing)
+    const blockConditions: any[] = [];
+    if (req.tenantId) {
+      blockConditions.push(
+        eq(blockedDatesTable.tenantId, req.tenantId),
+        sql`(${blockedDatesTable.listingId} IS NULL OR ${blockedDatesTable.listingId} = ${listingId})`
+      );
+    } else {
+      blockConditions.push(eq(blockedDatesTable.listingId, listingId));
+    }
+    const blocked = await db
+      .select({ startDate: blockedDatesTable.startDate, endDate: blockedDatesTable.endDate })
+      .from(blockedDatesTable)
+      .where(and(...blockConditions));
+
+    res.json([
+      ...bookings.map(b => ({ start: b.startDate, end: b.endDate, type: "booking" })),
+      ...blocked.map(b => ({ start: b.startDate, end: b.endDate, type: "blocked" })),
+    ]);
   } catch (err) {
     req.log.error(err);
     res.status(500).json({ error: "Failed to fetch availability" });
+  }
+});
+
+// ── Admin: manage blocked dates ───────────────────────────────────────────────
+
+// GET all blocked date ranges for a listing (admin)
+router.get("/listings/:id/blocked-dates", async (req, res) => {
+  try {
+    const listingId = Number(req.params.id);
+    const conditions: any[] = [eq(blockedDatesTable.listingId, listingId)];
+    if (req.tenantId) conditions.push(eq(blockedDatesTable.tenantId, req.tenantId));
+    const blocks = await db.select().from(blockedDatesTable).where(and(...conditions))
+      .orderBy(blockedDatesTable.startDate);
+    res.json(blocks);
+  } catch (err) {
+    req.log.error(err);
+    res.status(500).json({ error: "Failed to fetch blocked dates" });
+  }
+});
+
+// POST create a blocked date range (admin)
+router.post("/listings/:id/blocked-dates", async (req, res) => {
+  try {
+    if (!req.tenantId) { res.status(401).json({ error: "Unauthorized" }); return; }
+    const listingId = Number(req.params.id);
+    const { startDate, endDate, reason } = req.body;
+    if (!startDate || !endDate) { res.status(400).json({ error: "startDate and endDate required" }); return; }
+    const [created] = await db.insert(blockedDatesTable).values({
+      tenantId: req.tenantId,
+      listingId,
+      startDate,
+      endDate,
+      reason: reason || null,
+    }).returning();
+    res.status(201).json(created);
+  } catch (err) {
+    req.log.error(err);
+    res.status(500).json({ error: "Failed to create blocked date" });
+  }
+});
+
+// DELETE a blocked date range (admin)
+router.delete("/listings/blocked-dates/:blockId", async (req, res) => {
+  try {
+    if (!req.tenantId) { res.status(401).json({ error: "Unauthorized" }); return; }
+    const blockId = Number(req.params.blockId);
+    const conditions: any[] = [eq(blockedDatesTable.id, blockId)];
+    if (req.tenantId) conditions.push(eq(blockedDatesTable.tenantId, req.tenantId));
+    await db.delete(blockedDatesTable).where(and(...conditions));
+    res.json({ success: true });
+  } catch (err) {
+    req.log.error(err);
+    res.status(500).json({ error: "Failed to delete blocked date" });
   }
 });
 

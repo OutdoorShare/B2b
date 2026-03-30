@@ -12,3 +12,4 @@ export * from "./admin-users";
 export * from "./superadmin-users";
 export * from "./communications";
 export * from "./platform-settings";
+export * from "./blocked-dates";
