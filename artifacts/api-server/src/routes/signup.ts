@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
-import { tenantsTable } from "@workspace/db/schema";
+import { tenantsTable, businessProfileTable } from "@workspace/db/schema";
 import { eq } from "drizzle-orm";
 import { scrypt, randomBytes, timingSafeEqual } from "crypto";
 import { promisify } from "util";
@@ -86,6 +86,18 @@ router.post("/public/signup", async (req, res) => {
       phone: phone ?? null,
       trialEndsAt,
     }).returning();
+
+    // Seed business profile with signup info so new owners see their real data immediately
+    await db.insert(businessProfileTable).values({
+      tenantId: tenant.id,
+      name: companyName.trim(),
+      email: email.toLowerCase().trim(),
+      phone: phone?.trim() || "(555) 000-0000",
+      tagline: "Quality gear for your next adventure",
+      description: `Welcome to ${companyName.trim()}! We provide top-quality rental gear for your next adventure.`,
+      location: "Your City, State",
+      updatedAt: new Date(),
+    });
 
     res.status(201).json({
       tenant: safeTenant(tenant),
