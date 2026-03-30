@@ -1,10 +1,13 @@
-import { Link } from "wouter";
+import { useState, useRef, useEffect } from "react";
+import { Link, useLocation } from "wouter";
 import {
   CalendarDays, BarChart3, Users, Package, Shield, Zap,
-  CheckCircle2, ArrowRight, Star, Star as StarFull, TrendingDown
+  CheckCircle2, ArrowRight, Star, Star as StarFull, TrendingDown,
+  ShieldCheck, User, ChevronDown
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
 
 const OS_GREEN = "#3ab549";
 const OS_GREEN_DARK = "#2e9a3d";
@@ -24,6 +27,91 @@ const testimonials = [
   { name: "Maria Chen", company: "Coastal Watersports", text: "The kiosk mode alone saved us 2 hours of staff time per day. Our customers love it.", stars: 5 },
   { name: "Derek Park", company: "Trail Wheels MTB", text: "Finally a platform built for rental companies, not adapted from something else.", stars: 5 },
 ];
+
+function SignInDropdown() {
+  const [open, setOpen] = useState(false);
+  const [renterSlug, setRenterSlug] = useState("");
+  const [slugError, setSlugError] = useState("");
+  const [, navigate] = useLocation();
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function onClickOutside(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    }
+    document.addEventListener("mousedown", onClickOutside);
+    return () => document.removeEventListener("mousedown", onClickOutside);
+  }, []);
+
+  function goToRenterPortal(e: React.FormEvent) {
+    e.preventDefault();
+    const slug = renterSlug.trim().toLowerCase().replace(/\s+/g, "-");
+    if (!slug) { setSlugError("Please enter your rental company's website name."); return; }
+    setOpen(false);
+    navigate(`/${slug}/login`);
+  }
+
+  return (
+    <div className="relative" ref={ref}>
+      <Button
+        variant="ghost"
+        size="sm"
+        className="gap-1.5 font-semibold"
+        onClick={() => setOpen(v => !v)}
+      >
+        Sign In <ChevronDown className={`w-3.5 h-3.5 transition-transform ${open ? "rotate-180" : ""}`} />
+      </Button>
+
+      {open && (
+        <div className="absolute right-0 top-full mt-2 w-72 bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden z-50">
+          {/* Admin option */}
+          <Link href="/admin" onClick={() => setOpen(false)}>
+            <div className="flex items-start gap-3.5 px-5 py-4 hover:bg-gray-50 transition-colors cursor-pointer border-b">
+              <div className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0 mt-0.5" style={{ backgroundColor: `${OS_GREEN}18` }}>
+                <ShieldCheck className="w-4.5 h-4.5" style={{ color: OS_GREEN }} />
+              </div>
+              <div>
+                <div className="font-bold text-sm text-gray-900">Business Admin</div>
+                <div className="text-xs text-muted-foreground mt-0.5">Manage your rental company, bookings &amp; listings</div>
+              </div>
+            </div>
+          </Link>
+
+          {/* Renter option */}
+          <div className="px-5 py-4">
+            <div className="flex items-start gap-3.5 mb-3">
+              <div className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0 mt-0.5" style={{ backgroundColor: `${OS_BLUE}18` }}>
+                <User className="w-4.5 h-4.5" style={{ color: OS_BLUE }} />
+              </div>
+              <div>
+                <div className="font-bold text-sm text-gray-900">Renter Portal</div>
+                <div className="text-xs text-muted-foreground mt-0.5">Sign in to manage your active rentals &amp; bookings</div>
+              </div>
+            </div>
+            <form onSubmit={goToRenterPortal} className="space-y-2">
+              <Input
+                value={renterSlug}
+                onChange={e => { setRenterSlug(e.target.value); setSlugError(""); }}
+                placeholder="e.g. summit-gear-rentals"
+                className="h-9 text-sm"
+              />
+              {slugError && <p className="text-xs text-destructive">{slugError}</p>}
+              <p className="text-[11px] text-muted-foreground">Enter your rental company's website name</p>
+              <Button
+                type="submit"
+                size="sm"
+                className="w-full font-bold text-white hover:opacity-90"
+                style={{ backgroundColor: OS_BLUE }}
+              >
+                Go to Renter Portal
+              </Button>
+            </form>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
 
 const revenueTiers = [
   { rate: "20%", threshold: "Under $25K /year", label: "Starting rate", best: false },
@@ -47,9 +135,7 @@ export default function GetStartedPage() {
             <a href="#pricing" className="hover:text-foreground transition-colors">Pricing</a>
           </nav>
           <div className="flex items-center gap-3">
-            <Link href="/admin">
-              <Button variant="ghost" size="sm">Sign In</Button>
-            </Link>
+            <SignInDropdown />
             <Link href="/signup">
               <Button size="sm" style={{ backgroundColor: OS_GREEN }} className="hover:opacity-90 text-white font-semibold">
                 Get Started
