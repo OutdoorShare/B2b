@@ -144,6 +144,28 @@ router.get("/listings/:id", async (req, res) => {
   }
 });
 
+// Returns booked date ranges for a listing so storefronts can show availability
+router.get("/listings/:id/booked-dates", async (req, res) => {
+  try {
+    const listingId = Number(req.params.id);
+    const conditions = [
+      eq(bookingsTable.listingId, listingId),
+      sql`${bookingsTable.status} NOT IN ('cancelled', 'rejected')`,
+    ];
+    if (req.tenantId) conditions.push(eq(bookingsTable.tenantId, req.tenantId) as any);
+
+    const bookings = await db
+      .select({ startDate: bookingsTable.startDate, endDate: bookingsTable.endDate })
+      .from(bookingsTable)
+      .where(and(...conditions));
+
+    res.json(bookings.map(b => ({ start: b.startDate, end: b.endDate })));
+  } catch (err) {
+    req.log.error(err);
+    res.status(500).json({ error: "Failed to fetch availability" });
+  }
+});
+
 router.put("/listings/:id", async (req, res) => {
   try {
     const body = req.body;

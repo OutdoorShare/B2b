@@ -1,5 +1,6 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { Link, useLocation, useParams } from "wouter";
+import type { DateRange } from "react-day-picker";
 import {
   useGetListing,
   useGetBusinessProfile,
@@ -8,11 +9,13 @@ import {
 } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Separator } from "@/components/ui/separator";
+import { Calendar } from "@/components/ui/calendar";
 import {
   ArrowLeft, Check, Shield, MapPin, AlertTriangle,
-  Tag, ChevronRight, Package, ShieldCheck, Star, Umbrella, Zap, Lock
+  Tag, ChevronRight, Package, ShieldCheck, Umbrella, Zap, Lock,
+  CalendarDays, ChevronRight as ArrowRight
 } from "lucide-react";
+import { differenceInDays, format, isWithinInterval, startOfDay, addDays, isBefore, isAfter, isSameDay } from "date-fns";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
@@ -39,6 +42,8 @@ export default function StorefrontGearDetail() {
 
   const [activeImage, setActiveImage] = useState(0);
   const [addons, setAddons] = useState<Addon[]>([]);
+  const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined);
+  const [bookedRanges, setBookedRanges] = useState<{ start: Date; end: Date }[]>([]);
 
   const { data: listing, isLoading } = useGetListing(id, {
     query: { enabled: !!id, queryKey: getGetListingQueryKey(id) },
@@ -57,6 +62,49 @@ export default function StorefrontGearDetail() {
       })
       .catch(() => {});
   }, [id]);
+
+  useEffect(() => {
+    if (!id) return;
+    fetch(`${BASE}/api/listings/${id}/booked-dates`)
+      .then(r => r.json())
+      .then((data: { start: string; end: string }[]) => {
+        if (Array.isArray(data)) {
+          setBookedRanges(data.map(b => ({ start: new Date(b.start), end: new Date(b.end) })));
+        }
+      })
+      .catch(() => {});
+  }, [id]);
+
+  // Build a set of disabled dates from booked ranges
+  const disabledDates = useMemo(() => {
+    const disabled: Date[] = [];
+    bookedRanges.forEach(({ start, end }) => {
+      let cur = startOfDay(start);
+      const last = startOfDay(end);
+      while (!isAfter(cur, last)) {
+        disabled.push(new Date(cur));
+        cur = addDays(cur, 1);
+      }
+    });
+    return disabled;
+  }, [bookedRanges]);
+
+  // Check if a selected range overlaps any booked range
+  const rangeHasConflict = useMemo(() => {
+    if (!dateRange?.from || !dateRange?.to) return false;
+    return disabledDates.some(d => isWithinInterval(d, { start: dateRange.from!, end: dateRange.to! }));
+  }, [dateRange, disabledDates]);
+
+  const days = useMemo(() => {
+    if (!dateRange?.from || !dateRange?.to) return 0;
+    return Math.max(1, differenceInDays(dateRange.to, dateRange.from));
+  }, [dateRange]);
+
+  const pricePerDay = listing ? parseFloat(String(listing.pricePerDay)) : 0;
+  const subtotal = pricePerDay * days;
+
+  const protectionAddon = addons.find(a => a.name.toLowerCase().includes("protection"));
+  const protectionPrice = protectionAddon ? protectionAddon.price : 0;
 
   if (isLoading) {
     return (
@@ -175,45 +223,130 @@ export default function StorefrontGearDetail() {
               <p className="lg:hidden text-muted-foreground leading-relaxed">{listing.description}</p>
             )}
 
-            {/* Booking card */}
-            <div className="bg-muted/30 rounded-2xl border p-5 space-y-4">
-              {(profile?.location || (listing.depositAmount && Number(listing.depositAmount) > 0)) && (
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
-                  {profile?.location && (
-                    <div className="flex items-start gap-2.5">
-                      <MapPin className="w-4 h-4 text-primary shrink-0 mt-0.5" />
-                      <div>
-                        <p className="font-semibold text-foreground">Pickup</p>
-                        <p className="text-muted-foreground">{profile.location}</p>
+            {/* ── Availability Calendar + Booking Card ── */}
+            <div className="rounded-2xl border bg-background shadow-sm overflow-hidden">
+
+              {/* Calendar header */}
+              <div className="bg-muted/40 px-5 py-3.5 border-b flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <CalendarDays className="w-4 h-4 text-primary" />
+                  <span className="font-semibold text-sm">Check Availability</span>
+                </div>
+                <div className="flex items-center gap-3 text-xs text-muted-foreground">
+                  <span className="flex items-center gap-1.5">
+                    <span className="w-3 h-3 rounded-sm bg-red-100 border border-red-300 inline-block" /> Booked
+                  </span>
+                  <span className="flex items-center gap-1.5">
+                    <span className="w-3 h-3 rounded-sm bg-primary inline-block" /> Selected
+                  </span>
+                </div>
+              </div>
+
+              {/* Calendar */}
+              <div className="flex justify-center py-3 px-2">
+                <Calendar
+                  mode="range"
+                  selected={dateRange}
+                  onSelect={setDateRange}
+                  disabled={[
+                    { before: new Date() },
+                    ...disabledDates,
+                  ]}
+                  numberOfMonths={1}
+                  className="rounded-xl"
+                  modifiers={{ booked: disabledDates }}
+                  modifiersClassNames={{ booked: "bg-red-50 text-red-400 line-through opacity-60" }}
+                />
+              </div>
+
+              {/* Selected range summary + price preview */}
+              {dateRange?.from && (
+                <div className="border-t px-5 py-4 space-y-3">
+                  {/* Date row */}
+                  <div className="flex items-center justify-between text-sm">
+                    <div className="text-center flex-1">
+                      <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">Pickup</p>
+                      <p className="font-bold text-foreground">{format(dateRange.from, "MMM d, yyyy")}</p>
+                    </div>
+                    <ArrowRight className="w-4 h-4 text-muted-foreground mx-2 shrink-0" />
+                    <div className="text-center flex-1">
+                      <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">Return</p>
+                      <p className="font-bold text-foreground">{dateRange.to ? format(dateRange.to, "MMM d, yyyy") : "—"}</p>
+                    </div>
+                    {days > 0 && (
+                      <div className="text-center ml-2 pl-3 border-l flex-1">
+                        <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">Duration</p>
+                        <p className="font-bold text-foreground">{days} day{days !== 1 ? "s" : ""}</p>
                       </div>
+                    )}
+                  </div>
+
+                  {/* Price breakdown */}
+                  {days > 0 && !rangeHasConflict && (
+                    <div className="bg-muted/30 rounded-xl px-4 py-3 space-y-1.5 text-sm">
+                      <div className="flex justify-between">
+                        <span className="text-muted-foreground">${pricePerDay.toFixed(0)} × {days} day{days !== 1 ? "s" : ""}</span>
+                        <span className="font-semibold">${subtotal.toFixed(2)}</span>
+                      </div>
+                      {protectionPrice > 0 && (
+                        <div className="flex justify-between">
+                          <span className="text-muted-foreground flex items-center gap-1">
+                            <Lock className="w-3 h-3" /> Protection Plan
+                          </span>
+                          <span className="font-semibold">+${protectionPrice.toFixed(0)}</span>
+                        </div>
+                      )}
+                      {listing.depositAmount && Number(listing.depositAmount) > 0 && (
+                        <div className="flex justify-between text-muted-foreground">
+                          <span>Security deposit (refundable)</span>
+                          <span>${parseFloat(String(listing.depositAmount)).toFixed(0)}</span>
+                        </div>
+                      )}
+                      <div className="flex justify-between font-bold text-base pt-1 border-t mt-1">
+                        <span>Estimated Total</span>
+                        <span>${(subtotal + protectionPrice).toFixed(2)}</span>
+                      </div>
+                      <p className="text-[10px] text-muted-foreground text-center pt-0.5">Deposit collected separately at pickup</p>
                     </div>
                   )}
-                  {listing.depositAmount && Number(listing.depositAmount) > 0 && (
-                    <div className="flex items-start gap-2.5">
-                      <Shield className="w-4 h-4 text-primary shrink-0 mt-0.5" />
-                      <div>
-                        <p className="font-semibold text-foreground">Security Deposit</p>
-                        <p className="text-muted-foreground">${parseFloat(String(listing.depositAmount)).toFixed(2)} refundable</p>
-                      </div>
-                    </div>
+
+                  {rangeHasConflict && (
+                    <p className="text-sm text-red-600 font-medium text-center">
+                      Those dates overlap a booking — please pick different dates.
+                    </p>
                   )}
                 </div>
               )}
 
-              <Button
-                size="lg"
-                className="w-full h-13 text-base font-bold rounded-xl"
-                onClick={() => setLocation(`${sfBase}/book?listingId=${listing.id}`)}
-                disabled={!isAvailable}
-              >
-                {isAvailable ? (
-                  <>Book This <ChevronRight className="w-5 h-5 ml-1" /></>
-                ) : "Currently Unavailable"}
-              </Button>
-
-              <p className="text-xs text-center text-muted-foreground">
-                No charge until your booking is confirmed.
-              </p>
+              {/* Book button */}
+              <div className="px-5 pb-5 space-y-2">
+                {!dateRange?.from && isAvailable && (
+                  <p className="text-xs text-center text-muted-foreground mb-2">Select your pickup and return dates above.</p>
+                )}
+                <Button
+                  size="lg"
+                  className="w-full h-12 text-base font-bold rounded-xl"
+                  disabled={!isAvailable || !dateRange?.from || !dateRange?.to || rangeHasConflict}
+                  onClick={() => {
+                    if (!dateRange?.from || !dateRange?.to) return;
+                    const start = format(dateRange.from, "yyyy-MM-dd");
+                    const end = format(dateRange.to, "yyyy-MM-dd");
+                    setLocation(`${sfBase}/book?listingId=${listing.id}&startDate=${start}&endDate=${end}`);
+                  }}
+                >
+                  {!isAvailable ? "Currently Unavailable"
+                    : !dateRange?.from ? <>Select Dates <CalendarDays className="w-5 h-5 ml-1.5" /></>
+                    : !dateRange?.to ? "Select Return Date"
+                    : rangeHasConflict ? "Dates Unavailable"
+                    : <>Book Now — {days} day{days !== 1 ? "s" : ""} <ChevronRight className="w-5 h-5 ml-1" /></>}
+                </Button>
+                {profile?.location && (
+                  <div className="flex items-center justify-center gap-1.5 text-xs text-muted-foreground">
+                    <MapPin className="w-3 h-3" /> Pickup: {profile.location}
+                  </div>
+                )}
+                <p className="text-xs text-center text-muted-foreground">No charge until your booking is confirmed.</p>
+              </div>
             </div>
 
             {/* Add-ons */}

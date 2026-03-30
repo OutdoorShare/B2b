@@ -94,6 +94,8 @@ export default function StorefrontBook() {
   const searchParams = new URLSearchParams(window.location.search);
   const listingIdStr = searchParams.get("listingId");
   const listingId = listingIdStr ? parseInt(listingIdStr) : 0;
+  const urlStart = searchParams.get("startDate");
+  const urlEnd = searchParams.get("endDate");
 
   const { data: listing, isLoading } = useGetListing(listingId, {
     query: { enabled: !!listingId, queryKey: getGetListingQueryKey(listingId) }
@@ -102,10 +104,12 @@ export default function StorefrontBook() {
   const [step, setStep] = useState<Step>("dates");
   const [session, setSession] = useState<CustomerSession | null>(loadSession);
 
-  // Step 1: dates + personal + account
-  const [dateRange, setDateRange] = useState<DateRange | undefined>({
-    from: new Date(),
-    to: addDays(new Date(), 3),
+  // Step 1: dates + personal + account — pre-fill from listing page URL params
+  const [dateRange, setDateRange] = useState<DateRange | undefined>(() => {
+    if (urlStart && urlEnd) {
+      return { from: new Date(urlStart), to: new Date(urlEnd) };
+    }
+    return { from: new Date(), to: addDays(new Date(), 3) };
   });
   const [notes, setNotes] = useState("");
   const [name, setName] = useState(session?.name ?? "");
