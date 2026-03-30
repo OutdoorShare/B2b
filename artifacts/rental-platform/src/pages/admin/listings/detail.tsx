@@ -15,6 +15,7 @@ import {
   AlertTriangle, Check, Users, BarChart3, Clock, ChevronRight
 } from "lucide-react";
 import { format } from "date-fns";
+import { UnitIdentifiersManager } from "@/components/unit-identifiers-manager";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
@@ -286,6 +287,9 @@ export default function AdminListingDetail() {
               )}
             </div>
           )}
+
+          {/* Unit Identifiers */}
+          <UnitIdentifiersManager listingId={listing.id} quantity={listing.quantity} />
 
           {/* Add-ons */}
           <div className="bg-background rounded-2xl border p-5 space-y-3">

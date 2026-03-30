@@ -19,6 +19,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useToast } from "@/hooks/use-toast";
 import { ArrowLeft, Upload, X } from "lucide-react";
 import { AddonManager } from "@/components/addon-manager";
+import { UnitIdentifiersManager } from "@/components/unit-identifiers-manager";
 
 export default function AdminListingsForm() {
   const [match, params] = useRoute("/admin/listings/:id/edit");
@@ -407,14 +408,15 @@ export default function AdminListingsForm() {
         </div>
       </form>
 
-      {/* Add-ons manager — only available after the listing is created */}
+      {/* Unit identifiers + add-ons — only available after listing is created */}
       {isEditing && id ? (
-        <div className="max-w-2xl mt-8">
+        <div className="max-w-2xl mt-8 space-y-8">
+          <UnitIdentifiersManager listingId={id} quantity={formData.quantity} />
           <AddonManager listingId={id} />
         </div>
       ) : (
         <div className="max-w-2xl mt-6 p-4 border border-dashed rounded-xl text-sm text-muted-foreground text-center">
-          Save the listing first, then you can add optional or required add-ons (insurance, GPS, helmets, etc.)
+          Save the listing first, then you can register unit identifiers (VIN / HIN / serial #) and add optional add-ons.
         </div>
       )}
     </div>
