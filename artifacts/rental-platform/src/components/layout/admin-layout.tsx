@@ -13,6 +13,7 @@ import {
   MessageSquare,
   Clock,
   AlertTriangle,
+  FileSignature,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useGetBusinessProfile } from "@workspace/api-client-react";
@@ -27,6 +28,7 @@ const navigation = [
   { name: "Analytics", href: "/admin/analytics", icon: BarChart3 },
   { name: "Categories", href: "/admin/categories", icon: Tags },
   { name: "Team", href: "/admin/team", icon: Users },
+  { name: "Waivers", href: "/admin/waivers", icon: FileSignature },
   { name: "Kiosk Mode", href: "/admin/kiosk", icon: MonitorSmartphone },
   { name: "Settings", href: "/admin/settings", icon: Settings },
 ];

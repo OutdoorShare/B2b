@@ -72,14 +72,17 @@ router.post("/bookings", async (req, res) => {
     const totalPrice = basePrice + addonsTotal;
     const addonsData = addons.length > 0 ? JSON.stringify(addons) : null;
 
-    const { addons: _addons, assignedUnitIds: rawUnitIds, ...restBody } = body;
+    const { addons: _addons, assignedUnitIds: rawUnitIds, agreementSignedAt: _ignoredTs, ...restBody } = body;
     const assignedUnitIds = Array.isArray(rawUnitIds) && rawUnitIds.length > 0 ? JSON.stringify(rawUnitIds) : null;
+    // Set agreementSignedAt server-side when the customer provides their signature
+    const agreementSignedAt = restBody.agreementSignerName ? new Date() : null;
     const [created] = await db.insert(bookingsTable).values({
       ...restBody,
       tenantId: req.tenantId ?? null,
       totalPrice: String(totalPrice),
       addonsData,
       assignedUnitIds,
+      agreementSignedAt,
     }).returning();
 
     res.status(201).json(formatBooking(created, listing.title));

@@ -15,7 +15,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { Link, useLocation } from "wouter";
-import { ArrowLeft, User, Phone, Mail, Calendar, Package, StickyNote, ShieldAlert, Pencil } from "lucide-react";
+import { ArrowLeft, User, Phone, Mail, Calendar, Package, StickyNote, ShieldAlert, Pencil, FileSignature, ChevronDown, ChevronUp } from "lucide-react";
 import { format, differenceInDays } from "date-fns";
 
 export default function AdminBookingDetail() {
@@ -31,6 +31,7 @@ export default function AdminBookingDetail() {
 
   const updateBooking = useUpdateBooking();
   const [adminNotes, setAdminNotes] = useState("");
+  const [agreementExpanded, setAgreementExpanded] = useState(false);
 
   useEffect(() => {
     if (booking?.adminNotes) {
@@ -246,6 +247,59 @@ export default function AdminBookingDetail() {
               </div>
             </CardContent>
           </Card>
+
+          {/* Signed Agreement */}
+          {(booking as any).agreementSignerName && (
+            <Card>
+              <CardHeader className="pb-3">
+                <div className="flex items-center justify-between">
+                  <CardTitle className="flex items-center gap-2">
+                    <FileSignature className="w-5 h-5 text-green-600" />
+                    Signed Rental Agreement
+                  </CardTitle>
+                  <Badge variant="outline" className="border-green-300 text-green-700 bg-green-50">
+                    Signed
+                  </Badge>
+                </div>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <div className="grid grid-cols-2 gap-4 text-sm">
+                  <div>
+                    <div className="text-muted-foreground mb-0.5">Signed by</div>
+                    <div className="font-semibold">{(booking as any).agreementSignerName}</div>
+                  </div>
+                  <div>
+                    <div className="text-muted-foreground mb-0.5">Signed on</div>
+                    <div className="font-semibold">
+                      {(booking as any).agreementSignedAt
+                        ? format(new Date((booking as any).agreementSignedAt), "MMM d, yyyy h:mm a")
+                        : "—"}
+                    </div>
+                  </div>
+                </div>
+
+                {(booking as any).agreementText && (
+                  <>
+                    <Separator />
+                    <button
+                      onClick={() => setAgreementExpanded(v => !v)}
+                      className="flex items-center gap-1.5 text-sm text-primary hover:underline"
+                    >
+                      {agreementExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                      {agreementExpanded ? "Hide agreement text" : "View full agreement text"}
+                    </button>
+                    {agreementExpanded && (
+                      <div className="text-xs text-muted-foreground leading-relaxed space-y-2 border rounded-lg p-4 bg-muted/40 max-h-80 overflow-y-auto">
+                        {(booking as any).agreementText.split("\n\n").filter(Boolean).map((p: string, i: number) => (
+                          <p key={i}>{p}</p>
+                        ))}
+                      </div>
+                    )}
+                  </>
+                )}
+              </CardContent>
+            </Card>
+          )}
         </div>
 
         {/* Right Column: Payment */}

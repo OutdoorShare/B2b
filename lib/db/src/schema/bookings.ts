@@ -20,6 +20,9 @@ export const bookingsTable = pgTable("bookings", {
   source: text("source", { enum: ["online", "kiosk", "phone", "walkin"] }).notNull().default("online"),
   addonsData: text("addons_data"),
   assignedUnitIds: text("assigned_unit_ids"),
+  agreementSignerName: text("agreement_signer_name"),
+  agreementSignedAt: timestamp("agreement_signed_at"),
+  agreementText: text("agreement_text"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });

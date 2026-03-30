@@ -312,6 +312,8 @@ export default function StorefrontBook() {
           notes: notes || undefined,
           source: "online",
           addons: selectedAddons,
+          agreementSignerName: agreeSigned.trim(),
+          agreementText: agreementText || undefined,
         })
       });
       const data = await res.json();
