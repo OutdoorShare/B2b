@@ -9,6 +9,7 @@ import analyticsRouter from "./analytics";
 import customersRouter from "./customers";
 import addonsRouter from "./addons";
 import claimsRouter from "./claims";
+import superadminRouter from "./superadmin";
 
 const router: IRouter = Router();
 
@@ -22,5 +23,6 @@ router.use(analyticsRouter);
 router.use(customersRouter);
 router.use(addonsRouter);
 router.use(claimsRouter);
+router.use(superadminRouter);
 
 export default router;

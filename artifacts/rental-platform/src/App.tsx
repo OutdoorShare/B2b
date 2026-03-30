@@ -14,6 +14,10 @@ import StorefrontGearDetail from "@/pages/storefront/gear-detail";
 import StorefrontBook from "@/pages/storefront/book";
 import StorefrontLogin from "@/pages/storefront/login";
 
+import SuperAdminLogin from "@/pages/superadmin/login";
+import SuperAdminDashboard from "@/pages/superadmin/dashboard";
+import { SuperAdminLayout } from "@/components/layout/superadmin-layout";
+
 import AdminDashboard from "@/pages/admin/dashboard";
 import AdminListings from "@/pages/admin/listings/index";
 import AdminListingsForm from "@/pages/admin/listings/form";
@@ -35,6 +39,17 @@ const queryClient = new QueryClient();
 function Router() {
   return (
     <Switch>
+      {/* Super Admin Routes */}
+      <Route path="/superadmin">
+        <SuperAdminLogin />
+      </Route>
+      <Route path="/superadmin/dashboard">
+        <SuperAdminLayout><SuperAdminDashboard /></SuperAdminLayout>
+      </Route>
+      <Route path="/superadmin/tenants">
+        <SuperAdminLayout><SuperAdminDashboard /></SuperAdminLayout>
+      </Route>
+
       {/* Admin Routes */}
       <Route path="/admin">
         <AdminLayout><AdminDashboard /></AdminLayout>
