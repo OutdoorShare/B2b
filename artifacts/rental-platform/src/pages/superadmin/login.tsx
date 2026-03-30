@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useLocation } from "wouter";
-import { Shield, Eye, EyeOff } from "lucide-react";
+import { Eye, EyeOff } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -42,13 +42,15 @@ export default function SuperAdminLogin() {
     <div className="min-h-screen bg-slate-950 flex items-center justify-center px-4">
       <div className="w-full max-w-sm space-y-6">
         {/* Logo */}
-        <div className="text-center space-y-3">
-          <div className="w-16 h-16 rounded-2xl bg-violet-600 flex items-center justify-center mx-auto shadow-lg shadow-violet-900/50">
-            <Shield className="w-8 h-8 text-white" />
-          </div>
+        <div className="text-center space-y-4">
+          <img
+            src="/outdoorshare-logo.png"
+            alt="OutdoorShare"
+            className="w-20 h-20 object-contain mx-auto drop-shadow-lg"
+          />
           <div>
-            <h1 className="text-2xl font-black text-white tracking-tight">Platform Admin</h1>
-            <p className="text-slate-400 text-sm mt-1">Sign in to the super administrator console</p>
+            <h1 className="text-2xl font-black text-white tracking-wide">OutdoorShare</h1>
+            <p className="text-slate-400 text-sm mt-1">Super Admin Console</p>
           </div>
         </div>
 

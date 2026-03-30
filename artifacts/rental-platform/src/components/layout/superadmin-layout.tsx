@@ -27,9 +27,9 @@ export function SuperAdminLayout({ children }: { children: React.ReactNode }) {
     <div className="min-h-[100dvh] flex flex-col md:flex-row bg-slate-950 text-slate-100">
       {/* Mobile header */}
       <div className="md:hidden flex items-center justify-between h-14 px-4 bg-slate-900 border-b border-slate-800">
-        <div className="flex items-center gap-2 text-white font-bold">
-          <Shield className="w-5 h-5 text-violet-400" />
-          <span>Platform Admin</span>
+        <div className="flex items-center gap-2.5 text-white font-bold">
+          <img src="/outdoorshare-logo.png" alt="OutdoorShare" className="w-7 h-7 object-contain" />
+          <span className="font-black tracking-wide">OutdoorShare</span>
         </div>
         <button onClick={() => setMobileOpen(v => !v)} className="text-slate-400 hover:text-white">
           {mobileOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
@@ -43,12 +43,10 @@ export function SuperAdminLayout({ children }: { children: React.ReactNode }) {
         mobileOpen ? "flex" : "hidden"
       )}>
         {/* Logo */}
-        <div className="h-16 hidden md:flex items-center px-6 border-b border-slate-800 gap-2.5">
-          <div className="w-8 h-8 rounded-lg bg-violet-600 flex items-center justify-center">
-            <Shield className="w-4 h-4 text-white" />
-          </div>
+        <div className="h-16 hidden md:flex items-center px-5 border-b border-slate-800 gap-3">
+          <img src="/outdoorshare-logo.png" alt="OutdoorShare" className="w-9 h-9 object-contain" />
           <div>
-            <p className="text-sm font-bold text-white leading-none">Platform Admin</p>
+            <p className="text-sm font-black text-white leading-none tracking-wide">OutdoorShare</p>
             <p className="text-[10px] text-slate-400 mt-0.5">Super Admin Console</p>
           </div>
         </div>

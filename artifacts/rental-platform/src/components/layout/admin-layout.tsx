@@ -8,7 +8,6 @@ import {
   Tags, 
   MonitorSmartphone, 
   Settings,
-  Tent,
   ShieldAlert,
   Users
 } from "lucide-react";
@@ -34,10 +33,13 @@ export function AdminLayout({ children }: { children: React.ReactNode }) {
     <div className="min-h-[100dvh] flex flex-col md:flex-row bg-background">
       {/* Sidebar */}
       <aside className="w-full md:w-64 border-r border-border bg-sidebar flex-shrink-0 flex flex-col">
-        <div className="h-16 flex items-center px-6 border-b border-border">
-          <Link href="/admin" className="flex items-center gap-2 text-primary font-semibold text-lg">
-            <Tent className="w-6 h-6" />
-            <span>RentalAdmin</span>
+        <div className="h-16 flex items-center px-5 border-b border-border">
+          <Link href="/admin" className="flex items-center gap-2.5">
+            <img src="/outdoorshare-logo.png" alt="OutdoorShare" className="w-9 h-9 object-contain" />
+            <div className="leading-tight">
+              <p className="text-sm font-black text-foreground tracking-wide leading-none">OutdoorShare</p>
+              <p className="text-[10px] text-muted-foreground mt-0.5">Admin Dashboard</p>
+            </div>
           </Link>
         </div>
         <nav className="p-4 flex-1 space-y-1 overflow-y-auto">
