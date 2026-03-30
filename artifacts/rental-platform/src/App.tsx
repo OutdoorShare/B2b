@@ -6,6 +6,7 @@ import NotFound from "@/pages/not-found";
 
 import { AdminLayout } from "@/components/layout/admin-layout";
 import { StorefrontLayout } from "@/components/layout/storefront-layout";
+import { ThemeProvider } from "@/components/theme-provider";
 
 // Pages
 import StorefrontHome from "@/pages/storefront/home";
@@ -87,10 +88,12 @@ function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
-        <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
-          <Router />
-        </WouterRouter>
-        <Toaster />
+        <ThemeProvider>
+          <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
+            <Router />
+          </WouterRouter>
+          <Toaster />
+        </ThemeProvider>
       </TooltipProvider>
     </QueryClientProvider>
   );
