@@ -1,12 +1,14 @@
 import { useState, useEffect } from "react";
 import { Link, useLocation } from "wouter";
-import { Package, CheckCircle2, ArrowRight, Eye, EyeOff, ExternalLink, Building2 } from "lucide-react";
+import { CheckCircle2, ArrowRight, Eye, EyeOff, ExternalLink, Building2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
+const OS_GREEN = "#3ab549";
+const OS_GREEN_DARK = "#2e9a3d";
 
 const PLANS = [
   { id: "starter", name: "Starter", price: 49, features: ["Up to 10 listings", "Booking management", "Customer storefront", "Analytics"] },
@@ -105,14 +107,12 @@ export default function SignupPage() {
         <div className="max-w-4xl mx-auto px-6 h-16 flex items-center justify-between">
           <Link href="/get-started">
             <div className="flex items-center gap-2.5 cursor-pointer">
-              <div className="w-8 h-8 rounded-lg bg-[#2d6a4f] flex items-center justify-center">
-                <Package className="w-4 h-4 text-white" />
-              </div>
-              <span className="font-bold text-lg">RentalOS</span>
+              <img src="/outdoorshare-logo.png" alt="OutdoorShare" className="w-8 h-8 object-contain" />
+              <span className="font-black text-lg tracking-tight text-gray-900">OutdoorShare</span>
             </div>
           </Link>
           <div className="text-sm text-muted-foreground">
-            Already have an account? <Link href="/login" className="text-[#2d6a4f] font-semibold hover:underline">Sign in</Link>
+            Already have an account? <Link href="/admin" className="font-semibold hover:underline" style={{ color: OS_GREEN }}>Sign in</Link>
           </div>
         </div>
       </header>
@@ -123,18 +123,21 @@ export default function SignupPage() {
           <div className="flex items-center gap-2 mb-10">
             {steps.map((s, i) => (
               <div key={s.key} className="flex items-center gap-2 flex-1">
-                <div className={`flex items-center gap-2 ${i <= stepIndex ? "text-[#2d6a4f]" : "text-muted-foreground"}`}>
-                  <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold shrink-0 ${
-                    i < stepIndex ? "bg-[#2d6a4f] text-white" :
-                    i === stepIndex ? "border-2 border-[#2d6a4f] text-[#2d6a4f]" :
-                    "border-2 border-gray-200 text-gray-400"
-                  }`}>
+                <div className={`flex items-center gap-2 ${i <= stepIndex ? "" : "text-muted-foreground"}`} style={i <= stepIndex ? { color: OS_GREEN } : {}}>
+                  <div
+                    className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold shrink-0 ${i >= stepIndex ? "border-2" : ""}`}
+                    style={
+                      i < stepIndex ? { backgroundColor: OS_GREEN, color: "white" } :
+                      i === stepIndex ? { borderColor: OS_GREEN, color: OS_GREEN } :
+                      { borderColor: "#e5e7eb", color: "#9ca3af" }
+                    }
+                  >
                     {i < stepIndex ? <CheckCircle2 className="w-4 h-4" /> : i + 1}
                   </div>
                   <span className="text-sm font-medium hidden sm:block">{s.label}</span>
                 </div>
                 {i < steps.length - 1 && (
-                  <div className={`flex-1 h-0.5 mx-2 ${i < stepIndex ? "bg-[#2d6a4f]" : "bg-gray-200"}`} />
+                  <div className="flex-1 h-0.5 mx-2" style={{ backgroundColor: i < stepIndex ? OS_GREEN : "#e5e7eb" }} />
                 )}
               </div>
             ))}
@@ -205,7 +208,8 @@ export default function SignupPage() {
 
             <Button
               type="submit"
-              className="w-full h-11 bg-[#2d6a4f] hover:bg-[#235a42] font-bold gap-2"
+              className="w-full h-11 font-bold gap-2 text-white hover:opacity-90"
+              style={{ backgroundColor: OS_GREEN }}
             >
               Next: Choose a Plan <ArrowRight className="w-4 h-4" />
             </Button>
@@ -225,28 +229,23 @@ export default function SignupPage() {
                 <button
                   key={plan.id}
                   onClick={() => set("plan", plan.id)}
-                  className={`w-full text-left p-4 rounded-xl border-2 transition-all ${
-                    form.plan === plan.id
-                      ? "border-[#2d6a4f] bg-[#2d6a4f]/5"
-                      : "border-gray-200 hover:border-gray-300"
-                  }`}
+                  className="w-full text-left p-4 rounded-xl border-2 transition-all hover:border-gray-300"
+                  style={form.plan === plan.id ? { borderColor: OS_GREEN, backgroundColor: `${OS_GREEN}0c` } : { borderColor: "#e5e7eb" }}
                 >
                   <div className="flex items-center justify-between mb-2">
                     <div className="flex items-center gap-3">
-                      <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${
-                        form.plan === plan.id ? "border-[#2d6a4f]" : "border-gray-300"
-                      }`}>
-                        {form.plan === plan.id && <div className="w-2 h-2 rounded-full bg-[#2d6a4f]" />}
+                      <div className="w-4 h-4 rounded-full border-2 flex items-center justify-center" style={{ borderColor: form.plan === plan.id ? OS_GREEN : "#d1d5db" }}>
+                        {form.plan === plan.id && <div className="w-2 h-2 rounded-full" style={{ backgroundColor: OS_GREEN }} />}
                       </div>
                       <span className="font-bold text-gray-900">{plan.name}</span>
-                      {plan.popular && <Badge className="bg-[#2d6a4f] text-white text-xs">Popular</Badge>}
+                      {plan.popular && <Badge className="text-white text-xs" style={{ backgroundColor: OS_GREEN }}>Popular</Badge>}
                     </div>
                     <span className="font-black text-gray-900">${plan.price}<span className="text-sm font-normal text-muted-foreground">/mo</span></span>
                   </div>
                   <ul className="grid grid-cols-2 gap-1 pl-7">
                     {plan.features.map(f => (
                       <li key={f} className="text-xs text-muted-foreground flex items-center gap-1.5">
-                        <CheckCircle2 className="w-3 h-3 text-[#2d6a4f] shrink-0" /> {f}
+                        <CheckCircle2 className="w-3 h-3 shrink-0" style={{ color: OS_GREEN }} /> {f}
                       </li>
                     ))}
                   </ul>
@@ -259,7 +258,8 @@ export default function SignupPage() {
             <div className="flex gap-3">
               <Button variant="outline" className="flex-1 h-11" onClick={() => setStep("info")}>Back</Button>
               <Button
-                className="flex-1 h-11 bg-[#2d6a4f] hover:bg-[#235a42] font-bold gap-2"
+                className="flex-1 h-11 font-bold gap-2 text-white hover:opacity-90"
+                style={{ backgroundColor: OS_GREEN }}
                 onClick={handleCreate}
                 disabled={submitting}
               >
@@ -329,7 +329,7 @@ export default function SignupPage() {
                   </Button>
                 </Link>
                 <Link href="/admin/onboarding">
-                  <Button className="w-full bg-[#2d6a4f] hover:bg-[#235a42] font-bold gap-1.5">
+                  <Button className="w-full font-bold gap-1.5 text-white hover:opacity-90" style={{ backgroundColor: OS_GREEN }}>
                     Set Up My Site <ArrowRight className="w-4 h-4" />
                   </Button>
                 </Link>

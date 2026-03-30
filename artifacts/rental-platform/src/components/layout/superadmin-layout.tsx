@@ -2,9 +2,11 @@ import { useState } from "react";
 import { Link, useLocation } from "wouter";
 import {
   LayoutDashboard, Building2, LogOut, ChevronRight,
-  Shield, Menu, X, Users
+  Menu, X, Users
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+
+const OS_GREEN = "#3ab549";
 
 const navigation = [
   { name: "Overview", href: "/superadmin/dashboard", icon: LayoutDashboard },
@@ -51,6 +53,9 @@ export function SuperAdminLayout({ children }: { children: React.ReactNode }) {
           </div>
         </div>
 
+        {/* Green accent line under logo */}
+        <div className="h-0.5 w-full" style={{ background: `linear-gradient(90deg, ${OS_GREEN}aa, #29b4d4aa)` }} />
+
         <nav className="p-3 flex-1 space-y-0.5">
           {navigation.map(item => {
             const isActive = location === item.href || location.startsWith(item.href);
@@ -62,9 +67,14 @@ export function SuperAdminLayout({ children }: { children: React.ReactNode }) {
                 className={cn(
                   "flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors",
                   isActive
-                    ? "bg-violet-600/20 text-violet-300 border border-violet-500/20"
+                    ? "border"
                     : "text-slate-400 hover:bg-slate-800 hover:text-slate-100"
                 )}
+                style={isActive ? {
+                  backgroundColor: `${OS_GREEN}18`,
+                  color: OS_GREEN,
+                  borderColor: `${OS_GREEN}30`,
+                } : {}}
               >
                 <item.icon className="w-4 h-4 shrink-0" />
                 {item.name}

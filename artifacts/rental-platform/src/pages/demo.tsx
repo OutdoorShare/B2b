@@ -108,7 +108,7 @@ export default function DemoPage() {
       <div className="border-b border-slate-800 bg-slate-900/60 px-6 py-4 flex items-center justify-between gap-4 flex-wrap">
         <div className="flex items-center gap-3">
           <div className="w-9 h-9 rounded-xl bg-slate-800 border border-slate-700 flex items-center justify-center">
-            <Tent className="w-5 h-5 text-[#2d6a4f]" />
+            <Tent className="w-5 h-5 text-[#3ab549]" />
           </div>
           <div>
             <h1 className="font-black text-lg text-white">OutdoorShare Demo</h1>
@@ -121,7 +121,7 @@ export default function DemoPage() {
               <LayoutDashboard className="w-3.5 h-3.5" /> Admin Panel <ExternalLink className="w-3 h-3 opacity-50" />
             </a>
           </Button>
-          <Button asChild size="sm" className="bg-[#2d6a4f] hover:bg-[#235a42] text-white gap-1.5">
+          <Button asChild size="sm" className="bg-[#3ab549] hover:bg-[#2e9a3d] text-white gap-1.5">
             <Link href={`/${primarySlug}`}>
               <ShoppingBag className="w-3.5 h-3.5" /> Customer Storefront <ArrowRight className="w-3.5 h-3.5" />
             </Link>
@@ -137,7 +137,7 @@ export default function DemoPage() {
           <div className="flex items-center justify-between">
             <div>
               <h2 className="font-bold text-white flex items-center gap-2">
-                <ShoppingBag className="w-4 h-4 text-[#52b788]" /> Customer View
+                <ShoppingBag className="w-4 h-4 text-[#29b4d4]" /> Customer View
               </h2>
               <p className="text-slate-500 text-xs mt-0.5">What renters see when they visit your storefront</p>
             </div>
@@ -149,7 +149,7 @@ export default function DemoPage() {
               <img src={profile.logoUrl} alt={profile.name} className="w-12 h-12 rounded-lg object-contain bg-white p-1" />
             ) : (
               <div className="w-12 h-12 rounded-lg bg-slate-800 border border-slate-700 flex items-center justify-center">
-                <Tent className="w-6 h-6 text-[#2d6a4f]" />
+                <Tent className="w-6 h-6 text-[#3ab549]" />
               </div>
             )}
             <div className="flex-1 min-w-0">
@@ -157,7 +157,7 @@ export default function DemoPage() {
               {profile?.tagline && <p className="text-slate-400 text-xs truncate">{profile.tagline}</p>}
               {profile?.location && <p className="text-slate-500 text-xs">{profile.location}</p>}
             </div>
-            <Button asChild size="sm" className="bg-[#2d6a4f] hover:bg-[#235a42] text-white shrink-0 gap-1.5">
+            <Button asChild size="sm" className="bg-[#3ab549] hover:bg-[#2e9a3d] text-white shrink-0 gap-1.5">
               <Link href={`/${primarySlug}`}>Open Store <ArrowRight className="w-3.5 h-3.5" /></Link>
             </Button>
           </div>
@@ -195,7 +195,7 @@ export default function DemoPage() {
               <div className="bg-slate-900 border border-slate-800 border-dashed rounded-xl p-8 text-center">
                 <Package className="w-8 h-8 text-slate-700 mx-auto mb-2" />
                 <p className="text-slate-500 text-sm">No active listings yet</p>
-                <Button asChild size="sm" className="mt-3 bg-[#2d6a4f] hover:bg-[#235a42] text-white gap-1.5">
+                <Button asChild size="sm" className="mt-3 bg-[#3ab549] hover:bg-[#2e9a3d] text-white gap-1.5">
                   <a href="/admin/listings/new" target="_blank" rel="noopener noreferrer">
                     <Package className="w-3.5 h-3.5" /> Create a Listing
                   </a>
@@ -205,7 +205,7 @@ export default function DemoPage() {
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 {listings.map(l => (
                   <Link key={l.id} href={`/${primarySlug}/listings/${l.id}`}>
-                    <div className="group bg-slate-900 border border-slate-800 hover:border-[#2d6a4f]/50 rounded-xl overflow-hidden transition-all cursor-pointer">
+                    <div className="group bg-slate-900 border border-slate-800 hover:border-[#3ab549]/50 rounded-xl overflow-hidden transition-all cursor-pointer">
                       <div className="aspect-video bg-slate-800 relative overflow-hidden">
                         {l.imageUrls?.[0] ? (
                           <img src={l.imageUrls[0]} alt={l.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
@@ -223,7 +223,7 @@ export default function DemoPage() {
                       <div className="p-3">
                         <p className="font-semibold text-white text-sm leading-snug line-clamp-1">{l.title}</p>
                         <div className="flex items-center justify-between mt-1">
-                          <p className="text-[#52b788] font-bold text-sm">${l.pricePerDay.toFixed(2)}<span className="text-slate-500 font-normal text-xs">/day</span></p>
+                          <p className="text-[#29b4d4] font-bold text-sm">${l.pricePerDay.toFixed(2)}<span className="text-slate-500 font-normal text-xs">/day</span></p>
                           <span className="text-xs text-slate-500">Qty: {l.quantity}</span>
                         </div>
                       </div>
@@ -239,7 +239,7 @@ export default function DemoPage() {
             <p className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-3">Quick Test Links</p>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
               <Button asChild variant="outline" size="sm" className="border-slate-700 text-slate-300 hover:bg-slate-800 justify-start gap-2">
-                <Link href={`/${primarySlug}`}><ShoppingBag className="w-3.5 h-3.5 text-[#52b788]" />Browse as Customer</Link>
+                <Link href={`/${primarySlug}`}><ShoppingBag className="w-3.5 h-3.5 text-[#29b4d4]" />Browse as Customer</Link>
               </Button>
               <Button asChild variant="outline" size="sm" className="border-slate-700 text-slate-300 hover:bg-slate-800 justify-start gap-2">
                 <a href="/admin/bookings/new" target="_blank" rel="noopener noreferrer"><CalendarDays className="w-3.5 h-3.5 text-blue-400" />Admin: New Booking</a>
@@ -299,7 +299,7 @@ export default function DemoPage() {
               <CalendarDays className="w-10 h-10 text-slate-700 mx-auto mb-3" />
               <p className="text-slate-400 font-semibold">No bookings yet</p>
               <p className="text-slate-600 text-sm mt-1">Make a booking as a customer to see it appear here</p>
-              <Button asChild size="sm" className="mt-4 bg-[#2d6a4f] hover:bg-[#235a42] text-white gap-1.5">
+              <Button asChild size="sm" className="mt-4 bg-[#3ab549] hover:bg-[#2e9a3d] text-white gap-1.5">
                 <Link href={`/${primarySlug}`}>Try Booking as Customer <ArrowRight className="w-3.5 h-3.5" /></Link>
               </Button>
             </div>

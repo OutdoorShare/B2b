@@ -41,7 +41,7 @@ interface SAUser {
 }
 
 const ROLE_CONFIG: Record<SARole, { label: string; color: string; description: string }> = {
-  super_admin: { label: "Super Admin", color: "bg-violet-900/50 text-violet-200 border-violet-700/40", description: "Full platform access including team management" },
+  super_admin: { label: "Super Admin", color: "bg-emerald-900/50 text-emerald-200 border-emerald-700/40", description: "Full platform access including team management" },
   admin:       { label: "Admin",       color: "bg-slate-700/60 text-slate-300 border-slate-600/40",    description: "Manage tenants and view all data" },
 };
 
@@ -123,7 +123,7 @@ export default function SuperAdminTeam() {
           <h2 className="text-2xl font-bold">Team</h2>
           <p className="text-slate-400 mt-1 text-sm">Manage sub-admin accounts with access to the super admin console.</p>
         </div>
-        <Button onClick={openCreate} className="gap-2 bg-violet-600 hover:bg-violet-700 text-white">
+        <Button onClick={openCreate} className="gap-2 text-white hover:opacity-90" style={{ backgroundColor: "#3ab549" }}>
           <Plus className="w-4 h-4" /> Add Member
         </Button>
       </div>
@@ -156,8 +156,8 @@ export default function SuperAdminTeam() {
               key={user.id}
               className={`flex items-center gap-4 px-5 py-4 ${idx !== users.length - 1 ? "border-b border-slate-800" : ""} ${user.status === "inactive" ? "opacity-40" : ""} bg-slate-900/50`}
             >
-              <div className="w-10 h-10 rounded-full bg-violet-600/20 border border-violet-600/30 flex items-center justify-center shrink-0">
-                <Shield className="w-5 h-5 text-violet-400" />
+              <div className="w-10 h-10 rounded-full flex items-center justify-center shrink-0" style={{ backgroundColor: "#3ab54920", border: "1px solid #3ab54940" }}>
+                <Shield className="w-5 h-5 text-emerald-400" />
               </div>
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2 flex-wrap">
@@ -173,7 +173,7 @@ export default function SuperAdminTeam() {
               </div>
               <div className="flex items-center gap-1 shrink-0">
                 <button onClick={() => toggleStatus(user)} title={user.status === "active" ? "Deactivate" : "Activate"} className="p-1.5 rounded hover:bg-slate-800 text-slate-500 hover:text-slate-200 transition-colors">
-                  {user.status === "active" ? <UserX className="w-4 h-4" /> : <UserCheck className="w-4 h-4 text-violet-400" />}
+                  {user.status === "active" ? <UserX className="w-4 h-4" /> : <UserCheck className="w-4 h-4 text-emerald-400" />}
                 </button>
                 <button onClick={() => openEdit(user)} className="p-1.5 rounded hover:bg-slate-800 text-slate-500 hover:text-slate-200 transition-colors">
                   <Pencil className="w-4 h-4" />
@@ -252,7 +252,7 @@ export default function SuperAdminTeam() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowDialog(false)} className="border-slate-700 text-slate-300 hover:bg-slate-800">Cancel</Button>
-            <Button onClick={handleSave} disabled={saving} className="bg-violet-600 hover:bg-violet-700 text-white">{saving ? "Saving…" : (editingUser ? "Save" : "Add Member")}</Button>
+            <Button onClick={handleSave} disabled={saving} className="text-white hover:opacity-90" style={{ backgroundColor: "#3ab549" }}>{saving ? "Saving…" : (editingUser ? "Save" : "Add Member")}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

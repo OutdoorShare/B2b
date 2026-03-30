@@ -34,7 +34,8 @@ type BizProfile = { name: string; tagline: string; description: string; logoUrl?
 type Listing = { id: number; title: string; description: string; pricePerDay: number; pricePerWeek?: number | null; quantity: number; status: string; brand?: string; model?: string; condition?: string; location?: string; requirements?: string; depositAmount?: number | null; createdAt: string };
 type Booking = { id: number; customerName: string; customerEmail: string; startDate: string; endDate: string; quantity: number; totalPrice: number; status: string; source: string; adminNotes?: string; createdAt: string; listingId: number };
 
-const PLAN_COLORS: Record<string, string> = { starter: "bg-slate-700 text-slate-200", professional: "bg-blue-900/60 text-blue-300", enterprise: "bg-violet-900/60 text-violet-300" };
+const OS_GREEN = "#3ab549";
+const PLAN_COLORS: Record<string, string> = { starter: "bg-slate-700 text-slate-200", professional: "bg-blue-900/60 text-blue-300", enterprise: "bg-emerald-900/60 text-emerald-300" };
 const STATUS_COLORS: Record<string, string> = { active: "bg-green-900/50 text-green-300", inactive: "bg-slate-700 text-slate-400", suspended: "bg-red-900/50 text-red-300" };
 const BOOKING_COLORS: Record<string, string> = { pending: "bg-amber-900/50 text-amber-300", confirmed: "bg-blue-900/50 text-blue-300", active: "bg-green-900/50 text-green-300", completed: "bg-slate-700 text-slate-300", cancelled: "bg-red-900/50 text-red-300" };
 
@@ -116,7 +117,7 @@ function AccountTab({ tenant, tenantId, onSaved }: { tenant: Tenant; tenantId: n
           <Textarea value={form.notes} onChange={e => set("notes", e.target.value)} rows={2} className="bg-slate-800 border-slate-600 text-white resize-none" />
         </div>
       </div>
-      <Button onClick={save} disabled={saving} className="bg-violet-600 hover:bg-violet-700 text-white gap-1.5">
+      <Button onClick={save} disabled={saving} className="text-white gap-1.5" style={{ backgroundColor: "#3ab549" }} >
         <Save className="w-4 h-4" />{saving ? "Saving…" : "Save Account"}
       </Button>
     </div>
@@ -244,7 +245,7 @@ function StorefrontTab({ tenantId }: { tenantId: number }) {
         </div>
       </div>
 
-      <Button onClick={save} disabled={saving} className="bg-violet-600 hover:bg-violet-700 text-white gap-1.5">
+      <Button onClick={save} disabled={saving} className="text-white gap-1.5" style={{ backgroundColor: "#3ab549" }} >
         <Save className="w-4 h-4" />{saving ? "Saving…" : "Save Storefront Settings"}
       </Button>
     </div>
@@ -307,14 +308,14 @@ function ListingsTab({ tenantId }: { tenantId: number }) {
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <p className="text-slate-400 text-sm">{listings.length} listings</p>
-        <Button onClick={openCreate} size="sm" className="bg-violet-600 hover:bg-violet-700 text-white gap-1.5"><Plus className="w-4 h-4" />New Listing</Button>
+        <Button onClick={openCreate} size="sm" className="text-white gap-1.5 hover:opacity-85" style={{ backgroundColor: "#3ab549" }}><Plus className="w-4 h-4" />New Listing</Button>
       </div>
 
       {loading ? <div className="text-slate-400 py-8">Loading…</div> : listings.length === 0 ? (
         <div className="bg-slate-900 border border-slate-800 rounded-xl p-12 text-center">
           <Package className="w-10 h-10 text-slate-700 mx-auto mb-3" />
           <p className="text-slate-400 font-semibold">No listings yet</p>
-          <Button onClick={openCreate} size="sm" className="mt-4 bg-violet-600 hover:bg-violet-700 text-white gap-1.5"><Plus className="w-4 h-4" />Create First Listing</Button>
+          <Button onClick={openCreate} size="sm" className="mt-4 text-white gap-1.5 hover:opacity-85" style={{ backgroundColor: "#3ab549" }}><Plus className="w-4 h-4" />Create First Listing</Button>
         </div>
       ) : (
         <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden">
@@ -377,7 +378,7 @@ function ListingsTab({ tenantId }: { tenantId: number }) {
           </div>
           <DialogFooter className="gap-2">
             <Button variant="ghost" onClick={() => setShowForm(false)} className="text-slate-400 hover:text-white hover:bg-slate-800">Cancel</Button>
-            <Button onClick={save} disabled={saving} className="bg-violet-600 hover:bg-violet-700 text-white">{saving ? "Saving…" : editListing ? "Save Changes" : "Create Listing"}</Button>
+            <Button onClick={save} disabled={saving} className="text-white hover:opacity-90" style={{ backgroundColor: "#3ab549" }}>{saving ? "Saving…" : editListing ? "Save Changes" : "Create Listing"}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -490,7 +491,7 @@ function BookingsTab({ tenantId }: { tenantId: number }) {
           )}
           <DialogFooter className="gap-2">
             <Button variant="ghost" onClick={() => setSelectedBooking(null)} className="text-slate-400 hover:text-white hover:bg-slate-800">Cancel</Button>
-            <Button onClick={saveBooking} disabled={saving} className="bg-violet-600 hover:bg-violet-700 text-white">{saving ? "Saving…" : "Save"}</Button>
+            <Button onClick={saveBooking} disabled={saving} className="text-white hover:opacity-90" style={{ backgroundColor: "#3ab549" }}>{saving ? "Saving…" : "Save"}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

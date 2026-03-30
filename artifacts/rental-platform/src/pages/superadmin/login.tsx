@@ -6,6 +6,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
+const OS_GREEN = "#3ab549";
+const OS_GREEN_DARK = "#2e9a3d";
 
 export default function SuperAdminLogin() {
   const [, setLocation] = useLocation();
@@ -56,6 +58,7 @@ export default function SuperAdminLogin() {
 
         {/* Card */}
         <div className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-xl">
+          <div className="h-1 w-full" style={{ background: `linear-gradient(90deg, ${OS_GREEN}, #29b4d4)` }} />
           <form
             className="p-6 space-y-5"
             onSubmit={e => { e.preventDefault(); handleLogin(); }}
@@ -71,7 +74,8 @@ export default function SuperAdminLogin() {
                 value={email}
                 onChange={e => setEmail(e.target.value)}
                 placeholder="owner@platform.com"
-                className="bg-slate-800 border-slate-700 text-white placeholder:text-slate-500 h-11 focus:border-violet-500"
+                className="bg-slate-800 border-slate-700 text-white placeholder:text-slate-500 h-11"
+                style={{ ["--tw-ring-color" as string]: OS_GREEN }}
               />
             </div>
 
@@ -86,7 +90,7 @@ export default function SuperAdminLogin() {
                   value={password}
                   onChange={e => setPassword(e.target.value)}
                   placeholder="Your password"
-                  className="bg-slate-800 border-slate-700 text-white placeholder:text-slate-500 pr-10 h-11 focus:border-violet-500"
+                  className="bg-slate-800 border-slate-700 text-white placeholder:text-slate-500 pr-10 h-11"
                 />
                 <button
                   type="button"
@@ -102,7 +106,8 @@ export default function SuperAdminLogin() {
 
             <Button
               type="submit"
-              className="w-full h-11 bg-violet-600 hover:bg-violet-700 text-white font-bold"
+              className="w-full h-11 text-white font-bold hover:opacity-90"
+              style={{ backgroundColor: OS_GREEN }}
               disabled={loading}
             >
               {loading ? "Signing in…" : "Sign In to Platform"}

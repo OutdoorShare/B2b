@@ -42,10 +42,11 @@ type Tenant = {
   listingCount: number; bookingCount: number;
 };
 
+const OS_GREEN = "#3ab549";
 const PLAN_COLORS: Record<string, string> = {
   starter: "bg-slate-700 text-slate-200",
   professional: "bg-blue-900/60 text-blue-300",
-  enterprise: "bg-violet-900/60 text-violet-300",
+  enterprise: "bg-emerald-900/60 text-emerald-300",
 };
 
 const STATUS_COLORS: Record<string, string> = {
@@ -182,7 +183,7 @@ export default function SuperAdminDashboard() {
           <Button variant="ghost" size="icon" onClick={loadData} className="text-slate-400 hover:text-white hover:bg-slate-800">
             <RefreshCcw className="w-4 h-4" />
           </Button>
-          <Button onClick={openCreate} className="bg-violet-600 hover:bg-violet-700 text-white gap-1.5">
+          <Button onClick={openCreate} className="text-white gap-1.5 hover:opacity-90" style={{ backgroundColor: OS_GREEN }}>
             <Plus className="w-4 h-4" /> New Company
           </Button>
         </div>
@@ -197,7 +198,7 @@ export default function SuperAdminDashboard() {
             { label: "Inactive", value: stats.inactive, color: "text-slate-400" },
             { label: "Suspended", value: stats.suspended, color: "text-red-400" },
             { label: "Listings", value: stats.totalListings, color: "text-blue-400" },
-            { label: "Bookings", value: stats.totalBookings, color: "text-violet-400" },
+            { label: "Bookings", value: stats.totalBookings, color: "text-emerald-400" },
           ].map(s => (
             <div key={s.label} className="bg-slate-900 border border-slate-800 rounded-xl p-3.5">
               <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">{s.label}</p>
@@ -216,7 +217,7 @@ export default function SuperAdminDashboard() {
               value={search}
               onChange={e => setSearch(e.target.value)}
               placeholder="Search companies…"
-              className="pl-9 bg-slate-800 border-slate-700 text-white placeholder:text-slate-500 h-9 focus:border-violet-500"
+              className="pl-9 bg-slate-800 border-slate-700 text-white placeholder:text-slate-500 h-9 focus:border-emerald-500"
             />
           </div>
           <p className="text-sm text-slate-500 ml-auto">{filtered.length} companies</p>
@@ -231,7 +232,7 @@ export default function SuperAdminDashboard() {
               {search ? "No companies match your search" : "No companies yet"}
             </p>
             {!search && (
-              <Button onClick={openCreate} className="mt-4 bg-violet-600 hover:bg-violet-700 text-white gap-1.5">
+              <Button onClick={openCreate} className="mt-4 text-white gap-1.5 hover:opacity-90" style={{ backgroundColor: OS_GREEN }}>
                 <Plus className="w-4 h-4" /> Create First Company
               </Button>
             )}
@@ -279,7 +280,10 @@ export default function SuperAdminDashboard() {
                         <Link href={`/superadmin/companies/${t.id}`}>
                           <button
                             title="Manage company"
-                            className="flex items-center gap-1 px-2.5 py-1 rounded text-xs font-semibold bg-violet-600/20 text-violet-300 hover:bg-violet-600/40 transition-colors"
+                            className="flex items-center gap-1 px-2.5 py-1 rounded text-xs font-semibold transition-colors"
+                            style={{ backgroundColor: `${OS_GREEN}20`, color: OS_GREEN }}
+                            onMouseEnter={e => (e.currentTarget.style.backgroundColor = `${OS_GREEN}35`)}
+                            onMouseLeave={e => (e.currentTarget.style.backgroundColor = `${OS_GREEN}20`)}
                           >
                             Manage <ChevronRight className="w-3 h-3" />
                           </button>
@@ -332,17 +336,17 @@ export default function SuperAdminDashboard() {
               <div className="space-y-1.5 col-span-2">
                 <Label className="text-slate-300 text-xs">Company Name *</Label>
                 <Input value={form.name} onChange={e => updateField("name", e.target.value)} placeholder="Adventure Rentals Co."
-                  className="bg-slate-800 border-slate-600 text-white placeholder:text-slate-500 focus:border-violet-500" />
+                  className="bg-slate-800 border-slate-600 text-white placeholder:text-slate-500 focus:border-emerald-500" />
               </div>
               <div className="space-y-1.5">
                 <Label className="text-slate-300 text-xs">Slug * <span className="text-slate-500 font-normal">(URL identifier)</span></Label>
                 <Input value={form.slug} onChange={e => updateField("slug", e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ""))} placeholder="adventure-rentals"
-                  className="bg-slate-800 border-slate-600 text-white placeholder:text-slate-500 font-mono focus:border-violet-500" />
+                  className="bg-slate-800 border-slate-600 text-white placeholder:text-slate-500 font-mono focus:border-emerald-500" />
               </div>
               <div className="space-y-1.5">
                 <Label className="text-slate-300 text-xs">Plan</Label>
                 <Select value={form.plan} onValueChange={v => updateField("plan", v)}>
-                  <SelectTrigger className="bg-slate-800 border-slate-600 text-white focus:border-violet-500">
+                  <SelectTrigger className="bg-slate-800 border-slate-600 text-white focus:border-emerald-500">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent className="bg-slate-800 border-slate-700 text-white">
@@ -360,14 +364,14 @@ export default function SuperAdminDashboard() {
               <div className="space-y-1.5 col-span-2">
                 <Label className="text-slate-300 text-xs">Admin Email *</Label>
                 <Input value={form.email} onChange={e => updateField("email", e.target.value)} type="email" placeholder="admin@company.com"
-                  className="bg-slate-800 border-slate-600 text-white placeholder:text-slate-500 focus:border-violet-500" />
+                  className="bg-slate-800 border-slate-600 text-white placeholder:text-slate-500 focus:border-emerald-500" />
               </div>
               <div className="space-y-1.5">
                 <Label className="text-slate-300 text-xs">{editTenant ? "New Password" : "Password *"}</Label>
                 <div className="relative">
                   <Input value={form.password} onChange={e => updateField("password", e.target.value)}
                     type={showPassword ? "text" : "password"} placeholder={editTenant ? "Leave blank to keep" : "Min. 6 characters"}
-                    className="bg-slate-800 border-slate-600 text-white placeholder:text-slate-500 pr-9 focus:border-violet-500" />
+                    className="bg-slate-800 border-slate-600 text-white placeholder:text-slate-500 pr-9 focus:border-emerald-500" />
                   <button type="button" onClick={() => setShowPassword(v => !v)} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400">
                     {showPassword ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
                   </button>
@@ -377,7 +381,7 @@ export default function SuperAdminDashboard() {
                 <Label className="text-slate-300 text-xs">Confirm Password</Label>
                 <Input value={form.confirmPassword} onChange={e => updateField("confirmPassword", e.target.value)}
                   type={showPassword ? "text" : "password"} placeholder="Repeat password"
-                  className="bg-slate-800 border-slate-600 text-white placeholder:text-slate-500 focus:border-violet-500" />
+                  className="bg-slate-800 border-slate-600 text-white placeholder:text-slate-500 focus:border-emerald-500" />
               </div>
             </div>
 
@@ -387,17 +391,17 @@ export default function SuperAdminDashboard() {
               <div className="space-y-1.5">
                 <Label className="text-slate-300 text-xs">Contact Name</Label>
                 <Input value={form.contactName} onChange={e => updateField("contactName", e.target.value)} placeholder="Jane Smith"
-                  className="bg-slate-800 border-slate-600 text-white placeholder:text-slate-500 focus:border-violet-500" />
+                  className="bg-slate-800 border-slate-600 text-white placeholder:text-slate-500 focus:border-emerald-500" />
               </div>
               <div className="space-y-1.5">
                 <Label className="text-slate-300 text-xs">Phone</Label>
                 <Input value={form.phone} onChange={e => updateField("phone", e.target.value)} placeholder="+1 555-000-0000"
-                  className="bg-slate-800 border-slate-600 text-white placeholder:text-slate-500 focus:border-violet-500" />
+                  className="bg-slate-800 border-slate-600 text-white placeholder:text-slate-500 focus:border-emerald-500" />
               </div>
               <div className="space-y-1.5">
                 <Label className="text-slate-300 text-xs">Status</Label>
                 <Select value={form.status} onValueChange={v => updateField("status", v)}>
-                  <SelectTrigger className="bg-slate-800 border-slate-600 text-white focus:border-violet-500">
+                  <SelectTrigger className="bg-slate-800 border-slate-600 text-white focus:border-emerald-500">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent className="bg-slate-800 border-slate-700 text-white">
@@ -410,12 +414,12 @@ export default function SuperAdminDashboard() {
               <div className="space-y-1.5">
                 <Label className="text-slate-300 text-xs">Max Listings</Label>
                 <Input value={form.maxListings} onChange={e => updateField("maxListings", e.target.value)} type="number" min="1"
-                  className="bg-slate-800 border-slate-600 text-white focus:border-violet-500" />
+                  className="bg-slate-800 border-slate-600 text-white focus:border-emerald-500" />
               </div>
               <div className="space-y-1.5 col-span-2">
                 <Label className="text-slate-300 text-xs">Internal Notes</Label>
                 <Textarea value={form.notes} onChange={e => updateField("notes", e.target.value)} placeholder="Optional notes…" rows={2}
-                  className="bg-slate-800 border-slate-600 text-white placeholder:text-slate-500 focus:border-violet-500 resize-none" />
+                  className="bg-slate-800 border-slate-600 text-white placeholder:text-slate-500 focus:border-emerald-500 resize-none" />
               </div>
             </div>
 
@@ -430,7 +434,7 @@ export default function SuperAdminDashboard() {
             <Button variant="ghost" onClick={() => setShowForm(false)} className="text-slate-400 hover:text-white hover:bg-slate-800">
               Cancel
             </Button>
-            <Button onClick={handleSubmit} disabled={submitting} className="bg-violet-600 hover:bg-violet-700 text-white">
+            <Button onClick={handleSubmit} disabled={submitting} className="text-white hover:opacity-90" style={{ backgroundColor: OS_GREEN }}>
               {submitting ? "Saving…" : editTenant ? "Save Changes" : "Create Company"}
             </Button>
           </DialogFooter>
