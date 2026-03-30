@@ -11,3 +11,4 @@ export * from "./listing-units";
 export * from "./admin-users";
 export * from "./superadmin-users";
 export * from "./communications";
+export * from "./platform-settings";

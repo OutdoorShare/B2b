@@ -44,6 +44,7 @@ import AdminCommunications from "@/pages/admin/communications";
 import SuperAdminTeam from "@/pages/superadmin/team";
 import SuperAdminListings from "@/pages/superadmin/listings";
 import CompanyDetailPage from "@/pages/superadmin/company-detail";
+import SuperAdminAgreement from "@/pages/superadmin/agreement";
 
 const queryClient = new QueryClient();
 
@@ -105,6 +106,9 @@ function Router() {
       </Route>
       <Route path="/superadmin/companies/:id">
         <SuperAdminLayout><CompanyDetailPage /></SuperAdminLayout>
+      </Route>
+      <Route path="/superadmin/agreement">
+        <SuperAdminLayout><SuperAdminAgreement /></SuperAdminLayout>
       </Route>
 
       {/* Admin Routes */}

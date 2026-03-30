@@ -131,6 +131,7 @@ export default function StorefrontBook() {
   // Step 3: agreement
   const [agreeSigned, setAgreeSigned] = useState("");
   const [agreeChecked, setAgreeChecked] = useState(false);
+  const [agreementText, setAgreementText] = useState("");
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [confirmedBooking, setConfirmedBooking] = useState<{ id: number; totalPrice: number } | null>(null);
@@ -140,6 +141,14 @@ export default function StorefrontBook() {
   // Add-ons
   const [availableAddons, setAvailableAddons] = useState<Addon[]>([]);
   const [selectedAddonIds, setSelectedAddonIds] = useState<Set<number>>(new Set());
+
+  // Fetch the global agreement text
+  useEffect(() => {
+    fetch(`${BASE}/api/platform/agreement`)
+      .then(r => r.json())
+      .then(d => { if (d.value) setAgreementText(d.value); })
+      .catch(() => {});
+  }, []);
 
   // Fetch addons for the listing; auto-select required ones
   useEffect(() => {
@@ -769,13 +778,12 @@ export default function StorefrontBook() {
                   <p><strong className="text-foreground">Vehicle:</strong> {listing.title}</p>
                   <p><strong className="text-foreground">Renter:</strong> {name} ({email})</p>
                   <Separator />
-                  <p><strong className="text-foreground">1. Use of Vehicle.</strong> The renter agrees to use the vehicle only for lawful purposes and in a safe manner. The vehicle shall not be used off-road unless specifically permitted, sub-rented, or used to tow any object unless specifically authorized.</p>
-                  <p><strong className="text-foreground">2. Damage & Liability.</strong> The renter accepts full financial responsibility for any damage to the vehicle during the rental period, including but not limited to collisions, theft, vandalism, and weather damage. The security deposit of ${deposit.toFixed(2)} will be held against damages and returned within 5 business days of vehicle return if no damage is found.</p>
-                  <p><strong className="text-foreground">3. Age & License.</strong> The renter certifies they are of legal age to operate this vehicle and hold a valid license or certification required by law.</p>
-                  <p><strong className="text-foreground">4. Fuel & Condition.</strong> The vehicle must be returned with the same fuel level and in the same general condition as when received. Cleaning fees may apply if the vehicle is returned excessively dirty.</p>
-                  <p><strong className="text-foreground">5. Cancellation.</strong> Cancellations made more than 48 hours before the rental start date are eligible for a full refund. Cancellations within 48 hours may forfeit the deposit.</p>
-                  <p><strong className="text-foreground">6. Payment.</strong> The total rental fee is <strong className="text-foreground">${total.toFixed(2)}</strong> (${subtotal.toFixed(2)} rental + ${deposit.toFixed(2)} refundable deposit). No charge will be processed until this booking is confirmed by our team.</p>
-                  <p><strong className="text-foreground">7. Governing Law.</strong> This agreement shall be governed by the laws of the state where the rental business is located. Any disputes shall be resolved through binding arbitration.</p>
+                  {agreementText
+                    ? agreementText.split("\n\n").filter(Boolean).map((para, i) => (
+                        <p key={i}>{para}</p>
+                      ))
+                    : <p className="text-muted-foreground italic">Loading agreement…</p>
+                  }
                   <p className="text-xs italic">By signing below, you confirm you have read, understood, and agree to all terms in this rental agreement.</p>
                 </div>
 

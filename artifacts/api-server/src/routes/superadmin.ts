@@ -1,6 +1,6 @@
 import { Router, type IRouter, type Request, type Response, type NextFunction } from "express";
 import { db } from "@workspace/db";
-import { tenantsTable, listingsTable, bookingsTable, superadminUsersTable, businessProfileTable } from "@workspace/db/schema";
+import { tenantsTable, listingsTable, bookingsTable, superadminUsersTable, businessProfileTable, platformSettingsTable } from "@workspace/db/schema";
 import { eq, sql, desc } from "drizzle-orm";
 import { scrypt, randomBytes, timingSafeEqual } from "crypto";
 import { promisify } from "util";
@@ -447,6 +447,49 @@ router.get("/superadmin/stats", requireSuperAdmin, async (_req, res) => {
     res.json({ total, active, inactive, suspended, totalListings: listings, totalBookings: bookings });
   } catch (e) {
     res.status(500).json({ error: "Failed to fetch stats" });
+  }
+});
+
+// ── GET /superadmin/agreement ──────────────────────────────────────────────────
+router.get("/superadmin/agreement", requireSuperAdmin, async (_req, res) => {
+  try {
+    const [row] = await db.select().from(platformSettingsTable)
+      .where(eq(platformSettingsTable.key, "rental_agreement")).limit(1);
+    res.json({ value: row?.value ?? "", updatedAt: row?.updatedAt?.toISOString() ?? null });
+  } catch {
+    res.status(500).json({ error: "Failed to fetch agreement" });
+  }
+});
+
+// ── PUT /superadmin/agreement ──────────────────────────────────────────────────
+router.put("/superadmin/agreement", requireSuperAdmin, async (req, res) => {
+  try {
+    const { value } = req.body;
+    if (typeof value !== "string") { res.status(400).json({ error: "value is required" }); return; }
+    const now = new Date();
+    const existing = await db.select({ id: platformSettingsTable.id })
+      .from(platformSettingsTable).where(eq(platformSettingsTable.key, "rental_agreement")).limit(1);
+    if (existing.length > 0) {
+      await db.update(platformSettingsTable)
+        .set({ value, updatedAt: now })
+        .where(eq(platformSettingsTable.key, "rental_agreement"));
+    } else {
+      await db.insert(platformSettingsTable).values({ key: "rental_agreement", value, updatedAt: now });
+    }
+    res.json({ ok: true, updatedAt: now.toISOString() });
+  } catch {
+    res.status(500).json({ error: "Failed to save agreement" });
+  }
+});
+
+// ── GET /platform/agreement (public — used by booking flow) ───────────────────
+router.get("/platform/agreement", async (_req, res) => {
+  try {
+    const [row] = await db.select().from(platformSettingsTable)
+      .where(eq(platformSettingsTable.key, "rental_agreement")).limit(1);
+    res.json({ value: row?.value ?? "", updatedAt: row?.updatedAt?.toISOString() ?? null });
+  } catch {
+    res.status(500).json({ error: "Failed to fetch agreement" });
   }
 });
 
