@@ -288,7 +288,7 @@ export default function LoginPage() {
         <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 dark:bg-slate-900/40 dark:border-slate-700 overflow-hidden">
           <button
             className="w-full flex items-center justify-between px-5 py-4 text-sm font-semibold text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 transition-colors"
-            onClick={() => { setShowAdminSection(v => !v); setAdminError(""); setAdminCode(""); }}
+            onClick={() => { setShowAdminSection(v => !v); setAdminError(""); }}
           >
             <span className="flex items-center gap-2">
               <ShieldCheck className="w-4 h-4" />

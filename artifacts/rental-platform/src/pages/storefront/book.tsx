@@ -244,7 +244,7 @@ export default function StorefrontBook() {
     try {
       const res = await fetch(`${BASE}/api/customers/register`, {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password, name, phone })
+        body: JSON.stringify({ email, password, name, phone, slug: slug ?? "" })
       });
       const data = await res.json();
       if (!res.ok) { setAuthError(data.error || "Registration failed"); return; }
@@ -637,7 +637,7 @@ export default function StorefrontBook() {
                           try {
                             const res = await fetch(`${BASE}/api/customers/login`, {
                               method: "POST", headers: { "Content-Type": "application/json" },
-                              body: JSON.stringify({ email, password })
+                              body: JSON.stringify({ email, password, slug: slug ?? "" })
                             });
                             const data = await res.json();
                             if (!res.ok) { setAuthError(data.error || "Login failed"); return; }

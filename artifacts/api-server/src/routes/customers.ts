@@ -79,13 +79,25 @@ router.post("/customers/login", async (req, res) => {
     const tenantSlug = (slug ?? "").trim().toLowerCase();
     const normalEmail = email.toLowerCase().trim();
 
-    const [customer] = await db
+    // Try exact slug match first, then fall back to empty-slug (legacy accounts)
+    let customer = (await db
       .select()
       .from(customersTable)
       .where(and(
         eq(customersTable.email, normalEmail),
         eq(customersTable.tenantSlug, tenantSlug),
-      ));
+      )))[0];
+
+    if (!customer) {
+      // Legacy accounts created before tenant_slug tracking
+      customer = (await db
+        .select()
+        .from(customersTable)
+        .where(and(
+          eq(customersTable.email, normalEmail),
+          eq(customersTable.tenantSlug, ""),
+        )))[0];
+    }
 
     if (!customer) {
       res.status(401).json({ error: "Invalid email or password" });
@@ -96,6 +108,14 @@ router.post("/customers/login", async (req, res) => {
     if (!valid) {
       res.status(401).json({ error: "Invalid email or password" });
       return;
+    }
+
+    // Backfill tenant_slug if it was empty
+    if (!customer.tenantSlug && tenantSlug) {
+      await db.update(customersTable)
+        .set({ tenantSlug, updatedAt: new Date() })
+        .where(eq(customersTable.id, customer.id));
+      customer = { ...customer, tenantSlug };
     }
 
     res.json(safeCustomer(customer));
