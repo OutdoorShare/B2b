@@ -243,7 +243,7 @@ export default function StorefrontGearDetail() {
               </div>
 
               {/* Calendar */}
-              <div className="flex justify-center py-3 px-2">
+              <div className="p-4">
                 <Calendar
                   mode="range"
                   selected={dateRange}
@@ -252,8 +252,9 @@ export default function StorefrontGearDetail() {
                     { before: new Date() },
                     ...disabledDates,
                   ]}
-                  numberOfMonths={1}
-                  className="rounded-xl"
+                  numberOfMonths={2}
+                  className="[--cell-size:3rem] w-full"
+                  classNames={{ root: "w-full" }}
                   modifiers={{ booked: disabledDates }}
                   modifiersClassNames={{ booked: "bg-red-50 text-red-400 line-through opacity-60" }}
                 />
