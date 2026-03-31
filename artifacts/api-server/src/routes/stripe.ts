@@ -364,7 +364,10 @@ router.post("/stripe/identity/session", async (req, res) => {
     const { tenantSlug, customerId, returnUrl } = req.body;
     if (!tenantSlug) { res.status(400).json({ error: "tenantSlug required" }); return; }
 
-    const session = await (stripe as any).identity.verificationSessions.create({
+    const [tenant] = await db.select().from(tenantsTable).where(eq(tenantsTable.slug, tenantSlug));
+    const stripeClient = getStripeForTenant(!!(tenant?.testMode));
+
+    const session = await (stripeClient as any).identity.verificationSessions.create({
       type: "document",
       metadata: {
         tenant_slug: tenantSlug,
@@ -405,7 +408,14 @@ router.post("/stripe/identity/session", async (req, res) => {
 router.get("/stripe/identity/status/:sessionId", async (req, res) => {
   try {
     const { sessionId } = req.params;
-    const session = await (stripe as any).identity.verificationSessions.retrieve(sessionId);
+    const tenantSlug = req.query.tenantSlug as string | undefined;
+    let testMode = false;
+    if (tenantSlug) {
+      const [tenant] = await db.select().from(tenantsTable).where(eq(tenantsTable.slug, tenantSlug));
+      testMode = !!(tenant?.testMode);
+    }
+    const stripeClient = getStripeForTenant(testMode);
+    const session = await (stripeClient as any).identity.verificationSessions.retrieve(sessionId);
     const verified = session.status === "verified";
 
     // Update customer record if we can find them

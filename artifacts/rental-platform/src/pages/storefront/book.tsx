@@ -628,6 +628,7 @@ export default function StorefrontBook() {
     }
     setIdentityStatus("pending");
     try {
+      const stripePromise = isTestMode ? testStripePromise : liveStripePromise;
       const stripe = await stripePromise;
       if (!stripe) { setIdentityStatus("failed"); setIdentityError("Stripe could not load."); return; }
 
@@ -640,7 +641,7 @@ export default function StorefrontBook() {
 
       // Modal closed successfully — check status from backend
       if (identitySessionId) {
-        const statusRes = await fetch(`${BASE}/api/stripe/identity/status/${identitySessionId}`);
+        const statusRes = await fetch(`${BASE}/api/stripe/identity/status/${identitySessionId}?tenantSlug=${encodeURIComponent(slug ?? "")}`);
         const statusData = await statusRes.json();
         if (statusData.verified) {
           setIdentityStatus("verified");
@@ -1244,6 +1245,16 @@ export default function StorefrontBook() {
             {step === "verification" && (
               <div className="space-y-6">
                 <h1 className="text-2xl font-bold">Identity Verification</h1>
+
+                {isTestMode && (
+                  <div className="flex items-start gap-3 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 text-sm">
+                    <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                    <div>
+                      <span className="font-semibold text-amber-800">Test Mode — </span>
+                      <span className="text-amber-700">No real documents are collected. Use Stripe's test flow to simulate the full verification experience.</span>
+                    </div>
+                  </div>
+                )}
 
                 {identityStatus === "verified" ? (
                   <div className="bg-green-50 border border-green-200 rounded-2xl p-8 flex flex-col items-center gap-4 text-center">
