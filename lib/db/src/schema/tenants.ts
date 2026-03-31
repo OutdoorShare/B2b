@@ -1,4 +1,4 @@
-import { pgTable, serial, text, integer, timestamp } from "drizzle-orm/pg-core";
+import { pgTable, serial, text, integer, timestamp, boolean } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 
@@ -16,6 +16,10 @@ export const tenantsTable = pgTable("tenants", {
   notes: text("notes"),
   adminToken: text("admin_token"),
   trialEndsAt: timestamp("trial_ends_at"),
+  stripeAccountId: text("stripe_account_id"),
+  stripeAccountStatus: text("stripe_account_status", { enum: ["pending", "onboarding", "active", "restricted"] }),
+  stripeChargesEnabled: boolean("stripe_charges_enabled").default(false),
+  stripePayoutsEnabled: boolean("stripe_payouts_enabled").default(false),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });

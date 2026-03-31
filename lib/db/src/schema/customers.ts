@@ -1,4 +1,4 @@
-import { pgTable, serial, text, timestamp } from "drizzle-orm/pg-core";
+import { pgTable, serial, text, timestamp, boolean } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 
@@ -15,6 +15,10 @@ export const customersTable = pgTable("customers", {
   billingZip: text("billing_zip"),
   cardLastFour: text("card_last_four"),
   cardBrand: text("card_brand"),
+  stripeCustomerId: text("stripe_customer_id"),
+  identityVerificationStatus: text("identity_verification_status", { enum: ["unverified", "pending", "verified", "failed"] }).default("unverified"),
+  identityVerificationSessionId: text("identity_verification_session_id"),
+  identityVerifiedAt: timestamp("identity_verified_at"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });

@@ -99,6 +99,43 @@ export default function AdminSettings() {
 
   const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
+  // ── Stripe Connect state ──────────────────────────────────────────────────
+  const [connectStatus, setConnectStatus] = useState<{ connected: boolean; chargesEnabled: boolean; payoutsEnabled: boolean; email?: string } | null>(null);
+  const [onboardLoading, setOnboardLoading] = useState(false);
+
+  const adminHeaders = (): HeadersInit => {
+    try {
+      const raw = localStorage.getItem("admin_session");
+      if (raw) {
+        const s = JSON.parse(raw);
+        if (s?.token) return { "x-admin-token": s.token };
+      }
+    } catch { /* ignore */ }
+    return {};
+  };
+
+  useEffect(() => {
+    fetch(`${BASE}/api/stripe/connect/status`, { headers: adminHeaders() })
+      .then(r => r.ok ? r.json() : { connected: false })
+      .then(d => setConnectStatus(d))
+      .catch(() => setConnectStatus({ connected: false, chargesEnabled: false, payoutsEnabled: false }));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [BASE]);
+
+  const handleConnectOnboard = async () => {
+    setOnboardLoading(true);
+    try {
+      const res = await fetch(`${BASE}/api/stripe/connect/onboard`, { method: "POST", headers: adminHeaders() });
+      const data = await res.json();
+      if (data.url) { window.location.href = data.url; }
+      else { toast({ title: "Could not start Stripe onboarding", variant: "destructive" }); }
+    } catch {
+      toast({ title: "Stripe connection error", variant: "destructive" });
+    } finally {
+      setOnboardLoading(false);
+    }
+  };
+
   if (isLoading) return <div className="p-8">Loading settings...</div>;
 
   const primary = formData.primaryColor || "#1b4332";
@@ -134,10 +171,11 @@ export default function AdminSettings() {
       </div>
 
       <Tabs defaultValue="branding" className="w-full">
-        <TabsList className="grid w-full grid-cols-4">
+        <TabsList className="grid w-full grid-cols-5">
           <TabsTrigger value="general">General</TabsTrigger>
           <TabsTrigger value="branding">Branding</TabsTrigger>
           <TabsTrigger value="policies">Policies</TabsTrigger>
+          <TabsTrigger value="payments">Payments</TabsTrigger>
           <TabsTrigger value="integration">Integration</TabsTrigger>
         </TabsList>
 
@@ -527,6 +565,61 @@ export default function AdminSettings() {
                   <Label htmlFor="rentalTerms">Rental Terms & Conditions</Label>
                   <Textarea id="rentalTerms" name="rentalTerms" value={formData.rentalTerms || ""} onChange={handleChange} rows={6} />
                 </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          {/* ── PAYMENTS ── */}
+          <TabsContent value="payments" className="space-y-6 pt-6">
+            <Card>
+              <CardHeader>
+                <CardTitle>Stripe Connect — Receive Payouts</CardTitle>
+                <CardDescription>
+                  Connect your Stripe account so customers can pay you directly. We collect a small platform fee on each transaction.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-5">
+                {!connectStatus ? (
+                  <div className="flex items-center gap-2 text-muted-foreground text-sm py-4">
+                    <RefreshCw className="w-4 h-4 animate-spin" />
+                    Checking connection status…
+                  </div>
+                ) : connectStatus.connected && connectStatus.chargesEnabled ? (
+                  <div className="space-y-4">
+                    <div className="flex items-start gap-3 bg-green-50 border border-green-200 rounded-xl p-4">
+                      <CheckCircle2 className="w-5 h-5 text-green-600 mt-0.5 shrink-0" />
+                      <div>
+                        <p className="font-semibold text-green-800">Stripe Connected</p>
+                        {connectStatus.email && <p className="text-sm text-green-700">{connectStatus.email}</p>}
+                        <div className="flex gap-3 mt-2 text-xs text-green-700">
+                          <span>Charges: {connectStatus.chargesEnabled ? "✓ Enabled" : "✗ Disabled"}</span>
+                          <span>Payouts: {connectStatus.payoutsEnabled ? "✓ Enabled" : "✗ Disabled"}</span>
+                        </div>
+                      </div>
+                    </div>
+                    <Button variant="outline" size="sm" onClick={handleConnectOnboard} disabled={onboardLoading}>
+                      {onboardLoading ? <><RefreshCw className="w-3.5 h-3.5 mr-2 animate-spin" />Loading…</> : "Update Stripe Account"}
+                    </Button>
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    <div className="flex items-start gap-3 bg-amber-50 border border-amber-200 rounded-xl p-4">
+                      <Upload className="w-5 h-5 text-amber-600 mt-0.5 shrink-0" />
+                      <div>
+                        <p className="font-semibold text-amber-800">Stripe account not connected</p>
+                        <p className="text-sm text-amber-700 mt-1">
+                          Connect your Stripe account to start accepting payments from renters. You'll be redirected to Stripe to complete setup.
+                        </p>
+                      </div>
+                    </div>
+                    <Button onClick={handleConnectOnboard} disabled={onboardLoading} className="gap-2">
+                      {onboardLoading ? <><RefreshCw className="w-4 h-4 animate-spin" />Redirecting…</> : "Connect with Stripe"}
+                    </Button>
+                    <p className="text-xs text-muted-foreground">
+                      You'll be redirected to Stripe to securely set up your payout account. This is required before you can accept bookings.
+                    </p>
+                  </div>
+                )}
               </CardContent>
             </Card>
           </TabsContent>

@@ -15,9 +15,13 @@ import { useToast } from "@/hooks/use-toast";
 import { 
   ArrowLeft, ArrowRight, CheckCircle2, Calendar as CalendarIcon,
   Lock, User, CreditCard, FileText, Eye, EyeOff, ShieldCheck,
-  Zap, AlertTriangle, Umbrella, Star
+  Zap, AlertTriangle, Umbrella, Star, Loader2, BadgeCheck
 } from "lucide-react";
 import { differenceInDays, format, addDays } from "date-fns";
+import { loadStripe } from "@stripe/stripe-js";
+import { Elements, PaymentElement, useStripe, useElements } from "@stripe/react-stripe-js";
+
+const stripePromise = loadStripe(import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY ?? "");
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
@@ -57,25 +61,6 @@ function saveSession(c: CustomerSession) {
   localStorage.setItem("rental_customer", JSON.stringify(c));
 }
 
-function getCardBrand(num: string): string {
-  const n = num.replace(/\s/g, "");
-  if (/^4/.test(n)) return "Visa";
-  if (/^5[1-5]/.test(n)) return "Mastercard";
-  if (/^3[47]/.test(n)) return "Amex";
-  if (/^6(?:011|5)/.test(n)) return "Discover";
-  return "Card";
-}
-
-function formatCardNumber(value: string): string {
-  const digits = value.replace(/\D/g, "").slice(0, 16);
-  return digits.replace(/(\d{4})(?=\d)/g, "$1 ");
-}
-
-function formatExpiry(value: string): string {
-  const digits = value.replace(/\D/g, "").slice(0, 4);
-  if (digits.length >= 3) return `${digits.slice(0, 2)}/${digits.slice(2)}`;
-  return digits;
-}
 
 const STEP_LABELS: Record<Step, string> = {
   dates: "Dates & Info",
@@ -84,6 +69,64 @@ const STEP_LABELS: Record<Step, string> = {
   confirmation: "Confirmed",
 };
 const STEPS: Step[] = ["dates", "payment", "agreement", "confirmation"];
+
+// ── Stripe Payment Form (uses Stripe Elements context) ────────────────────────
+function StripePaymentForm({ onSuccess, customerEmail }: { onSuccess: () => void; customerEmail: string }) {
+  const stripe = useStripe();
+  const elements = useElements();
+  const [paying, setPaying] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const { toast } = useToast();
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!stripe || !elements) return;
+    setPaying(true);
+    setError(null);
+    try {
+      const { error: submitErr } = await elements.submit();
+      if (submitErr) { setError(submitErr.message ?? "Please check your card details"); setPaying(false); return; }
+
+      const { error: confirmErr } = await stripe.confirmPayment({
+        elements,
+        confirmParams: { receipt_email: customerEmail },
+        redirect: "if_required",
+      });
+
+      if (confirmErr) {
+        setError(confirmErr.message ?? "Payment failed");
+        setPaying(false);
+      } else {
+        toast({ title: "Payment successful!" });
+        onSuccess();
+      }
+    } catch {
+      setError("Payment failed. Please try again.");
+      setPaying(false);
+    }
+  };
+
+  return (
+    <form onSubmit={handleSubmit} className="space-y-5">
+      <div className="bg-background rounded-2xl border shadow-sm p-6">
+        <h2 className="font-semibold flex items-center gap-2 mb-4">
+          <CreditCard className="w-4 h-4 text-primary" />
+          Card Details
+        </h2>
+        <PaymentElement options={{ layout: "tabs" }} />
+      </div>
+      {error && (
+        <div className="flex items-center gap-2 text-destructive text-sm bg-destructive/10 rounded-lg px-4 py-3">
+          <AlertTriangle className="w-4 h-4 shrink-0" />
+          {error}
+        </div>
+      )}
+      <Button type="submit" size="lg" className="w-full h-13 text-base font-bold rounded-xl" disabled={paying || !stripe}>
+        {paying ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Processing…</> : <><ShieldCheck className="w-4 h-4 mr-2" />Pay & Continue</>}
+      </Button>
+    </form>
+  );
+}
 
 export default function StorefrontBook() {
   const { slug } = useParams<{ slug: string }>();
@@ -122,15 +165,10 @@ export default function StorefrontBook() {
   const [showLoginPanel, setShowLoginPanel] = useState(false);
   const [authError, setAuthError] = useState("");
 
-  // Step 2: payment
-  const [cardNumber, setCardNumber] = useState("");
-  const [cardExpiry, setCardExpiry] = useState("");
-  const [cardCvc, setCardCvc] = useState("");
-  const [billingName, setBillingName] = useState(session?.name ?? "");
-  const [billingAddress, setBillingAddress] = useState(session?.billingAddress ?? "");
-  const [billingCity, setBillingCity] = useState(session?.billingCity ?? "");
-  const [billingState, setBillingState] = useState(session?.billingState ?? "");
-  const [billingZip, setBillingZip] = useState(session?.billingZip ?? "");
+  // Step 2: payment — Stripe
+  const [clientSecret, setClientSecret] = useState<string | null>(null);
+  const [paymentIntentId, setPaymentIntentId] = useState<string | null>(null);
+  const [paymentConfirmed, setPaymentConfirmed] = useState(false);
 
   // Step 3: agreement
   const [agreeChecked, setAgreeChecked] = useState(false);
@@ -202,15 +240,6 @@ export default function StorefrontBook() {
       setName(session.name);
       setEmail(session.email);
       setPhone(session.phone ?? "");
-      setBillingName(session.name);
-      setBillingAddress(session.billingAddress ?? "");
-      setBillingCity(session.billingCity ?? "");
-      setBillingState(session.billingState ?? "");
-      setBillingZip(session.billingZip ?? "");
-      if (session.cardLastFour) {
-        setCardNumber(`•••• •••• •••• ${session.cardLastFour}`);
-        setCardExpiry("••/••");
-      }
     }
   }, [session]);
 
@@ -288,7 +317,12 @@ export default function StorefrontBook() {
       toast({ title: "Please fill in your name, email, and phone", variant: "destructive" }); return;
     }
     // Already logged in — go straight to payment
-    if (session) { setStep("payment"); return; }
+    if (session) {
+      const cents = Math.round(total * 100);
+      setStep("payment");
+      createPaymentIntent(cents);
+      return;
+    }
 
     // Register new account
     if (password.length < 6) { setAuthError("Password must be at least 6 characters"); return; }
@@ -302,35 +336,42 @@ export default function StorefrontBook() {
       });
       const data = await res.json();
       if (!res.ok) { setAuthError(data.error || "Registration failed"); return; }
-      saveSession(data); setSession(data); setStep("payment");
+      saveSession(data); setSession(data);
+      const cents = Math.round(total * 100);
+      setStep("payment");
+      createPaymentIntent(cents);
     } catch {
       setAuthError("Connection error, please try again");
     } finally { setIsSubmitting(false); }
   };
 
-  const handlePaymentNext = async () => {
-    const isSavedCard = cardNumber.startsWith("••••");
-    const rawCard = cardNumber.replace(/\s/g, "");
-    if (!isSavedCard && (rawCard.length < 15 || !cardExpiry || cardCvc.length < 3)) {
-      toast({ title: "Please complete payment details", variant: "destructive" }); return;
+  // Create Stripe payment intent when entering the payment step
+  const createPaymentIntent = useCallback(async (totalCents: number) => {
+    if (!slug) return;
+    try {
+      const res = await fetch(`${BASE}/api/stripe/payment-intent`, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          tenantSlug: slug,
+          amountCents: totalCents,
+          customerEmail: email,
+          customerName: name,
+          bookingMeta: { listing_id: String(listingId) },
+        }),
+      });
+      if (!res.ok) { toast({ title: "Unable to initialize payment", variant: "destructive" }); return; }
+      const data = await res.json();
+      setClientSecret(data.clientSecret);
+      setPaymentIntentId(data.paymentIntentId);
+    } catch {
+      toast({ title: "Payment setup failed", variant: "destructive" });
     }
-    if (!billingAddress || !billingCity || !billingState || !billingZip) {
-      toast({ title: "Please fill in billing address", variant: "destructive" }); return;
-    }
+  }, [slug, email, name, listingId, toast]);
 
-    if (session && !isSavedCard) {
-      const lastFour = rawCard.slice(-4);
-      const brand = getCardBrand(rawCard);
-      try {
-        const res = await fetch(`${BASE}/api/customers/${session.id}`, {
-          method: "PUT", headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ billingAddress, billingCity, billingState, billingZip, cardLastFour: lastFour, cardBrand: brand })
-        });
-        if (res.ok) {
-          const updated = await res.json();
-          saveSession(updated); setSession(updated);
-        }
-      } catch { /* non-critical */ }
+  const handlePaymentNext = () => {
+    if (!paymentConfirmed) {
+      toast({ title: "Please complete your payment before continuing", variant: "destructive" });
+      return;
     }
     setStep("agreement");
   };
@@ -374,6 +415,7 @@ export default function StorefrontBook() {
           agreementSignerName: name.trim(),
           agreementText: agreementText || undefined,
           agreementSignatureDataUrl: signatureDataUrl,
+          stripePaymentIntentId: paymentIntentId || undefined,
         })
       });
       const data = await res.json();
@@ -632,12 +674,6 @@ export default function StorefrontBook() {
                             if (!res.ok) { setAuthError(data.error || "Login failed"); return; }
                             saveSession(data); setSession(data);
                             setName(data.name); setPhone(data.phone ?? "");
-                            setBillingName(data.name);
-                            setBillingAddress(data.billingAddress ?? "");
-                            setBillingCity(data.billingCity ?? "");
-                            setBillingState(data.billingState ?? "");
-                            setBillingZip(data.billingZip ?? "");
-                            if (data.cardLastFour) { setCardNumber(`•••• •••• •••• ${data.cardLastFour}`); setCardExpiry("••/••"); }
                             setShowLoginPanel(false);
                             setPassword("");
                           } catch { setAuthError("Connection error, please try again"); }
@@ -731,86 +767,41 @@ export default function StorefrontBook() {
             {/* ── STEP 2: PAYMENT ── */}
             {step === "payment" && (
               <div className="space-y-6">
-                <h1 className="text-2xl font-bold">Payment Information</h1>
+                <h1 className="text-2xl font-bold">Payment</h1>
 
-                {session?.cardLastFour && (
-                  <div className="bg-primary/5 border border-primary/20 rounded-xl p-4 flex items-center gap-3">
-                    <CreditCard className="w-5 h-5 text-primary shrink-0" />
+                {!clientSecret ? (
+                  <div className="flex items-center justify-center py-16 gap-3 text-muted-foreground">
+                    <Loader2 className="w-5 h-5 animate-spin" />
+                    <span>Preparing payment…</span>
+                  </div>
+                ) : paymentConfirmed ? (
+                  <div className="bg-green-50 border border-green-200 rounded-xl p-5 flex items-center gap-3">
+                    <BadgeCheck className="w-6 h-6 text-green-600 shrink-0" />
                     <div>
-                      <p className="font-semibold text-sm">Saved card ending in {session.cardLastFour}</p>
-                      <p className="text-xs text-muted-foreground">{session.cardBrand}</p>
+                      <p className="font-semibold text-green-800">Payment authorized</p>
+                      <p className="text-sm text-green-700">Your card has been charged. Continue to sign the agreement.</p>
                     </div>
-                    <button onClick={() => { setCardNumber(""); setCardExpiry(""); setCardCvc(""); }} className="ml-auto text-xs text-primary underline">Use a different card</button>
                   </div>
-                )}
-
-                <div className="bg-background rounded-2xl border shadow-sm p-6 space-y-5">
-                  <h2 className="font-semibold flex items-center gap-2">
-                    <CreditCard className="w-4 h-4 text-primary" />
-                    Card Details
-                  </h2>
-
-                  <div className="space-y-1.5">
-                    <Label>Card Number</Label>
-                    <Input
-                      value={cardNumber}
-                      onChange={e => setCardNumber(formatCardNumber(e.target.value))}
-                      placeholder="1234 5678 9012 3456"
-                      className="h-11 font-mono tracking-wider"
-                      maxLength={19}
+                ) : (
+                  <Elements stripe={stripePromise} options={{ clientSecret, appearance: { theme: "stripe" } }}>
+                    <StripePaymentForm
+                      onSuccess={() => setPaymentConfirmed(true)}
+                      customerEmail={email}
                     />
-                  </div>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-1.5">
-                      <Label>Expiry Date</Label>
-                      <Input value={cardExpiry} onChange={e => setCardExpiry(formatExpiry(e.target.value))} placeholder="MM/YY" className="h-11" maxLength={5} />
-                    </div>
-                    <div className="space-y-1.5">
-                      <Label>CVC</Label>
-                      <Input value={cardCvc} onChange={e => setCardCvc(e.target.value.replace(/\D/g, "").slice(0, 4))} placeholder="123" className="h-11" />
-                    </div>
-                  </div>
-                </div>
-
-                <div className="bg-background rounded-2xl border shadow-sm p-6 space-y-5">
-                  <h2 className="font-semibold flex items-center gap-2">
-                    <User className="w-4 h-4 text-primary" />
-                    Billing Address
-                  </h2>
-
-                  <div className="space-y-1.5">
-                    <Label>Name on Card</Label>
-                    <Input value={billingName} onChange={e => setBillingName(e.target.value)} className="h-11" />
-                  </div>
-                  <div className="space-y-1.5">
-                    <Label>Street Address</Label>
-                    <Input value={billingAddress} onChange={e => setBillingAddress(e.target.value)} className="h-11" />
-                  </div>
-                  <div className="grid grid-cols-3 gap-3">
-                    <div className="col-span-1 space-y-1.5">
-                      <Label>City</Label>
-                      <Input value={billingCity} onChange={e => setBillingCity(e.target.value)} className="h-11" />
-                    </div>
-                    <div className="space-y-1.5">
-                      <Label>State</Label>
-                      <Input value={billingState} onChange={e => setBillingState(e.target.value)} className="h-11" maxLength={2} placeholder="CA" />
-                    </div>
-                    <div className="space-y-1.5">
-                      <Label>ZIP</Label>
-                      <Input value={billingZip} onChange={e => setBillingZip(e.target.value.replace(/\D/g, "").slice(0, 5))} className="h-11" />
-                    </div>
-                  </div>
-                </div>
+                  </Elements>
+                )}
 
                 <p className="text-xs text-muted-foreground flex items-center gap-1.5">
                   <Lock className="w-3.5 h-3.5" />
-                  Your payment info is saved securely to your account for future bookings. No charge is made until your booking is confirmed.
+                  Payments are processed securely by Stripe. Your card details are never stored on our servers.
                 </p>
 
-                <Button size="lg" className="w-full h-13 text-base font-bold rounded-xl" onClick={handlePaymentNext}>
-                  Continue to Agreement
-                  <ArrowRight className="w-4 h-4 ml-2" />
-                </Button>
+                {paymentConfirmed && (
+                  <Button size="lg" className="w-full h-13 text-base font-bold rounded-xl" onClick={handlePaymentNext}>
+                    Continue to Agreement
+                    <ArrowRight className="w-4 h-4 ml-2" />
+                  </Button>
+                )}
               </div>
             )}
 

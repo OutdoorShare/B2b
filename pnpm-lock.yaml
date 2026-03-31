@@ -208,6 +208,9 @@ importers:
       pino-http:
         specifier: ^10
         version: 10.5.0
+      stripe:
+        specifier: ^21.0.1
+        version: 21.0.1(@types/node@25.3.5)
     devDependencies:
       '@types/cookie-parser':
         specifier: ^1.4.10
@@ -419,6 +422,12 @@ importers:
 
   artifacts/rental-platform:
     dependencies:
+      '@stripe/react-stripe-js':
+        specifier: ^6.0.0
+        version: 6.0.0(@stripe/stripe-js@9.0.0)(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
+      '@stripe/stripe-js':
+        specifier: ^9.0.0
+        version: 9.0.0
       qrcode.react:
         specifier: ^4.2.0
         version: 4.2.0(react@19.1.0)
@@ -1590,6 +1599,17 @@ packages:
   '@sindresorhus/merge-streams@4.0.0':
     resolution: {integrity: sha512-tlqY9xq5ukxTUZBmoOp+m61cqwQD5pHJtFY3Mn8CA8ps6yghLH/Hw8UPdqg4OLmFW3IFlcXnQNmo/dh8HzXYIQ==}
     engines: {node: '>=18'}
+
+  '@stripe/react-stripe-js@6.0.0':
+    resolution: {integrity: sha512-vJW37/uyRAJEkD3YKCh3aISmMIMrQGR3ViVBkUVQDB7CqbRCnOUyhwDe8zKg+d6K8V4d0MUcthcQdHL4meqG7A==}
+    peerDependencies:
+      '@stripe/stripe-js': '>=9.0.0 <10.0.0'
+      react: '>=16.8.0 <20.0.0'
+      react-dom: '>=16.8.0 <20.0.0'
+
+  '@stripe/stripe-js@9.0.0':
+    resolution: {integrity: sha512-UtUK7LFglQSNVIOwcRBaxfzq4wkfU8CT2f2uQVEeu65jTP6wicxFshYdYCke9Tfd0PCxhOe/b8rwJjr5EiDCfQ==}
+    engines: {node: '>=12.16'}
 
   '@swc/helpers@0.5.20':
     resolution: {integrity: sha512-2egEBHUMasdypIzrprsu8g+OEVd7Vp2MM3a2eVlM/cyFYto0nGz5BX5BTgh/ShZZI9ed+ozEq+Ngt+rgmUs8tw==}
@@ -3133,6 +3153,15 @@ packages:
     resolution: {integrity: sha512-1tB5mhVo7U+ETBKNf92xT4hrQa3pm0MZ0PQvuDnWgAAGHDsfp4lPSpiS6psrSiet87wyGPh9ft6wmhOMQ0hDiw==}
     engines: {node: '>=14.16'}
 
+  stripe@21.0.1:
+    resolution: {integrity: sha512-ocv0j7dWttswDWV2XL/kb6+yiLpDXNXL3RQAOB5OB2kr49z0cEatdQc12+zP/j5nrXk6rAsT4N3y/NUvBbK7Pw==}
+    engines: {node: '>=18'}
+    peerDependencies:
+      '@types/node': '>=18'
+    peerDependenciesMeta:
+      '@types/node':
+        optional: true
+
   tailwind-merge@3.5.0:
     resolution: {integrity: sha512-I8K9wewnVDkL1NTGoqWmVEIlUcB9gFriAEkXkfCjX5ib8ezGxtR3xD7iZIxrfArjEsH7F1CHD4RFUtxefdqV/A==}
 
@@ -4468,6 +4497,15 @@ snapshots:
   '@shikijs/vscode-textmate@10.0.2': {}
 
   '@sindresorhus/merge-streams@4.0.0': {}
+
+  '@stripe/react-stripe-js@6.0.0(@stripe/stripe-js@9.0.0)(react-dom@19.1.0(react@19.1.0))(react@19.1.0)':
+    dependencies:
+      '@stripe/stripe-js': 9.0.0
+      prop-types: 15.8.1
+      react: 19.1.0
+      react-dom: 19.1.0(react@19.1.0)
+
+  '@stripe/stripe-js@9.0.0': {}
 
   '@swc/helpers@0.5.20':
     dependencies:
@@ -5961,6 +5999,10 @@ snapshots:
   strip-final-newline@4.0.0: {}
 
   strip-json-comments@5.0.3: {}
+
+  stripe@21.0.1(@types/node@25.3.5):
+    optionalDependencies:
+      '@types/node': 25.3.5
 
   tailwind-merge@3.5.0: {}
 

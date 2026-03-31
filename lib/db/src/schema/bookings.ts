@@ -1,4 +1,4 @@
-import { pgTable, serial, text, integer, decimal, timestamp } from "drizzle-orm/pg-core";
+import { pgTable, serial, text, integer, decimal, timestamp, boolean } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 
@@ -25,6 +25,9 @@ export const bookingsTable = pgTable("bookings", {
   agreementText: text("agreement_text"),
   agreementSignature: text("agreement_signature"),
   agreementPdfPath: text("agreement_pdf_path"),
+  stripePaymentIntentId: text("stripe_payment_intent_id"),
+  stripePaymentStatus: text("stripe_payment_status"),
+  stripePlatformFee: decimal("stripe_platform_fee", { precision: 10, scale: 2 }),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
