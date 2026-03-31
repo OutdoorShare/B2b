@@ -51,6 +51,7 @@ import SuperAdminListings from "@/pages/superadmin/listings";
 import CompanyDetailPage from "@/pages/superadmin/company-detail";
 import SuperAdminAgreement from "@/pages/superadmin/agreement";
 import SuperAdminClaims from "@/pages/superadmin/claims";
+import DemoSitePage from "@/pages/superadmin/demo-site";
 
 const queryClient = new QueryClient();
 
@@ -139,6 +140,9 @@ function Router() {
       </Route>
       <Route path="/superadmin/claims">
         <SuperAdminLayout><SuperAdminClaims /></SuperAdminLayout>
+      </Route>
+      <Route path="/superadmin/demo">
+        <SuperAdminLayout><DemoSitePage /></SuperAdminLayout>
       </Route>
 
       {/* Tenant Admin Routes — scoped to /:slug/admin/* */}
