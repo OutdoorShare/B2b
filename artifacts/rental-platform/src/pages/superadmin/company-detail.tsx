@@ -570,7 +570,10 @@ export default function CompanyDetailPage() {
             <span className="flex items-center gap-1"><CalendarDays className="w-3.5 h-3.5" />{tenant.bookingCount} bookings</span>
           </div>
           <Button size="sm" variant="outline" asChild className="border-slate-700 text-slate-300 hover:bg-slate-800 gap-1.5">
-            <a href="/admin" target="_blank" rel="noopener noreferrer"><ExternalLink className="w-3.5 h-3.5" />Open Admin</a>
+            <a href={`/${tenant.slug}`} target="_blank" rel="noopener noreferrer"><ExternalLink className="w-3.5 h-3.5" />View Storefront</a>
+          </Button>
+          <Button size="sm" variant="outline" asChild className="border-slate-700 text-slate-300 hover:bg-slate-800 gap-1.5">
+            <a href={`/${tenant.slug}/admin`} target="_blank" rel="noopener noreferrer"><ExternalLink className="w-3.5 h-3.5" />Open Admin</a>
           </Button>
         </div>
       </div>
