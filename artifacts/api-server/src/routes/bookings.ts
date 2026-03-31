@@ -246,6 +246,7 @@ router.post("/bookings", async (req, res) => {
             startDate: created.startDate,
             endDate: created.endDate,
             companyName,
+            tenantSlug,
             adminEmail,
           });
           if (adminEmail && tenantSlug) {

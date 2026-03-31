@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { useLocation, useParams, Link } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
@@ -7,7 +7,7 @@ import {
   Clock, CheckCircle2, XCircle, AlertCircle, FileSignature,
   StickyNote, ShieldCheck, MessageSquare, CreditCard,
   MapPin, Monitor, Smartphone, Phone as PhoneIcon, Users,
-  Receipt, Tag
+  Receipt, Tag, Camera, ImagePlus, Upload, X as XIcon, Loader2
 } from "lucide-react";
 import { format, differenceInDays } from "date-fns";
 
@@ -83,6 +83,14 @@ export default function MyBookingDetail() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState("");
 
+  // Pickup photo upload state
+  const [staged, setStaged] = useState<File[]>([]);
+  const [previews, setPreviews] = useState<string[]>([]);
+  const [uploading, setUploading] = useState(false);
+  const [photoDone, setPhotoDone] = useState(false);
+  const [savedPhotos, setSavedPhotos] = useState<string[]>([]);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
   useEffect(() => {
     const s = loadSession();
     if (!s) {
@@ -103,10 +111,50 @@ export default function MyBookingDetail() {
           return;
         }
         setBooking(data);
+        // Initialize photo state from existing booking data
+        if (Array.isArray(data.pickupPhotos) && data.pickupPhotos.length > 0) {
+          setSavedPhotos(data.pickupPhotos);
+          setPhotoDone(true);
+        }
       })
       .catch(() => setError("Failed to load booking."))
       .finally(() => setIsLoading(false));
   }, [id]);
+
+  const addFiles = useCallback((files: FileList | null) => {
+    if (!files) return;
+    const valid = Array.from(files).filter(f => f.type.startsWith("image/"));
+    if (!valid.length) return;
+    setStaged(prev => [...prev, ...valid]);
+    valid.forEach(f => {
+      const reader = new FileReader();
+      reader.onload = e => setPreviews(prev => [...prev, e.target?.result as string]);
+      reader.readAsDataURL(f);
+    });
+  }, []);
+
+  const removeStaged = (i: number) => {
+    setStaged(prev => prev.filter((_, idx) => idx !== i));
+    setPreviews(prev => prev.filter((_, idx) => idx !== i));
+  };
+
+  const submitPhotos = async () => {
+    if (staged.length === 0 || !id) return;
+    setUploading(true);
+    try {
+      const fd = new FormData();
+      staged.forEach(f => fd.append("photos", f));
+      const r = await fetch(`${BASE}/api/bookings/${id}/before-photos`, { method: "POST", body: fd });
+      const data = await r.json();
+      if (!r.ok || data.error) return;
+      setSavedPhotos(data.photos ?? []);
+      setPhotoDone(true);
+      setStaged([]);
+      setPreviews([]);
+    } finally {
+      setUploading(false);
+    }
+  };
 
   if (!session) return null;
 
@@ -194,6 +242,107 @@ export default function MyBookingDetail() {
         <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-800 flex items-start gap-2">
           <XCircle className="w-4 h-4 mt-0.5 shrink-0 text-red-500" />
           <span>This booking has been cancelled. Contact the rental company if you have questions.</span>
+        </div>
+      )}
+
+      {/* ── Pickup Photos Section (confirmed + active bookings) ── */}
+      {["confirmed", "active"].includes(booking.status) && (
+        <div className={`rounded-2xl border overflow-hidden ${photoDone ? "border-green-200" : "border-primary/30"}`}>
+          {/* Header */}
+          <div className={`px-5 py-4 border-b flex items-center gap-3 ${photoDone ? "bg-green-50" : "bg-primary/5"}`}>
+            <div className={`w-9 h-9 rounded-full flex items-center justify-center shrink-0 ${photoDone ? "bg-green-100" : "bg-primary/10"}`}>
+              <Camera className={`w-5 h-5 ${photoDone ? "text-green-600" : "text-primary"}`} />
+            </div>
+            <div className="flex-1">
+              <p className={`font-semibold text-sm ${photoDone ? "text-green-800" : "text-foreground"}`}>
+                {photoDone ? "Pickup Photos Submitted" : "Upload Pickup Photos"}
+              </p>
+              <p className={`text-xs mt-0.5 ${photoDone ? "text-green-600" : "text-muted-foreground"}`}>
+                {photoDone
+                  ? `${savedPhotos.length} photo${savedPhotos.length !== 1 ? "s" : ""} saved — you're all set for pickup!`
+                  : "Document the equipment condition before you leave to protect yourself from damage claims."}
+              </p>
+            </div>
+            {photoDone && <CheckCircle2 className="w-5 h-5 text-green-600 shrink-0" />}
+          </div>
+
+          <div className="p-5 space-y-4">
+            {photoDone ? (
+              /* Submitted photos grid */
+              savedPhotos.length > 0 ? (
+                <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
+                  {savedPhotos.map((url, i) => (
+                    <div key={i} className="aspect-square rounded-xl overflow-hidden bg-muted">
+                      <img src={url} alt={`Pickup photo ${i + 1}`} className="w-full h-full object-cover" />
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-sm text-muted-foreground text-center py-2">Photos saved to your booking.</p>
+              )
+            ) : (
+              <>
+                {/* Drop zone */}
+                <div
+                  className="rounded-xl border-2 border-dashed border-muted-foreground/25 hover:border-primary/50 hover:bg-primary/5 transition-colors p-6 text-center cursor-pointer"
+                  onDragOver={e => e.preventDefault()}
+                  onDrop={e => { e.preventDefault(); addFiles(e.dataTransfer.files); }}
+                  onClick={() => fileInputRef.current?.click()}
+                >
+                  <ImagePlus className="w-8 h-8 mx-auto mb-2 text-muted-foreground/40" />
+                  <p className="text-sm font-medium text-muted-foreground">Tap to add photos</p>
+                  <p className="text-xs text-muted-foreground/60 mt-0.5">All sides, existing scratches, serial numbers</p>
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="image/*"
+                    multiple
+                    className="hidden"
+                    onChange={e => addFiles(e.target.files)}
+                    capture="environment"
+                  />
+                </div>
+
+                {/* Staged preview grid */}
+                {previews.length > 0 && (
+                  <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
+                    {previews.map((src, i) => (
+                      <div key={i} className="relative aspect-square rounded-xl overflow-hidden bg-muted group">
+                        <img src={src} alt={`Preview ${i + 1}`} className="w-full h-full object-cover" />
+                        <button
+                          onClick={e => { e.stopPropagation(); removeStaged(i); }}
+                          className="absolute top-1 right-1 bg-black/60 rounded-full p-0.5 opacity-0 group-hover:opacity-100 transition-opacity"
+                        >
+                          <XIcon className="w-3 h-3 text-white" />
+                        </button>
+                      </div>
+                    ))}
+                    <button
+                      onClick={() => fileInputRef.current?.click()}
+                      className="aspect-square rounded-xl border-2 border-dashed border-muted-foreground/25 flex items-center justify-center hover:border-primary/50 transition-colors"
+                    >
+                      <ImagePlus className="w-5 h-5 text-muted-foreground/40" />
+                    </button>
+                  </div>
+                )}
+
+                <Button
+                  onClick={submitPhotos}
+                  disabled={staged.length === 0 || uploading}
+                  className="w-full gap-2"
+                >
+                  {uploading ? (
+                    <><Loader2 className="w-4 h-4 animate-spin" />Uploading…</>
+                  ) : (
+                    <><Upload className="w-4 h-4" />Submit {staged.length > 0 ? `${staged.length} Photo${staged.length !== 1 ? "s" : ""}` : "Photos"}</>
+                  )}
+                </Button>
+                {staged.length === 0 && (
+                  <p className="text-xs text-center text-muted-foreground">Add at least one photo to submit</p>
+                )}
+              </>
+            )}
+          </div>
         </div>
       )}
 

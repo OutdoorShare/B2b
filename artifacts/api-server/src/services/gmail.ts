@@ -570,10 +570,12 @@ export async function sendBookingPickupReminderEmail(opts: {
   startDate: string;
   endDate: string;
   companyName: string;
+  tenantSlug?: string;
   adminEmail?: string;
 }): Promise<void> {
-  const { customerName, customerEmail, bookingId, listingTitle, startDate, endDate, companyName, adminEmail } = opts;
+  const { customerName, customerEmail, bookingId, listingTitle, startDate, endDate, companyName, tenantSlug, adminEmail } = opts;
   const fromHeader = `${companyName} <contact.us@myoutdoorshare.com>`;
+  const bookingUrl = tenantSlug ? `${APP_URL}/${tenantSlug}/my-bookings/${bookingId}` : null;
 
   const body = `
     <p style="margin:0 0 8px;font-size:18px;font-weight:700;color:${BRAND_DARK};">Your booking is confirmed, ${customerName}!</p>
@@ -602,6 +604,15 @@ export async function sendBookingPickupReminderEmail(opts: {
         <li>1 Interior</li>
       </ul>
     </div>
+
+    ${bookingUrl ? `
+    <div style="text-align:center;margin:28px 0;">
+      <a href="${bookingUrl}" style="display:inline-block;background:#1a9c3c;color:#ffffff;font-size:15px;font-weight:700;text-decoration:none;padding:14px 32px;border-radius:10px;">
+        View Your Booking &amp; Start Pickup →
+      </a>
+      <p style="margin:10px 0 0;font-size:12px;color:#9ca3af;">You'll be asked to log in to your account first.</p>
+    </div>
+    ` : ""}
 
     <p style="margin:0;font-size:13px;color:#9ca3af;text-align:center;">
       Questions? Reply to this email and <strong>${companyName}</strong> will get back to you.
