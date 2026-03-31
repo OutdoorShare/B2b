@@ -348,8 +348,8 @@ export default function MyBookingDetail() {
         );
       })()}
 
-      {/* ── Pickup Photos Section (confirmed + active bookings) ── */}
-      {["confirmed", "active"].includes(booking.status) && (
+      {/* ── Pickup Photos Section (pending + confirmed + active bookings) ── */}
+      {["pending", "confirmed", "active"].includes(booking.status) && (
         <div className={`rounded-2xl border overflow-hidden ${photoDone ? "border-green-200" : "border-primary/30"}`}>
           {/* Header */}
           <div className={`px-5 py-4 border-b flex items-center gap-3 ${photoDone ? "bg-green-50" : "bg-primary/5"}`}>
