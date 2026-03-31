@@ -14,6 +14,7 @@ import StorefrontHome from "@/pages/storefront/home";
 import StorefrontGearDetail from "@/pages/storefront/gear-detail";
 import StorefrontBook from "@/pages/storefront/book";
 import StorefrontLogin from "@/pages/storefront/login";
+import StorefrontSetPassword from "@/pages/storefront/set-password";
 import StorefrontMyBookings from "@/pages/storefront/my-bookings";
 import StorefrontMyBookingDetail from "@/pages/storefront/my-booking-detail";
 import PickupPage from "@/pages/storefront/pickup";
@@ -240,6 +241,9 @@ function Router() {
       </Route>
       <Route path="/:slug/login">
         <StorefrontLayout><StorefrontLogin /></StorefrontLayout>
+      </Route>
+      <Route path="/:slug/set-password">
+        <StorefrontLayout><StorefrontSetPassword /></StorefrontLayout>
       </Route>
       <Route path="/:slug/my-bookings/:id">
         <StorefrontLayout><StorefrontMyBookingDetail /></StorefrontLayout>

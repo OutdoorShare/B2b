@@ -1,9 +1,10 @@
 import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
-import { customersTable } from "@workspace/db/schema";
-import { eq, and } from "drizzle-orm";
+import { customersTable, bookingsTable, tenantsTable } from "@workspace/db/schema";
+import { eq, and, desc } from "drizzle-orm";
 import { scrypt, randomBytes, timingSafeEqual } from "crypto";
 import { promisify } from "util";
+import { sendCredentialsEmail } from "../services/gmail";
 
 const scryptAsync = promisify(scrypt);
 const router: IRouter = Router();
@@ -65,6 +66,78 @@ router.post("/customers/register", async (req, res) => {
   } catch (err) {
     req.log.error(err);
     res.status(500).json({ error: "Failed to register" });
+  }
+});
+
+// ── Set password for an existing (passwordless) customer or create from booking ─
+router.post("/customers/set-password", async (req, res) => {
+  try {
+    const { email, password, tenantSlug: rawSlug } = req.body;
+    if (!email || !password || !rawSlug) {
+      res.status(400).json({ error: "email, password and tenantSlug are required" });
+      return;
+    }
+    if (password.length < 6) {
+      res.status(400).json({ error: "Password must be at least 6 characters" });
+      return;
+    }
+
+    const tenantSlug = rawSlug.trim().toLowerCase();
+    const normalEmail = email.toLowerCase().trim();
+
+    // Check for existing customer record
+    const [existing] = await db
+      .select()
+      .from(customersTable)
+      .where(and(eq(customersTable.email, normalEmail), eq(customersTable.tenantSlug, tenantSlug)));
+
+    if (existing) {
+      res.status(409).json({ error: "An account already exists for this email. Please sign in." });
+      return;
+    }
+
+    // Resolve tenant so we can scope the booking lookup
+    const [tenant] = await db.select().from(tenantsTable).where(eq(tenantsTable.slug, tenantSlug));
+    if (!tenant) {
+      res.status(404).json({ error: "Tenant not found" });
+      return;
+    }
+
+    // Look up name/phone from the most recent booking for this customer
+    const [booking] = await db
+      .select({ customerName: bookingsTable.customerName, customerPhone: bookingsTable.customerPhone })
+      .from(bookingsTable)
+      .where(and(eq(bookingsTable.customerEmail, normalEmail), eq(bookingsTable.tenantId, tenant.id)))
+      .orderBy(desc(bookingsTable.id))
+      .limit(1);
+
+    const name = booking?.customerName ?? normalEmail.split("@")[0];
+    const phone = booking?.customerPhone ?? null;
+
+    const passwordHash = await hashPassword(password);
+    const [customer] = await db
+      .insert(customersTable)
+      .values({ email: normalEmail, passwordHash, name, phone: phone ?? undefined, tenantSlug })
+      .returning();
+
+    // Send credentials email in background
+    (async () => {
+      try {
+        await sendCredentialsEmail({
+          customerName: name,
+          customerEmail: normalEmail,
+          tenantSlug,
+          password,
+        });
+      } catch (emailErr) {
+        console.warn("Failed to send credentials email", emailErr);
+      }
+    })();
+
+    res.status(201).json(safeCustomer(customer));
+  } catch (err) {
+    req.log.error(err);
+    res.status(500).json({ error: "Failed to set password" });
   }
 });
 

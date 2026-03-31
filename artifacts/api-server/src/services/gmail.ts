@@ -398,6 +398,48 @@ export async function sendClaimChargeEmail(opts: {
   });
 }
 
+// ── Credentials confirmation email ─────────────────────────────────────────────
+export async function sendCredentialsEmail(opts: {
+  customerName: string;
+  customerEmail: string;
+  tenantSlug: string;
+  password: string;
+}): Promise<void> {
+  const { customerName, customerEmail, tenantSlug, password } = opts;
+  const loginUrl = `${APP_URL}/${tenantSlug}/login`;
+
+  const body = `
+    <p style="margin:0 0 8px;font-size:18px;font-weight:700;color:${BRAND_DARK};">Your account is ready, ${customerName}!</p>
+    <p style="margin:0 0 20px;font-size:15px;color:#374151;line-height:1.6;">
+      Here are your login credentials. Keep this email somewhere safe.
+    </p>
+
+    ${infoTable([
+      { label: "Email",    value: customerEmail },
+      { label: "Password", value: password, mono: true },
+    ])}
+
+    ${ctaButton("Sign In to My Account", loginUrl)}
+
+    <p style="margin:0;font-size:13px;color:#9ca3af;text-align:center;">
+      You can change your password at any time from your account settings.
+    </p>
+  `;
+
+  const html = emailShell({
+    preheader: `Your OutdoorShare account credentials for ${customerEmail}.`,
+    badgeLabel: "Account Created",
+    badgeColor: BRAND_GREEN,
+    body,
+  });
+
+  const gmail = await getUncachableGmailClient();
+  await gmail.users.messages.send({
+    userId: "me",
+    requestBody: { raw: makeRawEmail(customerEmail, "Your account login credentials", html) },
+  });
+}
+
 // ── Kiosk account setup email ──────────────────────────────────────────────────
 export async function sendKioskAccountSetupEmail(opts: {
   customerName: string;
@@ -410,7 +452,7 @@ export async function sendKioskAccountSetupEmail(opts: {
   listingTitle: string;
 }): Promise<void> {
   const { customerName, customerEmail, bookingId, tenantSlug, companyName, startDate, endDate, listingTitle } = opts;
-  const registerUrl = `${APP_URL}/${tenantSlug}/register?email=${encodeURIComponent(customerEmail)}`;
+  const registerUrl = `${APP_URL}/${tenantSlug}/set-password?email=${encodeURIComponent(customerEmail)}`;
 
   const body = `
     <p style="margin:0 0 8px;font-size:18px;font-weight:700;color:${BRAND_DARK};">Your booking is confirmed, ${customerName}!</p>
