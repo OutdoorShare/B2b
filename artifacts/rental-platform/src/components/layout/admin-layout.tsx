@@ -14,6 +14,7 @@ import {
   Clock,
   AlertTriangle,
   FileSignature,
+  Wallet,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useGetBusinessProfile } from "@workspace/api-client-react";
@@ -30,6 +31,7 @@ const navigation = [
   { name: "Team", href: "/admin/team", icon: Users },
   { name: "Waivers", href: "/admin/waivers", icon: FileSignature },
   { name: "Kiosk Mode", href: "/admin/kiosk", icon: MonitorSmartphone },
+  { name: "My Wallet", href: "/admin/wallet", icon: Wallet },
   { name: "Settings", href: "/admin/settings", icon: Settings },
 ];
 

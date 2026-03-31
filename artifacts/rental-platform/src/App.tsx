@@ -44,6 +44,7 @@ import AdminClaimsNew from "@/pages/admin/claims/new";
 import AdminTeam from "@/pages/admin/team";
 import AdminCommunications from "@/pages/admin/communications";
 import AdminWaivers from "@/pages/admin/waivers";
+import AdminWallet from "@/pages/admin/wallet";
 import SuperAdminTeam from "@/pages/superadmin/team";
 import SuperAdminListings from "@/pages/superadmin/listings";
 import CompanyDetailPage from "@/pages/superadmin/company-detail";
@@ -174,6 +175,9 @@ function Router() {
       </Route>
       <Route path="/admin/waivers">
         <AdminLayout><AdminWaivers /></AdminLayout>
+      </Route>
+      <Route path="/admin/wallet">
+        <AdminLayout><AdminWallet /></AdminLayout>
       </Route>
       <Route path="/admin/communications">
         <AdminCommunications />

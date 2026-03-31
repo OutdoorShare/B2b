@@ -1,7 +1,7 @@
 import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
-import { tenantsTable, bookingsTable, customersTable } from "@workspace/db/schema";
-import { eq } from "drizzle-orm";
+import { tenantsTable, bookingsTable, customersTable, listingsTable } from "@workspace/db/schema";
+import { eq, desc, and } from "drizzle-orm";
 import { stripe, PLATFORM_FEE_PERCENT } from "../services/stripe";
 import type { Request } from "express";
 
@@ -106,6 +106,89 @@ router.post("/stripe/connect/dashboard", requireAdminAuth, async (req, res) => {
     const link = await stripe.accounts.createLoginLink(tenant.stripeAccountId);
     res.json({ url: link.url });
   } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ── Wallet: balance + payouts + transaction breakdown ─────────────────────────
+router.get("/stripe/wallet", requireAdminAuth, async (req, res) => {
+  try {
+    const tenantId = req.tenantId!;
+    const [tenant] = await db.select().from(tenantsTable).where(eq(tenantsTable.id, tenantId));
+    if (!tenant) { res.status(404).json({ error: "Tenant not found" }); return; }
+
+    const feePercent = parseFloat(tenant.platformFeePercent ?? String(PLATFORM_FEE_PERCENT * 100));
+
+    // Fetch bookings with listing titles
+    const bookings = await db
+      .select({
+        id: bookingsTable.id,
+        customerName: bookingsTable.customerName,
+        startDate: bookingsTable.startDate,
+        endDate: bookingsTable.endDate,
+        totalPrice: bookingsTable.totalPrice,
+        stripePlatformFee: bookingsTable.stripePlatformFee,
+        stripePaymentStatus: bookingsTable.stripePaymentStatus,
+        status: bookingsTable.status,
+        createdAt: bookingsTable.createdAt,
+        listingTitle: listingsTable.title,
+      })
+      .from(bookingsTable)
+      .leftJoin(listingsTable, eq(bookingsTable.listingId, listingsTable.id))
+      .where(and(eq(bookingsTable.tenantId, tenantId), eq(bookingsTable.stripePaymentStatus, "paid")))
+      .orderBy(desc(bookingsTable.createdAt))
+      .limit(50);
+
+    const transactions = bookings.map(b => {
+      const gross = parseFloat(b.totalPrice ?? "0");
+      const fee = b.stripePlatformFee != null ? parseFloat(b.stripePlatformFee) : gross * (feePercent / 100);
+      const net = gross - fee;
+      return {
+        id: b.id,
+        customerName: b.customerName,
+        listingTitle: b.listingTitle ?? "Unknown listing",
+        startDate: b.startDate,
+        endDate: b.endDate,
+        gross,
+        platformFee: parseFloat(fee.toFixed(2)),
+        net: parseFloat(net.toFixed(2)),
+        status: b.status,
+        createdAt: b.createdAt.toISOString(),
+      };
+    });
+
+    // No Stripe account yet — return just DB transactions
+    if (!tenant.stripeAccountId) {
+      return res.json({
+        connected: false,
+        balance: null,
+        payouts: [],
+        transactions,
+        feePercent,
+      });
+    }
+
+    // Fetch Stripe balance + recent payouts
+    const [balance, payoutsResp] = await Promise.all([
+      stripe.balance.retrieve({ stripeAccount: tenant.stripeAccountId }),
+      stripe.payouts.list({ limit: 20 }, { stripeAccount: tenant.stripeAccountId }),
+    ]);
+
+    const available = balance.available.reduce((sum, b) => sum + b.amount, 0) / 100;
+    const pending = balance.pending.reduce((sum, b) => sum + b.amount, 0) / 100;
+
+    const payouts = payoutsResp.data.map(p => ({
+      id: p.id,
+      amount: p.amount / 100,
+      currency: p.currency.toUpperCase(),
+      status: p.status,
+      arrivalDate: new Date(p.arrival_date * 1000).toISOString(),
+      description: p.description,
+    }));
+
+    res.json({ connected: true, balance: { available, pending, currency: balance.available[0]?.currency?.toUpperCase() ?? "USD" }, payouts, transactions, feePercent });
+  } catch (e: any) {
+    console.error("[stripe/wallet]", e.message);
     res.status(500).json({ error: e.message });
   }
 });
