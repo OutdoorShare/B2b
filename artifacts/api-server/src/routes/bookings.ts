@@ -453,6 +453,36 @@ router.get("/pickup/:token", async (req, res) => {
   }
 });
 
+// ── POST /bookings/:id/before-photos ─────────────────────────────────────────
+// Public: renter uploads before-rental condition photos during booking flow
+router.post("/bookings/:id/before-photos", pickupUpload.array("photos", 15), async (req, res) => {
+  try {
+    const bookingId = parseInt(req.params.id, 10);
+    if (isNaN(bookingId)) { res.status(400).json({ error: "Invalid booking id" }); return; }
+
+    const [booking] = await db.select().from(bookingsTable).where(eq(bookingsTable.id, bookingId));
+    if (!booking) { res.status(404).json({ error: "Booking not found" }); return; }
+
+    const files = req.files as Express.Multer.File[];
+    if (!files || files.length === 0) { res.status(400).json({ error: "No photos uploaded" }); return; }
+
+    const existingPhotos: string[] = booking.pickupPhotos ? JSON.parse(booking.pickupPhotos) : [];
+    const newPhotoUrls = files.map(f => `/api/uploads/${f.filename}`);
+    const allPhotos = [...existingPhotos, ...newPhotoUrls];
+
+    await db.update(bookingsTable).set({
+      pickupPhotos: JSON.stringify(allPhotos),
+      pickupCompletedAt: booking.pickupCompletedAt ?? new Date(),
+      updatedAt: new Date(),
+    }).where(eq(bookingsTable.id, booking.id));
+
+    res.json({ ok: true, photos: allPhotos, count: allPhotos.length });
+  } catch (err) {
+    req.log.error(err);
+    res.status(500).json({ error: "Failed to upload before-rental photos" });
+  }
+});
+
 // ── POST /pickup/:token/photos ────────────────────────────────────────────────
 // Public: renter uploads pickup condition photos
 router.post("/pickup/:token/photos", pickupUpload.array("photos", 20), async (req, res) => {

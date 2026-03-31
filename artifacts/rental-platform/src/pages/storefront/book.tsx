@@ -19,7 +19,7 @@ import {
   Lock, User, CreditCard, FileText, Eye, EyeOff, ShieldCheck,
   Zap, AlertTriangle, Umbrella, Star, Loader2, BadgeCheck,
   ScanFace, RefreshCw, XCircle, Clock, Tag, Monitor, QrCode, Smartphone,
-  ScanLine, X, Copy, Check
+  ScanLine, X, Copy, Check, Upload, ImagePlus, Car
 } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { differenceInDays, format, addDays } from "date-fns";
@@ -62,7 +62,7 @@ function currentTimeSlot(): string {
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
-type Step = "dates" | "payment" | "agreement" | "verification" | "confirmation";
+type Step = "dates" | "payment" | "agreement" | "verification" | "photos" | "confirmation";
 
 type Addon = {
   id: number;
@@ -112,9 +112,10 @@ const STEP_LABELS: Record<Step, string> = {
   payment: "Payment",
   agreement: "Agreement",
   verification: "Verify ID",
+  photos: "Photos",
   confirmation: "Confirmed",
 };
-const STEPS: Step[] = ["dates", "payment", "agreement", "verification", "confirmation"];
+const STEPS: Step[] = ["dates", "payment", "agreement", "verification", "photos", "confirmation"];
 
 // ── Card Scan Helper ──────────────────────────────────────────────────────────
 // Uses native autocomplete="cc-number" inputs: on iOS the keyboard offers
@@ -426,6 +427,12 @@ export default function StorefrontBook() {
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [confirmedBooking, setConfirmedBooking] = useState<{ id: number; totalPrice: number } | null>(null);
+
+  // Before-photos step
+  const [beforePhotos, setBeforePhotos] = useState<File[]>([]);
+  const [beforePreviews, setBeforePreviews] = useState<string[]>([]);
+  const [uploadingPhotos, setUploadingPhotos] = useState(false);
+  const beforePhotoInputRef = useRef<HTMLInputElement>(null);
   const [customerBookings, setCustomerBookings] = useState<any[]>([]);
   const [bookingsLoading, setBookingsLoading] = useState(false);
 
@@ -1005,7 +1012,7 @@ export default function StorefrontBook() {
         if (statusData.verified) {
           setIdentityStatus("verified");
           sessionStorage.removeItem(`identity_session_${listingId}`);
-          setTimeout(() => { setStep("confirmation"); window.scrollTo(0, 0); }, 1200);
+          setTimeout(() => { setStep("photos"); window.scrollTo(0, 0); }, 1200);
         } else {
           setIdentityStatus("failed");
           setIdentityError("Identity could not be verified. Please try again or contact support.");
@@ -1014,12 +1021,44 @@ export default function StorefrontBook() {
         // No session ID — treat modal close as verified (test mode fallback)
         setIdentityStatus("verified");
         sessionStorage.removeItem(`identity_session_${listingId}`);
-        setTimeout(() => { setStep("confirmation"); window.scrollTo(0, 0); }, 1200);
+        setTimeout(() => { setStep("photos"); window.scrollTo(0, 0); }, 1200);
       }
     } catch {
       setIdentityStatus("failed");
       setIdentityError("Verification failed. Please try again.");
     }
+  };
+
+  // Photos step: optionally upload before-rental photos then proceed to confirmation
+  const handlePhotosAndContinue = async () => {
+    if (beforePhotos.length > 0 && confirmedBooking) {
+      setUploadingPhotos(true);
+      try {
+        const fd = new FormData();
+        beforePhotos.forEach(f => fd.append("photos", f));
+        await fetch(`${BASE}/api/bookings/${confirmedBooking.id}/before-photos`, { method: "POST", body: fd });
+      } catch { /* non-critical — photos upload is best-effort */ }
+      setUploadingPhotos(false);
+    }
+    setStep("confirmation");
+    window.scrollTo(0, 0);
+  };
+
+  const addBeforePhotos = useCallback((files: FileList | null) => {
+    if (!files) return;
+    const valid = Array.from(files).filter(f => f.type.startsWith("image/")).slice(0, 15 - beforePhotos.length);
+    if (valid.length === 0) return;
+    setBeforePhotos(prev => [...prev, ...valid]);
+    valid.forEach(f => {
+      const reader = new FileReader();
+      reader.onload = e => setBeforePreviews(prev => [...prev, e.target?.result as string]);
+      reader.readAsDataURL(f);
+    });
+  }, [beforePhotos.length]);
+
+  const removeBeforePhoto = (idx: number) => {
+    setBeforePhotos(prev => prev.filter((_, i) => i !== idx));
+    setBeforePreviews(prev => prev.filter((_, i) => i !== idx));
   };
 
   // Retry: fetch a brand-new session and immediately launch the Stripe modal
@@ -1065,7 +1104,7 @@ export default function StorefrontBook() {
         if (statusData.verified) {
           setIdentityStatus("verified");
           sessionStorage.removeItem(`identity_session_${listingId}`);
-          setTimeout(() => { setStep("confirmation"); window.scrollTo(0, 0); }, 1200);
+          setTimeout(() => { setStep("photos"); window.scrollTo(0, 0); }, 1200);
         } else {
           setIdentityStatus("failed");
           setIdentityError("Identity could not be verified. Please try again or contact support.");
@@ -1073,7 +1112,7 @@ export default function StorefrontBook() {
       } else {
         setIdentityStatus("verified");
         sessionStorage.removeItem(`identity_session_${listingId}`);
-        setTimeout(() => { setStep("confirmation"); window.scrollTo(0, 0); }, 1200);
+        setTimeout(() => { setStep("photos"); window.scrollTo(0, 0); }, 1200);
       }
     } catch {
       setIdentityStatus("failed");
@@ -1111,7 +1150,7 @@ export default function StorefrontBook() {
       </div>
 
       <div className="max-w-5xl mx-auto px-4 py-8">
-        {step !== "verification" && (
+        {step !== "verification" && step !== "photos" && (
           <Button variant="ghost" className="mb-6 pl-0 hover:bg-transparent text-muted-foreground" onClick={() => {
             if (step === "dates") { window.history.back(); }
             else { setStep(STEPS[stepIndex - 1]); window.scrollTo({ top: 0, behavior: "smooth" }); }
@@ -1121,9 +1160,9 @@ export default function StorefrontBook() {
           </Button>
         )}
 
-        <div className={`grid grid-cols-1 gap-8 ${step !== "confirmation" ? "lg:grid-cols-5" : ""}`}>
+        <div className={`grid grid-cols-1 gap-8 ${step !== "confirmation" && step !== "photos" ? "lg:grid-cols-5" : ""}`}>
           {/* Main content */}
-          <div className={step !== "confirmation" ? "order-1 lg:order-1 lg:col-span-3" : ""}>
+          <div className={step !== "confirmation" && step !== "photos" ? "order-1 lg:order-1 lg:col-span-3" : ""}>
 
             {/* ── STEP 1: DATES & INFO ── */}
             {step === "dates" && (
@@ -1988,6 +2027,122 @@ export default function StorefrontBook() {
               </div>
             )}
 
+            {/* ── PHOTOS ── */}
+            {step === "photos" && (
+              <div className="max-w-2xl mx-auto">
+                <div className="bg-white rounded-2xl border shadow-sm overflow-hidden">
+                  {/* Header */}
+                  <div className="flex items-center justify-between px-6 py-4 border-b">
+                    <div className="flex items-center gap-3">
+                      <div className="w-9 h-9 rounded-full bg-primary/10 flex items-center justify-center">
+                        <Car className="w-5 h-5 text-primary" />
+                      </div>
+                      <div>
+                        <p className="font-bold text-base leading-tight">Pickup</p>
+                        <p className="text-sm text-muted-foreground leading-tight">Upload pictures</p>
+                      </div>
+                    </div>
+                    <Button variant="ghost" size="icon" onClick={() => { setStep("confirmation"); window.scrollTo(0, 0); }}>
+                      <X className="w-4 h-4" />
+                    </Button>
+                  </div>
+
+                  {/* Body */}
+                  <div className="px-6 py-5 space-y-5">
+                    <p className="font-semibold text-base">Upload pictures</p>
+
+                    {/* Upload zone */}
+                    <div
+                      className="border-2 border-dashed border-gray-200 rounded-xl p-6 text-center cursor-pointer hover:border-primary/50 transition-colors"
+                      onClick={() => beforePhotoInputRef.current?.click()}
+                      onDragOver={e => e.preventDefault()}
+                      onDrop={e => { e.preventDefault(); addBeforePhotos(e.dataTransfer.files); }}
+                    >
+                      <Upload className="w-9 h-9 text-gray-400 mx-auto mb-2" />
+                      <p className="font-medium text-sm">Choose a file</p>
+                      <p className="text-xs text-muted-foreground mt-1">We suggest uploading as many photos as possible up to 15</p>
+                      <p className="text-xs text-muted-foreground mt-1">You can add upto 15 images</p>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="mt-3"
+                        onClick={e => { e.stopPropagation(); beforePhotoInputRef.current?.click(); }}
+                      >
+                        Upload
+                      </Button>
+                    </div>
+                    <input
+                      ref={beforePhotoInputRef}
+                      type="file"
+                      accept="image/*"
+                      multiple
+                      className="hidden"
+                      onChange={e => addBeforePhotos(e.target.files)}
+                    />
+
+                    {/* Staged thumbnails */}
+                    {beforePreviews.length > 0 && (
+                      <div className="flex flex-wrap gap-2">
+                        {beforePreviews.map((src, i) => (
+                          <div key={i} className="relative w-20 h-20 rounded-lg overflow-hidden border">
+                            <img src={src} alt="" className="w-full h-full object-cover" />
+                            <button
+                              onClick={() => removeBeforePhoto(i)}
+                              className="absolute top-0.5 right-0.5 bg-black/60 text-white rounded-full w-5 h-5 flex items-center justify-center hover:bg-black/80"
+                            >
+                              <X className="w-3 h-3" />
+                            </button>
+                          </div>
+                        ))}
+                        {beforePhotos.length < 15 && (
+                          <button
+                            onClick={() => beforePhotoInputRef.current?.click()}
+                            className="w-20 h-20 rounded-lg border-2 border-dashed border-gray-200 flex flex-col items-center justify-center text-gray-400 hover:border-primary/50 transition-colors"
+                          >
+                            <ImagePlus className="w-5 h-5 mb-1" />
+                            <span className="text-xs">Add</span>
+                          </button>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Required angles checklist */}
+                    <div className="space-y-2 pt-1">
+                      {["1 Front", "1 Left Side", "1 Right Side", "1 Rear", "1 Interior"].map(label => (
+                        <div key={label} className="flex items-center gap-2 text-sm">
+                          <div className="w-5 h-5 rounded-full bg-primary flex items-center justify-center shrink-0">
+                            <Check className="w-3 h-3 text-white" />
+                          </div>
+                          <span>{label}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Footer */}
+                  <div className="px-6 py-4 border-t flex gap-3">
+                    <Button
+                      variant="outline"
+                      className="flex-1"
+                      onClick={() => { setStep("verification"); window.scrollTo(0, 0); }}
+                    >
+                      Back
+                    </Button>
+                    <Button
+                      className="flex-1 bg-primary hover:bg-primary/90"
+                      disabled={uploadingPhotos}
+                      onClick={handlePhotosAndContinue}
+                    >
+                      {uploadingPhotos
+                        ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Uploading…</>
+                        : "Start My Rental"
+                      }
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            )}
+
             {/* ── CONFIRMATION ── */}
             {step === "confirmation" && (
               <div className="space-y-8">
@@ -2120,7 +2275,7 @@ export default function StorefrontBook() {
           </div>
 
           {/* ── SIDEBAR SUMMARY ── */}
-          {step !== "confirmation" && (
+          {step !== "confirmation" && step !== "photos" && (
             <div className="order-2 lg:order-2 lg:col-span-2">
               <div className="sticky top-32 space-y-4">
 
