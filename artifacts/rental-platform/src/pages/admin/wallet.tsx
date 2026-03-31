@@ -168,29 +168,44 @@ export default function AdminWallet() {
           </CardContent>
         </Card>
       ) : (
-        <Card className="border-amber-200 bg-amber-50">
-          <CardContent className="p-5 flex items-center justify-between gap-4">
-            <div className="flex items-center gap-3">
-              <div className="rounded-full bg-amber-100 p-2.5">
-                <AlertCircle className="h-5 w-5 text-amber-600" />
+        <div className="space-y-3">
+          <Card className="border-amber-200 bg-amber-50">
+            <CardContent className="p-5 flex items-center justify-between gap-4">
+              <div className="flex items-center gap-3">
+                <div className="rounded-full bg-amber-100 p-2.5">
+                  <AlertCircle className="h-5 w-5 text-amber-600" />
+                </div>
+                <div>
+                  <p className="font-semibold text-amber-900">No payout account connected</p>
+                  <p className="text-sm text-amber-700">
+                    Connect your Stripe account to receive payouts from bookings.
+                  </p>
+                </div>
               </div>
-              <div>
-                <p className="font-semibold text-amber-900">No payout account connected</p>
-                <p className="text-sm text-amber-700">
-                  Connect your Stripe account to receive payouts from bookings.
+              <Button
+                onClick={startOnboarding}
+                disabled={onboarding}
+                className="shrink-0 gap-1.5 bg-amber-600 hover:bg-amber-700 text-white"
+              >
+                {onboarding ? "Redirecting…" : "Set Up Payouts"}
+                <ArrowUpRight className="h-4 w-4" />
+              </Button>
+            </CardContent>
+          </Card>
+          <Card className="border-blue-200 bg-blue-50">
+            <CardContent className="p-4 flex items-start gap-3">
+              <div className="rounded-full bg-blue-100 p-2 mt-0.5">
+                <DollarSign className="h-4 w-4 text-blue-600" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="font-semibold text-blue-900 text-sm">Your customers can still book</p>
+                <p className="text-sm text-blue-800 mt-0.5">
+                  Payments from completed bookings are being held securely by OutdoorShare. As soon as you connect your Stripe account above, all owed funds will be automatically swept to your payout account — no action needed from you.
                 </p>
               </div>
-            </div>
-            <Button
-              onClick={startOnboarding}
-              disabled={onboarding}
-              className="shrink-0 gap-1.5 bg-amber-600 hover:bg-amber-700 text-white"
-            >
-              {onboarding ? "Redirecting…" : "Set Up Payouts"}
-              <ArrowUpRight className="h-4 w-4" />
-            </Button>
-          </CardContent>
-        </Card>
+            </CardContent>
+          </Card>
+        </div>
       )}
 
       {/* Balance cards */}

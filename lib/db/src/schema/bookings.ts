@@ -33,6 +33,9 @@ export const bookingsTable = pgTable("bookings", {
   pickupToken: text("pickup_token"),
   pickupPhotos: text("pickup_photos"),
   pickupCompletedAt: timestamp("pickup_completed_at"),
+  // Payout tracking — funds held on platform until tenant connects Stripe
+  stripeTransferId: text("stripe_transfer_id"),
+  stripeTransferredAt: timestamp("stripe_transferred_at"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });

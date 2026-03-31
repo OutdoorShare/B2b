@@ -1,7 +1,7 @@
 import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
 import { tenantsTable, bookingsTable, customersTable, listingsTable } from "@workspace/db/schema";
-import { eq, desc, and } from "drizzle-orm";
+import { eq, desc, and, isNull, isNotNull } from "drizzle-orm";
 import { stripe, PLATFORM_FEE_PERCENT } from "../services/stripe";
 import type { Request } from "express";
 
@@ -193,21 +193,24 @@ router.get("/stripe/wallet", requireAdminAuth, async (req, res) => {
   }
 });
 
-// ── Connect: public readiness check (no auth required — called from booking page) ──
+// ── Connect: public readiness check ──────────────────────────────────────────
+// Payments are always accepted (funds held on platform if tenant not connected)
 router.get("/stripe/connect/check/:slug", async (req, res) => {
   try {
     const { slug } = req.params;
     const [tenant] = await db.select().from(tenantsTable).where(eq(tenantsTable.slug, slug));
     if (!tenant) { res.status(404).json({ ready: false, reason: "tenant_not_found" }); return; }
-    const ready = !!(tenant.stripeAccountId && tenant.stripeChargesEnabled);
-    res.json({ ready, reason: ready ? "ok" : "connect_not_configured" });
+    // Always ready — OutdoorShare platform Stripe is always available
+    const tenantConnected = !!(tenant.stripeAccountId && tenant.stripeChargesEnabled);
+    res.json({ ready: true, tenantConnected, reason: "ok" });
   } catch (e: any) {
     res.status(500).json({ ready: false, reason: "error" });
   }
 });
 
 // ── Payment Intent: create for a booking ─────────────────────────────────────
-// Called from booking page before submitting, returns clientSecret to frontend
+// If tenant has Connect → funds route to their account automatically.
+// If tenant has NOT connected → funds sit on OutdoorShare platform until they do.
 router.post("/stripe/payment-intent", async (req, res) => {
   try {
     const { tenantSlug, amountCents, customerEmail, customerName, bookingMeta } = req.body;
@@ -219,46 +222,129 @@ router.post("/stripe/payment-intent", async (req, res) => {
     const [tenant] = await db.select().from(tenantsTable).where(eq(tenantsTable.slug, tenantSlug));
     if (!tenant) { res.status(404).json({ error: "Tenant not found" }); return; }
 
-    // Require Stripe Connect to be fully set up before accepting payments
-    if (!tenant.stripeAccountId || !tenant.stripeChargesEnabled) {
-      res.status(402).json({
-        error: "payments_not_configured",
-        message: "This business has not yet set up their payment account. Please contact them directly.",
-      });
-      return;
-    }
-
-    // Use per-tenant fee if set, otherwise fall back to global constant
     const feePercent = tenant.platformFeePercent != null
       ? parseFloat(tenant.platformFeePercent) / 100
       : PLATFORM_FEE_PERCENT;
     const platformFeeAmount = Math.round(amountCents * feePercent);
     const transferAmount = amountCents - platformFeeAmount;
 
-    const intent = await stripe.paymentIntents.create({
+    const tenantConnected = !!(tenant.stripeAccountId && tenant.stripeChargesEnabled);
+
+    // Build payment intent — only route to tenant's account if they're connected
+    const intentParams: any = {
       amount: amountCents,
       currency: "usd",
       receipt_email: customerEmail,
       description: `Rental booking — ${tenant.name}`,
       metadata: {
+        tenant_id: String(tenant.id),
         tenant_slug: tenantSlug,
         customer_name: customerName ?? "",
+        platform_fee_cents: String(platformFeeAmount),
+        transfer_amount_cents: String(transferAmount),
         ...(bookingMeta ?? {}),
       },
-      transfer_data: {
-        destination: tenant.stripeAccountId,
-        amount: transferAmount,
-      },
-      application_fee_amount: platformFeeAmount,
-    });
+    };
+
+    if (tenantConnected) {
+      // Funds go directly to tenant; platform keeps its fee
+      intentParams.transfer_data = { destination: tenant.stripeAccountId, amount: transferAmount };
+      intentParams.application_fee_amount = platformFeeAmount;
+    }
+    // Otherwise: full amount held on platform, swept later via sweep-pending
+
+    const intent = await stripe.paymentIntents.create(intentParams);
 
     res.json({
       clientSecret: intent.client_secret,
       paymentIntentId: intent.id,
       platformFee: (platformFeeAmount / 100).toFixed(2),
+      heldOnPlatform: !tenantConnected,
     });
   } catch (e: any) {
     console.error("[stripe/payment-intent]", e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ── Sweep pending payouts to a newly-connected tenant ─────────────────────────
+// Finds all paid bookings with funds held on platform and transfers owed amount.
+async function sweepPendingPayouts(tenantId: number): Promise<{ swept: number; totalCents: number }> {
+  const [tenant] = await db.select().from(tenantsTable).where(eq(tenantsTable.id, tenantId));
+  if (!tenant?.stripeAccountId || !tenant.stripeChargesEnabled) return { swept: 0, totalCents: 0 };
+
+  // Bookings paid to platform but not yet transferred to tenant
+  const pending = await db.select().from(bookingsTable).where(
+    and(
+      eq(bookingsTable.tenantId, tenantId),
+      eq(bookingsTable.stripePaymentStatus, "paid"),
+      isNotNull(bookingsTable.stripePaymentIntentId),
+      isNull(bookingsTable.stripeTransferId),
+    )
+  );
+
+  const feePercent = tenant.platformFeePercent != null
+    ? parseFloat(tenant.platformFeePercent) / 100
+    : PLATFORM_FEE_PERCENT;
+
+  let swept = 0;
+  let totalCents = 0;
+
+  for (const booking of pending) {
+    // Check if this PI originally had transfer_data (already routed to tenant) by checking metadata
+    try {
+      const pi = await stripe.paymentIntents.retrieve(booking.stripePaymentIntentId!);
+      // If transfer_data was set on the original PI, funds already went to tenant — mark as transferred
+      if ((pi as any).transfer_data?.destination) {
+        await db.update(bookingsTable).set({
+          stripeTransferId: "via_destination",
+          stripeTransferredAt: new Date(),
+          updatedAt: new Date(),
+        }).where(eq(bookingsTable.id, booking.id));
+        continue;
+      }
+      // Funds are on platform — calculate and sweep
+      const totalCentsForBooking = Math.round(parseFloat(booking.totalPrice) * 100);
+      const platformFee = Math.round(totalCentsForBooking * feePercent);
+      const transferAmt = totalCentsForBooking - platformFee;
+      if (transferAmt < 50) continue; // Stripe minimum
+
+      const transfer = await stripe.transfers.create({
+        amount: transferAmt,
+        currency: "usd",
+        destination: tenant.stripeAccountId,
+        source_transaction: (pi.latest_charge as string) || undefined,
+        metadata: {
+          booking_id: String(booking.id),
+          tenant_id: String(tenantId),
+          type: "platform_payout",
+        },
+        description: `Payout for booking #${booking.id} — ${tenant.name}`,
+      });
+
+      await db.update(bookingsTable).set({
+        stripeTransferId: transfer.id,
+        stripeTransferredAt: new Date(),
+        updatedAt: new Date(),
+      }).where(eq(bookingsTable.id, booking.id));
+
+      swept++;
+      totalCents += transferAmt;
+    } catch (err: any) {
+      console.error(`[sweep] booking ${booking.id} failed:`, err.message);
+    }
+  }
+
+  return { swept, totalCents };
+}
+
+// POST /stripe/connect/sweep-pending — manually trigger payout sweep (admin)
+router.post("/stripe/connect/sweep-pending", requireAdminAuth, async (req, res) => {
+  try {
+    const result = await sweepPendingPayouts(req.tenantId!);
+    res.json({ ...result, message: result.swept > 0 ? `Swept ${result.swept} booking(s) totalling $${(result.totalCents / 100).toFixed(2)}` : "No pending payouts to sweep" });
+  } catch (e: any) {
+    console.error("[stripe/sweep-pending]", e.message);
     res.status(500).json({ error: e.message });
   }
 });
@@ -373,12 +459,21 @@ router.post("/stripe/webhook", async (req, res) => {
         const account = event.data.object;
         const meta = account.metadata as Record<string, string> | undefined;
         if (meta?.tenant_id) {
+          const tenantId = parseInt(meta.tenant_id);
+          const [prevTenant] = await db.select({ stripeChargesEnabled: tenantsTable.stripeChargesEnabled })
+            .from(tenantsTable).where(eq(tenantsTable.id, tenantId));
           await db.update(tenantsTable).set({
             stripeChargesEnabled: account.charges_enabled,
             stripePayoutsEnabled: account.payouts_enabled,
             stripeAccountStatus: account.charges_enabled ? "active" : "onboarding",
             updatedAt: new Date(),
-          }).where(eq(tenantsTable.id, parseInt(meta.tenant_id)));
+          }).where(eq(tenantsTable.id, tenantId));
+          // Auto-sweep held funds when tenant first becomes active
+          if (account.charges_enabled && !prevTenant?.stripeChargesEnabled) {
+            sweepPendingPayouts(tenantId).then(r => {
+              if (r.swept > 0) console.log(`[webhook] Auto-swept ${r.swept} bookings ($${(r.totalCents/100).toFixed(2)}) to tenant ${tenantId}`);
+            }).catch(err => console.error("[webhook] sweep failed:", err.message));
+          }
         }
         break;
       }
