@@ -36,6 +36,7 @@ function formatBooking(b: typeof bookingsTable.$inferSelect, listingTitle: strin
     totalPrice: parseFloat(b.totalPrice ?? "0"),
     depositPaid: b.depositPaid ? parseFloat(b.depositPaid) : null,
     pickupPhotos: b.pickupPhotos ? JSON.parse(b.pickupPhotos) : [],
+    pickupLinkSent: !!b.pickupToken,
     pickupCompletedAt: b.pickupCompletedAt ? b.pickupCompletedAt.toISOString() : null,
     createdAt: b.createdAt.toISOString(),
     updatedAt: b.updatedAt.toISOString(),
@@ -331,11 +332,38 @@ router.put("/bookings/:id", async (req, res) => {
   }
 });
 
+// ── GET /bookings/:id/pickup-link ──────────────────────────────────────────────
+// Admin: get existing pickup URL (no email sent); generates token if missing
+router.get("/bookings/:id/pickup-link", async (req, res) => {
+  try {
+    const bookingId = Number(req.params.id);
+    const conditions = [eq(bookingsTable.id, bookingId)];
+    if (req.tenantId) conditions.push(eq(bookingsTable.tenantId, req.tenantId));
+    const [booking] = await db.select().from(bookingsTable).where(and(...conditions));
+    if (!booking) { res.status(404).json({ error: "Booking not found" }); return; }
+
+    const token = booking.pickupToken ?? randomBytes(24).toString("hex");
+    if (!booking.pickupToken) {
+      await db.update(bookingsTable).set({ pickupToken: token, updatedAt: new Date() }).where(eq(bookingsTable.id, bookingId));
+    }
+
+    const BASE = process.env.APP_URL || `https://${process.env.REPLIT_DEV_DOMAIN}`;
+    const slug = req.headers["x-tenant-slug"] as string ?? "";
+    const pickupUrl = `${BASE}/${slug}/pickup/${token}`;
+    res.json({ ok: true, token, pickupUrl, linkSent: !!booking.pickupToken });
+  } catch (err) {
+    req.log.error(err);
+    res.status(500).json({ error: "Failed to get pickup link" });
+  }
+});
+
 // ── POST /bookings/:id/send-pickup-link ────────────────────────────────────────
 // Admin: generate a unique token and email the renter their pickup photo link
+// Body: { hostPickup?: boolean }  — when true, email copy says host handed off equipment
 router.post("/bookings/:id/send-pickup-link", async (req, res) => {
   try {
     const bookingId = Number(req.params.id);
+    const { hostPickup } = req.body as { hostPickup?: boolean };
     const conditions = [eq(bookingsTable.id, bookingId)];
     if (req.tenantId) conditions.push(eq(bookingsTable.tenantId, req.tenantId));
 
@@ -370,6 +398,7 @@ router.post("/bookings/:id/send-pickup-link", async (req, res) => {
       endDate: booking.endDate,
       companyName,
       companyEmail,
+      hostPickup: !!hostPickup,
     }).catch(err => console.error("[pickup email]", err));
 
     res.json({ ok: true, token, pickupUrl });

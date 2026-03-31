@@ -16,7 +16,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { Link, useLocation } from "wouter";
-import { ArrowLeft, User, Phone, Mail, Calendar, Package, StickyNote, ShieldAlert, Pencil, FileSignature, ChevronDown, ChevronUp, Download, Camera, CheckCircle2, Loader2, ExternalLink, ImageIcon, Clock, ShieldCheck, ShieldX, Shield, AlertCircle } from "lucide-react";
+import { ArrowLeft, User, Phone, Mail, Calendar, Package, StickyNote, ShieldAlert, Pencil, FileSignature, ChevronDown, ChevronUp, Download, Camera, CheckCircle2, Loader2, ExternalLink, ImageIcon, Clock, ShieldCheck, ShieldX, Shield, AlertCircle, Copy, Send, UserCheck } from "lucide-react";
 import { format, differenceInDays } from "date-fns";
 
 export default function AdminBookingDetail() {
@@ -35,6 +35,9 @@ export default function AdminBookingDetail() {
   const [agreementExpanded, setAgreementExpanded] = useState(false);
   const [sendingPickupLink, setSendingPickupLink] = useState(false);
   const [pickupLinkSent, setPickupLinkSent] = useState(false);
+  const [pickupUrl, setPickupUrl] = useState<string | null>(null);
+  const [hostPickupMode, setHostPickupMode] = useState(false);
+  const [copySuccess, setCopySuccess] = useState(false);
 
   type VerifData = {
     found: boolean;
@@ -63,20 +66,44 @@ export default function AdminBookingDetail() {
   if (isLoading) return <div className="p-8">Loading booking details...</div>;
   if (!booking) return <div className="p-8">Booking not found</div>;
 
-  const sendPickupLink = async () => {
+  const sendPickupLink = async (asHostPickup = false) => {
     setSendingPickupLink(true);
     try {
-      const r = await fetch(`/api/bookings/${id}/send-pickup-link`, {
+      const r = await fetch(`${BASE}/api/bookings/${id}/send-pickup-link`, {
         method: "POST",
         headers: { "Content-Type": "application/json", ...(getAdminSession()?.token ? { "x-admin-token": getAdminSession()!.token } : {}) },
+        body: JSON.stringify({ hostPickup: asHostPickup }),
       });
       const data = await r.json();
       if (!r.ok || data.error) { toast({ title: "Error", description: data.error ?? "Failed to send link", variant: "destructive" }); return; }
       setPickupLinkSent(true);
-      toast({ title: "Pickup link sent!", description: "The renter has been emailed a link to upload pre-pickup photos." });
+      if (data.pickupUrl) setPickupUrl(data.pickupUrl);
+      toast({
+        title: asHostPickup ? "Photo upload link sent to renter!" : "Pickup link sent!",
+        description: "The renter has been emailed a link to upload photos.",
+      });
     } finally {
       setSendingPickupLink(false);
     }
+  };
+
+  const copyPickupLink = async () => {
+    let url = pickupUrl;
+    if (!url) {
+      // Fetch the link without sending an email
+      try {
+        const r = await fetch(`${BASE}/api/bookings/${id}/pickup-link`, {
+          headers: getAdminSession()?.token ? { "x-admin-token": getAdminSession()!.token } : {},
+        });
+        const data = await r.json();
+        if (data.pickupUrl) { url = data.pickupUrl; setPickupUrl(data.pickupUrl); }
+      } catch {}
+    }
+    if (!url) { toast({ title: "Could not retrieve link", variant: "destructive" }); return; }
+    await navigator.clipboard.writeText(url);
+    setCopySuccess(true);
+    toast({ title: "Link copied!", description: "Paste it in a text message or email to the renter." });
+    setTimeout(() => setCopySuccess(false), 3000);
   };
 
   const handleStatusChange = (newStatus: any) => {
@@ -170,18 +197,6 @@ export default function AdminBookingDetail() {
           </Link>
         )}
 
-        {/* Send Pickup Photo Link */}
-        {['confirmed', 'active'].includes(booking.status) && (
-          <Button
-            variant="outline"
-            className={`gap-2 ${(booking as any).pickupCompletedAt ? "border-green-300 text-green-700" : "border-blue-300 text-blue-700 hover:bg-blue-50 hover:border-blue-400"}`}
-            onClick={sendPickupLink}
-            disabled={sendingPickupLink || pickupLinkSent}
-          >
-            {sendingPickupLink ? <Loader2 className="w-4 h-4 animate-spin" /> : (booking as any).pickupCompletedAt ? <CheckCircle2 className="w-4 h-4" /> : <Camera className="w-4 h-4" />}
-            {(booking as any).pickupCompletedAt ? "Photos Submitted" : pickupLinkSent ? "Link Sent!" : "Send Pickup Link"}
-          </Button>
-        )}
 
         <Button 
           variant="ghost"
@@ -454,44 +469,140 @@ export default function AdminBookingDetail() {
         {/* Right Column: Payment + Pickup Photos */}
         <div className="lg:col-span-1 space-y-8">
 
-          {/* Pickup Photos Card */}
-          {((booking as any).pickupPhotos?.length > 0 || (booking as any).pickupCompletedAt) && (
+          {/* ── Pickup Documentation Card — always visible for confirmed/active ── */}
+          {['confirmed', 'active'].includes(booking.status) && (
             <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
+              <CardHeader className="pb-3">
+                <CardTitle className="flex items-center gap-2 text-base">
                   <Camera className="w-5 h-5 text-primary" />
-                  Pre-Pickup Photos
+                  Pickup Documentation
                   {(booking as any).pickupCompletedAt && (
                     <span className="ml-auto">
                       <CheckCircle2 className="w-4 h-4 text-green-600" />
                     </span>
                   )}
                 </CardTitle>
+                <CardDescription className="text-xs leading-relaxed">
+                  Ask the renter to photograph equipment condition. Protects both parties against damage disputes.
+                </CardDescription>
               </CardHeader>
-              <CardContent>
+              <CardContent className="space-y-4">
+                {/* ── STATE 1: Photos received ── */}
                 {(booking as any).pickupPhotos?.length > 0 ? (
-                  <div className="grid grid-cols-2 gap-2">
-                    {(booking as any).pickupPhotos.map((url: string, i: number) => (
-                      <a key={i} href={url} target="_blank" rel="noopener noreferrer" className="relative group">
-                        <div className="aspect-square rounded-lg overflow-hidden bg-gray-100">
-                          <img src={url} alt={`Pickup photo ${i + 1}`} className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
-                        </div>
-                        <div className="absolute inset-0 flex items-center justify-center bg-black/0 group-hover:bg-black/20 rounded-lg transition-colors">
-                          <ExternalLink className="w-5 h-5 text-white opacity-0 group-hover:opacity-100 transition-opacity" />
-                        </div>
-                      </a>
-                    ))}
-                  </div>
+                  <>
+                    <div className="grid grid-cols-2 gap-2">
+                      {(booking as any).pickupPhotos.map((url: string, i: number) => (
+                        <a key={i} href={url} target="_blank" rel="noopener noreferrer" className="relative group">
+                          <div className="aspect-square rounded-lg overflow-hidden bg-gray-100">
+                            <img src={url} alt={`Pickup photo ${i + 1}`} className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
+                          </div>
+                          <div className="absolute inset-0 flex items-center justify-center bg-black/0 group-hover:bg-black/20 rounded-lg transition-colors">
+                            <ExternalLink className="w-5 h-5 text-white opacity-0 group-hover:opacity-100 transition-opacity" />
+                          </div>
+                        </a>
+                      ))}
+                    </div>
+                    {(booking as any).pickupCompletedAt && (
+                      <p className="text-xs text-muted-foreground">
+                        Submitted {format(new Date((booking as any).pickupCompletedAt), "MMM d, yyyy h:mm a")}
+                      </p>
+                    )}
+                    {/* Allow resending even when photos received */}
+                    <Button variant="ghost" size="sm" className="w-full text-muted-foreground gap-1.5" onClick={copyPickupLink}>
+                      {copySuccess ? <CheckCircle2 className="w-3.5 h-3.5 text-green-600" /> : <Copy className="w-3.5 h-3.5" />}
+                      {copySuccess ? "Copied!" : "Copy upload link"}
+                    </Button>
+                  </>
+                ) : (booking as any).pickupLinkSent || pickupLinkSent ? (
+                  /* ── STATE 2: Link sent, awaiting photos ── */
+                  <>
+                    <div className="flex items-center gap-3 bg-blue-50 border border-blue-200 rounded-xl p-3">
+                      <div className="relative flex h-2.5 w-2.5 shrink-0">
+                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75" />
+                        <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-blue-500" />
+                      </div>
+                      <div>
+                        <p className="text-sm font-semibold text-blue-800">Link sent — awaiting photos</p>
+                        <p className="text-xs text-blue-700">The renter will receive an email with an upload link.</p>
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="gap-1.5 border-blue-200 text-blue-700 hover:bg-blue-50"
+                        onClick={copyPickupLink}
+                        disabled={copySuccess}
+                      >
+                        {copySuccess ? <CheckCircle2 className="w-3.5 h-3.5 text-green-600" /> : <Copy className="w-3.5 h-3.5" />}
+                        {copySuccess ? "Copied!" : "Copy Link"}
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="gap-1.5"
+                        onClick={() => sendPickupLink(hostPickupMode)}
+                        disabled={sendingPickupLink}
+                      >
+                        {sendingPickupLink ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />}
+                        Resend Email
+                      </Button>
+                    </div>
+                  </>
                 ) : (
-                  <div className="text-center py-4 text-muted-foreground text-sm">
-                    <ImageIcon className="w-8 h-8 mx-auto mb-2 opacity-40" />
-                    <p>Link sent — awaiting renter photos</p>
-                  </div>
-                )}
-                {(booking as any).pickupCompletedAt && (
-                  <p className="text-xs text-muted-foreground mt-3">
-                    Submitted {format(new Date((booking as any).pickupCompletedAt), "MMM d, yyyy h:mm a")}
-                  </p>
+                  /* ── STATE 3: Not sent yet ── */
+                  <>
+                    {/* Host pickup toggle */}
+                    <div className="flex items-start gap-3 p-3 rounded-xl border bg-muted/40">
+                      <button
+                        onClick={() => setHostPickupMode(v => !v)}
+                        className={`relative shrink-0 w-9 h-5 rounded-full transition-colors mt-0.5 ${hostPickupMode ? "bg-primary" : "bg-muted-foreground/30"}`}
+                        role="switch"
+                        aria-checked={hostPickupMode}
+                      >
+                        <span className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform ${hostPickupMode ? "translate-x-4" : ""}`} />
+                      </button>
+                      <div>
+                        <p className="text-sm font-semibold flex items-center gap-1.5">
+                          <UserCheck className="w-4 h-4 text-muted-foreground" />
+                          Host did the pickup
+                        </p>
+                        <p className="text-xs text-muted-foreground leading-relaxed mt-0.5">
+                          {hostPickupMode
+                            ? "Email will say the host completed the handoff and ask the renter to document the condition."
+                            : "Email will ask the renter to photograph the equipment before pickup."}
+                        </p>
+                      </div>
+                    </div>
+
+                    <Button
+                      className="w-full gap-2"
+                      onClick={() => sendPickupLink(hostPickupMode)}
+                      disabled={sendingPickupLink}
+                    >
+                      {sendingPickupLink ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+                      Email Upload Link to Renter
+                    </Button>
+
+                    <div className="flex items-center gap-2">
+                      <div className="flex-1 border-t" />
+                      <span className="text-xs text-muted-foreground">or</span>
+                      <div className="flex-1 border-t" />
+                    </div>
+
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="w-full gap-2"
+                      onClick={copyPickupLink}
+                    >
+                      {copySuccess ? <CheckCircle2 className="w-4 h-4 text-green-600" /> : <Copy className="w-4 h-4" />}
+                      {copySuccess ? "Copied to clipboard!" : "Copy link to share manually"}
+                    </Button>
+                    <p className="text-xs text-muted-foreground text-center -mt-1">
+                      Paste in a text message, WhatsApp, or chat
+                    </p>
+                  </>
                 )}
               </CardContent>
             </Card>

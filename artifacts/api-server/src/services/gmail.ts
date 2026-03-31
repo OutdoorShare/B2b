@@ -281,8 +281,9 @@ export async function sendPickupLinkEmail(opts: {
   endDate: string;
   companyName: string;
   companyEmail?: string;
+  hostPickup?: boolean;
 }): Promise<void> {
-  const { toEmail, customerName, pickupUrl, listingTitle, startDate, endDate, companyName, companyEmail } = opts;
+  const { toEmail, customerName, pickupUrl, listingTitle, startDate, endDate, companyName, companyEmail, hostPickup } = opts;
   const fromHeader = companyEmail ? `${companyName} <${companyEmail}>` : undefined;
 
   const tableRows: { label: string; value: string }[] = [
@@ -292,13 +293,29 @@ export async function sendPickupLinkEmail(opts: {
     { label: "Company",     value: companyName },
   ];
 
+  const headline = hostPickup
+    ? "Please Upload Your Pickup Photos"
+    : "Pre-Pickup Photo Check Required";
+
+  const intro = hostPickup
+    ? `Hi <strong>${customerName}</strong>, your host at <strong>${companyName}</strong> has completed the equipment handoff for your rental.
+       Please take a moment to photograph the equipment's current condition using the link below.
+       These photos are your record and protect you against any future damage claims.`
+    : `Hi <strong>${customerName}</strong>, it's almost time to pick up your rental from <strong>${companyName}</strong>.
+       Before pickup, please document the condition of the equipment by uploading photos using the link below.
+       These photos protect you in case of any future damage claims.`;
+
+  const badge = hostPickup ? "Action Required — Document Equipment Condition" : "Action Required — Upload Pickup Photos";
+  const preheader = hostPickup
+    ? `Your host has completed the handoff — please upload photos to document your ${listingTitle}.`
+    : `Upload pickup photos for your ${listingTitle} rental — required before pickup.`;
+  const subject = hostPickup
+    ? `[${companyName}] Please document your rental equipment condition`
+    : `[${companyName}] Please upload pickup photos for your rental`;
+
   const body = `
-    <p style="margin:0 0 8px;font-size:18px;font-weight:700;color:${BRAND_DARK};">Pre-Pickup Photo Check Required</p>
-    <p style="margin:0 0 20px;font-size:15px;color:#374151;line-height:1.6;">
-      Hi <strong>${customerName}</strong>, it's almost time to pick up your rental from <strong>${companyName}</strong>.
-      Before pickup, please document the condition of the equipment by uploading photos using the link below.
-      These photos protect you in case of any future damage claims.
-    </p>
+    <p style="margin:0 0 8px;font-size:18px;font-weight:700;color:${BRAND_DARK};">${headline}</p>
+    <p style="margin:0 0 20px;font-size:15px;color:#374151;line-height:1.6;">${intro}</p>
     ${infoTable(tableRows)}
     <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:16px;margin:20px 0;">
       <p style="margin:0;font-size:13px;color:#166534;font-weight:600;">📸 What to photograph:</p>
@@ -308,23 +325,18 @@ export async function sendPickupLinkEmail(opts: {
         <li>Serial numbers or identifying markings</li>
       </ul>
     </div>
-    ${ctaButton("Upload Pickup Photos", pickupUrl, BRAND_GREEN)}
+    ${ctaButton("Upload Photos Now", pickupUrl, BRAND_GREEN)}
     <p style="margin:0;font-size:13px;color:#9ca3af;text-align:center;">
-      This link is unique to your booking and expires after pickup is complete.
+      This link is unique to your booking. You can upload multiple photos.
     </p>
   `;
 
-  const html = emailShell({
-    preheader: `Upload pickup photos for your ${listingTitle} rental — required before pickup.`,
-    badgeLabel: "Action Required — Upload Pickup Photos",
-    badgeColor: BRAND_GREEN,
-    body,
-  });
+  const html = emailShell({ preheader, badgeLabel: badge, badgeColor: BRAND_GREEN, body });
 
   const gmail = await getUncachableGmailClient();
   await gmail.users.messages.send({
     userId: "me",
-    requestBody: { raw: makeRawEmail(toEmail, `[${companyName}] Please upload pickup photos for your rental`, html, fromHeader) },
+    requestBody: { raw: makeRawEmail(toEmail, subject, html, fromHeader) },
   });
 }
 
