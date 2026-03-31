@@ -390,18 +390,21 @@ router.put("/superadmin/tenants/:id/business", requireSuperAdmin, async (req, re
 });
 
 // ── GET/POST/PUT/DELETE /superadmin/tenants/:id/listings ──────────────────────
-router.get("/superadmin/tenants/:id/listings", requireSuperAdmin, async (_req, res) => {
+router.get("/superadmin/tenants/:id/listings", requireSuperAdmin, async (req, res) => {
   try {
-    const rows = await db.select().from(listingsTable).orderBy(desc(listingsTable.createdAt));
+    const tenantId = parseInt(req.params.id);
+    const rows = await db.select().from(listingsTable).where(eq(listingsTable.tenantId, tenantId)).orderBy(desc(listingsTable.createdAt));
     res.json(rows.map(l => ({ ...l, pricePerDay: parseFloat(l.pricePerDay ?? "0"), pricePerWeek: l.pricePerWeek ? parseFloat(l.pricePerWeek) : null, createdAt: l.createdAt.toISOString(), updatedAt: l.updatedAt.toISOString() })));
   } catch { res.status(500).json({ error: "Failed to fetch listings" }); }
 });
 
 router.post("/superadmin/tenants/:id/listings", requireSuperAdmin, async (req, res) => {
   try {
+    const tenantId = parseInt(req.params.id);
     const { title, description, pricePerDay, pricePerWeek, quantity, status, categoryId, condition, brand, model, location, requirements, depositAmount } = req.body;
     if (!title || !pricePerDay) { res.status(400).json({ error: "title and pricePerDay required" }); return; }
     const [created] = await db.insert(listingsTable).values({
+      tenantId,
       title, description: description || "", pricePerDay: String(pricePerDay),
       pricePerWeek: pricePerWeek ? String(pricePerWeek) : null,
       quantity: quantity ?? 1, status: status ?? "active",
