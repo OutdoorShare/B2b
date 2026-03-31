@@ -673,17 +673,38 @@ function AnalyticsTab({ tenantId }: { tenantId: number }) {
 }
 
 // ─── Claims Tab ───────────────────────────────────────────────────────────────
-type ClaimRow = { id: number; customerName: string; customerEmail: string; type: string; status: string; claimedAmount: number | null; settledAmount: number | null; adminNotes: string | null; description: string; createdAt: string };
+type ClaimRow = {
+  id: number; customerName: string; customerEmail: string; type: string;
+  status: string; claimedAmount: number | null; settledAmount: number | null;
+  adminNotes: string | null; description: string; createdAt: string;
+  chargeMode: string | null; chargeStatus: string | null; chargedAmount: number | null;
+};
 const CLAIM_STATUS: Record<string, string> = { open: "bg-red-800 text-red-200", reviewing: "bg-yellow-800 text-yellow-200", resolved: "bg-green-800 text-green-200", denied: "bg-slate-700 text-slate-400" };
+const CHARGE_STATUS_CHIP: Record<string, string> = { pending: "bg-amber-800 text-amber-200", paid: "bg-green-800 text-green-200", cancelled: "bg-slate-700 text-slate-400" };
+
+type ChargeMode = "link" | "invoice" | "installments";
 
 function ClaimsTab({ tenantId }: { tenantId: number }) {
   const [claims, setClaims] = useState<ClaimRow[]>([]);
   const [loading, setLoading] = useState(true);
+
+  // Edit dialog state
   const [selected, setSelected] = useState<ClaimRow | null>(null);
   const [editStatus, setEditStatus] = useState("");
   const [editNotes, setEditNotes] = useState("");
   const [editSettled, setEditSettled] = useState("");
   const [saving, setSaving] = useState(false);
+
+  // Charge dialog state
+  const [charging, setCharging] = useState<ClaimRow | null>(null);
+  const [chargeMode, setChargeMode] = useState<ChargeMode>("link");
+  const [chargeAmount, setChargeAmount] = useState("");
+  const [dueInDays, setDueInDays] = useState("7");
+  const [installmentCount, setInstallmentCount] = useState("3");
+  const [intervalDays, setIntervalDays] = useState("30");
+  const [chargeLoading, setChargeLoading] = useState(false);
+  const [chargeResult, setChargeResult] = useState<{ paymentUrl: string | null; mode: string; refs: string[] } | null>(null);
+
   const { toast } = useToast();
 
   const load = useCallback(async () => {
@@ -695,11 +716,21 @@ function ClaimsTab({ tenantId }: { tenantId: number }) {
 
   useEffect(() => { load(); }, [load]);
 
-  function openClaim(c: ClaimRow) {
+  function openEdit(c: ClaimRow) {
     setSelected(c);
     setEditStatus(c.status);
     setEditNotes(c.adminNotes ?? "");
     setEditSettled(c.settledAmount != null ? String(c.settledAmount) : "");
+  }
+
+  function openCharge(c: ClaimRow) {
+    setCharging(c);
+    setChargeMode("link");
+    setChargeAmount(c.claimedAmount != null ? c.claimedAmount.toFixed(2) : "");
+    setDueInDays("7");
+    setInstallmentCount("3");
+    setIntervalDays("30");
+    setChargeResult(null);
   }
 
   async function saveClaim() {
@@ -715,6 +746,26 @@ function ClaimsTab({ tenantId }: { tenantId: number }) {
     const updated = await r.json();
     setClaims(prev => prev.map(c => c.id === updated.id ? { ...c, ...updated } : c));
     setSelected(null);
+  }
+
+  async function submitCharge() {
+    if (!charging) return;
+    const amt = parseFloat(chargeAmount);
+    if (!amt || amt <= 0) { toast({ title: "Enter a valid amount", variant: "destructive" }); return; }
+    setChargeLoading(true);
+    try {
+      const r = await sa(`/superadmin/claims/${charging.id}/charge`, {
+        method: "POST",
+        body: JSON.stringify({ mode: chargeMode, amount: amt, dueInDays: parseInt(dueInDays), installmentCount: parseInt(installmentCount), intervalDays: parseInt(intervalDays) }),
+      });
+      const data = await r.json();
+      if (!r.ok) { toast({ title: data.error ?? "Charge failed", variant: "destructive" }); return; }
+      setChargeResult(data);
+      setClaims(prev => prev.map(c => c.id === charging.id ? { ...c, chargeMode: data.mode, chargeStatus: "pending", chargedAmount: amt } : c));
+      toast({ title: chargeMode === "link" ? "Payment link created & emailed" : chargeMode === "invoice" ? "Invoice sent to renter" : `${installmentCount} installment invoices sent` });
+    } finally {
+      setChargeLoading(false);
+    }
   }
 
   const openCount = claims.filter(c => c.status === "open").length;
@@ -738,7 +789,7 @@ function ClaimsTab({ tenantId }: { tenantId: number }) {
         <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden">
           <table className="w-full text-sm">
             <thead><tr className="border-b border-slate-800">
-              {["#","Customer","Type","Claimed","Settled","Status","Date",""].map(h => (
+              {["#","Customer","Type","Claimed","Settled","Status","Charge",""].map(h => (
                 <th key={h} className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">{h}</th>
               ))}
             </tr></thead>
@@ -748,11 +799,31 @@ function ClaimsTab({ tenantId }: { tenantId: number }) {
                   <td className="px-4 py-3 text-slate-500 font-mono text-xs">#{c.id}</td>
                   <td className="px-4 py-3"><p className="text-white font-medium">{c.customerName}</p><p className="text-xs text-slate-500">{c.customerEmail}</p></td>
                   <td className="px-4 py-3 text-slate-300 capitalize text-xs">{c.type}</td>
-                  <td className="px-4 py-3 text-slate-300 text-xs">{c.claimedAmount != null ? `$${c.claimedAmount.toFixed(2)}` : "—"}</td>
-                  <td className="px-4 py-3 text-slate-300 text-xs">{c.settledAmount != null ? `$${c.settledAmount.toFixed(2)}` : "—"}</td>
+                  <td className="px-4 py-3 text-slate-300 text-xs">{c.claimedAmount != null ? `$${Number(c.claimedAmount).toFixed(2)}` : "—"}</td>
+                  <td className="px-4 py-3 text-slate-300 text-xs">{c.settledAmount != null ? `$${Number(c.settledAmount).toFixed(2)}` : "—"}</td>
                   <td className="px-4 py-3"><span className={`text-[11px] font-bold px-2 py-0.5 rounded-full capitalize ${CLAIM_STATUS[c.status] ?? "bg-slate-700 text-slate-300"}`}>{c.status}</span></td>
-                  <td className="px-4 py-3 text-slate-500 text-xs">{format(new Date(c.createdAt), "MMM d, yy")}</td>
-                  <td className="px-4 py-3"><button onClick={() => openClaim(c)} className="p-1.5 rounded text-slate-400 hover:text-white hover:bg-slate-700 opacity-0 group-hover:opacity-100 transition-opacity"><Edit2 className="w-3.5 h-3.5" /></button></td>
+                  <td className="px-4 py-3">
+                    {c.chargeStatus ? (
+                      <div className="flex flex-col gap-0.5">
+                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full capitalize w-fit ${CHARGE_STATUS_CHIP[c.chargeStatus] ?? "bg-slate-700 text-slate-300"}`}>{c.chargeStatus}</span>
+                        {c.chargedAmount != null && <span className="text-xs text-slate-400">${Number(c.chargedAmount).toFixed(2)}</span>}
+                        {c.chargeMode && <span className="text-[10px] text-slate-600 capitalize">{c.chargeMode === "link" ? "Pay Link" : c.chargeMode === "invoice" ? "Invoice" : "Installments"}</span>}
+                      </div>
+                    ) : (
+                      <button
+                        onClick={() => openCharge(c)}
+                        className="text-[11px] font-bold px-2 py-1 rounded bg-red-900/40 text-red-300 hover:bg-red-800/60 border border-red-800/50 transition-colors flex items-center gap-1 opacity-0 group-hover:opacity-100"
+                      >
+                        <DollarSign className="w-3 h-3" />Charge
+                      </button>
+                    )}
+                  </td>
+                  <td className="px-4 py-3">
+                    <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <button onClick={() => openEdit(c)} className="p-1.5 rounded text-slate-400 hover:text-white hover:bg-slate-700"><Edit2 className="w-3.5 h-3.5" /></button>
+                      {c.chargeStatus && <button onClick={() => openCharge(c)} className="p-1.5 rounded text-red-400 hover:text-red-200 hover:bg-red-900/30"><DollarSign className="w-3.5 h-3.5" /></button>}
+                    </div>
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -763,7 +834,7 @@ function ClaimsTab({ tenantId }: { tenantId: number }) {
       {/* Edit Dialog */}
       <Dialog open={!!selected} onOpenChange={v => { if (!v) setSelected(null); }}>
         <DialogContent className="bg-slate-900 border-slate-700 text-white max-w-md">
-          <DialogHeader><DialogTitle className="text-white">Claim #{selected?.id}</DialogTitle></DialogHeader>
+          <DialogHeader><DialogTitle className="text-white">Edit Claim #{selected?.id}</DialogTitle></DialogHeader>
           {selected && (
             <div className="space-y-4 py-2">
               <div className="bg-slate-800 rounded-lg p-3 text-sm space-y-1">
@@ -777,9 +848,7 @@ function ClaimsTab({ tenantId }: { tenantId: number }) {
                   <Label className="text-slate-400 text-xs">Status</Label>
                   <Select value={editStatus} onValueChange={setEditStatus}>
                     <SelectTrigger className="mt-1 bg-slate-800 border-slate-700 text-white"><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      {["open","reviewing","resolved","denied"].map(s => <SelectItem key={s} value={s} className="capitalize">{s}</SelectItem>)}
-                    </SelectContent>
+                    <SelectContent>{["open","reviewing","resolved","denied"].map(s => <SelectItem key={s} value={s} className="capitalize">{s}</SelectItem>)}</SelectContent>
                   </Select>
                 </div>
                 <div>
@@ -794,6 +863,166 @@ function ClaimsTab({ tenantId }: { tenantId: number }) {
               <DialogFooter>
                 <Button variant="ghost" onClick={() => setSelected(null)} className="text-slate-400">Cancel</Button>
                 <Button onClick={saveClaim} disabled={saving} className="bg-[#3ab549] hover:bg-[#2d9c3a] text-white font-bold">{saving ? "Saving…" : "Save"}</Button>
+              </DialogFooter>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Charge Dialog */}
+      <Dialog open={!!charging} onOpenChange={v => { if (!v) { setCharging(null); setChargeResult(null); } }}>
+        <DialogContent className="bg-slate-900 border-slate-700 text-white max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="text-white flex items-center gap-2">
+              <DollarSign className="w-5 h-5 text-red-400" />
+              Charge Renter — Claim #{charging?.id}
+            </DialogTitle>
+          </DialogHeader>
+
+          {charging && !chargeResult && (
+            <div className="space-y-5 py-2">
+              {/* Customer info */}
+              <div className="bg-slate-800 rounded-lg p-3 text-sm flex items-start justify-between">
+                <div>
+                  <p className="text-white font-medium">{charging.customerName}</p>
+                  <p className="text-slate-400 text-xs">{charging.customerEmail}</p>
+                  <p className="text-slate-500 text-xs mt-0.5 capitalize">{charging.type} claim</p>
+                </div>
+                {charging.claimedAmount != null && (
+                  <div className="text-right">
+                    <p className="text-xs text-slate-500">Claimed</p>
+                    <p className="text-white font-bold">${Number(charging.claimedAmount).toFixed(2)}</p>
+                  </div>
+                )}
+              </div>
+
+              {/* Charge amount */}
+              <div>
+                <Label className="text-slate-300 text-sm font-semibold">Charge Amount</Label>
+                <div className="relative mt-1.5">
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 font-bold">$</span>
+                  <Input
+                    type="number"
+                    value={chargeAmount}
+                    onChange={e => setChargeAmount(e.target.value)}
+                    placeholder="0.00"
+                    step="0.01"
+                    min="0.50"
+                    className="pl-7 bg-slate-800 border-slate-700 text-white text-lg font-bold"
+                  />
+                </div>
+              </div>
+
+              {/* Mode selector */}
+              <div>
+                <Label className="text-slate-300 text-sm font-semibold">Payment Method</Label>
+                <div className="grid grid-cols-3 gap-2 mt-2">
+                  {([
+                    { value: "link", icon: ExternalLink, label: "Payment Link", desc: "Renter clicks a link to pay now" },
+                    { value: "invoice", icon: Clock, label: "Invoice", desc: "Stripe invoice with due date" },
+                    { value: "installments", icon: AlertCircle, label: "Installments", desc: "Split into scheduled invoices" },
+                  ] as const).map(opt => (
+                    <button
+                      key={opt.value}
+                      onClick={() => setChargeMode(opt.value)}
+                      className={`rounded-lg border p-3 text-left transition-all ${chargeMode === opt.value ? "border-red-500 bg-red-500/10" : "border-slate-700 bg-slate-800 hover:border-slate-600"}`}
+                    >
+                      <opt.icon className={`w-4 h-4 mb-1.5 ${chargeMode === opt.value ? "text-red-400" : "text-slate-500"}`} />
+                      <p className={`text-xs font-bold ${chargeMode === opt.value ? "text-red-300" : "text-slate-300"}`}>{opt.label}</p>
+                      <p className="text-[10px] text-slate-500 mt-0.5 leading-tight">{opt.desc}</p>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Invoice options */}
+              {chargeMode === "invoice" && (
+                <div>
+                  <Label className="text-slate-400 text-xs">Days Until Due</Label>
+                  <Select value={dueInDays} onValueChange={setDueInDays}>
+                    <SelectTrigger className="mt-1 bg-slate-800 border-slate-700 text-white"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {[["7","7 days"], ["14","14 days"], ["30","30 days"], ["60","60 days"]].map(([v, l]) => <SelectItem key={v} value={v}>{l}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+
+              {/* Installment options */}
+              {chargeMode === "installments" && (
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <Label className="text-slate-400 text-xs">Number of Installments</Label>
+                    <Select value={installmentCount} onValueChange={setInstallmentCount}>
+                      <SelectTrigger className="mt-1 bg-slate-800 border-slate-700 text-white"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        {[["2","2 payments"], ["3","3 payments"], ["4","4 payments"], ["6","6 payments"]].map(([v, l]) => <SelectItem key={v} value={v}>{l}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <Label className="text-slate-400 text-xs">Interval Between Payments</Label>
+                    <Select value={intervalDays} onValueChange={setIntervalDays}>
+                      <SelectTrigger className="mt-1 bg-slate-800 border-slate-700 text-white"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        {[["7","Weekly"], ["14","Bi-weekly"], ["30","Monthly"]].map(([v, l]) => <SelectItem key={v} value={v}>{l}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  {chargeAmount && parseFloat(chargeAmount) > 0 && (
+                    <div className="col-span-2 bg-slate-800 rounded-lg p-2.5 text-xs text-slate-400">
+                      ~${(parseFloat(chargeAmount) / parseInt(installmentCount)).toFixed(2)} per installment,&nbsp;
+                      {installmentCount} invoices sent at {intervalDays}-day intervals
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Summary */}
+              <div className="bg-red-950/30 border border-red-900/40 rounded-lg p-3 text-xs text-red-300">
+                <AlertCircle className="w-3.5 h-3.5 inline mr-1.5 mb-0.5" />
+                {chargeMode === "link" && "A payment link will be created in Stripe and emailed to the renter. The renter pays by clicking the link."}
+                {chargeMode === "invoice" && `A Stripe Invoice will be created and emailed to ${charging.customerEmail} with a ${dueInDays}-day payment window.`}
+                {chargeMode === "installments" && `${installmentCount} Stripe Invoices will be created and emailed to ${charging.customerEmail}, each due ${intervalDays} days apart.`}
+              </div>
+
+              <DialogFooter>
+                <Button variant="ghost" onClick={() => setCharging(null)} className="text-slate-400">Cancel</Button>
+                <Button
+                  onClick={submitCharge}
+                  disabled={chargeLoading || !chargeAmount || parseFloat(chargeAmount) <= 0}
+                  className="bg-red-600 hover:bg-red-700 text-white font-bold"
+                >
+                  {chargeLoading ? "Processing…" : chargeMode === "link" ? "Create Payment Link" : chargeMode === "invoice" ? "Send Invoice" : `Send ${installmentCount} Invoices`}
+                </Button>
+              </DialogFooter>
+            </div>
+          )}
+
+          {/* Success state */}
+          {chargeResult && (
+            <div className="py-4 space-y-4">
+              <div className="text-center">
+                <CheckCircle2 className="w-12 h-12 text-green-400 mx-auto mb-3" />
+                <p className="text-white font-bold text-lg">
+                  {chargeResult.mode === "link" ? "Payment Link Created" : chargeResult.mode === "invoice" ? "Invoice Sent" : "Installment Invoices Sent"}
+                </p>
+                <p className="text-slate-400 text-sm mt-1">
+                  A notification email has been sent to <strong className="text-slate-200">{charging?.customerEmail}</strong>
+                </p>
+              </div>
+              {chargeResult.paymentUrl && (
+                <div className="bg-slate-800 rounded-lg p-3">
+                  <p className="text-slate-500 text-xs mb-1">Payment URL</p>
+                  <a href={chargeResult.paymentUrl} target="_blank" rel="noopener noreferrer"
+                    className="text-blue-400 text-xs break-all hover:underline flex items-center gap-1">
+                    <ExternalLink className="w-3 h-3 flex-shrink-0" />
+                    {chargeResult.paymentUrl}
+                  </a>
+                </div>
+              )}
+              <DialogFooter>
+                <Button onClick={() => { setCharging(null); setChargeResult(null); }} className="bg-slate-700 hover:bg-slate-600 text-white">Done</Button>
               </DialogFooter>
             </div>
           )}

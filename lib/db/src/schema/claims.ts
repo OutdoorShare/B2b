@@ -18,6 +18,10 @@ export const claimsTable = pgTable("claims", {
     .default("open"),
   adminNotes: text("admin_notes"),
   evidenceUrls: text("evidence_urls"),
+  chargeMode: text("charge_mode"),
+  chargeStatus: text("charge_status"),
+  chargedAmount: decimal("charged_amount", { precision: 10, scale: 2 }),
+  stripeChargeRefs: text("stripe_charge_refs"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });

@@ -269,6 +269,61 @@ export async function sendAccountUpdatedEmail(opts: {
 }
 
 // ── Claim alert email (to superadmin) ─────────────────────────────────────────
+export async function sendClaimChargeEmail(opts: {
+  claimId: number;
+  customerName: string;
+  customerEmail: string;
+  amount: number;
+  mode: "link" | "invoice" | "installments";
+  paymentUrl: string | null;
+  tenantName: string;
+  installmentCount?: number;
+  dueInDays?: number;
+}): Promise<void> {
+  const { claimId, customerName, customerEmail, amount, mode, paymentUrl, tenantName, installmentCount, dueInDays } = opts;
+
+  const modeLabel = mode === "link" ? "Payment Link" : mode === "invoice" ? "Invoice" : "Installment Plan";
+  const modeDesc = mode === "link"
+    ? "A payment link has been sent to collect the damage amount. Please click the button below to complete your payment."
+    : mode === "invoice"
+    ? `A Stripe Invoice has been emailed to you directly and is due in ${dueInDays ?? 7} days. You can also use the button below to access your invoice.`
+    : `Your damage charge has been split into ${installmentCount ?? 3} equal installments. You will receive separate invoice emails for each installment due on a rolling schedule.`;
+
+  const tableRows: { label: string; value: string; mono?: boolean }[] = [
+    { label: "Claim #",   value: `#${claimId}`, mono: true },
+    { label: "Amount",    value: `$${amount.toFixed(2)}` },
+    { label: "Company",   value: tenantName },
+    { label: "Method",    value: modeLabel },
+    ...(mode === "installments" ? [{ label: "Installments", value: `${installmentCount ?? 3} payments` }] : []),
+    ...(mode === "invoice" && dueInDays != null ? [{ label: "Due In", value: `${dueInDays} days` }] : []),
+  ];
+
+  const body = `
+    <p style="margin:0 0 8px;font-size:18px;font-weight:700;color:${BRAND_DARK};">Damage Charge Notice</p>
+    <p style="margin:0 0 20px;font-size:15px;color:#374151;line-height:1.6;">
+      Dear <strong>${customerName}</strong>, a damage charge of <strong>$${amount.toFixed(2)}</strong> has been issued by <strong>${tenantName}</strong> in connection with your recent rental. ${modeDesc}
+    </p>
+    ${infoTable(tableRows)}
+    ${paymentUrl ? ctaButton(mode === "link" ? "Pay Now" : "View Invoice", paymentUrl, "#dc2626") : ""}
+    <p style="margin:0;font-size:13px;color:#9ca3af;text-align:center;">
+      If you believe this charge is in error, please contact ${tenantName} directly or reply to this email.
+    </p>
+  `;
+
+  const html = emailShell({
+    preheader: `Damage charge of $${amount.toFixed(2)} has been issued for Claim #${claimId} — action required.`,
+    badgeLabel: "Damage Charge — Action Required",
+    badgeColor: "#dc2626",
+    body,
+  });
+
+  const gmail = await getUncachableGmailClient();
+  await gmail.users.messages.send({
+    userId: "me",
+    requestBody: { raw: makeRawEmail(customerEmail, `[Claim #${claimId}] Damage Charge Notice — $${amount.toFixed(2)}`, html) },
+  });
+}
+
 export async function sendClaimAlertEmail(opts: {
   claimId: number;
   customerName: string;

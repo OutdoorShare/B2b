@@ -4,7 +4,8 @@ import { tenantsTable, listingsTable, bookingsTable, superadminUsersTable, busin
 import { eq, sql, desc, and, ne } from "drizzle-orm";
 import { scrypt, randomBytes, timingSafeEqual } from "crypto";
 import { promisify } from "util";
-import { sendWelcomeEmail, sendAccountUpdatedEmail } from "../services/gmail";
+import { sendWelcomeEmail, sendAccountUpdatedEmail, sendClaimChargeEmail } from "../services/gmail";
+import { stripe } from "../services/stripe";
 
 const scryptAsync = promisify(scrypt);
 
@@ -721,6 +722,10 @@ router.get("/superadmin/claims", requireSuperAdmin, async (req, res) => {
         status: claimsTable.status,
         adminNotes: claimsTable.adminNotes,
         evidenceUrls: claimsTable.evidenceUrls,
+        chargeMode: claimsTable.chargeMode,
+        chargeStatus: claimsTable.chargeStatus,
+        chargedAmount: claimsTable.chargedAmount,
+        stripeChargeRefs: claimsTable.stripeChargeRefs,
         createdAt: claimsTable.createdAt,
         updatedAt: claimsTable.updatedAt,
         companyName: tenantsTable.name,
@@ -741,6 +746,7 @@ router.get("/superadmin/claims", requireSuperAdmin, async (req, res) => {
       ...r,
       claimedAmount: r.claimedAmount ? parseFloat(r.claimedAmount) : null,
       settledAmount: r.settledAmount ? parseFloat(r.settledAmount) : null,
+      chargedAmount: r.chargedAmount ? parseFloat(r.chargedAmount) : null,
       createdAt: r.createdAt.toISOString(),
       updatedAt: r.updatedAt.toISOString(),
     })));
@@ -775,6 +781,120 @@ router.put("/superadmin/claims/:id", requireSuperAdmin, async (req, res) => {
   } catch (err) {
     req.log.error(err);
     res.status(500).json({ error: "Failed to update claim" });
+  }
+});
+
+// ── POST /superadmin/claims/:id/charge ────────────────────────────────────────
+router.post("/superadmin/claims/:id/charge", requireSuperAdmin, async (req, res) => {
+  try {
+    const claimId = Number(req.params.id);
+    const { mode, amount, dueInDays = 7, installmentCount = 3, intervalDays = 30 } = req.body;
+
+    if (!["link", "invoice", "installments"].includes(mode)) {
+      return res.status(400).json({ error: "mode must be link, invoice, or installments" });
+    }
+    const amountFloat = parseFloat(amount);
+    if (!amountFloat || amountFloat <= 0) return res.status(400).json({ error: "amount must be > 0" });
+
+    const [claim] = await db.select().from(claimsTable).where(eq(claimsTable.id, claimId)).limit(1);
+    if (!claim) return res.status(404).json({ error: "Claim not found" });
+
+    const amountCents = Math.round(amountFloat * 100);
+    const customerEmail = claim.customerEmail;
+    const customerName  = claim.customerName;
+
+    // Resolve tenant Stripe account if available
+    let stripeAccountId: string | undefined;
+    let tenantName = "OutdoorShare";
+    if (claim.tenantId) {
+      const [t] = await db
+        .select({ sid: tenantsTable.stripeAccountId, enabled: tenantsTable.stripeChargesEnabled, name: tenantsTable.name })
+        .from(tenantsTable).where(eq(tenantsTable.id, claim.tenantId)).limit(1);
+      if (t?.enabled && t.sid) stripeAccountId = t.sid;
+      if (t?.name) tenantName = t.name;
+    }
+    const stripeOpts = stripeAccountId ? { stripeAccount: stripeAccountId } : undefined;
+
+    const refs: string[] = [];
+    let paymentUrl: string | null = null;
+
+    if (mode === "link") {
+      const product = await stripe.products.create(
+        { name: `Damage Claim #${claimId} — ${tenantName}` },
+        stripeOpts,
+      );
+      const price = await stripe.prices.create(
+        { product: product.id, unit_amount: amountCents, currency: "usd" },
+        stripeOpts,
+      );
+      const link = await stripe.paymentLinks.create(
+        { line_items: [{ price: price.id, quantity: 1 }] },
+        stripeOpts,
+      );
+      refs.push(link.id);
+      paymentUrl = link.url;
+
+    } else if (mode === "invoice") {
+      const customer = await stripe.customers.create({ email: customerEmail, name: customerName }, stripeOpts);
+      await stripe.invoiceItems.create(
+        { customer: customer.id, amount: amountCents, currency: "usd", description: `Damage Claim #${claimId} — ${tenantName}` },
+        stripeOpts,
+      );
+      const invoice = await stripe.invoices.create(
+        { customer: customer.id, collection_method: "send_invoice", days_until_due: Number(dueInDays), auto_advance: false },
+        stripeOpts,
+      );
+      const finalized = await stripe.invoices.finalizeInvoice(invoice.id, {}, stripeOpts);
+      await stripe.invoices.sendInvoice(finalized.id, {}, stripeOpts);
+      refs.push(finalized.id);
+      paymentUrl = finalized.hosted_invoice_url ?? null;
+
+    } else {
+      // installments
+      const n = Math.max(2, Math.min(12, Number(installmentCount)));
+      const interval = Math.max(7, Number(intervalDays));
+      const baseAmt = Math.floor(amountCents / n);
+      const remainder = amountCents - baseAmt * n;
+
+      const customer = await stripe.customers.create({ email: customerEmail, name: customerName }, stripeOpts);
+      for (let i = 0; i < n; i++) {
+        const instAmt = i === n - 1 ? baseAmt + remainder : baseAmt;
+        await stripe.invoiceItems.create(
+          { customer: customer.id, amount: instAmt, currency: "usd", description: `Damage Claim #${claimId} — Installment ${i + 1} of ${n}` },
+          stripeOpts,
+        );
+        const inv = await stripe.invoices.create(
+          { customer: customer.id, collection_method: "send_invoice", days_until_due: (i + 1) * interval, auto_advance: false },
+          stripeOpts,
+        );
+        const fin = await stripe.invoices.finalizeInvoice(inv.id, {}, stripeOpts);
+        await stripe.invoices.sendInvoice(fin.id, {}, stripeOpts);
+        refs.push(fin.id);
+        if (i === 0 && fin.hosted_invoice_url) paymentUrl = fin.hosted_invoice_url;
+      }
+    }
+
+    // Persist charge info on claim
+    await db.update(claimsTable).set({
+      chargeMode: mode,
+      chargeStatus: "pending",
+      chargedAmount: amountFloat.toFixed(2),
+      stripeChargeRefs: JSON.stringify(refs),
+      updatedAt: new Date(),
+    }).where(eq(claimsTable.id, claimId));
+
+    // Notify renter by email (fire-and-forget)
+    sendClaimChargeEmail({
+      claimId, customerEmail, customerName, amount: amountFloat,
+      mode, paymentUrl, tenantName,
+      installmentCount: Number(installmentCount),
+      dueInDays: Number(dueInDays),
+    }).catch(err => console.error("[claim charge email]", err));
+
+    res.json({ ok: true, mode, refs, paymentUrl });
+  } catch (err: any) {
+    req.log.error(err);
+    res.status(500).json({ error: err.message ?? "Failed to process charge" });
   }
 });
 
