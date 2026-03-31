@@ -1,10 +1,10 @@
 import { useState, useEffect, useCallback } from "react";
-import { useLocation, Link } from "wouter";
+import { useLocation } from "wouter";
 import {
   Building2, Users, BarChart3, Package,
   Plus, Edit, Trash2, CheckCircle2, XCircle,
   AlertTriangle, RefreshCcw, Eye, EyeOff,
-  ChevronRight, Search, ExternalLink
+  Search, ExternalLink
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -249,7 +249,7 @@ export default function SuperAdminDashboard() {
               </thead>
               <tbody>
                 {filtered.map(t => (
-                  <tr key={t.id} className="border-b border-slate-800/50 hover:bg-slate-800/30 transition-colors group">
+                  <tr key={t.id} onClick={() => setLocation(`/superadmin/companies/${t.id}`)} className="border-b border-slate-800/50 hover:bg-slate-800/30 transition-colors group cursor-pointer">
                     <td className="px-4 py-3.5">
                       <p className="font-semibold text-white">{t.name}</p>
                       <p className="text-xs text-slate-500 font-mono">{t.slug}</p>
@@ -275,19 +275,8 @@ export default function SuperAdminDashboard() {
                     <td className="px-4 py-3.5 text-slate-500 text-xs">
                       {format(new Date(t.createdAt), "MMM d, yyyy")}
                     </td>
-                    <td className="px-4 py-3.5">
+                    <td className="px-4 py-3.5" onClick={e => e.stopPropagation()}>
                       <div className="flex items-center gap-1">
-                        <Link href={`/superadmin/companies/${t.id}`}>
-                          <button
-                            title="Manage company"
-                            className="flex items-center gap-1 px-2.5 py-1 rounded text-xs font-semibold transition-colors"
-                            style={{ backgroundColor: `${OS_GREEN}20`, color: OS_GREEN }}
-                            onMouseEnter={e => (e.currentTarget.style.backgroundColor = `${OS_GREEN}35`)}
-                            onMouseLeave={e => (e.currentTarget.style.backgroundColor = `${OS_GREEN}20`)}
-                          >
-                            Manage <ChevronRight className="w-3 h-3" />
-                          </button>
-                        </Link>
                         <button
                           onClick={() => handleStatusToggle(t)}
                           title={t.status === "active" ? "Deactivate" : "Activate"}
