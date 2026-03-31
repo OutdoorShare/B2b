@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
-import { customersTable, bookingsTable, tenantsTable } from "@workspace/db/schema";
+import { customersTable, bookingsTable, tenantsTable, businessProfileTable } from "@workspace/db/schema";
 import { eq, and, desc } from "drizzle-orm";
 import { scrypt, randomBytes, timingSafeEqual } from "crypto";
 import { promisify } from "util";
@@ -120,14 +120,20 @@ router.post("/customers/set-password", async (req, res) => {
       .values({ email: normalEmail, passwordHash, name, phone: phone ?? undefined, tenantSlug })
       .returning();
 
-    // Send credentials email in background
+    // Send credentials email in background (fetch company name for branded From)
     (async () => {
       try {
+        const [biz] = await db
+          .select({ businessName: businessProfileTable.businessName })
+          .from(businessProfileTable)
+          .where(eq(businessProfileTable.tenantId, tenant.id));
         await sendCredentialsEmail({
           customerName: name,
           customerEmail: normalEmail,
           tenantSlug,
           password,
+          companyName: biz?.businessName ?? undefined,
+          adminEmail: tenant.email,
         });
       } catch (emailErr) {
         console.warn("Failed to send credentials email", emailErr);

@@ -170,6 +170,7 @@ router.post("/bookings", async (req, res) => {
         try {
           let companyName = "Rental Company";
           let tenantSlug = "";
+          let adminEmail: string | undefined;
           if (req.tenantId) {
             const [biz] = await db
               .select({ businessName: businessProfileTable.businessName })
@@ -177,10 +178,11 @@ router.post("/bookings", async (req, res) => {
               .where(eq(businessProfileTable.tenantId, req.tenantId));
             if (biz?.businessName) companyName = biz.businessName;
             const [t] = await db
-              .select({ slug: tenantsTable.slug })
+              .select({ slug: tenantsTable.slug, email: tenantsTable.email })
               .from(tenantsTable)
               .where(eq(tenantsTable.id, req.tenantId));
             if (t?.slug) tenantSlug = t.slug;
+            if (t?.email) adminEmail = t.email;
           }
           await sendKioskAccountSetupEmail({
             customerName: created.customerName,
@@ -188,6 +190,7 @@ router.post("/bookings", async (req, res) => {
             bookingId: created.id,
             tenantSlug,
             companyName,
+            adminEmail,
             startDate: created.startDate,
             endDate: created.endDate,
             listingTitle: listing.title,

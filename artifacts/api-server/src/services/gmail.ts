@@ -53,21 +53,25 @@ async function getUncachableGmailClient() {
 
 const PLATFORM_FROM = "OutdoorShare <contact.us@myoutdoorshare.com>";
 
-function makeRawEmail(to: string, subject: string, htmlBody: string, from?: string): string {
+function makeRawEmail(to: string, subject: string, htmlBody: string, from?: string, replyTo?: string): string {
   const boundary = "boundary_outdoorshare";
-  const message = [
+  const lines = [
     `From: ${from ?? PLATFORM_FROM}`,
     `To: ${to}`,
     `Subject: ${subject}`,
     `MIME-Version: 1.0`,
     `Content-Type: multipart/alternative; boundary="${boundary}"`,
+  ];
+  if (replyTo) lines.push(`Reply-To: ${replyTo}`);
+  lines.push(
     ``,
     `--${boundary}`,
     `Content-Type: text/html; charset=UTF-8`,
     ``,
     htmlBody,
     `--${boundary}--`,
-  ].join("\r\n");
+  );
+  const message = lines.join("\r\n");
   return Buffer.from(message)
     .toString("base64")
     .replace(/\+/g, "-")
@@ -404,9 +408,14 @@ export async function sendCredentialsEmail(opts: {
   customerEmail: string;
   tenantSlug: string;
   password: string;
+  companyName?: string;
+  adminEmail?: string;
 }): Promise<void> {
-  const { customerName, customerEmail, tenantSlug, password } = opts;
+  const { customerName, customerEmail, tenantSlug, password, companyName, adminEmail } = opts;
   const loginUrl = `${APP_URL}/${tenantSlug}/login`;
+  const fromHeader = companyName
+    ? `${companyName} <contact.us@myoutdoorshare.com>`
+    : PLATFORM_FROM;
 
   const body = `
     <p style="margin:0 0 8px;font-size:18px;font-weight:700;color:${BRAND_DARK};">Your account is ready, ${customerName}!</p>
@@ -436,7 +445,7 @@ export async function sendCredentialsEmail(opts: {
   const gmail = await getUncachableGmailClient();
   await gmail.users.messages.send({
     userId: "me",
-    requestBody: { raw: makeRawEmail(customerEmail, "Your account login credentials", html) },
+    requestBody: { raw: makeRawEmail(customerEmail, "Your account login credentials", html, fromHeader, adminEmail) },
   });
 }
 
@@ -447,11 +456,13 @@ export async function sendKioskAccountSetupEmail(opts: {
   bookingId: number;
   tenantSlug: string;
   companyName: string;
+  adminEmail?: string;
   startDate: string;
   endDate: string;
   listingTitle: string;
 }): Promise<void> {
-  const { customerName, customerEmail, bookingId, tenantSlug, companyName, startDate, endDate, listingTitle } = opts;
+  const { customerName, customerEmail, bookingId, tenantSlug, companyName, adminEmail, startDate, endDate, listingTitle } = opts;
+  const fromHeader = `${companyName} <contact.us@myoutdoorshare.com>`;
   const registerUrl = `${APP_URL}/${tenantSlug}/set-password?email=${encodeURIComponent(customerEmail)}`;
 
   const body = `
@@ -489,7 +500,7 @@ export async function sendKioskAccountSetupEmail(opts: {
   const gmail = await getUncachableGmailClient();
   await gmail.users.messages.send({
     userId: "me",
-    requestBody: { raw: makeRawEmail(customerEmail, `Your rental at ${companyName} is confirmed — set up your account`, html) },
+    requestBody: { raw: makeRawEmail(customerEmail, `Your rental at ${companyName} is confirmed — set up your account`, html, fromHeader, adminEmail) },
   });
 }
 
