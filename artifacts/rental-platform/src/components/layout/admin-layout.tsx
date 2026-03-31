@@ -15,6 +15,7 @@ import {
   FileSignature,
   Wallet,
   Tag,
+  Plus,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useGetBusinessProfile } from "@workspace/api-client-react";
@@ -153,7 +154,14 @@ export function AdminLayout({ children }: { children: React.ReactNode }) {
           <h1 className="text-xl font-semibold text-foreground">
             {activeItem?.name ?? "Dashboard"}
           </h1>
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-3">
+            <Link
+              href={`${adminBase}/bookings/new`}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 transition-colors"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              New Booking
+            </Link>
             <a
               href={storefrontHref}
               target="_blank"
