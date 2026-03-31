@@ -1,7 +1,8 @@
 import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
-import { claimsTable, bookingsTable, listingsTable } from "@workspace/db/schema";
+import { claimsTable, bookingsTable, listingsTable, tenantsTable } from "@workspace/db/schema";
 import { eq, desc, and, gte, lte } from "drizzle-orm";
+import { sendClaimAlertEmail } from "../services/gmail";
 
 const router: IRouter = Router();
 
@@ -99,6 +100,35 @@ router.post("/claims", async (req, res) => {
       .returning();
 
     res.status(201).json(formatClaim(created));
+
+    // Fire-and-forget email alert to superadmin
+    (async () => {
+      try {
+        let companyName = "Unknown Company";
+        let slug = "unknown";
+        if (created.tenantId) {
+          const [tenant] = await db
+            .select({ name: tenantsTable.name, slug: tenantsTable.slug })
+            .from(tenantsTable)
+            .where(eq(tenantsTable.id, created.tenantId))
+            .limit(1);
+          if (tenant) { companyName = tenant.name; slug = tenant.slug; }
+        }
+        await sendClaimAlertEmail({
+          claimId: created.id,
+          customerName: created.customerName,
+          customerEmail: created.customerEmail,
+          type: created.type,
+          description: created.description,
+          claimedAmount: created.claimedAmount ? parseFloat(created.claimedAmount) : null,
+          companyName,
+          slug,
+          bookingId: created.bookingId ?? null,
+        });
+      } catch (e) {
+        req.log.warn({ err: e }, "Failed to send claim alert email (non-fatal)");
+      }
+    })();
   } catch (err) {
     req.log.error(err);
     res.status(500).json({ error: "Failed to create claim" });

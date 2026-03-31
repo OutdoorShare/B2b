@@ -267,3 +267,61 @@ export async function sendAccountUpdatedEmail(opts: {
     requestBody: { raw: makeRawEmail(toEmail, `Your OutdoorShare account has been updated`, html) },
   });
 }
+
+// ── Claim alert email (to superadmin) ─────────────────────────────────────────
+export async function sendClaimAlertEmail(opts: {
+  claimId: number;
+  customerName: string;
+  customerEmail: string;
+  type: string;
+  description: string;
+  claimedAmount: number | null;
+  companyName: string;
+  slug: string;
+  bookingId: number | null;
+}): Promise<void> {
+  const { claimId, customerName, customerEmail, type, description, claimedAmount, companyName, slug, bookingId } = opts;
+
+  const gmail = await getUncachableGmailClient();
+  const profile = await gmail.users.getProfile({ userId: "me" });
+  const toEmail = profile.data.emailAddress!;
+
+  const claimsUrl = `${APP_URL}/superadmin/claims`;
+  const typeLabel = type.charAt(0).toUpperCase() + type.slice(1);
+  const descPreview = description.length > 140 ? description.substring(0, 140) + "…" : description;
+
+  const tableRows: { label: string; value: string; mono?: boolean }[] = [
+    { label: "Claim #",     value: `#${claimId}`, mono: true },
+    { label: "Customer",    value: customerName },
+    { label: "Email",       value: customerEmail },
+    { label: "Type",        value: typeLabel },
+    { label: "Company",     value: `${companyName} (/${slug})` },
+    ...(claimedAmount != null ? [{ label: "Claimed",  value: `$${claimedAmount.toFixed(2)}` }] : []),
+    ...(bookingId    != null ? [{ label: "Booking #", value: `#${bookingId}`, mono: true }]    : []),
+    { label: "Details",     value: descPreview },
+  ];
+
+  const body = `
+    <p style="margin:0 0 8px;font-size:18px;font-weight:700;color:${BRAND_DARK};">New Claim Submitted</p>
+    <p style="margin:0 0 20px;font-size:15px;color:#374151;line-height:1.6;">
+      A new <strong>${typeLabel}</strong> claim has been filed for <strong>${companyName}</strong> and requires your attention.
+    </p>
+    ${infoTable(tableRows)}
+    ${ctaButton("Review Claim in Console", claimsUrl, "#dc2626")}
+    <p style="margin:0;font-size:13px;color:#9ca3af;text-align:center;">
+      Log in to the Super Admin console to update the status or add notes.
+    </p>
+  `;
+
+  const html = emailShell({
+    preheader: `New ${typeLabel} claim from ${customerName} at ${companyName} — action required.`,
+    badgeLabel: "New Claim — Action Required",
+    badgeColor: "#dc2626",
+    body,
+  });
+
+  await gmail.users.messages.send({
+    userId: "me",
+    requestBody: { raw: makeRawEmail(toEmail, `[Claim #${claimId}] New ${typeLabel} claim — ${companyName}`, html) },
+  });
+}

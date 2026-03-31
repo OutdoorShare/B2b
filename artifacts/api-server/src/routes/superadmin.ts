@@ -1,6 +1,6 @@
 import { Router, type IRouter, type Request, type Response, type NextFunction } from "express";
 import { db } from "@workspace/db";
-import { tenantsTable, listingsTable, bookingsTable, superadminUsersTable, businessProfileTable, platformSettingsTable, categoriesTable } from "@workspace/db/schema";
+import { tenantsTable, listingsTable, bookingsTable, superadminUsersTable, businessProfileTable, platformSettingsTable, categoriesTable, claimsTable } from "@workspace/db/schema";
 import { eq, sql, desc, and, ne } from "drizzle-orm";
 import { scrypt, randomBytes, timingSafeEqual } from "crypto";
 import { promisify } from "util";
@@ -612,6 +612,82 @@ router.delete("/superadmin/agreement/category/:slug", requireSuperAdmin, async (
     res.json({ ok: true });
   } catch {
     res.status(500).json({ error: "Failed to delete category agreement" });
+  }
+});
+
+// ── GET /superadmin/claims ─────────────────────────────────────────────────────
+router.get("/superadmin/claims", requireSuperAdmin, async (req, res) => {
+  try {
+    const { status, type, tenantId } = req.query;
+    const rows = await db
+      .select({
+        id: claimsTable.id,
+        tenantId: claimsTable.tenantId,
+        bookingId: claimsTable.bookingId,
+        listingId: claimsTable.listingId,
+        customerName: claimsTable.customerName,
+        customerEmail: claimsTable.customerEmail,
+        type: claimsTable.type,
+        description: claimsTable.description,
+        claimedAmount: claimsTable.claimedAmount,
+        settledAmount: claimsTable.settledAmount,
+        status: claimsTable.status,
+        adminNotes: claimsTable.adminNotes,
+        evidenceUrls: claimsTable.evidenceUrls,
+        createdAt: claimsTable.createdAt,
+        updatedAt: claimsTable.updatedAt,
+        companyName: tenantsTable.name,
+        companySlug: tenantsTable.slug,
+      })
+      .from(claimsTable)
+      .leftJoin(tenantsTable, eq(claimsTable.tenantId, tenantsTable.id))
+      .where(
+        and(
+          status ? eq(claimsTable.status, status as any) : undefined,
+          type ? eq(claimsTable.type, type as any) : undefined,
+          tenantId ? eq(claimsTable.tenantId, Number(tenantId)) : undefined,
+        )
+      )
+      .orderBy(desc(claimsTable.createdAt));
+
+    res.json(rows.map(r => ({
+      ...r,
+      claimedAmount: r.claimedAmount ? parseFloat(r.claimedAmount) : null,
+      settledAmount: r.settledAmount ? parseFloat(r.settledAmount) : null,
+      createdAt: r.createdAt.toISOString(),
+      updatedAt: r.updatedAt.toISOString(),
+    })));
+  } catch (err) {
+    req.log.error(err);
+    res.status(500).json({ error: "Failed to fetch claims" });
+  }
+});
+
+// ── PUT /superadmin/claims/:id ─────────────────────────────────────────────────
+router.put("/superadmin/claims/:id", requireSuperAdmin, async (req, res) => {
+  try {
+    const { status, adminNotes, settledAmount } = req.body;
+    const [updated] = await db
+      .update(claimsTable)
+      .set({
+        ...(status !== undefined && { status }),
+        ...(adminNotes !== undefined && { adminNotes }),
+        ...(settledAmount !== undefined && { settledAmount: settledAmount != null ? String(settledAmount) : null }),
+        updatedAt: new Date(),
+      })
+      .where(eq(claimsTable.id, Number(req.params.id)))
+      .returning();
+    if (!updated) return res.status(404).json({ error: "Not found" });
+    res.json({
+      ...updated,
+      claimedAmount: updated.claimedAmount ? parseFloat(updated.claimedAmount) : null,
+      settledAmount: updated.settledAmount ? parseFloat(updated.settledAmount) : null,
+      createdAt: updated.createdAt.toISOString(),
+      updatedAt: updated.updatedAt.toISOString(),
+    });
+  } catch (err) {
+    req.log.error(err);
+    res.status(500).json({ error: "Failed to update claim" });
   }
 });
 
