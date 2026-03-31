@@ -7,6 +7,7 @@ import uploadRouter from "./routes/upload";
 import stripeRouter from "./routes/stripe";
 import promoCodesRouter from "./routes/promo-codes";
 import listingRulesRouter from "./routes/listing-rules";
+import protectionPlansRouter from "./routes/superadmin-protection";
 import { logger } from "./lib/logger";
 import { resolveTenant } from "./middleware/admin-auth";
 
@@ -48,6 +49,7 @@ app.use("/api", uploadRouter);
 app.use("/api", stripeRouter);
 app.use("/api", promoCodesRouter);
 app.use("/api", listingRulesRouter);
+app.use("/api", protectionPlansRouter);
 app.use("/api", router);
 
 export default app;

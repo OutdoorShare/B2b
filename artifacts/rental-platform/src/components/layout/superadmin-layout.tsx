@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Link, useLocation } from "wouter";
 import {
   LayoutDashboard, Building2, LogOut, ChevronRight,
-  Menu, X, Users, Package, FileText, ShieldAlert, Monitor
+  Menu, X, Users, Package, FileText, ShieldAlert, Monitor, Shield
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -13,6 +13,7 @@ const navigation = [
   { name: "Companies", href: "/superadmin/tenants", icon: Building2 },
   { name: "All Products", href: "/superadmin/listings", icon: Package },
   { name: "Claims", href: "/superadmin/claims", icon: ShieldAlert },
+  { name: "Protection Plan", href: "/superadmin/protection", icon: Shield },
   { name: "Team", href: "/superadmin/team", icon: Users },
   { name: "Agreement", href: "/superadmin/agreement", icon: FileText },
   { name: "Demo Site", href: "/superadmin/demo", icon: Monitor },
