@@ -44,6 +44,13 @@ export default function StorefrontGearDetail() {
   const [addons, setAddons] = useState<Addon[]>([]);
   const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined);
   const [bookedRanges, setBookedRanges] = useState<{ start: Date; end: Date }[]>([]);
+  const [calendarMonths, setCalendarMonths] = useState(() => window.innerWidth >= 640 ? 2 : 1);
+
+  useEffect(() => {
+    const handler = () => setCalendarMonths(window.innerWidth >= 640 ? 2 : 1);
+    window.addEventListener("resize", handler);
+    return () => window.removeEventListener("resize", handler);
+  }, []);
 
   const { data: listing, isLoading } = useGetListing(id, {
     query: { enabled: !!id, queryKey: getGetListingQueryKey(id) },
@@ -243,7 +250,7 @@ export default function StorefrontGearDetail() {
               </div>
 
               {/* Calendar */}
-              <div className="p-4">
+              <div className="p-3 sm:p-4">
                 <Calendar
                   mode="range"
                   selected={dateRange}
@@ -252,8 +259,8 @@ export default function StorefrontGearDetail() {
                     { before: new Date() },
                     ...disabledDates,
                   ]}
-                  numberOfMonths={2}
-                  className="[--cell-size:3rem] w-full"
+                  numberOfMonths={calendarMonths}
+                  className="[--cell-size:2.5rem] sm:[--cell-size:3rem] w-full"
                   classNames={{ root: "w-full" }}
                   modifiers={{ booked: disabledDates }}
                   modifiersClassNames={{ booked: "bg-red-50 text-red-400 line-through opacity-60" }}
