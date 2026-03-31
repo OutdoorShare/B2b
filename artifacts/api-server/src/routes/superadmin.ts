@@ -854,12 +854,14 @@ router.post("/superadmin/claims/:id/charge", requireSuperAdmin, async (req, res)
     // Resolve tenant Stripe account if available
     let stripeAccountId: string | undefined;
     let tenantName = "OutdoorShare";
+    let tenantEmail: string | undefined;
     if (claim.tenantId) {
       const [t] = await db
-        .select({ sid: tenantsTable.stripeAccountId, enabled: tenantsTable.stripeChargesEnabled, name: tenantsTable.name })
+        .select({ sid: tenantsTable.stripeAccountId, enabled: tenantsTable.stripeChargesEnabled, name: tenantsTable.name, email: tenantsTable.email })
         .from(tenantsTable).where(eq(tenantsTable.id, claim.tenantId)).limit(1);
       if (t?.enabled && t.sid) stripeAccountId = t.sid;
       if (t?.name) tenantName = t.name;
+      if (t?.email) tenantEmail = t.email;
     }
     const stripeOpts = stripeAccountId ? { stripeAccount: stripeAccountId } : undefined;
 
@@ -934,7 +936,7 @@ router.post("/superadmin/claims/:id/charge", requireSuperAdmin, async (req, res)
     // Notify renter by email (fire-and-forget)
     sendClaimChargeEmail({
       claimId, customerEmail, customerName, amount: amountFloat,
-      mode, paymentUrl, tenantName,
+      mode, paymentUrl, tenantName, tenantEmail,
       installmentCount: Number(installmentCount),
       dueInDays: Number(dueInDays),
     }).catch(err => console.error("[claim charge email]", err));

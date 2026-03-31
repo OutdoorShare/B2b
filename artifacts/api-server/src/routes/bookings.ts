@@ -4,7 +4,7 @@ import path from "path";
 import multer from "multer";
 import { randomBytes } from "crypto";
 import { db } from "@workspace/db";
-import { bookingsTable, listingsTable, businessProfileTable } from "@workspace/db/schema";
+import { bookingsTable, listingsTable, businessProfileTable, tenantsTable } from "@workspace/db/schema";
 import { eq, and, gte, lte } from "drizzle-orm";
 import { generateAgreementPdf } from "../lib/generate-agreement-pdf";
 import { sendPickupLinkEmail } from "../services/gmail";
@@ -293,9 +293,12 @@ router.post("/bookings/:id/send-pickup-link", async (req, res) => {
     // Get listing title and business profile for the email
     const [listing] = await db.select({ title: listingsTable.title }).from(listingsTable).where(eq(listingsTable.id, booking.listingId));
     let companyName = "OutdoorShare";
+    let companyEmail: string | undefined;
     if (req.tenantId) {
       const [biz] = await db.select({ name: businessProfileTable.name }).from(businessProfileTable).where(eq(businessProfileTable.tenantId, req.tenantId));
       if (biz?.name) companyName = biz.name;
+      const [tenant] = await db.select({ email: tenantsTable.email }).from(tenantsTable).where(eq(tenantsTable.id, req.tenantId)).limit(1);
+      if (tenant?.email) companyEmail = tenant.email;
     }
 
     const BASE = process.env.APP_URL || `https://${process.env.REPLIT_DEV_DOMAIN}`;
@@ -310,6 +313,7 @@ router.post("/bookings/:id/send-pickup-link", async (req, res) => {
       startDate: booking.startDate,
       endDate: booking.endDate,
       companyName,
+      companyEmail,
     }).catch(err => console.error("[pickup email]", err));
 
     res.json({ ok: true, token, pickupUrl });

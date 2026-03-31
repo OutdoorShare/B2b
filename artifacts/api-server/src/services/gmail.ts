@@ -53,10 +53,10 @@ async function getUncachableGmailClient() {
 
 const PLATFORM_FROM = "OutdoorShare <contact.us@myoutdoorshare.com>";
 
-function makeRawEmail(to: string, subject: string, htmlBody: string): string {
+function makeRawEmail(to: string, subject: string, htmlBody: string, from?: string): string {
   const boundary = "boundary_outdoorshare";
   const message = [
-    `From: ${PLATFORM_FROM}`,
+    `From: ${from ?? PLATFORM_FROM}`,
     `To: ${to}`,
     `Subject: ${subject}`,
     `MIME-Version: 1.0`,
@@ -280,8 +280,10 @@ export async function sendPickupLinkEmail(opts: {
   startDate: string;
   endDate: string;
   companyName: string;
+  companyEmail?: string;
 }): Promise<void> {
-  const { toEmail, customerName, pickupUrl, listingTitle, startDate, endDate, companyName } = opts;
+  const { toEmail, customerName, pickupUrl, listingTitle, startDate, endDate, companyName, companyEmail } = opts;
+  const fromHeader = companyEmail ? `${companyName} <${companyEmail}>` : undefined;
 
   const tableRows: { label: string; value: string }[] = [
     { label: "Equipment",   value: listingTitle },
@@ -322,7 +324,7 @@ export async function sendPickupLinkEmail(opts: {
   const gmail = await getUncachableGmailClient();
   await gmail.users.messages.send({
     userId: "me",
-    requestBody: { raw: makeRawEmail(toEmail, `[${companyName}] Please upload pickup photos for your rental`, html) },
+    requestBody: { raw: makeRawEmail(toEmail, `[${companyName}] Please upload pickup photos for your rental`, html, fromHeader) },
   });
 }
 
@@ -335,10 +337,12 @@ export async function sendClaimChargeEmail(opts: {
   mode: "link" | "invoice" | "installments";
   paymentUrl: string | null;
   tenantName: string;
+  tenantEmail?: string;
   installmentCount?: number;
   dueInDays?: number;
 }): Promise<void> {
-  const { claimId, customerName, customerEmail, amount, mode, paymentUrl, tenantName, installmentCount, dueInDays } = opts;
+  const { claimId, customerName, customerEmail, amount, mode, paymentUrl, tenantName, tenantEmail, installmentCount, dueInDays } = opts;
+  const fromHeader = tenantEmail ? `${tenantName} <${tenantEmail}>` : undefined;
 
   const modeLabel = mode === "link" ? "Payment Link" : mode === "invoice" ? "Invoice" : "Installment Plan";
   const modeDesc = mode === "link"
@@ -378,7 +382,7 @@ export async function sendClaimChargeEmail(opts: {
   const gmail = await getUncachableGmailClient();
   await gmail.users.messages.send({
     userId: "me",
-    requestBody: { raw: makeRawEmail(customerEmail, `[Claim #${claimId}] Damage Charge Notice — $${amount.toFixed(2)}`, html) },
+    requestBody: { raw: makeRawEmail(customerEmail, `[Claim #${claimId}] Damage Charge Notice — $${amount.toFixed(2)}`, html, fromHeader) },
   });
 }
 
