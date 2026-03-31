@@ -574,6 +574,62 @@ router.get("/superadmin/tenants/:id/analytics", requireSuperAdmin, async (req, r
   }
 });
 
+// ── GET /superadmin/bookings — all bookings across all tenants ─────────────────
+router.get("/superadmin/bookings", requireSuperAdmin, async (req, res) => {
+  try {
+    const { search, status, limit = "300" } = req.query as Record<string, string>;
+    const rows = await db
+      .select({
+        id: bookingsTable.id,
+        tenantId: bookingsTable.tenantId,
+        listingId: bookingsTable.listingId,
+        customerName: bookingsTable.customerName,
+        customerEmail: bookingsTable.customerEmail,
+        customerPhone: bookingsTable.customerPhone,
+        startDate: bookingsTable.startDate,
+        endDate: bookingsTable.endDate,
+        totalPrice: bookingsTable.totalPrice,
+        status: bookingsTable.status,
+        source: bookingsTable.source,
+        notes: bookingsTable.notes,
+        adminNotes: bookingsTable.adminNotes,
+        pickupCompletedAt: bookingsTable.pickupCompletedAt,
+        createdAt: bookingsTable.createdAt,
+        updatedAt: bookingsTable.updatedAt,
+        companyName: tenantsTable.name,
+        companySlug: tenantsTable.slug,
+        listingTitle: listingsTable.title,
+      })
+      .from(bookingsTable)
+      .leftJoin(tenantsTable, eq(bookingsTable.tenantId, tenantsTable.id))
+      .leftJoin(listingsTable, eq(bookingsTable.listingId, listingsTable.id))
+      .where(
+        and(
+          status ? eq(bookingsTable.status, status as any) : undefined,
+          search ? sql`(
+            lower(${bookingsTable.customerName}) like ${"%" + search.toLowerCase() + "%"} or
+            lower(${bookingsTable.customerEmail}) like ${"%" + search.toLowerCase() + "%"} or
+            lower(${listingsTable.title}) like ${"%" + search.toLowerCase() + "%"} or
+            lower(${tenantsTable.name}) like ${"%" + search.toLowerCase() + "%"}
+          )` : undefined,
+        )
+      )
+      .orderBy(desc(bookingsTable.createdAt))
+      .limit(parseInt(limit));
+
+    res.json(rows.map(b => ({
+      ...b,
+      totalPrice: parseFloat(b.totalPrice ?? "0"),
+      createdAt: b.createdAt.toISOString(),
+      updatedAt: b.updatedAt.toISOString(),
+      pickupCompletedAt: b.pickupCompletedAt?.toISOString() ?? null,
+    })));
+  } catch (err) {
+    req.log.error(err);
+    res.status(500).json({ error: "Failed to fetch bookings" });
+  }
+});
+
 // ── GET /superadmin/tenants/:id/bookings ──────────────────────────────────────
 router.get("/superadmin/tenants/:id/bookings", requireSuperAdmin, async (req, res) => {
   try {
