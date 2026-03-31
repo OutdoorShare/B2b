@@ -62,7 +62,7 @@ export default function AdminListingsForm() {
     condition: 'good' as any,
     includedItems: [] as string[],
     requirements: '',
-    ageRestriction: null as number | null
+    ageRestriction: 21 as number | null
   });
 
   const [includedItemInput, setIncludedItemInput] = useState('');
@@ -89,7 +89,7 @@ export default function AdminListingsForm() {
         condition: listing.condition || 'good',
         includedItems: listing.includedItems || [],
         requirements: listing.requirements || '',
-        ageRestriction: listing.ageRestriction || null
+        ageRestriction: 21
       });
     }
   }, [isEditing, listing]);
@@ -479,10 +479,6 @@ export default function AdminListingsForm() {
                 <CardTitle>Additional Settings</CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="ageRestriction">Age Restriction (Optional)</Label>
-                  <Input id="ageRestriction" name="ageRestriction" type="number" min="0" placeholder="e.g. 18" value={formData.ageRestriction || ''} onChange={handleChange} />
-                </div>
                 <div className="space-y-2">
                   <Label htmlFor="requirements">Special Requirements</Label>
                   <Textarea id="requirements" name="requirements" placeholder="e.g. Must have a valid driver's license" value={formData.requirements} onChange={handleChange} rows={3} />

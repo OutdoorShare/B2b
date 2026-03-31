@@ -146,7 +146,7 @@ export default function SuperAdminListings() {
           condition: editForm.condition || null,
           location: editForm.location || null,
           requirements: editForm.requirements || null,
-          ageRestriction: editForm.ageRestriction ? Number(editForm.ageRestriction) : null,
+          ageRestriction: 21,
         }),
       });
       const data = await res.json();
@@ -458,16 +458,6 @@ export default function SuperAdminListings() {
                       <SelectItem value="fair">Fair</SelectItem>
                     </SelectContent>
                   </Select>
-                </div>
-                <div className="space-y-1.5">
-                  <Label className="text-slate-300 text-xs">Age Restriction</Label>
-                  <Input
-                    type="number" min="0"
-                    value={editForm.ageRestriction}
-                    onChange={e => setEditForm(f => ({ ...f, ageRestriction: e.target.value }))}
-                    placeholder="e.g. 18"
-                    className="bg-slate-800 border-slate-600 text-slate-100 h-9"
-                  />
                 </div>
               </div>
               <div className="space-y-1.5">
