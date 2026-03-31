@@ -658,7 +658,7 @@ router.get("/stripe/checkout-qr/:sessionId", async (req, res) => {
   }
 });
 
-// ── Security Deposit: authorize hold ─────────────────────────────────────────
+// ── Security Deposit: authorize hold (or full charge for 5+ day bookings) ─────
 router.post("/bookings/:id/deposit/authorize", requireAdminAuth, async (req, res) => {
   try {
     const bookingId = Number(req.params.id);
@@ -687,26 +687,45 @@ router.post("/bookings/:id/deposit/authorize", requireAdminAuth, async (req, res
       res.status(400).json({ error: "No saved payment method on this booking. The card was not saved for future use." }); return;
     }
 
-    const holdPi = await stripeClient.paymentIntents.create({
+    // Bookings of 5+ days get a full charge instead of an authorized hold
+    const startMs = new Date(booking.startDate).getTime();
+    const endMs   = new Date(booking.endDate).getTime();
+    const rentalDays = Math.round((endMs - startMs) / (1000 * 60 * 60 * 24));
+    const isLongBooking = rentalDays >= 5;
+
+    const depositPi = await stripeClient.paymentIntents.create({
       amount: depositAmountCents,
       currency: "usd",
       payment_method: String(originalPi.payment_method),
-      capture_method: "manual",
+      ...(isLongBooking
+        ? { capture_method: "automatic" }          // full charge — funds captured immediately
+        : { capture_method: "manual" }),            // hold — only captured on damage/claim
       confirm: true,
       off_session: true,
-      description: `Security deposit hold — Booking #${bookingId} (${listing?.title ?? ""})`,
+      description: isLongBooking
+        ? `Security deposit (full charge, ${rentalDays}-day rental) — Booking #${bookingId} (${listing?.title ?? ""})`
+        : `Security deposit hold — Booking #${bookingId} (${listing?.title ?? ""})`,
       metadata: {
         booking_id: String(bookingId),
         tenant_id: String(tenantId),
-        type: "deposit_hold",
+        type: isLongBooking ? "deposit_charge" : "deposit_hold",
+        rental_days: String(rentalDays),
       },
     });
 
+    const newStatus = isLongBooking ? "charged" : "authorized";
+
     await db.update(bookingsTable)
-      .set({ depositHoldIntentId: holdPi.id, depositHoldStatus: "authorized", updatedAt: new Date() })
+      .set({ depositHoldIntentId: depositPi.id, depositHoldStatus: newStatus, updatedAt: new Date() })
       .where(eq(bookingsTable.id, bookingId));
 
-    res.json({ depositHoldIntentId: holdPi.id, depositHoldStatus: "authorized", amountCents: depositAmountCents });
+    res.json({
+      depositHoldIntentId: depositPi.id,
+      depositHoldStatus: newStatus,
+      amountCents: depositAmountCents,
+      isFullCharge: isLongBooking,
+      rentalDays,
+    });
   } catch (e: any) {
     console.error("[deposit/authorize]", e.message);
     res.status(500).json({ error: e.message });
