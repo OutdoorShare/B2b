@@ -85,9 +85,13 @@ export default function AdminSettings() {
   };
 
   const getStorefrontUrl = () => {
-    // Use URL param slug first (always present in admin routes), fall back to profile
-    const slug = urlSlug ?? (profile as any)?.siteSlug ?? "";
-    return slug ? `${window.location.origin}/${slug}` : window.location.origin;
+    // Most reliable source: extract slug directly from the current pathname.
+    // Admin URLs are always /<slug>/admin/... so the first path segment IS the slug.
+    const base = import.meta.env.BASE_URL.replace(/\/+$/, "");
+    const stripped = window.location.pathname.replace(base, "").replace(/^\/+/, "");
+    const slugFromPath = stripped.split("/")[0] ?? "";
+    const slug = slugFromPath || urlSlug || (profile as any)?.siteSlug || "";
+    return slug ? `${window.location.origin}${base}/${slug}` : window.location.origin;
   };
 
   const getEmbedCode = () => {
@@ -202,10 +206,12 @@ export default function AdminSettings() {
           <TabsContent value="general" className="space-y-6 pt-6">
             {/* Storefront URL banner */}
             {(() => {
-              const slug = urlSlug ?? (profile as any)?.siteSlug ?? "";
+              const base = import.meta.env.BASE_URL.replace(/\/+$/, "");
+              const stripped = window.location.pathname.replace(base, "").replace(/^\/+/, "");
+              const slug = stripped.split("/")[0] || urlSlug || (profile as any)?.siteSlug || "";
               const liveSlug = slugifyPreview(formData.name || "");
-              const currentUrl = slug ? `${window.location.origin}/${slug}` : "";
-              const previewUrl = liveSlug ? `${window.location.origin}/${liveSlug}` : "";
+              const currentUrl = slug ? `${window.location.origin}${base}/${slug}` : "";
+              const previewUrl = liveSlug ? `${window.location.origin}${base}/${liveSlug}` : "";
               const willChange = slug && liveSlug && liveSlug !== slug;
               return (
                 <div className="rounded-xl border bg-primary/5 border-primary/20 px-5 py-4 flex items-start justify-between gap-4 flex-wrap">

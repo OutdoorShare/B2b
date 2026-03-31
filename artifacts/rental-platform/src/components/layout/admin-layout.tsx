@@ -92,8 +92,11 @@ export function AdminLayout({ children }: { children: React.ReactNode }) {
   const slug = getAdminSlug();
   const adminBase = `/${slug}/admin`;
 
-  // Use URL slug (always present in admin routes /:slug/admin/...) as the reliable source
-  const storefrontHref = slug ? `/${slug}` : "/";
+  // Extract slug from pathname (most reliable — admin is always /<slug>/admin/...)
+  const base = import.meta.env.BASE_URL.replace(/\/+$/, "");
+  const strippedPath = window.location.pathname.replace(base, "").replace(/^\/+/, "");
+  const slugFromPath = strippedPath.split("/")[0] || slug;
+  const storefrontHref = slugFromPath ? `${base}/${slugFromPath}` : base || "/";
 
   const activeItem = NAV_ITEMS.find(item => {
     const href = `${adminBase}${item.path}`;
