@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { useLocation, useRoute } from "wouter";
 import { 
   useGetListing, 
@@ -17,9 +17,11 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { ArrowLeft, Upload, X, CheckCircle2, AlertCircle, CircleDashed } from "lucide-react";
+import { ArrowLeft, Upload, X, CheckCircle2, AlertCircle, CircleDashed, ImagePlus, Loader2 } from "lucide-react";
 import { AddonManager } from "@/components/addon-manager";
 import { UnitIdentifiersManager } from "@/components/unit-identifiers-manager";
+
+const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
 export default function AdminListingsForm() {
   const [match, params] = useRoute("/admin/listings/:id/edit");
@@ -134,6 +136,37 @@ export default function AdminListingsForm() {
       imageUrls: prev.imageUrls.filter((_, i) => i !== index)
     }));
   };
+
+  const [uploading, setUploading] = useState(false);
+  const [dragOver, setDragOver] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const uploadFiles = useCallback(async (files: FileList | File[]) => {
+    const arr = Array.from(files);
+    if (!arr.length) return;
+    setUploading(true);
+    try {
+      const uploaded: string[] = [];
+      for (const file of arr) {
+        const fd = new FormData();
+        fd.append("file", file);
+        const res = await fetch(`${BASE}/api/upload/image`, { method: "POST", body: fd });
+        if (!res.ok) { toast({ title: "Upload failed", description: file.name, variant: "destructive" }); continue; }
+        const { url } = await res.json();
+        uploaded.push(url);
+      }
+      if (uploaded.length) {
+        setFormData(prev => ({ ...prev, imageUrls: [...prev.imageUrls, ...uploaded] }));
+        toast({ title: `${uploaded.length} photo${uploaded.length > 1 ? "s" : ""} uploaded` });
+      }
+    } finally { setUploading(false); }
+  }, [toast]);
+
+  const onDrop = useCallback((e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    setDragOver(false);
+    if (e.dataTransfer.files.length) uploadFiles(e.dataTransfer.files);
+  }, [uploadFiles]);
 
   // Publish readiness checks — required when status is "active"
   const publishChecks = [
@@ -362,35 +395,78 @@ export default function AdminListingsForm() {
             <Card>
               <CardHeader>
                 <CardTitle>Photos</CardTitle>
-                <CardDescription>Add image URLs for this listing.</CardDescription>
+                <CardDescription>Upload photos or paste an image URL.</CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
-                <div className="space-y-2">
-                  <div className="flex gap-2">
-                    <Input 
-                      value={imageUrlInput} 
-                      onChange={(e) => setImageUrlInput(e.target.value)}
-                      placeholder="https://..."
-                      onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), addImageUrl())}
-                    />
-                    <Button type="button" variant="secondary" onClick={addImageUrl}>
-                      <Upload className="w-4 h-4" />
-                    </Button>
-                  </div>
+
+                {/* Hidden file input */}
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp,image/gif"
+                  multiple
+                  className="hidden"
+                  onChange={e => e.target.files && uploadFiles(e.target.files)}
+                />
+
+                {/* Drag & drop zone */}
+                <div
+                  onDragOver={e => { e.preventDefault(); setDragOver(true); }}
+                  onDragLeave={() => setDragOver(false)}
+                  onDrop={onDrop}
+                  onClick={() => fileInputRef.current?.click()}
+                  className={`flex flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed px-4 py-8 cursor-pointer transition-colors select-none ${
+                    dragOver
+                      ? "border-primary bg-primary/5 text-primary"
+                      : "border-muted-foreground/25 hover:border-primary/50 hover:bg-muted/40 text-muted-foreground"
+                  }`}
+                >
+                  {uploading ? (
+                    <>
+                      <Loader2 className="w-8 h-8 animate-spin" />
+                      <p className="text-sm font-medium">Uploading…</p>
+                    </>
+                  ) : (
+                    <>
+                      <ImagePlus className="w-8 h-8" />
+                      <p className="text-sm font-medium">Drop photos here or click to browse</p>
+                      <p className="text-xs">JPG, PNG, WebP, GIF — up to 5 MB each</p>
+                    </>
+                  )}
                 </div>
 
+                {/* URL fallback */}
+                <div className="flex gap-2">
+                  <Input
+                    value={imageUrlInput}
+                    onChange={(e) => setImageUrlInput(e.target.value)}
+                    placeholder="Or paste an image URL…"
+                    onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), addImageUrl())}
+                  />
+                  <Button type="button" variant="secondary" onClick={addImageUrl} title="Add URL">
+                    <Upload className="w-4 h-4" />
+                  </Button>
+                </div>
+
+                {/* Photo grid */}
                 {formData.imageUrls.length > 0 && (
-                  <div className="space-y-3 mt-4">
+                  <div className="grid grid-cols-2 gap-2 mt-2">
                     {formData.imageUrls.map((url, idx) => (
-                      <div key={idx} className="relative group rounded-md overflow-hidden border">
-                        <img src={url} alt={`Preview ${idx}`} className="w-full aspect-[4/3] object-cover" />
-                        <button 
-                          type="button" 
+                      <div key={idx} className="relative group rounded-md overflow-hidden border aspect-[4/3]">
+                        <img src={url} alt={`Photo ${idx + 1}`} className="w-full h-full object-cover" />
+                        <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors" />
+                        <button
+                          type="button"
                           onClick={() => removeImageUrl(idx)}
-                          className="absolute top-2 right-2 w-8 h-8 bg-black/50 hover:bg-black/70 text-white rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                          className="absolute top-1.5 right-1.5 w-7 h-7 bg-black/60 hover:bg-black/80 text-white rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
                         >
-                          <X className="w-4 h-4" />
+                          <X className="w-3.5 h-3.5" />
                         </button>
+                        {idx === 0 && (
+                          <span className="absolute bottom-1.5 left-1.5 text-[10px] font-bold bg-black/60 text-white px-1.5 py-0.5 rounded">
+                            Cover
+                          </span>
+                        )}
                       </div>
                     ))}
                   </div>
