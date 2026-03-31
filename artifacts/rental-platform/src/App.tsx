@@ -1,4 +1,5 @@
-import { Switch, Route, Router as WouterRouter, useParams } from "wouter";
+import { Switch, Route, Router as WouterRouter, useParams, useLocation } from "wouter";
+import { useEffect } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -83,6 +84,26 @@ setExtraHeadersGetter(() => {
   return {};
 });
 
+// First-visit redirect: sends new admins to the launchpad instead of the dashboard.
+// Once they visit the launchpad, a per-slug flag is set and they go straight to the
+// dashboard on subsequent logins.
+function AdminDashboardOrLaunchpad() {
+  const params = useParams<{ slug: string }>();
+  const slug = params.slug ?? "";
+  const [, setLocation] = useLocation();
+  const key = `admin_launchpad_seen_${slug}`;
+  const hasSeenLaunchpad = !!localStorage.getItem(key);
+
+  useEffect(() => {
+    if (!hasSeenLaunchpad) {
+      setLocation(`/${slug}/admin/launchpad`);
+    }
+  }, []);
+
+  if (!hasSeenLaunchpad) return null;
+  return <AdminDashboard />;
+}
+
 // Auth guard: checks session matches the slug in the URL
 function AdminGuard({ children }: { children: React.ReactNode }) {
   const params = useParams<{ slug: string }>();
@@ -154,7 +175,7 @@ function Router() {
 
       {/* Tenant Admin Routes — scoped to /:slug/admin/* */}
       <Route path="/:slug/admin">
-        <AdminGuard><AdminLayout><AdminDashboard /></AdminLayout></AdminGuard>
+        <AdminGuard><AdminLayout><AdminDashboardOrLaunchpad /></AdminLayout></AdminGuard>
       </Route>
       <Route path="/:slug/admin/listings/new">
         <AdminGuard><AdminLayout><AdminListingsForm /></AdminLayout></AdminGuard>

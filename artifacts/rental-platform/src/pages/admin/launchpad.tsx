@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useLocation } from "wouter";
-import { adminPath } from "@/lib/admin-nav";
+import { adminPath, getAdminSlug } from "@/lib/admin-nav";
 import { Button } from "@/components/ui/button";
 import {
   Building2, Image, CreditCard, FileSignature, Package,
@@ -60,6 +60,11 @@ export default function AdminLaunchpad() {
   };
 
   useEffect(() => {
+    // Mark this slug as having visited the launchpad so the first-visit
+    // redirect in App.tsx no longer triggers on subsequent admin visits.
+    const slug = getAdminSlug();
+    if (slug) localStorage.setItem(`admin_launchpad_seen_${slug}`, "1");
+
     setLoading(true);
     fetchAll().finally(() => setLoading(false));
   }, []);
