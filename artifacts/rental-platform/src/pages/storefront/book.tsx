@@ -221,6 +221,9 @@ export default function StorefrontBook() {
   const [identitySessionId, setIdentitySessionId] = useState<string | null>(null);
   const [identityStatus, setIdentityStatus] = useState<"idle" | "pending" | "verified" | "failed">("idle");
   const [identityError, setIdentityError] = useState<string | null>(null);
+  const [identitySessionLoading, setIdentitySessionLoading] = useState(false);
+  const [identitySessionFailed, setIdentitySessionFailed] = useState(false);
+  const [identityIsTestMode, setIdentityIsTestMode] = useState(false);
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [confirmedBooking, setConfirmedBooking] = useState<{ id: number; totalPrice: number } | null>(null);
@@ -268,6 +271,61 @@ export default function StorefrontBook() {
       .catch(() => {})
       .finally(() => setBookingsLoading(false));
   }, [step, email]);
+
+  // Restore identity session from sessionStorage on page load (in case of refresh mid-verification)
+  useEffect(() => {
+    const storageKey = `identity_session_${listingId}`;
+    const saved = sessionStorage.getItem(storageKey);
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        if (parsed.identityClientSecret && parsed.identitySessionId) {
+          setIdentityClientSecret(parsed.identityClientSecret);
+          setIdentitySessionId(parsed.identitySessionId);
+          setIdentityIsTestMode(!!parsed.identityIsTestMode);
+          setStep("verification");
+          window.scrollTo(0, 0);
+        }
+      } catch { /* ignore */ }
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [listingId]);
+
+  // ── Fetch a new Stripe Identity session ───────────────────────────────────
+  const fetchIdentitySession = async (customerId?: number) => {
+    setIdentitySessionLoading(true);
+    setIdentitySessionFailed(false);
+    try {
+      const idRes = await fetch(`${BASE}/api/stripe/identity/session`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          tenantSlug: slug,
+          customerId: customerId ?? undefined,
+          returnUrl: window.location.href,
+        }),
+      });
+      const idData = await idRes.json();
+      if (idRes.ok && idData.clientSecret) {
+        setIdentityClientSecret(idData.clientSecret);
+        setIdentitySessionId(idData.sessionId);
+        setIdentityIsTestMode(!!idData.testMode);
+        // Persist to sessionStorage so page refresh can resume
+        const storageKey = `identity_session_${listingId}`;
+        sessionStorage.setItem(storageKey, JSON.stringify({
+          identityClientSecret: idData.clientSecret,
+          identitySessionId: idData.sessionId,
+          identityIsTestMode: !!idData.testMode,
+        }));
+      } else {
+        setIdentitySessionFailed(true);
+      }
+    } catch {
+      setIdentitySessionFailed(true);
+    } finally {
+      setIdentitySessionLoading(false);
+    }
+  };
 
   const days = useMemo(() => {
     if (!dateRange?.from || !dateRange?.to) return 1;
@@ -596,23 +654,8 @@ export default function StorefrontBook() {
       }
 
       // Create Stripe Identity session for the verification step
-      try {
-        const idRes = await fetch(`${BASE}/api/stripe/identity/session`, {
-          method: "POST", headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            tenantSlug: slug,
-            customerId: session?.id ?? undefined,
-            returnUrl: window.location.href,
-          }),
-        });
-        const idData = await idRes.json();
-        if (idRes.ok && idData.clientSecret) {
-          setIdentityClientSecret(idData.clientSecret);
-          setIdentitySessionId(idData.sessionId);
-        }
-      } catch { /* non-blocking — verification step will handle missing session */ }
-
       setStep("verification");
+      fetchIdentitySession(session?.id ?? undefined);
       window.scrollTo(0, 0);
     } catch {
       toast({ title: "Booking failed", description: "Please try again.", variant: "destructive" });
@@ -628,7 +671,7 @@ export default function StorefrontBook() {
     }
     setIdentityStatus("pending");
     try {
-      const stripePromise = isTestMode ? testStripePromise : liveStripePromise;
+      const stripePromise = identityIsTestMode ? testStripePromise : liveStripePromise;
       const stripe = await stripePromise;
       if (!stripe) { setIdentityStatus("failed"); setIdentityError("Stripe could not load."); return; }
 
@@ -645,6 +688,7 @@ export default function StorefrontBook() {
         const statusData = await statusRes.json();
         if (statusData.verified) {
           setIdentityStatus("verified");
+          sessionStorage.removeItem(`identity_session_${listingId}`);
           setTimeout(() => { setStep("confirmation"); window.scrollTo(0, 0); }, 1200);
         } else {
           setIdentityStatus("failed");
@@ -653,6 +697,7 @@ export default function StorefrontBook() {
       } else {
         // No session ID — treat modal close as verified (test mode fallback)
         setIdentityStatus("verified");
+        sessionStorage.removeItem(`identity_session_${listingId}`);
         setTimeout(() => { setStep("confirmation"); window.scrollTo(0, 0); }, 1200);
       }
     } catch {
@@ -1316,6 +1361,30 @@ export default function StorefrontBook() {
                         <Loader2 className="w-5 h-5 animate-spin" />
                         <span>Verification in progress…</span>
                       </div>
+                    ) : identitySessionLoading ? (
+                      <Button size="lg" className="w-full h-13 text-base font-bold rounded-xl gap-2" disabled>
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        Preparing verification…
+                      </Button>
+                    ) : identitySessionFailed ? (
+                      <div className="space-y-3">
+                        <div className="flex items-start gap-3 bg-amber-50 border border-amber-200 rounded-xl p-4 text-sm text-amber-800">
+                          <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0 text-amber-600" />
+                          <div>
+                            <p className="font-semibold">Couldn't start verification session</p>
+                            <p className="text-amber-700 mt-0.5">There was a problem connecting to our verification service. Please try again.</p>
+                          </div>
+                        </div>
+                        <Button
+                          size="lg"
+                          variant="outline"
+                          className="w-full h-13 text-base font-bold rounded-xl gap-2"
+                          onClick={() => fetchIdentitySession(session?.id ?? undefined)}
+                        >
+                          <RefreshCw className="w-4 h-4" />
+                          Retry
+                        </Button>
+                      </div>
                     ) : (
                       <Button
                         size="lg"
@@ -1329,12 +1398,6 @@ export default function StorefrontBook() {
                           <><ScanFace className="w-4 h-4" />Start Identity Verification</>
                         )}
                       </Button>
-                    )}
-
-                    {!identityClientSecret && identityStatus !== "pending" && (
-                      <p className="text-xs text-muted-foreground text-center">
-                        Loading verification session… If this persists, please refresh the page.
-                      </p>
                     )}
                   </>
                 )}

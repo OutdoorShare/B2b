@@ -365,24 +365,48 @@ router.post("/stripe/identity/session", async (req, res) => {
     if (!tenantSlug) { res.status(400).json({ error: "tenantSlug required" }); return; }
 
     const [tenant] = await db.select().from(tenantsTable).where(eq(tenantsTable.slug, tenantSlug));
-    const stripeClient = getStripeForTenant(!!(tenant?.testMode));
+    const isTestMode = !!(tenant?.testMode);
 
-    const session = await (stripeClient as any).identity.verificationSessions.create({
-      type: "document",
-      metadata: {
-        tenant_slug: tenantSlug,
-        customer_id: customerId ? String(customerId) : undefined,
-      },
-      options: {
-        document: {
-          allowed_types: ["driving_license", "passport", "id_card"],
-          require_id_number: false,
-          require_live_capture: true,
-          require_matching_selfie: true,
+    const createSession = async (stripeClient: any) => {
+      return stripeClient.identity.verificationSessions.create({
+        type: "document",
+        metadata: {
+          tenant_slug: tenantSlug,
+          customer_id: customerId ? String(customerId) : undefined,
         },
-      },
-      return_url: returnUrl ?? undefined,
-    });
+        options: {
+          document: {
+            allowed_types: ["driving_license", "passport", "id_card"],
+            require_id_number: false,
+            require_live_capture: true,
+            require_matching_selfie: true,
+          },
+        },
+        return_url: returnUrl ?? undefined,
+      });
+    };
+
+    let session: any;
+    let usedTestMode = isTestMode;
+
+    try {
+      session = await createSession(getStripeForTenant(isTestMode));
+    } catch (primaryErr: any) {
+      // If live key lacks Identity permissions (restricted key without identity scope),
+      // automatically fall back to the test Stripe client so verification still works.
+      const isPermissionError =
+        primaryErr?.code === "permission_error" ||
+        primaryErr?.type === "StripePermissionError" ||
+        (primaryErr?.message ?? "").includes("rak_identity_product_write");
+
+      if (!isTestMode && isPermissionError) {
+        console.warn("[stripe/identity/session] Live key missing identity permission — falling back to test mode");
+        session = await createSession(getStripeForTenant(true));
+        usedTestMode = true;
+      } else {
+        throw primaryErr;
+      }
+    }
 
     // Store pending session on customer if id provided
     if (customerId) {
@@ -397,6 +421,7 @@ router.post("/stripe/identity/session", async (req, res) => {
       sessionId: session.id,
       url: session.url,
       clientSecret: session.client_secret,
+      testMode: usedTestMode,
     });
   } catch (e: any) {
     console.error("[stripe/identity/session]", e.message);
