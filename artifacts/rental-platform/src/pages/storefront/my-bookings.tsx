@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import {
   Calendar, ChevronRight, Package, Clock, CheckCircle2,
-  XCircle, AlertCircle, User, LogOut, ArrowRight
+  XCircle, AlertCircle, User, LogOut, ArrowRight, RotateCcw
 } from "lucide-react";
 import { format } from "date-fns";
 
@@ -161,7 +161,7 @@ export default function MyBookings() {
             Upcoming &amp; Active
           </h2>
           {upcomingBookings.map(booking => (
-            <BookingCard key={booking.id} booking={booking} base={base} />
+            <BookingCard key={booking.id} booking={booking} base={base} showRebook={false} />
           ))}
         </section>
       )}
@@ -178,7 +178,7 @@ export default function MyBookings() {
             Past &amp; Cancelled
           </h2>
           {pastBookings.map(booking => (
-            <BookingCard key={booking.id} booking={booking} base={base} />
+            <BookingCard key={booking.id} booking={booking} base={base} showRebook={true} />
           ))}
         </section>
       )}
@@ -186,11 +186,18 @@ export default function MyBookings() {
   );
 }
 
-function BookingCard({ booking, base }: { booking: any; base: string }) {
+function BookingCard({ booking, base, showRebook }: { booking: any; base: string; showRebook: boolean }) {
+  const [, setLocation] = useLocation();
   const { label, color } = statusConfig(booking.status);
   const startDate = new Date(booking.startDate + "T00:00:00");
   const endDate = new Date(booking.endDate + "T00:00:00");
   const nights = Math.max(1, Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24)));
+
+  const handleRebook = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setLocation(`${base}/book?listingId=${booking.listingId}`);
+  };
 
   return (
     <Link href={`${base}/my-bookings/${booking.id}`}>
@@ -214,13 +221,34 @@ function BookingCard({ booking, base }: { booking: any; base: string }) {
             </div>
           </div>
           <div className="flex items-center gap-2 shrink-0">
-            <div className="text-right">
-              <div className="font-bold">${Number(booking.totalPrice ?? 0).toFixed(2)}</div>
-              <div className="text-xs text-muted-foreground">#{booking.id}</div>
-            </div>
+            {showRebook && booking.listingId ? (
+              <Button
+                size="sm"
+                variant="outline"
+                className="gap-1.5 text-xs h-8 border-primary/30 text-primary hover:bg-primary hover:text-primary-foreground"
+                onClick={handleRebook}
+              >
+                <RotateCcw className="w-3 h-3" />
+                Rebook
+              </Button>
+            ) : (
+              <div className="text-right">
+                <div className="font-bold">${Number(booking.totalPrice ?? 0).toFixed(2)}</div>
+                <div className="text-xs text-muted-foreground">#{booking.id}</div>
+              </div>
+            )}
             <ChevronRight className="w-4 h-4 text-muted-foreground/40 group-hover:text-primary transition-colors" />
           </div>
         </div>
+        {showRebook && booking.listingId && (
+          <div className="mt-3 pt-3 border-t flex items-center justify-between">
+            <div className="text-right">
+              <div className="font-semibold text-sm">${Number(booking.totalPrice ?? 0).toFixed(2)}</div>
+              <div className="text-xs text-muted-foreground">Booking #{booking.id}</div>
+            </div>
+            <p className="text-xs text-muted-foreground">Enjoyed it? Book the same gear again with fresh dates.</p>
+          </div>
+        )}
       </div>
     </Link>
   );

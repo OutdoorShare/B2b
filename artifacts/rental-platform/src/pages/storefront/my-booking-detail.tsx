@@ -7,7 +7,7 @@ import {
   Clock, CheckCircle2, XCircle, AlertCircle, FileSignature, FileText, ExternalLink,
   StickyNote, ShieldCheck, MessageSquare, CreditCard,
   MapPin, Monitor, Smartphone, Phone as PhoneIcon, Users,
-  Receipt, Tag, Camera, ImagePlus, Upload, X as XIcon, Loader2
+  Receipt, Tag, Camera, ImagePlus, Upload, X as XIcon, Loader2, RotateCcw
 } from "lucide-react";
 import { format, differenceInDays } from "date-fns";
 
@@ -567,11 +567,21 @@ export default function MyBookingDetail() {
             All Bookings
           </Button>
         </Link>
-        <Link href={base || "/"} className="flex-1">
-          <Button className="w-full">
-            Browse More Rentals
+        {["completed", "cancelled", "no_show"].includes(booking.status) && booking.listingId ? (
+          <Button
+            className="flex-1"
+            onClick={() => setLocation(`${base}/book?listingId=${booking.listingId}`)}
+          >
+            <RotateCcw className="w-4 h-4 mr-2" />
+            Rebook This
           </Button>
-        </Link>
+        ) : (
+          <Link href={base || "/"} className="flex-1">
+            <Button className="w-full">
+              Browse More Rentals
+            </Button>
+          </Link>
+        )}
       </div>
     </div>
   );
