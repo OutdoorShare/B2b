@@ -992,15 +992,10 @@ export default function StorefrontBook() {
         }).catch(() => {});
       }
 
-      // Kiosk: skip Stripe Identity — go straight to confirmation
-      if (isKiosk) {
-        setStep("confirmation");
-        window.scrollTo(0, 0);
-      } else {
-        setStep("verification");
-        fetchIdentitySession(session?.id ?? undefined);
-        window.scrollTo(0, 0);
-      }
+      // All modes: verification → photos → confirmation
+      setStep("verification");
+      fetchIdentitySession(session?.id ?? undefined);
+      window.scrollTo(0, 0);
     } catch {
       toast({ title: "Booking failed", description: "Please try again.", variant: "destructive" });
     } finally { setIsSubmitting(false); }
