@@ -290,7 +290,10 @@ function StripePaymentForm({ onSuccess, customerEmail }: { onSuccess: () => void
 
       const { error: confirmErr } = await stripe.confirmPayment({
         elements,
-        confirmParams: { receipt_email: customerEmail },
+        confirmParams: {
+          receipt_email: customerEmail,
+          return_url: window.location.href,
+        },
         redirect: "if_required",
       });
 

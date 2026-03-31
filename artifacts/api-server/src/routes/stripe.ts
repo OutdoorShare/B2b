@@ -50,8 +50,8 @@ router.post("/stripe/connect/onboard", requireAdminAuth, async (req, res) => {
 
     const link = await stripe.accountLinks.create({
       account: accountId,
-      refresh_url: `${baseUrl}/admin/settings?stripe=refresh`,
-      return_url: `${baseUrl}/admin/settings?stripe=success`,
+      refresh_url: `${baseUrl}/${tenant.slug}/admin/settings?stripe=refresh`,
+      return_url: `${baseUrl}/${tenant.slug}/admin/settings?stripe=success`,
       type: "account_onboarding",
     });
 
