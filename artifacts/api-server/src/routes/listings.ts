@@ -1,7 +1,7 @@
 import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
-import { listingsTable, categoriesTable, bookingsTable, blockedDatesTable } from "@workspace/db/schema";
-import { eq, and, gte, lte, ilike, or, count, sum } from "drizzle-orm";
+import { listingsTable, categoriesTable, bookingsTable, blockedDatesTable, listingAddonsTable } from "@workspace/db/schema";
+import { eq, and, gte, lte, ilike, or, count, sum, inArray } from "drizzle-orm";
 import { sql } from "drizzle-orm";
 
 const router: IRouter = Router();
@@ -75,10 +75,25 @@ router.get("/listings", async (req, res) => {
       bookingStats.map(s => [s.listingId, { totalBookings: Number(s.totalBookings), totalRevenue: parseFloat(s.totalRevenue ?? "0") }])
     );
 
+    // Find which listings have a protection plan addon
+    const listingIds = listings.map(l => l.id);
+    const protectionAddonRows = listingIds.length > 0
+      ? await db
+          .select({ listingId: listingAddonsTable.listingId })
+          .from(listingAddonsTable)
+          .where(and(
+            inArray(listingAddonsTable.listingId, listingIds),
+            sql`lower(${listingAddonsTable.name}) like '%protection%'`,
+            eq(listingAddonsTable.isActive, true)
+          ))
+      : [];
+    const protectionListingIds = new Set(protectionAddonRows.map(r => r.listingId));
+
     const result = listings.map(l => ({
       ...formatListing(l, catMap[l.categoryId ?? -1]?.name, catMap[l.categoryId ?? -1]?.slug),
       totalBookings: statsMap[l.id]?.totalBookings ?? 0,
       totalRevenue: statsMap[l.id]?.totalRevenue ?? 0,
+      hasProtectionPlan: protectionListingIds.has(l.id),
     }));
 
     res.json(result);

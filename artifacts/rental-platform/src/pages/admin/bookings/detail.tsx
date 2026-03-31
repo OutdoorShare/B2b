@@ -501,28 +501,52 @@ export default function AdminBookingDetail() {
               <CardTitle>Payment Summary</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="flex justify-between text-sm">
-                <span className="text-muted-foreground">Duration</span>
-                <span className="font-medium">{days} day{days > 1 ? 's' : ''}</span>
-              </div>
-              <div className="flex justify-between text-sm">
-                <span className="text-muted-foreground">Rental Fee</span>
-                <span className="font-medium">${(booking.totalPrice - (booking.depositPaid || 0)).toFixed(2)}</span>
-              </div>
-              
-              {booking.depositPaid !== null && booking.depositPaid !== undefined && booking.depositPaid > 0 && (
-                <div className="flex justify-between text-sm">
-                  <span className="text-muted-foreground">Security Deposit</span>
-                  <span className="font-medium">${booking.depositPaid.toFixed(2)}</span>
-                </div>
-              )}
-              
-              <Separator />
-              
-              <div className="flex justify-between items-center">
-                <span className="font-bold text-lg">Total</span>
-                <span className="font-bold text-2xl">${booking.totalPrice.toFixed(2)}</span>
-              </div>
+              {(() => {
+                let parsedAddons: Array<{ id?: number; name: string; price: number; subtotal?: number }> = [];
+                try { parsedAddons = (booking as any).addonsData ? JSON.parse((booking as any).addonsData) : []; } catch {}
+                const addonsTotal = parsedAddons.reduce((s, a) => s + (a.subtotal ?? a.price ?? 0), 0);
+                const rentalFee = booking.totalPrice - (booking.depositPaid || 0) - addonsTotal;
+                const protectionAddons = parsedAddons.filter(a => a.name.toLowerCase().includes("protection"));
+                const otherAddons = parsedAddons.filter(a => !a.name.toLowerCase().includes("protection"));
+                return (
+                  <>
+                    <div className="flex justify-between text-sm">
+                      <span className="text-muted-foreground">Duration</span>
+                      <span className="font-medium">{days} day{days > 1 ? 's' : ''}</span>
+                    </div>
+                    <div className="flex justify-between text-sm">
+                      <span className="text-muted-foreground">Rental Fee</span>
+                      <span className="font-medium">${rentalFee.toFixed(2)}</span>
+                    </div>
+                    {protectionAddons.map((addon, i) => (
+                      <div key={i} className="flex justify-between text-sm">
+                        <span className="flex items-center gap-1.5 text-muted-foreground">
+                          <Shield className="w-3.5 h-3.5 text-emerald-600" />
+                          {addon.name}
+                        </span>
+                        <span className="font-medium text-emerald-700">+${(addon.subtotal ?? addon.price ?? 0).toFixed(2)}</span>
+                      </div>
+                    ))}
+                    {otherAddons.map((addon, i) => (
+                      <div key={i} className="flex justify-between text-sm">
+                        <span className="text-muted-foreground">{addon.name}</span>
+                        <span className="font-medium">+${(addon.subtotal ?? addon.price ?? 0).toFixed(2)}</span>
+                      </div>
+                    ))}
+                    {booking.depositPaid !== null && booking.depositPaid !== undefined && booking.depositPaid > 0 && (
+                      <div className="flex justify-between text-sm">
+                        <span className="text-muted-foreground">Security Deposit</span>
+                        <span className="font-medium">${booking.depositPaid.toFixed(2)}</span>
+                      </div>
+                    )}
+                    <Separator />
+                    <div className="flex justify-between items-center">
+                      <span className="font-bold text-lg">Total</span>
+                      <span className="font-bold text-2xl">${booking.totalPrice.toFixed(2)}</span>
+                    </div>
+                  </>
+                );
+              })()}
               
               <div className="mt-6 p-4 bg-muted rounded-lg space-y-3">
                 <div className="text-sm font-medium">Payment Status</div>

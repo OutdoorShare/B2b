@@ -15,7 +15,7 @@ import { Badge } from "@/components/ui/badge";
 import { 
   Search, MapPin, ArrowRight, Car,
   Waves, Bus, Truck, Anchor, Bike, Zap,
-  Package, Snowflake, CarFront, Gauge, SlidersHorizontal
+  Package, Snowflake, CarFront, Gauge, SlidersHorizontal, ShieldCheck
 } from "lucide-react";
 
 const CATEGORY_ICONS: Record<string, React.ElementType> = {
@@ -276,6 +276,12 @@ export default function StorefrontHome() {
                         <MapPin className="w-3 h-3 shrink-0" />
                         {listing.location}
                       </p>
+                    )}
+                    {(listing as any).hasProtectionPlan && (
+                      <div className="flex items-center gap-1 text-[10px] font-semibold text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 rounded-full px-2 py-0.5 w-fit mb-2">
+                        <ShieldCheck className="w-3 h-3 shrink-0" />
+                        Protection Plan
+                      </div>
                     )}
                     <div className="mt-auto pt-3 border-t border-border flex items-end justify-between">
                       <div>

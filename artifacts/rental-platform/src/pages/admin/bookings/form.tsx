@@ -14,7 +14,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
 import { useToast } from "@/hooks/use-toast";
-import { ArrowLeft, CalendarDays, User, DollarSign, Package, Info, Hash } from "lucide-react";
+import { ArrowLeft, CalendarDays, User, DollarSign, Package, Info, Hash, ShieldCheck } from "lucide-react";
 import { format, addDays, differenceInDays } from "date-fns";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
@@ -47,6 +47,10 @@ export default function AdminBookingForm() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [listingDetails, setListingDetails] = useState<any | null>(null);
+
+  // Protection plan addons for the selected listing
+  const [protectionAddons, setProtectionAddons] = useState<Array<{ id: number; name: string; price: string; pricingType: string }>>([]);
+  const [selectedProtectionId, setSelectedProtectionId] = useState<number | null>(null);
 
   // Per-unit assignment (VIN / HIN / serial)
   const [availableUnits, setAvailableUnits] = useState<{ id: number; unitIdentifier: string; identifierType: string; label: string | null; status: string }[]>([]);
@@ -110,6 +114,21 @@ export default function AdminBookingForm() {
       .catch(() => {});
   }, [form.listingId]);
 
+  // Fetch protection plan addons when listing changes
+  useEffect(() => {
+    if (!form.listingId) { setProtectionAddons([]); setSelectedProtectionId(null); return; }
+    fetch(`${BASE}/api/listings/${form.listingId}/addons`)
+      .then(r => r.json())
+      .then((data: any[]) => {
+        const plans = Array.isArray(data)
+          ? data.filter(a => a.isActive && a.name?.toLowerCase().includes("protection"))
+          : [];
+        setProtectionAddons(plans);
+        setSelectedProtectionId(null);
+      })
+      .catch(() => { setProtectionAddons([]); setSelectedProtectionId(null); });
+  }, [form.listingId]);
+
   // Keep assignedSlots array length in sync with quantity
   useEffect(() => {
     const qty = Math.max(1, Number(form.quantity) || 1);
@@ -136,7 +155,16 @@ export default function AdminBookingForm() {
     return parseFloat(String(listingDetails.depositAmount));
   }, [listingDetails]);
 
-  const estimatedTotal = basePrice + deposit;
+  const selectedProtection = useMemo(() => protectionAddons.find(a => a.id === selectedProtectionId) ?? null, [protectionAddons, selectedProtectionId]);
+  const protectionPrice = useMemo(() => {
+    if (!selectedProtection) return 0;
+    const ppu = parseFloat(selectedProtection.price);
+    if (selectedProtection.pricingType === "per_day") return ppu * days * Number(form.quantity || 1);
+    if (selectedProtection.pricingType === "per_rental") return ppu * Number(form.quantity || 1);
+    return ppu;
+  }, [selectedProtection, days, form.quantity]);
+
+  const estimatedTotal = basePrice + deposit + protectionPrice;
 
   const handleChange = (field: string, value: string) => {
     setForm(f => ({ ...f, [field]: value }));
@@ -154,6 +182,10 @@ export default function AdminBookingForm() {
     setSaving(true);
     try {
       const filledSlots = assignedSlots.filter(s => s.trim() !== "");
+      const addonsPayload = selectedProtection
+        ? [{ id: selectedProtection.id, name: selectedProtection.name, price: parseFloat(selectedProtection.price), pricingType: selectedProtection.pricingType, subtotal: protectionPrice }]
+        : [];
+
       const payload: any = {
         listingId: Number(form.listingId),
         customerName: form.customerName.trim(),
@@ -168,6 +200,8 @@ export default function AdminBookingForm() {
         adminNotes: form.adminNotes || null,
         depositPaid: form.depositPaid ? Number(form.depositPaid) : null,
         assignedUnitIds: filledSlots.length > 0 ? filledSlots : [],
+        addonsData: JSON.stringify(addonsPayload),
+        totalPrice: estimatedTotal,
       };
 
       const url = isEditing ? `${BASE}/api/bookings/${editId}` : `${BASE}/api/bookings`;
@@ -434,6 +468,38 @@ export default function AdminBookingForm() {
                     <div className="flex justify-between text-sm">
                       <span className="text-muted-foreground">Deposit</span>
                       <span>${deposit.toFixed(2)}</span>
+                    </div>
+                  )}
+                  {protectionAddons.length > 0 && (
+                    <div className="pt-1 pb-1 space-y-2">
+                      <Label className="text-xs flex items-center gap-1.5 text-muted-foreground font-medium">
+                        <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" /> Protection Plan
+                      </Label>
+                      {protectionAddons.map(addon => {
+                        const ppu = parseFloat(addon.price);
+                        const label = addon.pricingType === "per_day" ? `$${ppu.toFixed(2)}/day/unit` : `$${ppu.toFixed(2)}/rental`;
+                        const isSelected = selectedProtectionId === addon.id;
+                        return (
+                          <button
+                            key={addon.id}
+                            type="button"
+                            onClick={() => setSelectedProtectionId(isSelected ? null : addon.id)}
+                            className={`w-full text-left flex items-center justify-between rounded-lg border px-3 py-2 text-xs transition-colors ${isSelected ? "border-emerald-500 bg-emerald-50 text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-700" : "border-border hover:border-muted-foreground"}`}
+                          >
+                            <span className="flex items-center gap-1.5">
+                              <ShieldCheck className={`w-3.5 h-3.5 ${isSelected ? "text-emerald-600" : "text-muted-foreground"}`} />
+                              {addon.name}
+                            </span>
+                            <span className="font-medium">{label}</span>
+                          </button>
+                        );
+                      })}
+                      {selectedProtection && (
+                        <div className="flex justify-between text-sm">
+                          <span className="text-muted-foreground">Protection subtotal</span>
+                          <span className="text-emerald-700 font-medium">+${protectionPrice.toFixed(2)}</span>
+                        </div>
+                      )}
                     </div>
                   )}
                   <Separator />
