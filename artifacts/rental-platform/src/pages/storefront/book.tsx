@@ -18,13 +18,26 @@ import {
   ArrowLeft, ArrowRight, CheckCircle2, Calendar as CalendarIcon,
   Lock, User, CreditCard, FileText, Eye, EyeOff, ShieldCheck,
   Zap, AlertTriangle, Umbrella, Star, Loader2, BadgeCheck,
-  ScanFace, RefreshCw, XCircle
+  ScanFace, RefreshCw, XCircle, Clock
 } from "lucide-react";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { differenceInDays, format, addDays } from "date-fns";
 import { loadStripe } from "@stripe/stripe-js";
 import { Elements, PaymentElement, useStripe, useElements } from "@stripe/react-stripe-js";
 
 const stripePromise = loadStripe(import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY ?? "");
+
+// Generate 30-minute time slots from 6:00 AM to 10:00 PM
+const TIME_OPTIONS: string[] = [];
+for (let h = 6; h <= 22; h++) {
+  for (const m of [0, 30]) {
+    if (h === 22 && m === 30) break;
+    const hour12 = h % 12 === 0 ? 12 : h % 12;
+    const ampm = h < 12 ? "AM" : "PM";
+    const minStr = m === 0 ? "00" : "30";
+    TIME_OPTIONS.push(`${hour12}:${minStr} ${ampm}`);
+  }
+}
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
@@ -162,6 +175,8 @@ export default function StorefrontBook() {
     }
     return { from: new Date(), to: addDays(new Date(), 3) };
   });
+  const [pickupTime, setPickupTime] = useState<string>("10:00 AM");
+  const [dropoffTime, setDropoffTime] = useState<string>("10:00 AM");
   const [notes, setNotes] = useState("");
   const [name, setName] = useState(session?.name ?? "");
   const [email, setEmail] = useState(session?.email ?? "");
@@ -265,8 +280,10 @@ export default function StorefrontBook() {
     renter_phone:   phone || "—",
     listing_title:  listing?.title || "—",
     category:       (listing as any)?.categoryName || "—",
-    start_date:     dateRange?.from ? format(dateRange.from, "MMM d, yyyy") : "—",
-    end_date:       dateRange?.to   ? format(dateRange.to,   "MMM d, yyyy") : "—",
+    start_date:     dateRange?.from ? `${format(dateRange.from, "MMM d, yyyy")} at ${pickupTime}` : "—",
+    end_date:       dateRange?.to   ? `${format(dateRange.to,   "MMM d, yyyy")} at ${dropoffTime}` : "—",
+    pickup_time:    pickupTime,
+    dropoff_time:   dropoffTime,
     rental_days:    String(days),
     price_per_day:  listing?.pricePerDay ? `$${parseFloat(String(listing.pricePerDay)).toFixed(2)}` : "—",
     subtotal:       `$${subtotal.toFixed(2)}`,
@@ -419,6 +436,8 @@ export default function StorefrontBook() {
 
   const startFormatted = dateRange?.from ? format(dateRange.from, "MMM d, yyyy") : "—";
   const endFormatted = dateRange?.to ? format(dateRange.to, "MMM d, yyyy") : "—";
+  const startFormattedWithTime = dateRange?.from ? `${format(dateRange.from, "MMM d, yyyy")} at ${pickupTime}` : "—";
+  const endFormattedWithTime = dateRange?.to ? `${format(dateRange.to, "MMM d, yyyy")} at ${dropoffTime}` : "—";
 
   const handleDatesNext = async () => {
     setAuthError("");
@@ -507,6 +526,8 @@ export default function StorefrontBook() {
           customerPhone: phone,
           startDate: format(dateRange!.from!, "yyyy-MM-dd"),
           endDate: format(dateRange!.to!, "yyyy-MM-dd"),
+          pickupTime,
+          dropoffTime,
           quantity: 1,
           notes: notes || undefined,
           source: "online",
@@ -645,13 +666,41 @@ export default function StorefrontBook() {
 
                 {dateRange?.from && dateRange?.to && (
                   <div className="grid grid-cols-2 gap-3">
-                    <div className="bg-background rounded-xl border p-4 text-center">
-                      <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider mb-1">Pickup</p>
-                      <p className="font-bold text-base">{format(dateRange.from, "EEE, MMM d")}</p>
+                    {/* Pickup */}
+                    <div className="bg-background rounded-xl border p-4">
+                      <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider mb-1.5">Pickup</p>
+                      <p className="font-bold text-base mb-3">{format(dateRange.from, "EEE, MMM d")}</p>
+                      <div className="relative">
+                        <Clock className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none z-10" />
+                        <Select value={pickupTime} onValueChange={setPickupTime}>
+                          <SelectTrigger className="pl-8 h-8 text-xs font-medium">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {TIME_OPTIONS.map(t => (
+                              <SelectItem key={t} value={t} className="text-xs">{t}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
                     </div>
-                    <div className="bg-background rounded-xl border p-4 text-center">
-                      <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider mb-1">Return</p>
-                      <p className="font-bold text-base">{format(dateRange.to, "EEE, MMM d")}</p>
+                    {/* Return */}
+                    <div className="bg-background rounded-xl border p-4">
+                      <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider mb-1.5">Return</p>
+                      <p className="font-bold text-base mb-3">{format(dateRange.to, "EEE, MMM d")}</p>
+                      <div className="relative">
+                        <Clock className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none z-10" />
+                        <Select value={dropoffTime} onValueChange={setDropoffTime}>
+                          <SelectTrigger className="pl-8 h-8 text-xs font-medium">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {TIME_OPTIONS.map(t => (
+                              <SelectItem key={t} value={t} className="text-xs">{t}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
                     </div>
                   </div>
                 )}
@@ -987,7 +1036,7 @@ export default function StorefrontBook() {
 
                 <div className="bg-background rounded-2xl border shadow-sm p-6 space-y-4 max-h-96 overflow-y-auto text-sm text-muted-foreground leading-relaxed">
                   <h2 className="text-base font-bold text-foreground">Vehicle Rental Agreement</h2>
-                  <p><strong className="text-foreground">Rental Period:</strong> {startFormatted} — {endFormatted} ({days} day{days > 1 ? "s" : ""})</p>
+                  <p><strong className="text-foreground">Rental Period:</strong> {startFormattedWithTime} — {endFormattedWithTime} ({days} day{days > 1 ? "s" : ""})</p>
                   <p><strong className="text-foreground">Vehicle:</strong> {listing.title}</p>
                   <p><strong className="text-foreground">Renter:</strong> {name} ({email})</p>
                   <Separator />
@@ -1312,11 +1361,19 @@ export default function StorefrontBook() {
                     </h3>
                     <Separator />
                     <div className="space-y-2 text-sm">
-                      <div className="flex justify-between text-muted-foreground">
-                        <span className="flex items-center gap-1.5">
-                          <CalendarIcon className="w-3 h-3" /> {startFormatted}
-                        </span>
-                        <span>→ {endFormatted}</span>
+                      <div className="flex flex-col gap-1 text-muted-foreground text-xs">
+                        <div className="flex items-center gap-1.5">
+                          <CalendarIcon className="w-3 h-3 shrink-0" />
+                          <span className="font-medium text-foreground">Pickup:</span>
+                          {startFormatted}
+                          <span className="flex items-center gap-0.5 ml-auto text-primary font-semibold"><Clock className="w-3 h-3" />{pickupTime}</span>
+                        </div>
+                        <div className="flex items-center gap-1.5">
+                          <CalendarIcon className="w-3 h-3 shrink-0" />
+                          <span className="font-medium text-foreground">Return:</span>
+                          {endFormatted}
+                          <span className="flex items-center gap-0.5 ml-auto text-primary font-semibold"><Clock className="w-3 h-3" />{dropoffTime}</span>
+                        </div>
                       </div>
                       <div className="flex justify-between text-muted-foreground">
                         <span>${listing.pricePerDay}/day × {days} day{days > 1 ? "s" : ""}</span>

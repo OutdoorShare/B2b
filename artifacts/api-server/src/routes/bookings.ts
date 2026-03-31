@@ -202,6 +202,8 @@ router.put("/bookings/:id", async (req, res) => {
     if (body.customerPhone !== undefined) updateData.customerPhone = body.customerPhone || null;
     if (body.startDate !== undefined) updateData.startDate = body.startDate;
     if (body.endDate !== undefined) updateData.endDate = body.endDate;
+    if (body.pickupTime !== undefined) updateData.pickupTime = body.pickupTime || null;
+    if (body.dropoffTime !== undefined) updateData.dropoffTime = body.dropoffTime || null;
     if (body.quantity !== undefined) updateData.quantity = Number(body.quantity);
     if (body.notes !== undefined) updateData.notes = body.notes || null;
     if (body.source !== undefined) updateData.source = body.source;

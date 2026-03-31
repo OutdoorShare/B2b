@@ -16,7 +16,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { Link, useLocation } from "wouter";
-import { ArrowLeft, User, Phone, Mail, Calendar, Package, StickyNote, ShieldAlert, Pencil, FileSignature, ChevronDown, ChevronUp, Download, Camera, CheckCircle2, Loader2, ExternalLink, ImageIcon } from "lucide-react";
+import { ArrowLeft, User, Phone, Mail, Calendar, Package, StickyNote, ShieldAlert, Pencil, FileSignature, ChevronDown, ChevronUp, Download, Camera, CheckCircle2, Loader2, ExternalLink, ImageIcon, Clock } from "lucide-react";
 import { format, differenceInDays } from "date-fns";
 
 export default function AdminBookingDetail() {
@@ -247,12 +247,22 @@ export default function AdminBookingDetail() {
                     <Calendar className="w-4 h-4" /> Pickup Date
                   </div>
                   <div className="font-medium text-lg">{format(new Date(booking.startDate), 'EEEE, MMM d, yyyy')}</div>
+                  {(booking as any).pickupTime && (
+                    <div className="text-sm text-primary font-semibold flex items-center gap-1.5">
+                      <Clock className="w-3.5 h-3.5" /> {(booking as any).pickupTime}
+                    </div>
+                  )}
                 </div>
                 <div className="space-y-1">
                   <div className="text-sm text-muted-foreground flex items-center gap-2">
                     <Calendar className="w-4 h-4" /> Return Date
                   </div>
                   <div className="font-medium text-lg">{format(new Date(booking.endDate), 'EEEE, MMM d, yyyy')}</div>
+                  {(booking as any).dropoffTime && (
+                    <div className="text-sm text-primary font-semibold flex items-center gap-1.5">
+                      <Clock className="w-3.5 h-3.5" /> {(booking as any).dropoffTime}
+                    </div>
+                  )}
                 </div>
               </div>
             </CardContent>
