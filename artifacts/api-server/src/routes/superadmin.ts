@@ -1,12 +1,38 @@
 import { Router, type IRouter, type Request, type Response, type NextFunction } from "express";
 import { db } from "@workspace/db";
-import { tenantsTable, listingsTable, bookingsTable, superadminUsersTable, businessProfileTable, platformSettingsTable } from "@workspace/db/schema";
+import { tenantsTable, listingsTable, bookingsTable, superadminUsersTable, businessProfileTable, platformSettingsTable, categoriesTable } from "@workspace/db/schema";
 import { eq, sql, desc } from "drizzle-orm";
 import { scrypt, randomBytes, timingSafeEqual } from "crypto";
 import { promisify } from "util";
 import { sendWelcomeEmail, sendAccountUpdatedEmail } from "../services/gmail";
 
 const scryptAsync = promisify(scrypt);
+
+// ── Default categories seeded for every new tenant ────────────────────────────
+const DEFAULT_CATEGORIES = [
+  { name: "ATV",             slug: "atv",            description: "All-terrain vehicles" },
+  { name: "UTV",             slug: "utv",            description: "Utility task vehicles / side-by-sides" },
+  { name: "Boat",            slug: "boat",           description: "Boats and watercraft" },
+  { name: "Jet Ski",         slug: "jet-ski",        description: "Personal watercraft" },
+  { name: "Kayak / Canoe",   slug: "kayak-canoe",    description: "Kayaks and canoes" },
+  { name: "RV",              slug: "rv",             description: "Recreational vehicles and campers" },
+  { name: "Dirt Bike",       slug: "dirt-bike",      description: "Off-road motorcycles" },
+  { name: "Ebike",           slug: "ebike",          description: "Electric bicycles" },
+  { name: "Snowmobile",      slug: "snowmobile",     description: "Snowmobiles" },
+  { name: "Towing Vehicle",  slug: "towing-vehicle", description: "Trucks and towing vehicles" },
+  { name: "Utility Trailer", slug: "utility-trailer",description: "Trailers and cargo haulers" },
+  { name: "Camper / Tent",   slug: "camper-tent",    description: "Camping gear and tents" },
+];
+
+async function seedDefaultCategories(tenantId: number) {
+  try {
+    await db.insert(categoriesTable).values(
+      DEFAULT_CATEGORIES.map(c => ({ ...c, tenantId }))
+    ).onConflictDoNothing();
+  } catch (e) {
+    console.error("[seedDefaultCategories] Failed:", e);
+  }
+}
 const router: IRouter = Router();
 
 // ── Auth helpers ──────────────────────────────────────────────────────────────
@@ -145,6 +171,9 @@ router.post("/superadmin/tenants", requireSuperAdmin, async (req, res) => {
       phone: phone ?? null,
       notes: notes ?? null,
     }).returning();
+
+    // Seed default categories for the new tenant (non-blocking)
+    seedDefaultCategories(tenant.id).catch(() => {});
 
     // Send welcome email (non-blocking — don't fail the request if email fails)
     sendWelcomeEmail({ toEmail: email, companyName: name, slug, password }).catch((err) =>
