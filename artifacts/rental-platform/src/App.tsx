@@ -46,6 +46,7 @@ import AdminTeam from "@/pages/admin/team";
 import AdminCommunications from "@/pages/admin/communications";
 import AdminWaivers from "@/pages/admin/waivers";
 import AdminWallet from "@/pages/admin/wallet";
+import AdminPromoCodes from "@/pages/admin/promo-codes";
 import SuperAdminTeam from "@/pages/superadmin/team";
 import SuperAdminListings from "@/pages/superadmin/listings";
 import CompanyDetailPage from "@/pages/superadmin/company-detail";
@@ -205,6 +206,9 @@ function Router() {
       </Route>
       <Route path="/:slug/admin/wallet">
         <AdminGuard><AdminLayout><AdminWallet /></AdminLayout></AdminGuard>
+      </Route>
+      <Route path="/:slug/admin/promo-codes">
+        <AdminGuard><AdminLayout><AdminPromoCodes /></AdminLayout></AdminGuard>
       </Route>
       <Route path="/:slug/admin/communications">
         <AdminGuard><AdminCommunications /></AdminGuard>

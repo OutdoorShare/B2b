@@ -14,6 +14,7 @@ import {
   AlertTriangle,
   FileSignature,
   Wallet,
+  Tag,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useGetBusinessProfile } from "@workspace/api-client-react";
@@ -30,6 +31,7 @@ const NAV_ITEMS = [
   { name: "Team", path: "/team", icon: Users },
   { name: "Waivers", path: "/waivers", icon: FileSignature },
   { name: "Kiosk Mode", path: "/kiosk", icon: MonitorSmartphone },
+  { name: "Promo Codes", path: "/promo-codes", icon: Tag },
   { name: "My Wallet", path: "/wallet", icon: Wallet },
   { name: "Settings", path: "/settings", icon: Settings },
 ];

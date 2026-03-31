@@ -18,7 +18,7 @@ import {
   ArrowLeft, ArrowRight, CheckCircle2, Calendar as CalendarIcon,
   Lock, User, CreditCard, FileText, Eye, EyeOff, ShieldCheck,
   Zap, AlertTriangle, Umbrella, Star, Loader2, BadgeCheck,
-  ScanFace, RefreshCw, XCircle, Clock
+  ScanFace, RefreshCw, XCircle, Clock, Tag
 } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { differenceInDays, format, addDays } from "date-fns";
@@ -194,6 +194,19 @@ export default function StorefrontBook() {
   const [paymentIntentId, setPaymentIntentId] = useState<string | null>(null);
   const [paymentConfirmed, setPaymentConfirmed] = useState(false);
   const [isTestMode, setIsTestMode] = useState(false);
+  const [showStripeForm, setShowStripeForm] = useState(false);
+
+  // Promo codes
+  const [promoInput, setPromoInput] = useState("");
+  const [appliedPromo, setAppliedPromo] = useState<{
+    code: string;
+    discountType: "percent" | "fixed";
+    discountValue: number;
+    discountAmount: number;
+    description: string;
+  } | null>(null);
+  const [promoLoading, setPromoLoading] = useState(false);
+  const [promoError, setPromoError] = useState<string | null>(null);
 
   // Step 3: agreement
   const [agreeChecked, setAgreeChecked] = useState(false);
@@ -270,6 +283,8 @@ export default function StorefrontBook() {
       .reduce((sum, a) => sum + (a.priceType === "per_day" ? a.price * days : a.price), 0);
   }, [availableAddons, selectedAddonIds, days]);
   const total = subtotal + addonsSubtotal + deposit;
+  const promoDiscount = appliedPromo ? Math.min(appliedPromo.discountAmount, total) : 0;
+  const discountedTotal = Math.max(0.50, total - promoDiscount);
 
   // ── Agreement token resolution ─────────────────────────────────────────────
   // Map of known auto-fill token keys → their runtime values
@@ -287,7 +302,7 @@ export default function StorefrontBook() {
     price_per_day:  listing?.pricePerDay ? `$${parseFloat(String(listing.pricePerDay)).toFixed(2)}` : "—",
     subtotal:       `$${subtotal.toFixed(2)}`,
     deposit_amount: deposit > 0 ? `$${deposit.toFixed(2)}` : "$0.00",
-    total_price:    `$${total.toFixed(2)}`,
+    total_price:    `$${discountedTotal.toFixed(2)}`,
     company_name:   (businessProfile as any)?.name || "—",
   };
 
@@ -445,9 +460,8 @@ export default function StorefrontBook() {
     }
     // Already logged in — go straight to payment
     if (session) {
-      const cents = Math.round(total * 100);
       setStep("payment");
-      createPaymentIntent(cents);
+      setShowStripeForm(false);
       return;
     }
 
@@ -464,12 +478,44 @@ export default function StorefrontBook() {
       const data = await res.json();
       if (!res.ok) { setAuthError(data.error || "Registration failed"); return; }
       saveSession(data); setSession(data);
-      const cents = Math.round(total * 100);
       setStep("payment");
-      createPaymentIntent(cents);
+      setShowStripeForm(false);
     } catch {
       setAuthError("Connection error, please try again");
     } finally { setIsSubmitting(false); }
+  };
+
+  const handleApplyPromo = async () => {
+    const code = promoInput.trim().toUpperCase();
+    if (!code) return;
+    setPromoLoading(true);
+    setPromoError(null);
+    try {
+      const res = await fetch(`${BASE}/api/promo-codes/validate`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ code, tenantSlug: slug, bookingAmountCents: Math.round(total * 100) }),
+      });
+      const data = await res.json();
+      if (!data.valid) {
+        setPromoError(data.error || "Invalid promo code");
+        setAppliedPromo(null);
+      } else {
+        setAppliedPromo(data);
+        setPromoError(null);
+        toast({ title: `Promo code applied: ${data.description}` });
+      }
+    } catch {
+      setPromoError("Failed to validate promo code");
+    } finally {
+      setPromoLoading(false);
+    }
+  };
+
+  const handleContinueToPayment = () => {
+    const cents = Math.round(discountedTotal * 100);
+    createPaymentIntent(cents);
+    setShowStripeForm(true);
   };
 
   const handlePaymentNext = () => {
@@ -532,11 +578,22 @@ export default function StorefrontBook() {
           agreementText: agreementText ? resolveAgreementText(agreementText) : undefined,
           agreementSignatureDataUrl: signatureDataUrl,
           stripePaymentIntentId: paymentIntentId || undefined,
+          appliedPromoCode: appliedPromo?.code || undefined,
+          discountAmount: promoDiscount > 0 ? promoDiscount : undefined,
         })
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
       setConfirmedBooking({ id: data.id, totalPrice: data.totalPrice });
+
+      // Track promo code usage
+      if (appliedPromo?.code && slug) {
+        fetch(`${BASE}/api/promo-codes/use`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ code: appliedPromo.code, tenantSlug: slug }),
+        }).catch(() => {});
+      }
 
       // Create Stripe Identity session for the verification step
       try {
@@ -976,14 +1033,66 @@ export default function StorefrontBook() {
               <div className="space-y-6">
                 <h1 className="text-2xl font-bold">Payment</h1>
 
-                {isTestMode && (
-                  <div className="flex items-center gap-2.5 bg-amber-50 border border-amber-300 rounded-lg px-4 py-3 mb-2">
-                    <span className="text-amber-600 font-bold text-xs uppercase tracking-wider bg-amber-200 px-2 py-0.5 rounded">Test Mode</span>
-                    <span className="text-sm text-amber-800">No real money will be charged. Use card number <strong>4242 4242 4242 4242</strong> with any future expiry and CVC.</span>
+                {/* Promo Code section — only shown before Stripe form loads */}
+                {!showStripeForm && !paymentConfirmed && (
+                  <div className="bg-background rounded-2xl border shadow-sm p-5 space-y-3">
+                    <h2 className="font-semibold text-sm flex items-center gap-2">
+                      <Tag className="w-4 h-4 text-primary" />
+                      Have a promo code?
+                    </h2>
+                    {appliedPromo ? (
+                      <div className="flex items-center justify-between bg-green-50 border border-green-200 rounded-xl px-4 py-3">
+                        <div className="flex items-center gap-2">
+                          <CheckCircle2 className="w-4 h-4 text-green-600 shrink-0" />
+                          <div>
+                            <p className="font-bold text-green-800 font-mono tracking-wider">{appliedPromo.code}</p>
+                            <p className="text-xs text-green-700">{appliedPromo.description} applied</p>
+                          </div>
+                        </div>
+                        <button
+                          className="text-xs text-muted-foreground hover:text-destructive underline"
+                          onClick={() => { setAppliedPromo(null); setPromoInput(""); setPromoError(null); }}
+                        >
+                          Remove
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="flex gap-2">
+                        <Input
+                          value={promoInput}
+                          onChange={e => setPromoInput(e.target.value.toUpperCase().replace(/\s/g, ""))}
+                          onKeyDown={e => e.key === "Enter" && handleApplyPromo()}
+                          placeholder="Enter code"
+                          className="font-mono uppercase font-semibold tracking-widest flex-1"
+                          maxLength={30}
+                        />
+                        <Button
+                          variant="outline"
+                          onClick={handleApplyPromo}
+                          disabled={!promoInput.trim() || promoLoading}
+                          className="shrink-0"
+                        >
+                          {promoLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : "Apply"}
+                        </Button>
+                      </div>
+                    )}
+                    {promoError && (
+                      <p className="text-xs text-destructive flex items-center gap-1.5">
+                        <XCircle className="w-3.5 h-3.5 shrink-0" />
+                        {promoError}
+                      </p>
+                    )}
                   </div>
                 )}
 
-                {!clientSecret ? (
+                {/* Stripe payment flow */}
+                {!showStripeForm && !paymentConfirmed ? (
+                  <Button size="lg" className="w-full h-13 text-base font-bold rounded-xl" onClick={handleContinueToPayment}>
+                    <CreditCard className="w-4 h-4 mr-2" />
+                    Continue to Payment
+                    {appliedPromo && <span className="ml-1 opacity-80">— ${discountedTotal.toFixed(2)}</span>}
+                  </Button>
+                ) : showStripeForm && !clientSecret ? (
                   <div className="flex items-center justify-center py-16 gap-3 text-muted-foreground">
                     <Loader2 className="w-5 h-5 animate-spin" />
                     <span>Preparing payment…</span>
@@ -996,14 +1105,22 @@ export default function StorefrontBook() {
                       <p className="text-sm text-green-700">{isTestMode ? "Test payment recorded — no real charge." : "Your card has been charged. Continue to sign the agreement."}</p>
                     </div>
                   </div>
-                ) : (
-                  <Elements stripe={isTestMode ? testStripePromise : liveStripePromise} options={{ clientSecret, appearance: { theme: "stripe" } }}>
-                    <StripePaymentForm
-                      onSuccess={() => setPaymentConfirmed(true)}
-                      customerEmail={email}
-                    />
-                  </Elements>
-                )}
+                ) : clientSecret ? (
+                  <>
+                    {isTestMode && (
+                      <div className="flex items-center gap-2.5 bg-amber-50 border border-amber-300 rounded-lg px-4 py-3">
+                        <span className="text-amber-600 font-bold text-xs uppercase tracking-wider bg-amber-200 px-2 py-0.5 rounded">Test Mode</span>
+                        <span className="text-sm text-amber-800">No real money will be charged. Use card <strong>4242 4242 4242 4242</strong>, any future expiry and CVC.</span>
+                      </div>
+                    )}
+                    <Elements stripe={isTestMode ? testStripePromise : liveStripePromise} options={{ clientSecret, appearance: { theme: "stripe" } }}>
+                      <StripePaymentForm
+                        onSuccess={() => setPaymentConfirmed(true)}
+                        customerEmail={email}
+                      />
+                    </Elements>
+                  </>
+                ) : null}
 
                 <p className="text-xs text-muted-foreground flex items-center gap-1.5">
                   <Lock className="w-3.5 h-3.5" />
@@ -1381,11 +1498,26 @@ export default function StorefrontBook() {
                           <span>${deposit.toFixed(2)}</span>
                         </div>
                       )}
+                      {appliedPromo && (
+                        <div className="flex justify-between text-green-600 font-medium">
+                          <span className="flex items-center gap-1">
+                            <Tag className="w-3 h-3" />
+                            {appliedPromo.code}
+                          </span>
+                          <span>-${promoDiscount.toFixed(2)}</span>
+                        </div>
+                      )}
                       <Separator />
                       <div className="flex justify-between font-bold text-base">
                         <span>Total due</span>
-                        <span>${total.toFixed(2)}</span>
+                        <span className={appliedPromo ? "text-green-700" : ""}>${discountedTotal.toFixed(2)}</span>
                       </div>
+                      {appliedPromo && (
+                        <div className="flex justify-between text-xs text-muted-foreground line-through">
+                          <span>Original price</span>
+                          <span>${total.toFixed(2)}</span>
+                        </div>
+                      )}
                       <p className="text-xs text-muted-foreground flex items-center gap-1">
                         <Lock className="w-3 h-3" /> No charge until confirmed
                       </p>
