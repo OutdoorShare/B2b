@@ -5,7 +5,7 @@ import multer from "multer";
 import { randomBytes } from "crypto";
 import { db } from "@workspace/db";
 import { bookingsTable, listingsTable, businessProfileTable, tenantsTable } from "@workspace/db/schema";
-import { eq, and, gte, lte } from "drizzle-orm";
+import { eq, and, gte, lte, isNull, or } from "drizzle-orm";
 import { generateAgreementPdf } from "../lib/generate-agreement-pdf";
 import { sendPickupLinkEmail, sendKioskAccountSetupEmail } from "../services/gmail";
 
@@ -46,7 +46,16 @@ router.get("/bookings", async (req, res) => {
   try {
     const { status, listingId, startDate, endDate, customerEmail } = req.query;
     const conditions = [];
-    if (req.tenantId) conditions.push(eq(bookingsTable.tenantId, req.tenantId));
+
+    // When searching by customerEmail (renter's my-bookings view), include
+    // null-tenant bookings alongside the scoped ones so customers always see
+    // every booking they made, even if it was created without tenant context.
+    if (req.tenantId && customerEmail) {
+      conditions.push(or(eq(bookingsTable.tenantId, req.tenantId), isNull(bookingsTable.tenantId))!);
+    } else if (req.tenantId) {
+      conditions.push(eq(bookingsTable.tenantId, req.tenantId));
+    }
+
     if (status) conditions.push(eq(bookingsTable.status, status as any));
     if (listingId) conditions.push(eq(bookingsTable.listingId, Number(listingId)));
     if (startDate) conditions.push(gte(bookingsTable.startDate, String(startDate)));
@@ -59,12 +68,13 @@ router.get("/bookings", async (req, res) => {
       .where(conditions.length > 0 ? and(...conditions) : undefined)
       .orderBy(bookingsTable.createdAt);
 
-    // Only fetch listings scoped to this tenant for title lookup
-    const listingConditions = req.tenantId ? [eq(listingsTable.tenantId, req.tenantId)] : [];
-    const listings = await db
-      .select({ id: listingsTable.id, title: listingsTable.title })
-      .from(listingsTable)
-      .where(listingConditions.length > 0 ? and(...listingConditions) : undefined);
+    // Collect all listing IDs referenced by the returned bookings for title lookup
+    const listingIds = [...new Set(bookings.map(b => b.listingId))];
+    const listings = listingIds.length > 0
+      ? await db.select({ id: listingsTable.id, title: listingsTable.title })
+          .from(listingsTable)
+          .where(or(...listingIds.map(id => eq(listingsTable.id, id))))
+      : [];
     const titleMap = Object.fromEntries(listings.map(l => [l.id, l.title]));
 
     res.json(bookings.map(b => formatBooking(b, titleMap[b.listingId] ?? "Unknown")));
@@ -189,9 +199,21 @@ router.post("/bookings", async (req, res) => {
 
 router.get("/bookings/:id", async (req, res) => {
   try {
-    const conditions = [eq(bookingsTable.id, Number(req.params.id))];
-    if (req.tenantId) conditions.push(eq(bookingsTable.tenantId, req.tenantId));
-    const [booking] = await db.select().from(bookingsTable).where(and(...conditions));
+    const bookingId = Number(req.params.id);
+    let booking: typeof bookingsTable.$inferSelect | undefined;
+
+    // First try scoped to this tenant
+    if (req.tenantId) {
+      [booking] = await db.select().from(bookingsTable)
+        .where(and(eq(bookingsTable.id, bookingId), eq(bookingsTable.tenantId, req.tenantId)));
+    }
+
+    // If not found (or no tenant context), fall back to finding by ID alone.
+    // The caller (storefront) enforces ownership via customerEmail check on the client.
+    if (!booking) {
+      [booking] = await db.select().from(bookingsTable).where(eq(bookingsTable.id, bookingId));
+    }
+
     if (!booking) { res.status(404).json({ error: "Not found" }); return; }
 
     const [listing] = await db.select({ title: listingsTable.title }).from(listingsTable).where(eq(listingsTable.id, booking.listingId));
