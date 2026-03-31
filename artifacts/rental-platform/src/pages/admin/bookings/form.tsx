@@ -159,9 +159,8 @@ export default function AdminBookingForm() {
   const protectionPrice = useMemo(() => {
     if (!selectedProtection) return 0;
     const ppu = parseFloat(selectedProtection.price);
-    if (selectedProtection.pricingType === "per_day") return ppu * days * Number(form.quantity || 1);
-    if (selectedProtection.pricingType === "per_rental") return ppu * Number(form.quantity || 1);
-    return ppu;
+    if (selectedProtection.priceType === "per_day") return ppu * days * Number(form.quantity || 1);
+    return ppu * Number(form.quantity || 1);
   }, [selectedProtection, days, form.quantity]);
 
   const estimatedTotal = basePrice + deposit + protectionPrice;
@@ -477,7 +476,9 @@ export default function AdminBookingForm() {
                       </Label>
                       {protectionAddons.map(addon => {
                         const ppu = parseFloat(addon.price);
-                        const label = addon.pricingType === "per_day" ? `$${ppu.toFixed(2)}/day/unit` : `$${ppu.toFixed(2)}/rental`;
+                        const label = addon.priceType === "per_day"
+                          ? `$${ppu.toFixed(2)}/day × ${days} days = $${(ppu * days * Number(form.quantity || 1)).toFixed(2)}`
+                          : `$${ppu.toFixed(2)}/rental`;
                         const isSelected = selectedProtectionId === addon.id;
                         return (
                           <button

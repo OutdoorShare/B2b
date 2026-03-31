@@ -123,7 +123,9 @@ export default function StorefrontGearDetail() {
   const subtotal = pricePerDay * days;
 
   const protectionAddon = addons.find(a => a.name.toLowerCase().includes("protection"));
-  const protectionPrice = protectionAddon ? protectionAddon.price : 0;
+  const protectionPrice = protectionAddon
+    ? (protectionAddon.priceType === "per_day" ? protectionAddon.price * days : protectionAddon.price)
+    : 0;
 
   if (isLoading) {
     return (
@@ -311,12 +313,15 @@ export default function StorefrontGearDetail() {
                         <span className="text-muted-foreground">${pricePerDay.toFixed(0)} × {days} day{days !== 1 ? "s" : ""}</span>
                         <span className="font-semibold">${subtotal.toFixed(2)}</span>
                       </div>
-                      {protectionPrice > 0 && (
+                      {protectionPrice > 0 && protectionAddon && (
                         <div className="flex justify-between">
                           <span className="text-muted-foreground flex items-center gap-1">
-                            <Lock className="w-3 h-3" /> Protection Plan
+                            <Lock className="w-3 h-3" />
+                            {protectionAddon.priceType === "per_day"
+                              ? `Protection ($${protectionAddon.price.toFixed(0)}/day × ${days})`
+                              : "Protection Plan"}
                           </span>
-                          <span className="font-semibold">+${protectionPrice.toFixed(0)}</span>
+                          <span className="font-semibold">+${protectionPrice.toFixed(2)}</span>
                         </div>
                       )}
                       {listing.depositAmount && Number(listing.depositAmount) > 0 && (
