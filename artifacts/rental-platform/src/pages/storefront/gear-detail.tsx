@@ -262,7 +262,7 @@ export default function StorefrontGearDetail() {
               </div>
 
               {/* Calendar */}
-              <div className="p-3 sm:p-4">
+              <div className="px-1">
                 <Calendar
                   mode="range"
                   selected={dateRange}
@@ -272,8 +272,11 @@ export default function StorefrontGearDetail() {
                     ...disabledDates,
                   ]}
                   numberOfMonths={calendarMonths}
-                  className="[--cell-size:2.5rem] sm:[--cell-size:3rem] w-full"
-                  classNames={{ root: "w-full" }}
+                  className="[--cell-size:2rem] sm:[--cell-size:2.5rem] w-full"
+                  classNames={{
+                    root: "w-full",
+                    day: "group/day relative aspect-square w-full select-none p-0 text-center [&:first-child[data-selected=true]_button]:rounded-l-md [&:last-child[data-selected=true]_button]:rounded-r-md",
+                  }}
                   modifiers={{ booked: disabledDates }}
                   modifiersClassNames={{ booked: "bg-red-50 text-red-400 line-through opacity-60" }}
                 />
