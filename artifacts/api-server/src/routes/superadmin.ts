@@ -665,6 +665,143 @@ router.get("/superadmin/stats", requireSuperAdmin, async (_req, res) => {
   }
 });
 
+// ── GET /superadmin/analytics ─────────────────────────────────────────────────
+router.get("/superadmin/analytics", requireSuperAdmin, async (_req, res) => {
+  try {
+    const [
+      kpiRows,
+      sourceRows,
+      leaderboardRows,
+      categoryRows,
+      topListingRows,
+      signupTrendRows,
+    ] = await Promise.all([
+      // KPI: total revenue, platform commission, protection fees, booking count, new signups
+      db.execute(sql`
+        SELECT
+          COALESCE(SUM(b.total_price) FILTER (WHERE b.status NOT IN ('cancelled')), 0)::numeric AS total_revenue,
+          COALESCE(SUM(b.stripe_platform_fee), 0)::numeric AS platform_commission,
+          COALESCE((
+            SELECT SUM((addon->>'subtotal')::numeric)
+            FROM bookings bx
+            CROSS JOIN LATERAL jsonb_array_elements(
+              CASE WHEN bx.addons_data IS NOT NULL AND bx.addons_data NOT IN ('[]','null','')
+                   THEN bx.addons_data::jsonb ELSE '[]'::jsonb END
+            ) AS addon
+            WHERE lower(addon->>'name') LIKE '%protection%'
+          ), 0)::numeric AS protection_fees,
+          COUNT(b.id)::int AS total_bookings,
+          (SELECT COUNT(*)::int FROM tenants WHERE created_at > NOW() - INTERVAL '30 days') AS new_signups,
+          (SELECT COUNT(*)::int FROM tenants) AS total_companies
+        FROM bookings b
+      `),
+      // Booking source breakdown
+      db.execute(sql`
+        SELECT COALESCE(source, 'online') AS source, COUNT(*)::int AS count
+        FROM bookings
+        GROUP BY COALESCE(source, 'online')
+        ORDER BY count DESC
+      `),
+      // Company leaderboard
+      db.execute(sql`
+        SELECT
+          t.id, t.name, t.slug,
+          COUNT(b.id)::int AS booking_count,
+          COALESCE(SUM(b.total_price) FILTER (WHERE b.status NOT IN ('cancelled')), 0)::numeric AS total_revenue,
+          COALESCE(SUM(b.stripe_platform_fee), 0)::numeric AS commission_paid,
+          t.created_at
+        FROM tenants t
+        LEFT JOIN bookings b ON b.tenant_id = t.id
+        GROUP BY t.id, t.name, t.slug, t.created_at
+        ORDER BY booking_count DESC, total_revenue DESC
+        LIMIT 25
+      `),
+      // Totals per category
+      db.execute(sql`
+        SELECT
+          c.name AS category_name,
+          COUNT(b.id)::int AS booking_count,
+          COALESCE(SUM(b.total_price) FILTER (WHERE b.status NOT IN ('cancelled')), 0)::numeric AS total_revenue
+        FROM bookings b
+        JOIN listings l ON l.id = b.listing_id
+        JOIN categories c ON c.id = l.category_id
+        GROUP BY c.name
+        ORDER BY total_revenue DESC
+      `),
+      // Top listings by booking count
+      db.execute(sql`
+        SELECT
+          l.id, l.title,
+          t.name AS company_name,
+          COUNT(b.id)::int AS booking_count,
+          COALESCE(SUM(b.total_price) FILTER (WHERE b.status NOT IN ('cancelled')), 0)::numeric AS total_revenue
+        FROM bookings b
+        JOIN listings l ON l.id = b.listing_id
+        JOIN tenants t ON t.id = b.tenant_id
+        GROUP BY l.id, l.title, t.name
+        ORDER BY booking_count DESC
+        LIMIT 10
+      `),
+      // Monthly tenant signup trend (last 6 months)
+      db.execute(sql`
+        SELECT
+          TO_CHAR(DATE_TRUNC('month', created_at), 'Mon') AS month_label,
+          DATE_TRUNC('month', created_at) AS month_start,
+          COUNT(*)::int AS count
+        FROM tenants
+        WHERE created_at > NOW() - INTERVAL '6 months'
+        GROUP BY DATE_TRUNC('month', created_at)
+        ORDER BY DATE_TRUNC('month', created_at)
+      `),
+    ]);
+
+    const kpi = (kpiRows as any).rows?.[0] ?? (kpiRows as any)[0] ?? {};
+
+    res.json({
+      kpi: {
+        totalRevenue: parseFloat(kpi.total_revenue ?? "0"),
+        platformCommission: parseFloat(kpi.platform_commission ?? "0"),
+        protectionFees: parseFloat(kpi.protection_fees ?? "0"),
+        totalBookings: parseInt(kpi.total_bookings ?? "0"),
+        newSignups: parseInt(kpi.new_signups ?? "0"),
+        totalCompanies: parseInt(kpi.total_companies ?? "0"),
+      },
+      sources: ((sourceRows as any).rows ?? sourceRows as any[]).map((r: any) => ({
+        source: r.source,
+        count: parseInt(r.count ?? "0"),
+      })),
+      leaderboard: ((leaderboardRows as any).rows ?? leaderboardRows as any[]).map((r: any) => ({
+        id: r.id,
+        name: r.name,
+        slug: r.slug,
+        bookingCount: parseInt(r.booking_count ?? "0"),
+        totalRevenue: parseFloat(r.total_revenue ?? "0"),
+        commissionPaid: parseFloat(r.commission_paid ?? "0"),
+        createdAt: r.created_at,
+      })),
+      categories: ((categoryRows as any).rows ?? categoryRows as any[]).map((r: any) => ({
+        name: r.category_name,
+        bookingCount: parseInt(r.booking_count ?? "0"),
+        totalRevenue: parseFloat(r.total_revenue ?? "0"),
+      })),
+      topListings: ((topListingRows as any).rows ?? topListingRows as any[]).map((r: any) => ({
+        id: r.id,
+        title: r.title,
+        companyName: r.company_name,
+        bookingCount: parseInt(r.booking_count ?? "0"),
+        totalRevenue: parseFloat(r.total_revenue ?? "0"),
+      })),
+      signupTrend: ((signupTrendRows as any).rows ?? signupTrendRows as any[]).map((r: any) => ({
+        month: r.month_label,
+        count: parseInt(r.count ?? "0"),
+      })),
+    });
+  } catch (e) {
+    console.error("[analytics]", e);
+    res.status(500).json({ error: "Failed to fetch analytics" });
+  }
+});
+
 // ── GET /superadmin/agreement ──────────────────────────────────────────────────
 router.get("/superadmin/agreement", requireSuperAdmin, async (_req, res) => {
   try {
