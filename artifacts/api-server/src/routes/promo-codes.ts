@@ -1,7 +1,7 @@
 import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
 import { promoCodesTable, tenantsTable } from "@workspace/db/schema";
-import { eq, and } from "drizzle-orm";
+import { eq, and, or, isNull, gt, sql } from "drizzle-orm";
 import type { Request } from "express";
 
 const router: IRouter = Router();
@@ -125,6 +125,42 @@ router.delete("/promo-codes/:id", requireAdminAuth, async (req, res) => {
     res.json({ success: true });
   } catch (e: any) {
     res.status(500).json({ error: e.message });
+  }
+});
+
+// ── Public: Check if tenant has any usable promo codes ───────────────────────
+// GET /api/promo-codes/has-active?tenantSlug=demo-outdoorshare
+router.get("/promo-codes/has-active", async (req, res) => {
+  try {
+    const { tenantSlug } = req.query as { tenantSlug?: string };
+    if (!tenantSlug) {
+      res.status(400).json({ hasActive: false, error: "tenantSlug is required" });
+      return;
+    }
+    const [tenant] = await db.select({ id: tenantsTable.id }).from(tenantsTable).where(eq(tenantsTable.slug, tenantSlug));
+    if (!tenant) {
+      res.json({ hasActive: false });
+      return;
+    }
+    const now = new Date();
+    const codes = await db
+      .select({ id: promoCodesTable.id })
+      .from(promoCodesTable)
+      .where(
+        and(
+          eq(promoCodesTable.tenantId, tenant.id),
+          eq(promoCodesTable.isActive, true),
+          or(isNull(promoCodesTable.expiresAt), gt(promoCodesTable.expiresAt, now)),
+          or(
+            isNull(promoCodesTable.maxUses),
+            sql`${promoCodesTable.usesCount} < ${promoCodesTable.maxUses}`
+          )
+        )
+      )
+      .limit(1);
+    res.json({ hasActive: codes.length > 0 });
+  } catch (e: any) {
+    res.status(500).json({ hasActive: false, error: e.message });
   }
 });
 

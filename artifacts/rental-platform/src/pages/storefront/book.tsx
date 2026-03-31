@@ -234,6 +234,7 @@ export default function StorefrontBook() {
   const [qrPayMethodLabel, setQrPayMethodLabel] = useState<string | null>(null);
 
   // Promo codes
+  const [hasActivePromos, setHasActivePromos] = useState(false);
   const [promoInput, setPromoInput] = useState("");
   const [appliedPromo, setAppliedPromo] = useState<{
     code: string;
@@ -309,7 +310,13 @@ export default function StorefrontBook() {
       .then(r => r.json())
       .then((data: ListingRule[]) => { if (Array.isArray(data)) setListingRules(data); })
       .catch(() => {});
-  }, [listingId]);
+    if (slug) {
+      fetch(`${BASE}/api/promo-codes/has-active?tenantSlug=${encodeURIComponent(slug)}`)
+        .then(r => r.json())
+        .then((data: { hasActive: boolean }) => setHasActivePromos(!!data.hasActive))
+        .catch(() => {});
+    }
+  }, [listingId, slug]);
 
   useEffect(() => {
     if (step !== "confirmation" || !email) return;
@@ -1376,8 +1383,8 @@ export default function StorefrontBook() {
                   </div>
                 )}
 
-                {/* Promo Code section — only shown before Stripe form loads, and in card mode */}
-                {(!isKiosk || kioskPayMode === "card") && !showStripeForm && !paymentConfirmed && (
+                {/* Promo Code section — only shown when tenant has active promos, before Stripe form loads, and in card mode */}
+                {hasActivePromos && (!isKiosk || kioskPayMode === "card") && !showStripeForm && !paymentConfirmed && (
                   <div className="bg-background rounded-2xl border shadow-sm p-5 space-y-3">
                     <h2 className="font-semibold text-sm flex items-center gap-2">
                       <Tag className="w-4 h-4 text-primary" />
