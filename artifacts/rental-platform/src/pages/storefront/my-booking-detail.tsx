@@ -9,7 +9,7 @@ import {
   MapPin, Monitor, Smartphone, Phone as PhoneIcon, Users,
   Receipt, Tag, Camera, ImagePlus, Upload, X as XIcon, Loader2, RotateCcw
 } from "lucide-react";
-import { format, differenceInDays, startOfDay } from "date-fns";
+import { format, differenceInDays, startOfDay, parseISO, subHours } from "date-fns";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
@@ -189,6 +189,33 @@ export default function MyBookingDetail() {
   const endDate   = new Date(booking.endDate + "T00:00:00");
   const days = Math.max(1, differenceInDays(endDate, startDate));
 
+  // ── Pickup photo window: opens 12 hours before rental start ──────────────
+  // Parse the pickup datetime from the date + optional "10:00 AM" style time
+  const pickupDatetime = (() => {
+    const base = parseISO(booking.startDate);
+    const t = booking.pickupTime;
+    if (t) {
+      const m = t.match(/(\d+):(\d+)\s*(AM|PM)?/i);
+      if (m) {
+        let h = parseInt(m[1]);
+        const min = parseInt(m[2]);
+        const ampm = m[3]?.toUpperCase();
+        if (ampm === "PM" && h !== 12) h += 12;
+        if (ampm === "AM" && h === 12) h = 0;
+        base.setHours(h, min, 0, 0);
+      } else {
+        base.setHours(0, 0, 0, 0);
+      }
+    }
+    return base;
+  })();
+  const photoWindowOpensAt = subHours(pickupDatetime, 12);
+  const now = new Date();
+  const photoWindowOpen = now >= photoWindowOpensAt;
+  const hoursUntilWindow = Math.ceil((photoWindowOpensAt.getTime() - now.getTime()) / (1000 * 60 * 60));
+  const canShowPhotoUpload = (booking.status === "confirmed" || booking.status === "active") && photoWindowOpen;
+  const photoWindowPending = booking.status === "confirmed" && !photoWindowOpen;
+
   let addons: Array<{ id: number; name: string; price: number; priceType: string; subtotal: number }> = [];
   try {
     addons = booking.addonsData ? JSON.parse(booking.addonsData) : [];
@@ -348,8 +375,24 @@ export default function MyBookingDetail() {
         );
       })()}
 
-      {/* ── Pickup Photos Section (pending + confirmed + active bookings) ── */}
-      {["pending", "confirmed", "active"].includes(booking.status) && (
+      {/* ── Pickup photo window not yet open ── */}
+      {photoWindowPending && (
+        <div className="rounded-2xl border border-blue-200 bg-blue-50 p-4 flex items-start gap-3">
+          <Camera className="w-5 h-5 text-blue-500 shrink-0 mt-0.5" />
+          <div>
+            <p className="font-semibold text-blue-800 text-sm">Pickup photo upload opens soon</p>
+            <p className="text-xs text-blue-600 mt-0.5">
+              You'll be able to document the equipment condition starting{" "}
+              <strong>{format(photoWindowOpensAt, "EEEE, MMM d 'at' h:mm a")}</strong>
+              {hoursUntilWindow > 1 ? ` — ${hoursUntilWindow} hours from now` : " — less than an hour away"}.
+            </p>
+            <p className="text-xs text-blue-500 mt-1">Photos protect you from any damage claims after your rental.</p>
+          </div>
+        </div>
+      )}
+
+      {/* ── Pickup Photos Section (confirmed within 12 hrs + active bookings) ── */}
+      {canShowPhotoUpload && (
         <div className={`rounded-2xl border overflow-hidden ${photoDone ? "border-green-200" : "border-primary/30"}`}>
           {/* Header */}
           <div className={`px-5 py-4 border-b flex items-center gap-3 ${photoDone ? "bg-green-50" : "bg-primary/5"}`}>
