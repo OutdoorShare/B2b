@@ -629,13 +629,28 @@ router.get("/stripe/checkout-qr/:sessionId", async (req, res) => {
     const isTestMode = !!tenant?.testMode;
     const stripeClient = getStripeForTenant(isTestMode);
 
-    const session = await stripeClient.checkout.sessions.retrieve(sessionId);
+    const session = await stripeClient.checkout.sessions.retrieve(sessionId, {
+      expand: ["payment_intent.payment_method"],
+    });
+
+    const pi = session.payment_intent as any;
+    const pm = pi?.payment_method;
+
+    // Resolve human-readable wallet label
+    let paymentMethodLabel: string | null = null;
+    if (pm) {
+      const walletType = pm.card?.wallet?.type;
+      if (walletType === "apple_pay") paymentMethodLabel = "Apple Pay";
+      else if (walletType === "google_pay") paymentMethodLabel = "Google Pay";
+      else if (pm.type === "card") paymentMethodLabel = "Card";
+      else paymentMethodLabel = pm.type ?? "Payment";
+    }
+
     res.json({
-      status: session.status,          // "open" | "complete" | "expired"
-      paymentStatus: session.payment_status, // "paid" | "unpaid" | "no_payment_required"
-      paymentIntentId: typeof session.payment_intent === "string"
-        ? session.payment_intent
-        : (session.payment_intent as any)?.id ?? null,
+      status: session.status,
+      paymentStatus: session.payment_status,
+      paymentIntentId: pi?.id ?? null,
+      paymentMethodLabel,
     });
   } catch (e: any) {
     console.error("[stripe/checkout-qr/status]", e.message);

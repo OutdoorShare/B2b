@@ -223,6 +223,7 @@ export default function StorefrontBook() {
   const [qrUrl, setQrUrl] = useState<string | null>(null);
   const [qrLoading, setQrLoading] = useState(false);
   const [qrPolling, setQrPolling] = useState(false);
+  const [qrPayMethodLabel, setQrPayMethodLabel] = useState<string | null>(null);
 
   // Promo codes
   const [promoInput, setPromoInput] = useState("");
@@ -534,8 +535,8 @@ export default function StorefrontBook() {
           clearInterval(interval);
           setQrPolling(false);
           if (data.paymentIntentId) setPaymentIntentId(data.paymentIntentId);
+          if (data.paymentMethodLabel) setQrPayMethodLabel(data.paymentMethodLabel);
           setPaymentConfirmed(true);
-          toast({ title: "Payment received!", description: "Proceeding to your rental agreement." });
         } else if (data.status === "expired") {
           clearInterval(interval);
           setQrPolling(false);
@@ -547,6 +548,13 @@ export default function StorefrontBook() {
     }, 2500);
     return () => clearInterval(interval);
   }, [qrPolling, qrSessionId, slug, toast]);
+
+  // Auto-advance from payment step to agreement step after QR payment confirmed
+  useEffect(() => {
+    if (!paymentConfirmed || kioskPayMode !== "qr" || step !== "payment") return;
+    const timer = setTimeout(() => handlePaymentNext(), 3000);
+    return () => clearTimeout(timer);
+  }, [paymentConfirmed, kioskPayMode, step]);
 
   // Create Stripe payment intent when entering the payment step
   const createPaymentIntent = useCallback(async (totalCents: number) => {
@@ -1215,75 +1223,110 @@ export default function StorefrontBook() {
                 )}
 
                 {/* ── Kiosk QR payment panel ── */}
-                {isKiosk && kioskPayMode === "qr" && !paymentConfirmed && (
+                {isKiosk && kioskPayMode === "qr" && (
                   <div className="bg-background rounded-2xl border shadow-sm p-6 space-y-5">
-                    <div className="text-center space-y-1">
-                      <h2 className="font-bold text-lg">Scan with your phone</h2>
-                      <p className="text-sm text-muted-foreground">
-                        Open your camera app and point it at the QR code to pay securely via Stripe.
-                      </p>
-                    </div>
-
-                    {qrLoading ? (
-                      <div className="flex flex-col items-center gap-3 py-8">
-                        <Loader2 className="w-8 h-8 animate-spin text-primary" />
-                        <p className="text-sm text-muted-foreground">Generating secure payment link…</p>
+                    {paymentConfirmed ? (
+                      /* ── SUCCESS STATE ── */
+                      <div className="flex flex-col items-center gap-4 py-4 text-center">
+                        <div className="w-20 h-20 rounded-full bg-green-100 flex items-center justify-center">
+                          <BadgeCheck className="w-10 h-10 text-green-600" />
+                        </div>
+                        <div>
+                          <h2 className="text-2xl font-black text-green-800">Payment Received!</h2>
+                          <p className="text-green-700 text-sm mt-1">
+                            {qrPayMethodLabel ? `Paid via ${qrPayMethodLabel}` : "Payment confirmed"}
+                            {isTestMode ? " (Test Mode — no real charge)" : ""}
+                          </p>
+                        </div>
+                        <div className="text-4xl font-black tabular-nums text-green-900">
+                          ${discountedTotal.toFixed(2)}
+                        </div>
+                        <div className="flex items-center gap-2 text-sm text-green-700">
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                          Advancing to agreement…
+                        </div>
                       </div>
-                    ) : qrUrl ? (
+                    ) : (
+                      /* ── QR SCAN STATE ── */
                       <>
-                        {/* QR Code */}
-                        <div className="flex justify-center">
-                          <div className="bg-white rounded-2xl p-4 shadow-sm border border-border inline-block">
-                            <QRCodeSVG
-                              value={qrUrl}
-                              size={220}
-                              level="M"
-                              includeMargin={false}
-                            />
+                        <div className="text-center space-y-1">
+                          <h2 className="font-bold text-lg">Scan with your phone to pay</h2>
+                          <p className="text-sm text-muted-foreground">
+                            Open your camera app and point it at the QR code.
+                          </p>
+                          {/* Wallet badges */}
+                          <div className="flex items-center justify-center gap-2 pt-1">
+                            <span className="inline-flex items-center gap-1 bg-black text-white text-xs font-semibold px-2.5 py-1 rounded-full">
+                              <svg viewBox="0 0 24 24" className="w-3.5 h-3.5 fill-white" aria-hidden="true"><path d="M12.017 0C5.396 0 .029 5.367.029 11.987c0 5.079 3.158 9.417 7.618 11.162-.105-.949-.2-2.405.042-3.441.218-.937 1.407-5.965 1.407-5.965s-.359-.719-.359-1.782c0-1.668.967-2.914 2.171-2.914 1.023 0 1.518.769 1.518 1.69 0 1.029-.655 2.568-.994 3.995-.283 1.194.599 2.169 1.777 2.169 2.133 0 3.772-2.249 3.772-5.495 0-2.873-2.064-4.882-5.012-4.882-3.414 0-5.418 2.561-5.418 5.207 0 1.031.397 2.138.893 2.738a.36.36 0 0 1 .083.345l-.333 1.36c-.053.22-.174.267-.402.161-1.499-.698-2.436-2.889-2.436-4.649 0-3.785 2.75-7.262 7.929-7.262 4.163 0 7.398 2.967 7.398 6.931 0 4.136-2.607 7.464-6.227 7.464-1.216 0-2.359-.632-2.75-1.378l-.748 2.853c-.271 1.043-1.002 2.35-1.492 3.146C9.57 23.812 10.763 24.009 12.017 24c6.624 0 11.99-5.367 11.99-11.988C24.007 5.367 18.641.001 12.017.001z"/></svg>
+                              Apple Pay
+                            </span>
+                            <span className="inline-flex items-center gap-1 bg-white border border-border text-foreground text-xs font-semibold px-2.5 py-1 rounded-full shadow-sm">
+                              <svg viewBox="0 0 24 24" className="w-3.5 h-3.5" aria-hidden="true"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 14H9V8h2v8zm4 0h-2V8h2v8z" fill="none"/><path d="M6.24 10.34l1.41-1.41 4.24 4.24-1.41 1.41z" fill="#4285F4"/><path d="M9.07 7.5h1.5v9h-1.5z" fill="#EA4335"/><path d="M13.43 7.5h1.5v9h-1.5z" fill="#FBBC05"/><path d="M11.25 4.5l1.06 1.06-4.24 4.24-1.06-1.06z" fill="#34A853"/></svg>
+                              Google Pay
+                            </span>
+                            <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
+                              + Card
+                            </span>
                           </div>
                         </div>
 
-                        {/* Amount */}
-                        <div className="text-center">
-                          <div className="text-3xl font-black tabular-nums">${discountedTotal.toFixed(2)}</div>
-                          <div className="text-xs text-muted-foreground mt-0.5">Total due</div>
-                        </div>
+                        {qrLoading ? (
+                          <div className="flex flex-col items-center gap-3 py-8">
+                            <Loader2 className="w-8 h-8 animate-spin text-primary" />
+                            <p className="text-sm text-muted-foreground">Generating secure payment link…</p>
+                          </div>
+                        ) : qrUrl ? (
+                          <>
+                            {/* QR Code */}
+                            <div className="flex justify-center">
+                              <div className="bg-white rounded-2xl p-4 shadow-sm border border-border inline-block">
+                                <QRCodeSVG value={qrUrl} size={220} level="M" includeMargin={false} />
+                              </div>
+                            </div>
 
-                        {/* Polling indicator */}
-                        <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground">
-                          <span className="relative flex h-2 w-2">
-                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary opacity-75" />
-                            <span className="relative inline-flex rounded-full h-2 w-2 bg-primary" />
-                          </span>
-                          Waiting for payment on your phone…
-                        </div>
+                            {/* Amount */}
+                            <div className="text-center">
+                              <div className="text-3xl font-black tabular-nums">${discountedTotal.toFixed(2)}</div>
+                              <div className="text-xs text-muted-foreground mt-0.5">Total due</div>
+                            </div>
 
-                        {isTestMode && (
-                          <div className="flex items-center gap-2.5 bg-amber-50 border border-amber-300 rounded-lg px-4 py-3">
-                            <span className="text-amber-600 font-bold text-xs uppercase tracking-wider bg-amber-200 px-2 py-0.5 rounded">Test Mode</span>
-                            <span className="text-sm text-amber-800">No real charges. Use card <strong>4242 4242 4242 4242</strong> on the phone.</span>
+                            {/* Polling indicator */}
+                            <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground">
+                              <span className="relative flex h-2 w-2">
+                                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary opacity-75" />
+                                <span className="relative inline-flex rounded-full h-2 w-2 bg-primary" />
+                              </span>
+                              Waiting for payment on your phone…
+                            </div>
+
+                            {isTestMode && (
+                              <div className="flex items-center gap-2.5 bg-amber-50 border border-amber-300 rounded-lg px-4 py-3">
+                                <span className="text-amber-600 font-bold text-xs uppercase tracking-wider bg-amber-200 px-2 py-0.5 rounded">Test Mode</span>
+                                <span className="text-sm text-amber-800">No real charges. Use card <strong>4242 4242 4242 4242</strong> on the phone.</span>
+                              </div>
+                            )}
+
+                            {/* Refresh button */}
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="w-full text-muted-foreground"
+                              onClick={() => { setQrSessionId(null); setQrUrl(null); setQrPolling(false); createQrSession(); }}
+                            >
+                              <RefreshCw className="w-3.5 h-3.5 mr-1.5" />
+                              Generate new QR code
+                            </Button>
+                          </>
+                        ) : (
+                          <div className="flex flex-col items-center gap-4 py-6">
+                            <p className="text-sm text-muted-foreground text-center">Click below to generate a secure payment QR code.</p>
+                            <Button onClick={createQrSession} className="px-8">
+                              <QrCode className="w-4 h-4 mr-2" />
+                              Generate QR Code
+                            </Button>
                           </div>
                         )}
-
-                        {/* Refresh button */}
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="w-full text-muted-foreground"
-                          onClick={() => { setQrSessionId(null); setQrUrl(null); setQrPolling(false); createQrSession(); }}
-                        >
-                          <RefreshCw className="w-3.5 h-3.5 mr-1.5" />
-                          Generate new QR code
-                        </Button>
                       </>
-                    ) : (
-                      <div className="flex flex-col items-center gap-4 py-6">
-                        <p className="text-sm text-muted-foreground text-center">Click below to generate a secure payment QR code.</p>
-                        <Button onClick={createQrSession} className="px-8">
-                          <QrCode className="w-4 h-4 mr-2" />
-                          Generate QR Code
-                        </Button>
-                      </div>
                     )}
                   </div>
                 )}
@@ -1352,7 +1395,7 @@ export default function StorefrontBook() {
                     <Loader2 className="w-5 h-5 animate-spin" />
                     <span>Preparing payment…</span>
                   </div>
-                ) : paymentConfirmed ? (
+                ) : paymentConfirmed && (!isKiosk || kioskPayMode === "card") ? (
                   <div className="bg-green-50 border border-green-200 rounded-xl p-5 flex items-center gap-3">
                     <BadgeCheck className="w-6 h-6 text-green-600 shrink-0" />
                     <div>
@@ -1382,7 +1425,7 @@ export default function StorefrontBook() {
                   Payments are processed securely by Stripe. Your card details are never stored on our servers.
                 </p>
 
-                {paymentConfirmed && (
+                {paymentConfirmed && (!isKiosk || kioskPayMode === "card") && (
                   <Button size="lg" className="w-full h-13 text-base font-bold rounded-xl" onClick={handlePaymentNext}>
                     Continue to Agreement
                     <ArrowRight className="w-4 h-4 ml-2" />
