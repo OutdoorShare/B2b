@@ -42,16 +42,13 @@ for (let h = 6; h <= 22; h++) {
   }
 }
 
-/** Returns the current time rounded UP to the nearest 30-min slot, clamped to TIME_OPTIONS range. */
 function currentTimeSlot(): string {
   const now = new Date();
   let h = now.getHours();
   let m = now.getMinutes();
-  // Round up to next 30-minute boundary
-  if (m === 0) { /* exactly on a slot — keep as-is */ }
+  if (m === 0) { }
   else if (m <= 30) { m = 30; }
   else { m = 0; h += 1; }
-  // Clamp to operating range (6:00 AM – 10:00 PM)
   if (h < 6) { h = 6; m = 0; }
   if (h > 22 || (h === 22 && m > 0)) { h = 22; m = 0; }
   const hour12 = h % 12 === 0 ? 12 : h % 12;
@@ -62,7 +59,8 @@ function currentTimeSlot(): string {
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
-type Step = "dates" | "payment" | "agreement" | "verification" | "photos" | "confirmation";
+// Two screens: "book" (dates+info+payment) and "complete" (agreement→verification→confirmation)
+type Step = "book" | "complete";
 
 type Addon = {
   id: number;
@@ -106,22 +104,7 @@ function saveSession(c: CustomerSession) {
   localStorage.setItem("rental_customer", JSON.stringify(c));
 }
 
-
-const STEP_LABELS: Record<Step, string> = {
-  dates: "Dates & Info",
-  payment: "Payment",
-  agreement: "Agreement",
-  verification: "Verify ID",
-  photos: "Photos",
-  confirmation: "Confirmed",
-};
-const STEPS: Step[] = ["dates", "payment", "agreement", "verification", "photos", "confirmation"];
-
 // ── Card Scan Helper ──────────────────────────────────────────────────────────
-// Uses native autocomplete="cc-number" inputs: on iOS the keyboard offers
-// "Scan Credit Card"; on Android autofill can capture from camera.
-// The scanned values are shown as a reference while the user enters them
-// into Stripe's secure form (we never send raw card data to our server).
 function CardScanHelper() {
   const [open, setOpen] = useState(false);
   const [cardNumber, setCardNumber] = useState("");
@@ -271,7 +254,7 @@ function CardScanHelper() {
   );
 }
 
-// ── Stripe Payment Form (uses Stripe Elements context) ────────────────────────
+// ── Stripe Payment Form ────────────────────────────────────────────────────────
 function StripePaymentForm({ onSuccess, customerEmail }: { onSuccess: () => void; customerEmail: string }) {
   const stripe = useStripe();
   const elements = useElements();
@@ -311,17 +294,8 @@ function StripePaymentForm({ onSuccess, customerEmail }: { onSuccess: () => void
   };
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-5">
-      <div className="bg-background rounded-2xl border shadow-sm p-6 space-y-4">
-        <div className="flex items-center justify-between">
-          <h2 className="font-semibold flex items-center gap-2">
-            <CreditCard className="w-4 h-4 text-primary" />
-            Card Details
-          </h2>
-          <CardScanHelper />
-        </div>
-        <PaymentElement options={{ layout: "tabs" }} />
-      </div>
+    <form onSubmit={handleSubmit} className="space-y-4">
+      <PaymentElement options={{ layout: "tabs" }} />
       {error && (
         <div className="flex items-center gap-2 text-destructive text-sm bg-destructive/10 rounded-lg px-4 py-3">
           <AlertTriangle className="w-4 h-4 shrink-0" />
@@ -329,7 +303,7 @@ function StripePaymentForm({ onSuccess, customerEmail }: { onSuccess: () => void
         </div>
       )}
       <Button type="submit" size="lg" className="w-full h-13 text-base font-bold rounded-xl" disabled={paying || !stripe}>
-        {paying ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Processing…</> : <><ShieldCheck className="w-4 h-4 mr-2" />Pay & Continue</>}
+        {paying ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Processing…</> : <><ShieldCheck className="w-4 h-4 mr-2" />Pay & Book</>}
       </Button>
     </form>
   );
@@ -357,10 +331,15 @@ export default function StorefrontBook() {
     query: { queryKey: getGetBusinessProfileQueryKey() }
   });
 
-  const [step, setStep] = useState<Step>("dates");
+  // ── 2 screens ──
+  const [step, setStep] = useState<Step>("book");
+  // Sub-state within "complete" screen
+  type CompletePhase = "agreement" | "verification" | "confirmed";
+  const [completePhase, setCompletePhase] = useState<CompletePhase>("agreement");
+
   const [session, setSession] = useState<CustomerSession | null>(loadSession);
 
-  // Step 1: dates + personal + account — pre-fill from listing page URL params
+  // Dates + info
   const [dateRange, setDateRange] = useState<DateRange | undefined>(() => {
     if (urlStart && urlEnd) {
       return { from: new Date(urlStart), to: new Date(urlEnd) };
@@ -380,14 +359,14 @@ export default function StorefrontBook() {
   const [showLoginPanel, setShowLoginPanel] = useState(false);
   const [authError, setAuthError] = useState("");
 
-  // Step 2: payment — Stripe
+  // Payment
   const [clientSecret, setClientSecret] = useState<string | null>(null);
   const [paymentIntentId, setPaymentIntentId] = useState<string | null>(null);
   const [paymentConfirmed, setPaymentConfirmed] = useState(false);
   const [isTestMode, setIsTestMode] = useState(false);
   const [showStripeForm, setShowStripeForm] = useState(false);
 
-  // Kiosk QR-pay (pay on phone via Stripe Checkout)
+  // Kiosk QR-pay
   const [kioskPayMode, setKioskPayMode] = useState<"card" | "qr">("card");
   const [qrSessionId, setQrSessionId] = useState<string | null>(null);
   const [qrUrl, setQrUrl] = useState<string | null>(null);
@@ -408,11 +387,10 @@ export default function StorefrontBook() {
   const [promoLoading, setPromoLoading] = useState(false);
   const [promoError, setPromoError] = useState<string | null>(null);
 
-  // Step 3: agreement
+  // Agreement
   const [agreeChecked, setAgreeChecked] = useState(false);
   const [agreementText, setAgreementText] = useState("");
   const [customFieldValues, setCustomFieldValues] = useState<Record<string, string>>({});
-  // Contract field definitions fetched from platform
   const [contractFields, setContractFields] = useState<Array<{
     id: string; label: string; key: string;
     type: "text" | "date" | "number" | "textarea" | "checkbox";
@@ -421,11 +399,10 @@ export default function StorefrontBook() {
   const sigCanvasRef = useRef<HTMLCanvasElement>(null);
   const isDrawingRef = useRef(false);
   const [sigHasContent, setSigHasContent] = useState(false);
-  // Per-rule initials: { [ruleId]: "JD" }
   const [listingRules, setListingRules] = useState<ListingRule[]>([]);
   const [ruleInitials, setRuleInitials] = useState<Record<number, string>>({});
 
-  // Step 4: Stripe Identity verification
+  // Verification
   const [identityClientSecret, setIdentityClientSecret] = useState<string | null>(null);
   const [identitySessionId, setIdentitySessionId] = useState<string | null>(null);
   const [identityStatus, setIdentityStatus] = useState<"idle" | "pending" | "verified" | "failed">("idle");
@@ -437,29 +414,6 @@ export default function StorefrontBook() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [confirmedBooking, setConfirmedBooking] = useState<{ id: number; totalPrice: number } | null>(null);
 
-  // Before-photos step
-  const [beforePhotos, setBeforePhotos] = useState<File[]>([]);
-  const [beforePreviews, setBeforePreviews] = useState<string[]>([]);
-  const [uploadingPhotos, setUploadingPhotos] = useState(false);
-  const beforePhotoInputRef = useRef<HTMLInputElement>(null);
-
-  const addBeforePhotos = useCallback((files: FileList | null) => {
-    if (!files) return;
-    const valid = Array.from(files).filter(f => f.type.startsWith("image/")).slice(0, 15 - beforePhotos.length);
-    if (valid.length === 0) return;
-    setBeforePhotos(prev => [...prev, ...valid]);
-    valid.forEach(f => {
-      const reader = new FileReader();
-      reader.onload = e => setBeforePreviews(prev => [...prev, e.target?.result as string]);
-      reader.readAsDataURL(f);
-    });
-  }, [beforePhotos.length]);
-
-  const removeBeforePhoto = (idx: number) => {
-    setBeforePhotos(prev => prev.filter((_, i) => i !== idx));
-    setBeforePreviews(prev => prev.filter((_, i) => i !== idx));
-  };
-
   const [customerBookings, setCustomerBookings] = useState<any[]>([]);
   const [bookingsLoading, setBookingsLoading] = useState(false);
 
@@ -467,11 +421,11 @@ export default function StorefrontBook() {
   const [availableAddons, setAvailableAddons] = useState<Addon[]>([]);
   const [selectedAddonIds, setSelectedAddonIds] = useState<Set<number>>(new Set());
 
-  // Fetch the agreement text and field definitions in parallel
+  // Fetch agreement + fields
   useEffect(() => {
-    const slug = (listing as any)?.categorySlug;
-    const url = slug
-      ? `${BASE}/api/platform/agreement?categorySlug=${encodeURIComponent(slug)}`
+    const catSlug = (listing as any)?.categorySlug;
+    const url = catSlug
+      ? `${BASE}/api/platform/agreement?categorySlug=${encodeURIComponent(catSlug)}`
       : `${BASE}/api/platform/agreement`;
     Promise.all([
       fetch(url).then(r => r.json()),
@@ -482,7 +436,7 @@ export default function StorefrontBook() {
     }).catch(() => {});
   }, [(listing as any)?.categorySlug]);
 
-  // Fetch addons for the listing; auto-select required ones
+  // Fetch addons
   useEffect(() => {
     if (!listingId) return;
     fetch(`${BASE}/api/listings/${listingId}/addons`)
@@ -491,14 +445,13 @@ export default function StorefrontBook() {
         if (!Array.isArray(data)) return;
         const active = data.filter(a => a.isActive);
         setAvailableAddons(active);
-        // auto-select required addons + all protection plan addons (always required)
         const required = new Set(active.filter(a => a.isRequired || a.name.toLowerCase().includes("protection")).map(a => a.id));
         setSelectedAddonIds(required);
       })
       .catch(() => {});
   }, [listingId]);
 
-  // Fetch listing rules (for per-rule initialing in agreement step)
+  // Fetch listing rules + check promos
   useEffect(() => {
     if (!listingId) return;
     fetch(`${BASE}/api/listings/${listingId}/rules`)
@@ -513,17 +466,18 @@ export default function StorefrontBook() {
     }
   }, [listingId, slug]);
 
+  // Load bookings on confirmation
   useEffect(() => {
-    if (step !== "confirmation" || !email) return;
+    if (completePhase !== "confirmed" || !email) return;
     setBookingsLoading(true);
     fetch(`${BASE}/api/bookings?customerEmail=${encodeURIComponent(email)}`)
       .then(r => r.json())
       .then(data => { if (Array.isArray(data)) setCustomerBookings(data.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())); })
       .catch(() => {})
       .finally(() => setBookingsLoading(false));
-  }, [step, email]);
+  }, [completePhase, email]);
 
-  // Restore identity session from sessionStorage on page load (in case of refresh mid-verification)
+  // Restore identity session from sessionStorage (page refresh during verification)
   useEffect(() => {
     const storageKey = `identity_session_${listingId}`;
     const saved = sessionStorage.getItem(storageKey);
@@ -534,15 +488,15 @@ export default function StorefrontBook() {
           setIdentityClientSecret(parsed.identityClientSecret);
           setIdentitySessionId(parsed.identitySessionId);
           setIdentityIsTestMode(!!parsed.identityIsTestMode);
-          setStep("verification");
+          setStep("complete");
+          setCompletePhase("verification");
           window.scrollTo(0, 0);
         }
-      } catch { /* ignore */ }
+      } catch { }
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [listingId]);
 
-  // ── Fetch a new Stripe Identity session ───────────────────────────────────
   const fetchIdentitySession = async (customerId?: number) => {
     setIdentitySessionLoading(true);
     setIdentitySessionFailed(false);
@@ -561,7 +515,6 @@ export default function StorefrontBook() {
         setIdentityClientSecret(idData.clientSecret);
         setIdentitySessionId(idData.sessionId);
         setIdentityIsTestMode(!!idData.testMode);
-        // Persist to sessionStorage so page refresh can resume
         const storageKey = `identity_session_${listingId}`;
         sessionStorage.setItem(storageKey, JSON.stringify({
           identityClientSecret: idData.clientSecret,
@@ -591,21 +544,23 @@ export default function StorefrontBook() {
       .filter(a => selectedAddonIds.has(a.id))
       .reduce((sum, a) => sum + (a.priceType === "per_day" ? a.price * days : a.price), 0);
   }, [availableAddons, selectedAddonIds, days]);
-  // Deposit is an authorized hold placed at pickup — NOT charged at booking time
   const total = subtotal + addonsSubtotal;
   const promoDiscount = appliedPromo ? Math.min(appliedPromo.discountAmount, total) : 0;
   const discountedTotal = Math.max(0.50, total - promoDiscount);
 
-  // ── Agreement token resolution ─────────────────────────────────────────────
-  // Map of known auto-fill token keys → their runtime values
+  const startFormatted = dateRange?.from ? format(dateRange.from, "MMM d, yyyy") : "—";
+  const endFormatted = dateRange?.to ? format(dateRange.to, "MMM d, yyyy") : "—";
+  const startFormattedWithTime = dateRange?.from ? `${format(dateRange.from, "MMM d, yyyy")} at ${pickupTime}` : "—";
+  const endFormattedWithTime = dateRange?.to ? `${format(dateRange.to, "MMM d, yyyy")} at ${dropoffTime}` : "—";
+
   const autoFillMap: Record<string, string> = {
     renter_name:    name || "—",
     renter_email:   email || "—",
     renter_phone:   phone || "—",
     listing_title:  listing?.title || "—",
     category:       (listing as any)?.categoryName || "—",
-    start_date:     dateRange?.from ? `${format(dateRange.from, "MMM d, yyyy")} at ${pickupTime}` : "—",
-    end_date:       dateRange?.to   ? `${format(dateRange.to,   "MMM d, yyyy")} at ${dropoffTime}` : "—",
+    start_date:     startFormattedWithTime,
+    end_date:       endFormattedWithTime,
     pickup_time:    pickupTime,
     dropoff_time:   dropoffTime,
     rental_days:    String(days),
@@ -616,8 +571,6 @@ export default function StorefrontBook() {
     company_name:   (businessProfile as any)?.name || "—",
   };
 
-  // Render agreement template as React nodes — auto-fill tokens become
-  // highlighted spans; renter-fill tokens show current value or dashed placeholder
   function renderAgreementParagraph(para: string, paraIdx: number) {
     const parts = para.split(/({{[^}]+}})/g);
     return (
@@ -633,7 +586,6 @@ export default function StorefrontBook() {
               </span>
             );
           }
-          // Renter-fill token: show value if set, or dashed placeholder
           const fieldDef = contractFields.find(f => f.key === key);
           const currentVal = customFieldValues[key];
           const label = fieldDef?.label || key.replace(/_/g, " ");
@@ -655,7 +607,6 @@ export default function StorefrontBook() {
     );
   }
 
-  // Resolve all tokens to final text for booking submission
   function resolveAgreementText(template: string): string {
     return template.replace(/{{([^}]+)}}/g, (_, key) => {
       const k = key.trim();
@@ -672,7 +623,7 @@ export default function StorefrontBook() {
     }
   }, [session]);
 
-  // ── Signature canvas helpers (must be defined before early returns) ───────
+  // ── Signature canvas helpers ──
   const getSigPos = useCallback((e: MouseEvent | TouchEvent, canvas: HTMLCanvasElement) => {
     const rect = canvas.getBoundingClientRect();
     const scaleX = canvas.width / rect.width;
@@ -722,7 +673,7 @@ export default function StorefrontBook() {
     setSigHasContent(false);
   }, []);
 
-  // Kiosk: create Stripe Checkout Session for phone-pay QR code
+  // Kiosk QR session
   const createQrSession = useCallback(async () => {
     if (!slug || !listing) return;
     setQrLoading(true);
@@ -751,7 +702,7 @@ export default function StorefrontBook() {
     }
   }, [slug, listing, discountedTotal, email, name, toast]);
 
-  // Poll Stripe for QR session completion every 2.5 seconds
+  // Poll for QR completion
   useEffect(() => {
     if (!qrPolling || !qrSessionId || !slug) return;
     const interval = setInterval(async () => {
@@ -771,19 +722,18 @@ export default function StorefrontBook() {
           setQrUrl(null);
           toast({ title: "QR code expired", description: "Please generate a new one.", variant: "destructive" });
         }
-      } catch { /* ignore polling errors */ }
+      } catch { }
     }, 2500);
     return () => clearInterval(interval);
   }, [qrPolling, qrSessionId, slug, toast]);
 
-  // Auto-advance from payment step to agreement step after QR payment confirmed
+  // Auto-advance from QR payment on kiosk
   useEffect(() => {
-    if (!paymentConfirmed || kioskPayMode !== "qr" || step !== "payment") return;
-    const timer = setTimeout(() => handlePaymentNext(), 3000);
+    if (!paymentConfirmed || kioskPayMode !== "qr" || step !== "book") return;
+    const timer = setTimeout(() => advanceToComplete(), 3000);
     return () => clearTimeout(timer);
   }, [paymentConfirmed, kioskPayMode, step]);
 
-  // Create Stripe payment intent when entering the payment step
   const createPaymentIntent = useCallback(async (totalCents: number) => {
     if (!slug) return;
     try {
@@ -797,11 +747,10 @@ export default function StorefrontBook() {
           bookingMeta: { listing_id: String(listingId) },
         }),
       });
-      // Note: payments always accepted — OutdoorShare holds funds if tenant not yet connected
       if (!res.ok) {
         const errData = await res.json().catch(() => ({}));
         toast({ title: "Unable to initialize payment", description: errData.error ?? `HTTP ${res.status}`, variant: "destructive" });
-        setShowStripeForm(false); // Let the user retry
+        setShowStripeForm(false);
         return;
       }
       const data = await res.json();
@@ -810,7 +759,7 @@ export default function StorefrontBook() {
       setIsTestMode(!!data.testMode);
     } catch {
       toast({ title: "Payment setup failed — please try again", variant: "destructive" });
-      setShowStripeForm(false); // Let the user retry
+      setShowStripeForm(false);
     }
   }, [slug, email, name, listingId, toast]);
 
@@ -826,12 +775,8 @@ export default function StorefrontBook() {
   if (isLoading) return <div className="container mx-auto px-4 py-16 text-center">Loading...</div>;
   if (!listing) return <div className="container mx-auto px-4 py-16 text-center">Listing not found</div>;
 
-  const startFormatted = dateRange?.from ? format(dateRange.from, "MMM d, yyyy") : "—";
-  const endFormatted = dateRange?.to ? format(dateRange.to, "MMM d, yyyy") : "—";
-  const startFormattedWithTime = dateRange?.from ? `${format(dateRange.from, "MMM d, yyyy")} at ${pickupTime}` : "—";
-  const endFormattedWithTime = dateRange?.to ? `${format(dateRange.to, "MMM d, yyyy")} at ${dropoffTime}` : "—";
-
-  const handleDatesNext = async () => {
+  // ── Validate + register/login then go to screen 2 ──
+  const handleBookNext = async () => {
     setAuthError("");
     if (!dateRange?.from || !dateRange?.to) {
       toast({ title: "Please select pickup and return dates", variant: "destructive" }); return;
@@ -839,42 +784,16 @@ export default function StorefrontBook() {
     if (!name || !email || !phone) {
       toast({ title: "Please fill in your name, email, and phone", variant: "destructive" }); return;
     }
-
-    // Kiosk mode: no login or account creation — go straight to payment
-    if (isKiosk) {
-      setStep("payment");
-      setShowStripeForm(false);
-      window.scrollTo({ top: 0, behavior: "smooth" });
-      return;
+    if (!paymentConfirmed) {
+      toast({ title: "Please complete payment before continuing", variant: "destructive" }); return;
     }
+    advanceToComplete();
+  };
 
-    // Already logged in — go straight to payment
-    if (session) {
-      setStep("payment");
-      setShowStripeForm(false);
-      window.scrollTo({ top: 0, behavior: "smooth" });
-      return;
-    }
-
-    // Register new account
-    if (password.length < 6) { setAuthError("Password must be at least 6 characters"); return; }
-    if (password !== confirmPassword) { setAuthError("Passwords don't match"); return; }
-
-    setIsSubmitting(true);
-    try {
-      const res = await fetch(`${BASE}/api/customers/register`, {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password, name, phone, slug: slug ?? "" })
-      });
-      const data = await res.json();
-      if (!res.ok) { setAuthError(data.error || "Registration failed"); return; }
-      saveSession(data); setSession(data);
-      setStep("payment");
-      setShowStripeForm(false);
-      window.scrollTo({ top: 0, behavior: "smooth" });
-    } catch {
-      setAuthError("Connection error, please try again");
-    } finally { setIsSubmitting(false); }
+  const advanceToComplete = () => {
+    setStep("complete");
+    setCompletePhase("agreement");
+    window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
   const handleApplyPromo = async () => {
@@ -905,21 +824,41 @@ export default function StorefrontBook() {
   };
 
   const handleContinueToPayment = () => {
+    if (!name || !email || !phone) {
+      toast({ title: "Please fill in your name, email, and phone first", variant: "destructive" }); return;
+    }
     const cents = Math.round(discountedTotal * 100);
     createPaymentIntent(cents);
     setShowStripeForm(true);
   };
 
-  const handlePaymentNext = () => {
-    if (!paymentConfirmed) {
-      toast({ title: "Please complete your payment before continuing", variant: "destructive" });
-      return;
+  // Register new customer account (non-kiosk, non-logged-in)
+  const handleRegisterAndPay = async () => {
+    setAuthError("");
+    if (!name || !email || !phone) {
+      toast({ title: "Please fill in your name, email, and phone", variant: "destructive" }); return;
     }
-    setStep("agreement");
-    window.scrollTo({ top: 0, behavior: "smooth" });
+    if (password.length < 6) { setAuthError("Password must be at least 6 characters"); return; }
+    if (password !== confirmPassword) { setAuthError("Passwords don't match"); return; }
+    setIsSubmitting(true);
+    try {
+      const res = await fetch(`${BASE}/api/customers/register`, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, password, name, phone, slug: slug ?? "" })
+      });
+      const data = await res.json();
+      if (!res.ok) { setAuthError(data.error || "Registration failed"); return; }
+      saveSession(data); setSession(data);
+      // Now show payment
+      const cents = Math.round(discountedTotal * 100);
+      createPaymentIntent(cents);
+      setShowStripeForm(true);
+    } catch {
+      setAuthError("Connection error, please try again");
+    } finally { setIsSubmitting(false); }
   };
 
-  // ── Final booking submission ──────────────────────────────────────────────
+  // ── Final agreement submission ──
   const handleFinalSubmit = async () => {
     if (!sigHasContent) {
       toast({ title: "Please draw your signature to proceed", variant: "destructive" }); return;
@@ -927,7 +866,6 @@ export default function StorefrontBook() {
     if (!agreeChecked) {
       toast({ title: "Please accept the rental terms", variant: "destructive" }); return;
     }
-    // Validate all required renter-fill fields are completed
     if (agreementText) {
       const unfilledRequired = Array.from(agreementText.matchAll(/{{([^}]+)}}/g))
         .map(m => m[1].trim())
@@ -949,7 +887,6 @@ export default function StorefrontBook() {
       }
     }
 
-    // Validate all listing rules have been initialed
     const uninitialedRules = listingRules.filter(r => !ruleInitials[r.id]?.trim());
     if (uninitialedRules.length > 0) {
       toast({ title: "Please initial all rental rules", description: `${uninitialedRules.length} rule${uninitialedRules.length > 1 ? "s" : ""} still need your initials.`, variant: "destructive" });
@@ -1007,7 +944,6 @@ export default function StorefrontBook() {
       if (!res.ok) throw new Error(data.error);
       setConfirmedBooking({ id: data.id, totalPrice: data.totalPrice });
 
-      // Track promo code usage
       if (appliedPromo?.code && slug) {
         fetch(`${BASE}/api/promo-codes/use`, {
           method: "POST",
@@ -1016,8 +952,7 @@ export default function StorefrontBook() {
         }).catch(() => {});
       }
 
-      // All modes: verification → photos → confirmation
-      setStep("verification");
+      setCompletePhase("verification");
       fetchIdentitySession(session?.id ?? undefined);
       window.scrollTo(0, 0);
     } catch {
@@ -1025,7 +960,7 @@ export default function StorefrontBook() {
     } finally { setIsSubmitting(false); }
   };
 
-  // ── Stripe Identity verification launcher ─────────────────────────────────
+  // ── Stripe Identity ──
   const handleStartVerification = async () => {
     setIdentityError(null);
     if (!identityClientSecret) {
@@ -1045,23 +980,21 @@ export default function StorefrontBook() {
         return;
       }
 
-      // Modal closed successfully — check status from backend
       if (identitySessionId) {
         const statusRes = await fetch(`${BASE}/api/stripe/identity/status/${identitySessionId}?tenantSlug=${encodeURIComponent(slug ?? "")}`);
         const statusData = await statusRes.json();
         if (statusData.verified) {
           setIdentityStatus("verified");
           sessionStorage.removeItem(`identity_session_${listingId}`);
-          setTimeout(() => { setStep("photos"); window.scrollTo(0, 0); }, 1200);
+          setTimeout(() => { setCompletePhase("confirmed"); window.scrollTo(0, 0); }, 1200);
         } else {
           setIdentityStatus("failed");
           setIdentityError("Identity could not be verified. Please try again or contact support.");
         }
       } else {
-        // No session ID — treat modal close as verified (test mode fallback)
         setIdentityStatus("verified");
         sessionStorage.removeItem(`identity_session_${listingId}`);
-        setTimeout(() => { setStep("photos"); window.scrollTo(0, 0); }, 1200);
+        setTimeout(() => { setCompletePhase("confirmed"); window.scrollTo(0, 0); }, 1200);
       }
     } catch {
       setIdentityStatus("failed");
@@ -1069,22 +1002,6 @@ export default function StorefrontBook() {
     }
   };
 
-  // Photos step: optionally upload before-rental photos then proceed to confirmation
-  const handlePhotosAndContinue = async () => {
-    if (beforePhotos.length > 0 && confirmedBooking) {
-      setUploadingPhotos(true);
-      try {
-        const fd = new FormData();
-        beforePhotos.forEach(f => fd.append("photos", f));
-        await fetch(`${BASE}/api/bookings/${confirmedBooking.id}/before-photos`, { method: "POST", body: fd });
-      } catch { /* non-critical — photos upload is best-effort */ }
-      setUploadingPhotos(false);
-    }
-    setStep("confirmation");
-    window.scrollTo(0, 0);
-  };
-
-  // Retry: fetch a brand-new session and immediately launch the Stripe modal
   const handleRetryVerification = async () => {
     setIdentityStatus("idle");
     setIdentityError(null);
@@ -1101,7 +1018,6 @@ export default function StorefrontBook() {
       const idData = await idRes.json();
       if (!idRes.ok || !idData.clientSecret) { setIdentitySessionFailed(true); return; }
 
-      // Persist fresh session
       setIdentityClientSecret(idData.clientSecret);
       setIdentitySessionId(idData.sessionId);
       setIdentityIsTestMode(!!idData.testMode);
@@ -1112,7 +1028,6 @@ export default function StorefrontBook() {
       }));
       setIdentitySessionLoading(false);
 
-      // Launch modal with fresh secret directly (don't rely on state update)
       setIdentityStatus("pending");
       const stripeInst = await (idData.testMode ? testStripePromise : liveStripePromise);
       if (!stripeInst) { setIdentityStatus("failed"); setIdentityError("Stripe could not load."); return; }
@@ -1120,14 +1035,13 @@ export default function StorefrontBook() {
       const { error } = await stripeInst.verifyIdentity(idData.clientSecret);
       if (error) { setIdentityStatus("failed"); setIdentityError(error.message ?? "Verification was not completed."); return; }
 
-      // Check result
       if (idData.sessionId) {
         const statusRes = await fetch(`${BASE}/api/stripe/identity/status/${idData.sessionId}?tenantSlug=${encodeURIComponent(slug ?? "")}`);
         const statusData = await statusRes.json();
         if (statusData.verified) {
           setIdentityStatus("verified");
           sessionStorage.removeItem(`identity_session_${listingId}`);
-          setTimeout(() => { setStep("photos"); window.scrollTo(0, 0); }, 1200);
+          setTimeout(() => { setCompletePhase("confirmed"); window.scrollTo(0, 0); }, 1200);
         } else {
           setIdentityStatus("failed");
           setIdentityError("Identity could not be verified. Please try again or contact support.");
@@ -1135,7 +1049,7 @@ export default function StorefrontBook() {
       } else {
         setIdentityStatus("verified");
         sessionStorage.removeItem(`identity_session_${listingId}`);
-        setTimeout(() => { setStep("photos"); window.scrollTo(0, 0); }, 1200);
+        setTimeout(() => { setCompletePhase("confirmed"); window.scrollTo(0, 0); }, 1200);
       }
     } catch {
       setIdentityStatus("failed");
@@ -1145,27 +1059,29 @@ export default function StorefrontBook() {
     }
   };
 
-  const stepIndex = STEPS.indexOf(step);
+  // ── Progress indicator ──
+  const progressStep = step === "book" ? 0 : completePhase === "agreement" ? 1 : completePhase === "verification" ? 2 : 3;
+  const progressLabels = ["Details & Payment", "Agreement", "Verify ID", "Confirmed"];
 
   return (
     <div className="min-h-screen bg-muted/20">
-      {/* Progress bar */}
+      {/* Slim 2-step progress bar */}
       <div className="sticky top-16 z-10 bg-background border-b shadow-sm">
         <div className="max-w-3xl mx-auto px-4 py-3">
           <div className="flex items-center gap-0">
-            {STEPS.filter(s => s !== "confirmation").map((s, i) => (
-              <div key={s} className="flex items-center flex-1">
+            {progressLabels.map((label, i) => (
+              <div key={label} className="flex items-center flex-1">
                 <div className={`flex items-center gap-1.5 text-xs font-semibold transition-colors
-                  ${stepIndex > i ? "text-primary" : stepIndex === i ? "text-foreground" : "text-muted-foreground"}`}>
+                  ${progressStep > i ? "text-primary" : progressStep === i ? "text-foreground" : "text-muted-foreground"}`}>
                   <div className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold transition-colors
-                    ${stepIndex > i ? "bg-primary text-primary-foreground" 
-                    : stepIndex === i ? "bg-foreground text-background" 
+                    ${progressStep > i ? "bg-primary text-primary-foreground" 
+                    : progressStep === i ? "bg-foreground text-background" 
                     : "bg-muted text-muted-foreground"}`}>
-                    {stepIndex > i ? "✓" : i + 1}
+                    {progressStep > i ? "✓" : i + 1}
                   </div>
-                  <span className="hidden sm:inline">{STEP_LABELS[s]}</span>
+                  <span className="hidden sm:inline">{label}</span>
                 </div>
-                {i < STEPS.filter(s => s !== "confirmation").length - 1 && <div className={`flex-1 h-0.5 mx-2 rounded transition-colors ${stepIndex > i ? "bg-primary" : "bg-muted"}`} />}
+                {i < progressLabels.length - 1 && <div className={`flex-1 h-0.5 mx-2 rounded transition-colors ${progressStep > i ? "bg-primary" : "bg-muted"}`} />}
               </div>
             ))}
           </div>
@@ -1173,27 +1089,31 @@ export default function StorefrontBook() {
       </div>
 
       <div className="max-w-5xl mx-auto px-4 py-8">
-        {step !== "verification" && step !== "photos" && (
+        {/* Back button */}
+        {completePhase !== "verification" && completePhase !== "confirmed" && (
           <Button variant="ghost" className="mb-6 pl-0 hover:bg-transparent text-muted-foreground" onClick={() => {
-            if (step === "dates") { window.history.back(); }
-            else { setStep(STEPS[stepIndex - 1]); window.scrollTo({ top: 0, behavior: "smooth" }); }
+            if (step === "book") { window.history.back(); }
+            else { setStep("book"); window.scrollTo({ top: 0, behavior: "smooth" }); }
           }}>
             <ArrowLeft className="w-4 h-4 mr-2" />
-            {step === "dates" ? "Back to listing" : "Back"}
+            {step === "book" ? "Back to listing" : "Back"}
           </Button>
         )}
 
-        <div className={`grid grid-cols-1 gap-8 ${step !== "confirmation" && step !== "photos" ? "lg:grid-cols-5" : ""}`}>
+        <div className={`grid grid-cols-1 gap-8 ${completePhase !== "confirmed" ? "lg:grid-cols-5" : ""}`}>
           {/* Main content */}
-          <div className={step !== "confirmation" && step !== "photos" ? "order-1 lg:order-1 lg:col-span-3" : ""}>
+          <div className={completePhase !== "confirmed" ? "order-1 lg:order-1 lg:col-span-3" : ""}>
 
-            {/* ── STEP 1: DATES & INFO ── */}
-            {step === "dates" && (
+            {/* ════════════════════════════════════════
+                SCREEN 1: DETAILS & PAYMENT
+                ════════════════════════════════════════ */}
+            {step === "book" && (
               <div className="space-y-8">
-                <h1 className="text-2xl font-bold">Select Your Dates</h1>
+                <h1 className="text-2xl font-bold">Book {listing.title}</h1>
 
                 {/* Calendar */}
                 <div className="bg-background rounded-2xl border shadow-sm p-3 sm:p-5">
+                  <h2 className="font-semibold text-sm text-muted-foreground uppercase tracking-wider mb-4">Select Dates</h2>
                   <Calendar
                     mode="range"
                     selected={dateRange}
@@ -1208,7 +1128,6 @@ export default function StorefrontBook() {
 
                 {dateRange?.from && dateRange?.to && (
                   <div className="grid grid-cols-2 gap-3">
-                    {/* Pickup */}
                     <div className="bg-background rounded-xl border p-4">
                       <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider mb-1.5">Pickup</p>
                       <p className="font-bold text-base mb-3">{format(dateRange.from, "EEE, MMM d")}</p>
@@ -1226,7 +1145,6 @@ export default function StorefrontBook() {
                         </Select>
                       </div>
                     </div>
-                    {/* Return */}
                     <div className="bg-background rounded-xl border p-4">
                       <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider mb-1.5">Return</p>
                       <p className="font-bold text-base mb-3">{format(dateRange.to, "EEE, MMM d")}</p>
@@ -1252,7 +1170,7 @@ export default function StorefrontBook() {
                   <Textarea id="notes" value={notes} onChange={e => setNotes(e.target.value)} placeholder="Any special requests?" rows={2} />
                 </div>
 
-                {/* ── PROTECTION PLAN ── */}
+                {/* ── Protection Plan + Regular Add-ons ── */}
                 {(() => {
                   const protectionAddons = availableAddons.filter(a => a.name.toLowerCase().includes("protection"));
                   const regularAddons = availableAddons.filter(a => !a.name.toLowerCase().includes("protection"));
@@ -1276,7 +1194,6 @@ export default function StorefrontBook() {
                             className="w-full text-left rounded-2xl overflow-hidden shadow-lg"
                             style={{ border: "2px solid #3ab549" }}
                           >
-                            {/* Header bar — OutdoorShare brand */}
                             <div className="px-5 py-3 flex items-center justify-between" style={{ background: "#1a2332" }}>
                               <div className="flex items-center gap-2.5">
                                 <ShieldCheck className="w-5 h-5" style={{ color: "#3ab549" }} />
@@ -1289,8 +1206,6 @@ export default function StorefrontBook() {
                                 <Lock className="w-3 h-3" /> Required
                               </span>
                             </div>
-
-                            {/* Body */}
                             <div className="p-5" style={{ background: "#f0faf1" }}>
                               <div className="flex items-start justify-between gap-4">
                                 <div className="flex-1">
@@ -1311,7 +1226,6 @@ export default function StorefrontBook() {
                                     ))}
                                   </div>
                                 </div>
-
                                 <div className="shrink-0 text-right">
                                   <p className="text-3xl font-black" style={{ color: "#1a2332" }}>
                                     ${addonPrice.toFixed(0)}
@@ -1327,7 +1241,6 @@ export default function StorefrontBook() {
                         );
                       })}
 
-                      {/* ── REGULAR ADD-ONS ── */}
                       {regularAddons.length > 0 && (
                         <div className="bg-background rounded-2xl border shadow-sm p-6 space-y-4">
                           <div>
@@ -1379,398 +1292,361 @@ export default function StorefrontBook() {
 
                 <Separator />
 
-                <div className="flex items-center justify-between">
-                  <h2 className="text-lg font-semibold">Your Information</h2>
-                </div>
+                {/* ── Your Information ── */}
+                <div>
+                  <h2 className="text-lg font-semibold mb-4">Your Information</h2>
 
-                {/* ── Login / Account status banner ── */}
-                {isKiosk ? (
-                  <div className="flex items-start gap-3 bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 rounded-xl px-4 py-3">
-                    <Monitor className="w-4 h-4 text-blue-600 dark:text-blue-400 shrink-0 mt-0.5" />
-                    <p className="text-sm text-blue-800 dark:text-blue-200 leading-relaxed">
-                      <span className="font-semibold">Kiosk booking</span> — No account needed. After booking, we'll email you a link to create your account and view your rental details.
-                    </p>
-                  </div>
-                ) : !session ? (
-                  showLoginPanel ? (
-                    /* Expanded login form */
-                    <div className="bg-background border-2 border-primary/20 rounded-2xl p-5 space-y-4 shadow-sm">
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                          <Lock className="w-4 h-4 text-primary" />
-                          <h3 className="font-semibold text-sm">Log in to your account</h3>
+                  {isKiosk ? (
+                    <div className="flex items-start gap-3 bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 rounded-xl px-4 py-3 mb-4">
+                      <Monitor className="w-4 h-4 text-blue-600 dark:text-blue-400 shrink-0 mt-0.5" />
+                      <p className="text-sm text-blue-800 dark:text-blue-200 leading-relaxed">
+                        <span className="font-semibold">Kiosk booking</span> — No account needed. We'll email you a link to create your account and view your rental details.
+                      </p>
+                    </div>
+                  ) : !session ? (
+                    showLoginPanel ? (
+                      <div className="bg-background border-2 border-primary/20 rounded-2xl p-5 space-y-4 shadow-sm mb-4">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <Lock className="w-4 h-4 text-primary" />
+                            <h3 className="font-semibold text-sm">Log in to your account</h3>
+                          </div>
+                          <button onClick={() => { setShowLoginPanel(false); setAuthError(""); setPassword(""); }} className="text-xs text-muted-foreground hover:text-foreground">Cancel</button>
                         </div>
-                        <button onClick={() => { setShowLoginPanel(false); setAuthError(""); setPassword(""); }} className="text-xs text-muted-foreground hover:text-foreground">Cancel</button>
+                        <div className="space-y-3">
+                          <div>
+                            <Label className="text-xs">Email</Label>
+                            <Input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="your@email.com" className="mt-1 h-11" />
+                          </div>
+                          <div>
+                            <Label className="text-xs">Password</Label>
+                            <div className="relative mt-1">
+                              <Input type={showPassword ? "text" : "password"} value={password} onChange={e => setPassword(e.target.value)} placeholder="Your password" className="h-11 pr-10" />
+                              <button type="button" onClick={() => setShowPassword(v => !v)} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground">
+                                {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                        {authError && <p className="text-destructive text-sm">{authError}</p>}
+                        <Button
+                          className="w-full h-11"
+                          disabled={isSubmitting}
+                          onClick={async () => {
+                            setAuthError("");
+                            if (!email || !password) { setAuthError("Enter your email and password"); return; }
+                            setIsSubmitting(true);
+                            try {
+                              const res = await fetch(`${BASE}/api/customers/login`, {
+                                method: "POST", headers: { "Content-Type": "application/json" },
+                                body: JSON.stringify({ email, password, slug: slug ?? "" })
+                              });
+                              const data = await res.json();
+                              if (!res.ok) { setAuthError(data.error || "Login failed"); return; }
+                              saveSession(data); setSession(data);
+                              setName(data.name); setPhone(data.phone ?? "");
+                              setShowLoginPanel(false);
+                              setPassword("");
+                            } catch { setAuthError("Connection error, please try again"); }
+                            finally { setIsSubmitting(false); }
+                          }}
+                        >
+                          {isSubmitting ? "Signing in…" : "Sign In"}
+                        </Button>
+                        <p className="text-center text-xs text-muted-foreground">
+                          No account yet?{" "}
+                          <button onClick={() => { setShowLoginPanel(false); setAuthError(""); }} className="text-primary hover:underline font-medium">
+                            Continue as new customer
+                          </button>
+                        </p>
+                      </div>
+                    ) : (
+                      <button
+                        onClick={() => { setShowLoginPanel(true); setAuthError(""); }}
+                        className="w-full flex items-center gap-3 bg-muted/50 hover:bg-muted border border-border hover:border-primary/40 rounded-xl px-4 py-3 transition-all group text-left mb-4"
+                      >
+                        <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
+                          <User className="w-4 h-4 text-primary" />
+                        </div>
+                        <div className="flex-1">
+                          <p className="text-sm font-semibold text-foreground">Returning customer?</p>
+                          <p className="text-xs text-muted-foreground">Log in to pre-fill your details</p>
+                        </div>
+                        <ArrowRight className="w-4 h-4 text-muted-foreground group-hover:text-primary transition-colors" />
+                      </button>
+                    )
+                  ) : (
+                    <div className="bg-primary/5 border border-primary/20 rounded-xl p-4 flex items-center gap-3 mb-4">
+                      <ShieldCheck className="w-5 h-5 text-primary shrink-0" />
+                      <div>
+                        <p className="font-semibold text-sm">Signed in as {session.name}</p>
+                        <p className="text-xs text-muted-foreground">{session.email}</p>
+                      </div>
+                      <button onClick={() => { localStorage.removeItem("rental_customer"); setSession(null); setName(""); setEmail(""); setPhone(""); }} className="ml-auto text-xs text-muted-foreground hover:text-foreground underline">Log out</button>
+                    </div>
+                  )}
+
+                  <div className="space-y-4">
+                    <div>
+                      <Label htmlFor="name">Full Name</Label>
+                      <Input id="name" value={name} onChange={e => setName(e.target.value)} className="mt-1.5 h-11" required />
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <Label htmlFor="email">Email</Label>
+                        <Input id="email" type="email" value={email} onChange={e => setEmail(e.target.value)} className="mt-1.5 h-11" required disabled={!!session} />
+                      </div>
+                      <div>
+                        <Label htmlFor="phone">Phone</Label>
+                        <Input id="phone" type="tel" value={phone} onChange={e => setPhone(e.target.value)} className="mt-1.5 h-11" required />
+                      </div>
+                    </div>
+                  </div>
+
+                  {!isKiosk && !session && !showLoginPanel && (
+                    <div className="bg-muted/40 rounded-2xl p-5 space-y-3 border mt-4">
+                      <div className="flex items-center gap-2">
+                        <Lock className="w-4 h-4 text-primary" />
+                        <h3 className="font-semibold text-sm">Create your account</h3>
                       </div>
                       <div className="space-y-3">
-                        <div>
-                          <Label className="text-xs">Email</Label>
-                          <Input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="your@email.com" className="mt-1 h-11" />
+                        <div className="relative">
+                          <Input type={showPassword ? "text" : "password"} placeholder="Create password (min 6 chars)" value={password} onChange={e => setPassword(e.target.value)} className="h-11 pr-10" />
+                          <button type="button" onClick={() => setShowPassword(v => !v)} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground">
+                            {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                          </button>
                         </div>
-                        <div>
-                          <Label className="text-xs">Password</Label>
-                          <div className="relative mt-1">
-                            <Input type={showPassword ? "text" : "password"} value={password} onChange={e => setPassword(e.target.value)} placeholder="Your password" className="h-11 pr-10" />
-                            <button type="button" onClick={() => setShowPassword(v => !v)} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground">
-                              {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                            </button>
-                          </div>
-                        </div>
+                        <Input type="password" placeholder="Confirm password" value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} className="h-11" />
                       </div>
                       {authError && <p className="text-destructive text-sm">{authError}</p>}
-                      <Button
-                        className="w-full h-11"
-                        disabled={isSubmitting}
-                        onClick={async () => {
-                          setAuthError("");
-                          if (!email || !password) { setAuthError("Enter your email and password"); return; }
-                          setIsSubmitting(true);
-                          try {
-                            const res = await fetch(`${BASE}/api/customers/login`, {
-                              method: "POST", headers: { "Content-Type": "application/json" },
-                              body: JSON.stringify({ email, password, slug: slug ?? "" })
-                            });
-                            const data = await res.json();
-                            if (!res.ok) { setAuthError(data.error || "Login failed"); return; }
-                            saveSession(data); setSession(data);
-                            setName(data.name); setPhone(data.phone ?? "");
-                            setShowLoginPanel(false);
-                            setPassword("");
-                          } catch { setAuthError("Connection error, please try again"); }
-                          finally { setIsSubmitting(false); }
-                        }}
-                      >
-                        {isSubmitting ? "Signing in…" : "Sign In"}
-                      </Button>
-                      <p className="text-center text-xs text-muted-foreground">
-                        No account yet?{" "}
-                        <button onClick={() => { setShowLoginPanel(false); setAuthError(""); }} className="text-primary hover:underline font-medium">
-                          Continue as new customer
-                        </button>
-                      </p>
+                      <p className="text-xs text-muted-foreground">Saves your info for future bookings.</p>
                     </div>
-                  ) : (
-                    /* Collapsed "returning customer" prompt */
-                    <button
-                      onClick={() => { setShowLoginPanel(true); setAuthError(""); }}
-                      className="w-full flex items-center gap-3 bg-muted/50 hover:bg-muted border border-border hover:border-primary/40 rounded-xl px-4 py-3 transition-all group text-left"
-                    >
-                      <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
-                        <User className="w-4 h-4 text-primary" />
-                      </div>
-                      <div className="flex-1">
-                        <p className="text-sm font-semibold text-foreground">Returning customer?</p>
-                        <p className="text-xs text-muted-foreground">Log in to pre-fill your details</p>
-                      </div>
-                      <ArrowRight className="w-4 h-4 text-muted-foreground group-hover:text-primary transition-colors" />
-                    </button>
-                  )
-                ) : (
-                  <div className="bg-primary/5 border border-primary/20 rounded-xl p-4 flex items-center gap-3">
-                    <ShieldCheck className="w-5 h-5 text-primary shrink-0" />
-                    <div>
-                      <p className="font-semibold text-sm">Signed in as {session.name}</p>
-                      <p className="text-xs text-muted-foreground">{session.email}</p>
-                    </div>
-                    <button onClick={() => { localStorage.removeItem("rental_customer"); setSession(null); setName(""); setEmail(""); setPhone(""); }} className="ml-auto text-xs text-muted-foreground hover:text-foreground underline">Log out</button>
-                  </div>
-                )}
-
-                {/* Personal info fields */}
-                <div className="space-y-4">
-                  <div>
-                    <Label htmlFor="name">Full Name</Label>
-                    <Input id="name" value={name} onChange={e => setName(e.target.value)} className="mt-1.5 h-11" required />
-                  </div>
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <Label htmlFor="email">Email</Label>
-                      <Input id="email" type="email" value={email} onChange={e => setEmail(e.target.value)} className="mt-1.5 h-11" required disabled={!!session} />
-                    </div>
-                    <div>
-                      <Label htmlFor="phone">Phone</Label>
-                      <Input id="phone" type="tel" value={phone} onChange={e => setPhone(e.target.value)} className="mt-1.5 h-11" required />
-                    </div>
-                  </div>
+                  )}
                 </div>
 
-                {/* New-customer account creation (only when not logged in and not kiosk) */}
-                {!isKiosk && !session && !showLoginPanel && (
-                  <div className="bg-muted/40 rounded-2xl p-5 space-y-3 border">
-                    <div className="flex items-center gap-2">
-                      <Lock className="w-4 h-4 text-primary" />
-                      <h3 className="font-semibold text-sm">Create your account</h3>
+                <Separator />
+
+                {/* ── Payment ── */}
+                <div>
+                  <h2 className="text-lg font-semibold mb-4">Payment</h2>
+
+                  {isKiosk && !paymentConfirmed && (
+                    <div className="bg-background rounded-2xl border shadow-sm p-1.5 flex gap-1 mb-4">
+                      <button
+                        onClick={() => { setKioskPayMode("card"); setQrPolling(false); }}
+                        className={`flex-1 flex items-center justify-center gap-2 py-3 px-4 rounded-xl text-sm font-semibold transition-all ${kioskPayMode === "card" ? "bg-primary text-primary-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
+                      >
+                        <CreditCard className="w-4 h-4" />
+                        Pay by Card
+                      </button>
+                      <button
+                        onClick={() => {
+                          setKioskPayMode("qr");
+                          setShowStripeForm(false);
+                          if (!qrUrl && !qrLoading) createQrSession();
+                        }}
+                        className={`flex-1 flex items-center justify-center gap-2 py-3 px-4 rounded-xl text-sm font-semibold transition-all ${kioskPayMode === "qr" ? "bg-primary text-primary-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
+                      >
+                        <Smartphone className="w-4 h-4" />
+                        Scan to Pay on Phone
+                      </button>
                     </div>
-                    <div className="space-y-3">
-                      <div className="relative">
-                        <Input type={showPassword ? "text" : "password"} placeholder="Create password (min 6 chars)" value={password} onChange={e => setPassword(e.target.value)} className="h-11 pr-10" />
-                        <button type="button" onClick={() => setShowPassword(v => !v)} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground">
-                          {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                        </button>
-                      </div>
-                      <Input type="password" placeholder="Confirm password" value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} className="h-11" />
-                    </div>
-                    {authError && <p className="text-destructive text-sm">{authError}</p>}
-                    <p className="text-xs text-muted-foreground">
-                      Saves your info and payment details for future bookings.
-                    </p>
-                  </div>
-                )}
+                  )}
 
-                <Button size="lg" className="w-full h-13 text-base font-bold rounded-xl" onClick={handleDatesNext} disabled={isSubmitting}>
-                  {isSubmitting ? "Saving..." : "Continue to Payment"}
-                  <ArrowRight className="w-4 h-4 ml-2" />
-                </Button>
-              </div>
-            )}
-
-            {/* ── STEP 2: PAYMENT ── */}
-            {step === "payment" && (
-              <div className="space-y-6">
-                <h1 className="text-2xl font-bold">Payment</h1>
-
-                {/* ── Kiosk: pay mode toggle (card vs QR) ── */}
-                {isKiosk && !paymentConfirmed && (
-                  <div className="bg-background rounded-2xl border shadow-sm p-1.5 flex gap-1">
-                    <button
-                      onClick={() => { setKioskPayMode("card"); setQrPolling(false); }}
-                      className={`flex-1 flex items-center justify-center gap-2 py-3 px-4 rounded-xl text-sm font-semibold transition-all ${
-                        kioskPayMode === "card"
-                          ? "bg-primary text-primary-foreground shadow-sm"
-                          : "text-muted-foreground hover:text-foreground"
-                      }`}
-                    >
-                      <CreditCard className="w-4 h-4" />
-                      Pay by Card
-                    </button>
-                    <button
-                      onClick={() => {
-                        setKioskPayMode("qr");
-                        setShowStripeForm(false);
-                        if (!qrUrl && !qrLoading) createQrSession();
-                      }}
-                      className={`flex-1 flex items-center justify-center gap-2 py-3 px-4 rounded-xl text-sm font-semibold transition-all ${
-                        kioskPayMode === "qr"
-                          ? "bg-primary text-primary-foreground shadow-sm"
-                          : "text-muted-foreground hover:text-foreground"
-                      }`}
-                    >
-                      <Smartphone className="w-4 h-4" />
-                      Scan to Pay on Phone
-                    </button>
-                  </div>
-                )}
-
-                {/* ── Kiosk QR payment panel ── */}
-                {isKiosk && kioskPayMode === "qr" && (
-                  <div className="bg-background rounded-2xl border shadow-sm p-6 space-y-5">
-                    {paymentConfirmed ? (
-                      /* ── SUCCESS STATE ── */
-                      <div className="flex flex-col items-center gap-4 py-4 text-center">
-                        <div className="w-20 h-20 rounded-full bg-green-100 flex items-center justify-center">
-                          <BadgeCheck className="w-10 h-10 text-green-600" />
-                        </div>
-                        <div>
-                          <h2 className="text-2xl font-black text-green-800">Payment Received!</h2>
-                          <p className="text-green-700 text-sm mt-1">
-                            {qrPayMethodLabel ? `Paid via ${qrPayMethodLabel}` : "Payment confirmed"}
-                            {isTestMode ? " (Test Mode — no real charge)" : ""}
-                          </p>
-                        </div>
-                        <div className="text-4xl font-black tabular-nums text-green-900">
-                          ${discountedTotal.toFixed(2)}
-                        </div>
-                        <div className="flex items-center gap-2 text-sm text-green-700">
-                          <Loader2 className="w-4 h-4 animate-spin" />
-                          Advancing to agreement…
-                        </div>
-                      </div>
-                    ) : (
-                      /* ── QR SCAN STATE ── */
-                      <>
-                        <div className="text-center space-y-1">
-                          <h2 className="font-bold text-lg">Scan with your phone to pay</h2>
-                          <p className="text-sm text-muted-foreground">
-                            Open your camera app and point it at the QR code.
-                          </p>
-                          {/* Wallet badges */}
-                          <div className="flex items-center justify-center gap-2 pt-1">
-                            <span className="inline-flex items-center gap-1 bg-black text-white text-xs font-semibold px-2.5 py-1 rounded-full">
-                              <svg viewBox="0 0 24 24" className="w-3.5 h-3.5 fill-white" aria-hidden="true"><path d="M12.017 0C5.396 0 .029 5.367.029 11.987c0 5.079 3.158 9.417 7.618 11.162-.105-.949-.2-2.405.042-3.441.218-.937 1.407-5.965 1.407-5.965s-.359-.719-.359-1.782c0-1.668.967-2.914 2.171-2.914 1.023 0 1.518.769 1.518 1.69 0 1.029-.655 2.568-.994 3.995-.283 1.194.599 2.169 1.777 2.169 2.133 0 3.772-2.249 3.772-5.495 0-2.873-2.064-4.882-5.012-4.882-3.414 0-5.418 2.561-5.418 5.207 0 1.031.397 2.138.893 2.738a.36.36 0 0 1 .083.345l-.333 1.36c-.053.22-.174.267-.402.161-1.499-.698-2.436-2.889-2.436-4.649 0-3.785 2.75-7.262 7.929-7.262 4.163 0 7.398 2.967 7.398 6.931 0 4.136-2.607 7.464-6.227 7.464-1.216 0-2.359-.632-2.75-1.378l-.748 2.853c-.271 1.043-1.002 2.35-1.492 3.146C9.57 23.812 10.763 24.009 12.017 24c6.624 0 11.99-5.367 11.99-11.988C24.007 5.367 18.641.001 12.017.001z"/></svg>
-                              Apple Pay
-                            </span>
-                            <span className="inline-flex items-center gap-1 bg-white border border-border text-foreground text-xs font-semibold px-2.5 py-1 rounded-full shadow-sm">
-                              <svg viewBox="0 0 24 24" className="w-3.5 h-3.5" aria-hidden="true"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 14H9V8h2v8zm4 0h-2V8h2v8z" fill="none"/><path d="M6.24 10.34l1.41-1.41 4.24 4.24-1.41 1.41z" fill="#4285F4"/><path d="M9.07 7.5h1.5v9h-1.5z" fill="#EA4335"/><path d="M13.43 7.5h1.5v9h-1.5z" fill="#FBBC05"/><path d="M11.25 4.5l1.06 1.06-4.24 4.24-1.06-1.06z" fill="#34A853"/></svg>
-                              Google Pay
-                            </span>
-                            <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
-                              + Card
-                            </span>
+                  {/* QR payment panel */}
+                  {isKiosk && kioskPayMode === "qr" && (
+                    <div className="bg-background rounded-2xl border shadow-sm p-6 space-y-5 mb-4">
+                      {paymentConfirmed ? (
+                        <div className="flex flex-col items-center gap-4 py-4 text-center">
+                          <div className="w-20 h-20 rounded-full bg-green-100 flex items-center justify-center">
+                            <BadgeCheck className="w-10 h-10 text-green-600" />
                           </div>
-                        </div>
-
-                        {qrLoading ? (
-                          <div className="flex flex-col items-center gap-3 py-8">
-                            <Loader2 className="w-8 h-8 animate-spin text-primary" />
-                            <p className="text-sm text-muted-foreground">Generating secure payment link…</p>
-                          </div>
-                        ) : qrUrl ? (
-                          <>
-                            {/* QR Code */}
-                            <div className="flex justify-center">
-                              <div className="bg-white rounded-2xl p-4 shadow-sm border border-border inline-block">
-                                <QRCodeSVG value={qrUrl} size={220} level="M" includeMargin={false} />
-                              </div>
-                            </div>
-
-                            {/* Amount */}
-                            <div className="text-center">
-                              <div className="text-3xl font-black tabular-nums">${discountedTotal.toFixed(2)}</div>
-                              <div className="text-xs text-muted-foreground mt-0.5">Total due</div>
-                            </div>
-
-                            {/* Polling indicator */}
-                            <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground">
-                              <span className="relative flex h-2 w-2">
-                                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary opacity-75" />
-                                <span className="relative inline-flex rounded-full h-2 w-2 bg-primary" />
-                              </span>
-                              Waiting for payment on your phone…
-                            </div>
-
-                            {isTestMode && (
-                              <div className="flex items-center gap-2.5 bg-amber-50 border border-amber-300 rounded-lg px-4 py-3">
-                                <span className="text-amber-600 font-bold text-xs uppercase tracking-wider bg-amber-200 px-2 py-0.5 rounded">Test Mode</span>
-                                <span className="text-sm text-amber-800">No real charges. Use card <strong>4242 4242 4242 4242</strong> on the phone.</span>
-                              </div>
-                            )}
-
-                            {/* Refresh button */}
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className="w-full text-muted-foreground"
-                              onClick={() => { setQrSessionId(null); setQrUrl(null); setQrPolling(false); createQrSession(); }}
-                            >
-                              <RefreshCw className="w-3.5 h-3.5 mr-1.5" />
-                              Generate new QR code
-                            </Button>
-                          </>
-                        ) : (
-                          <div className="flex flex-col items-center gap-4 py-6">
-                            <p className="text-sm text-muted-foreground text-center">Click below to generate a secure payment QR code.</p>
-                            <Button onClick={createQrSession} className="px-8">
-                              <QrCode className="w-4 h-4 mr-2" />
-                              Generate QR Code
-                            </Button>
-                          </div>
-                        )}
-                      </>
-                    )}
-                  </div>
-                )}
-
-                {/* Promo Code section — only shown when tenant has active promos, before Stripe form loads, and in card mode */}
-                {hasActivePromos && (!isKiosk || kioskPayMode === "card") && !showStripeForm && !paymentConfirmed && (
-                  <div className="bg-background rounded-2xl border shadow-sm p-5 space-y-3">
-                    <h2 className="font-semibold text-sm flex items-center gap-2">
-                      <Tag className="w-4 h-4 text-primary" />
-                      Have a promo code?
-                    </h2>
-                    {appliedPromo ? (
-                      <div className="flex items-center justify-between bg-green-50 border border-green-200 rounded-xl px-4 py-3">
-                        <div className="flex items-center gap-2">
-                          <CheckCircle2 className="w-4 h-4 text-green-600 shrink-0" />
                           <div>
-                            <p className="font-bold text-green-800 font-mono tracking-wider">{appliedPromo.code}</p>
-                            <p className="text-xs text-green-700">{appliedPromo.description} applied</p>
+                            <h2 className="text-2xl font-black text-green-800">Payment Received!</h2>
+                            <p className="text-green-700 text-sm mt-1">
+                              {qrPayMethodLabel ? `Paid via ${qrPayMethodLabel}` : "Payment confirmed"}
+                              {isTestMode ? " (Test Mode — no real charge)" : ""}
+                            </p>
+                          </div>
+                          <div className="text-4xl font-black tabular-nums text-green-900">${discountedTotal.toFixed(2)}</div>
+                          <div className="flex items-center gap-2 text-sm text-green-700">
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                            Advancing to agreement…
                           </div>
                         </div>
-                        <button
-                          className="text-xs text-muted-foreground hover:text-destructive underline"
-                          onClick={() => { setAppliedPromo(null); setPromoInput(""); setPromoError(null); }}
-                        >
-                          Remove
-                        </button>
-                      </div>
-                    ) : (
-                      <div className="flex gap-2">
-                        <Input
-                          value={promoInput}
-                          onChange={e => setPromoInput(e.target.value.toUpperCase().replace(/\s/g, ""))}
-                          onKeyDown={e => e.key === "Enter" && handleApplyPromo()}
-                          placeholder="Enter code"
-                          className="font-mono uppercase font-semibold tracking-widest flex-1"
-                          maxLength={30}
-                        />
-                        <Button
-                          variant="outline"
-                          onClick={handleApplyPromo}
-                          disabled={!promoInput.trim() || promoLoading}
-                          className="shrink-0"
-                        >
-                          {promoLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : "Apply"}
-                        </Button>
-                      </div>
-                    )}
-                    {promoError && (
-                      <p className="text-xs text-destructive flex items-center gap-1.5">
-                        <XCircle className="w-3.5 h-3.5 shrink-0" />
-                        {promoError}
-                      </p>
-                    )}
-                  </div>
-                )}
-
-                {/* Stripe card payment flow — hidden in kiosk QR mode */}
-                {(!isKiosk || kioskPayMode === "card") && !showStripeForm && !paymentConfirmed ? (
-                  <div className="space-y-3">
-                    <Button size="lg" className="w-full h-13 text-base font-bold rounded-xl" onClick={handleContinueToPayment}>
-                      <CreditCard className="w-4 h-4 mr-2" />
-                      Continue to Payment
-                      {appliedPromo && <span className="ml-1 opacity-80">— ${discountedTotal.toFixed(2)}</span>}
-                    </Button>
-                    <div className="flex justify-center">
-                      <CardScanHelper />
+                      ) : (
+                        <>
+                          <div className="text-center space-y-1">
+                            <h2 className="font-bold text-lg">Scan with your phone to pay</h2>
+                            <p className="text-sm text-muted-foreground">Open your camera app and point it at the QR code.</p>
+                            <div className="flex items-center justify-center gap-2 pt-1">
+                              <span className="inline-flex items-center gap-1 bg-black text-white text-xs font-semibold px-2.5 py-1 rounded-full">
+                                <svg viewBox="0 0 24 24" className="w-3.5 h-3.5 fill-white" aria-hidden="true"><path d="M12.017 0C5.396 0 .029 5.367.029 11.987c0 5.079 3.158 9.417 7.618 11.162-.105-.949-.2-2.405.042-3.441.218-.937 1.407-5.965 1.407-5.965s-.359-.719-.359-1.782c0-1.668.967-2.914 2.171-2.914 1.023 0 1.518.769 1.518 1.69 0 1.029-.655 2.568-.994 3.995-.283 1.194.599 2.169 1.777 2.169 2.133 0 3.772-2.249 3.772-5.495 0-2.873-2.064-4.882-5.012-4.882-3.414 0-5.418 2.561-5.418 5.207 0 1.031.397 2.138.893 2.738a.36.36 0 0 1 .083.345l-.333 1.36c-.053.22-.174.267-.402.161-1.499-.698-2.436-2.889-2.436-4.649 0-3.785 2.75-7.262 7.929-7.262 4.163 0 7.398 2.967 7.398 6.931 0 4.136-2.607 7.464-6.227 7.464-1.216 0-2.359-.632-2.75-1.378l-.748 2.853c-.271 1.043-1.002 2.35-1.492 3.146C9.57 23.812 10.763 24.009 12.017 24c6.624 0 11.99-5.367 11.99-11.988C24.007 5.367 18.641.001 12.017.001z"/></svg>
+                                Apple Pay
+                              </span>
+                              <span className="inline-flex items-center gap-1 bg-white border border-border text-foreground text-xs font-semibold px-2.5 py-1 rounded-full shadow-sm">Google Pay</span>
+                              <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">+ Card</span>
+                            </div>
+                          </div>
+                          {qrLoading ? (
+                            <div className="flex flex-col items-center gap-3 py-8">
+                              <Loader2 className="w-8 h-8 animate-spin text-primary" />
+                              <p className="text-sm text-muted-foreground">Generating secure payment link…</p>
+                            </div>
+                          ) : qrUrl ? (
+                            <>
+                              <div className="flex justify-center">
+                                <div className="bg-white rounded-2xl p-4 shadow-sm border border-border inline-block">
+                                  <QRCodeSVG value={qrUrl} size={220} level="M" includeMargin={false} />
+                                </div>
+                              </div>
+                              <div className="text-center">
+                                <div className="text-3xl font-black tabular-nums">${discountedTotal.toFixed(2)}</div>
+                                <div className="text-xs text-muted-foreground mt-0.5">Total due</div>
+                              </div>
+                              <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground">
+                                <span className="relative flex h-2 w-2">
+                                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary opacity-75" />
+                                  <span className="relative inline-flex rounded-full h-2 w-2 bg-primary" />
+                                </span>
+                                Waiting for payment on your phone…
+                              </div>
+                              {isTestMode && (
+                                <div className="flex items-center gap-2.5 bg-amber-50 border border-amber-300 rounded-lg px-4 py-3">
+                                  <span className="text-amber-600 font-bold text-xs uppercase tracking-wider bg-amber-200 px-2 py-0.5 rounded">Test Mode</span>
+                                  <span className="text-sm text-amber-800">No real charges. Use card <strong>4242 4242 4242 4242</strong> on the phone.</span>
+                                </div>
+                              )}
+                              <Button variant="ghost" size="sm" className="w-full text-muted-foreground" onClick={() => { setQrSessionId(null); setQrUrl(null); setQrPolling(false); createQrSession(); }}>
+                                <RefreshCw className="w-3.5 h-3.5 mr-1.5" />
+                                Generate new QR code
+                              </Button>
+                            </>
+                          ) : (
+                            <div className="flex flex-col items-center gap-4 py-6">
+                              <p className="text-sm text-muted-foreground text-center">Click below to generate a secure payment QR code.</p>
+                              <Button onClick={createQrSession} className="px-8">
+                                <QrCode className="w-4 h-4 mr-2" />
+                                Generate QR Code
+                              </Button>
+                            </div>
+                          )}
+                        </>
+                      )}
                     </div>
-                  </div>
-                ) : showStripeForm && !clientSecret ? (
-                  <div className="flex items-center justify-center py-16 gap-3 text-muted-foreground">
-                    <Loader2 className="w-5 h-5 animate-spin" />
-                    <span>Preparing payment…</span>
-                  </div>
-                ) : paymentConfirmed && (!isKiosk || kioskPayMode === "card") ? (
-                  <div className="bg-green-50 border border-green-200 rounded-xl p-5 flex items-center gap-3">
-                    <BadgeCheck className="w-6 h-6 text-green-600 shrink-0" />
-                    <div>
-                      <p className="font-semibold text-green-800">Payment authorized</p>
-                      <p className="text-sm text-green-700">{isTestMode ? "Test payment recorded — no real charge." : "Your card has been charged. Continue to sign the agreement."}</p>
+                  )}
+
+                  {/* Promo code */}
+                  {hasActivePromos && (!isKiosk || kioskPayMode === "card") && !showStripeForm && !paymentConfirmed && (
+                    <div className="bg-background rounded-2xl border shadow-sm p-5 space-y-3 mb-4">
+                      <h2 className="font-semibold text-sm flex items-center gap-2">
+                        <Tag className="w-4 h-4 text-primary" />
+                        Have a promo code?
+                      </h2>
+                      {appliedPromo ? (
+                        <div className="flex items-center justify-between bg-green-50 border border-green-200 rounded-xl px-4 py-3">
+                          <div className="flex items-center gap-2">
+                            <CheckCircle2 className="w-4 h-4 text-green-600 shrink-0" />
+                            <div>
+                              <p className="font-bold text-green-800 font-mono tracking-wider">{appliedPromo.code}</p>
+                              <p className="text-xs text-green-700">{appliedPromo.description} applied</p>
+                            </div>
+                          </div>
+                          <button className="text-xs text-muted-foreground hover:text-destructive underline" onClick={() => { setAppliedPromo(null); setPromoInput(""); setPromoError(null); }}>Remove</button>
+                        </div>
+                      ) : (
+                        <div className="flex gap-2">
+                          <Input
+                            value={promoInput}
+                            onChange={e => setPromoInput(e.target.value.toUpperCase().replace(/\s/g, ""))}
+                            onKeyDown={e => e.key === "Enter" && handleApplyPromo()}
+                            placeholder="Enter code"
+                            className="font-mono uppercase font-semibold tracking-widest flex-1"
+                            maxLength={30}
+                          />
+                          <Button variant="outline" onClick={handleApplyPromo} disabled={!promoInput.trim() || promoLoading} className="shrink-0">
+                            {promoLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : "Apply"}
+                          </Button>
+                        </div>
+                      )}
+                      {promoError && (
+                        <p className="text-xs text-destructive flex items-center gap-1.5">
+                          <XCircle className="w-3.5 h-3.5 shrink-0" />
+                          {promoError}
+                        </p>
+                      )}
                     </div>
-                  </div>
-                ) : clientSecret ? (
-                  <>
-                    {isTestMode && (
-                      <div className="flex items-center gap-2.5 bg-amber-50 border border-amber-300 rounded-lg px-4 py-3">
-                        <span className="text-amber-600 font-bold text-xs uppercase tracking-wider bg-amber-200 px-2 py-0.5 rounded">Test Mode</span>
-                        <span className="text-sm text-amber-800">No real money will be charged. Use card <strong>4242 4242 4242 4242</strong>, any future expiry and CVC.</span>
-                      </div>
-                    )}
-                    <Elements stripe={isTestMode ? testStripePromise : liveStripePromise} options={{ clientSecret, appearance: { theme: "stripe" } }}>
-                      <StripePaymentForm
-                        onSuccess={() => setPaymentConfirmed(true)}
-                        customerEmail={email}
-                      />
-                    </Elements>
-                  </>
-                ) : null}
+                  )}
 
-                <p className="text-xs text-muted-foreground flex items-center gap-1.5">
-                  <Lock className="w-3.5 h-3.5" />
-                  Payments are processed securely by Stripe. Your card details are never stored on our servers.
-                </p>
+                  {/* Card payment — non-kiosk or kiosk card mode */}
+                  {(!isKiosk || kioskPayMode === "card") && (
+                    <>
+                      {paymentConfirmed ? (
+                        <div className="bg-green-50 border border-green-200 rounded-xl p-5 flex items-center gap-3">
+                          <BadgeCheck className="w-6 h-6 text-green-600 shrink-0" />
+                          <div>
+                            <p className="font-semibold text-green-800">Payment authorized</p>
+                            <p className="text-sm text-green-700">{isTestMode ? "Test payment recorded — no real charge." : "Your card has been charged successfully."}</p>
+                          </div>
+                        </div>
+                      ) : !showStripeForm ? (
+                        <div className="space-y-3">
+                          {!isKiosk && !session && !showLoginPanel ? (
+                            <Button size="lg" className="w-full h-13 text-base font-bold rounded-xl" onClick={handleRegisterAndPay} disabled={isSubmitting}>
+                              {isSubmitting ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Creating account…</> : <><ShieldCheck className="w-4 h-4 mr-2" />Create Account & Pay {appliedPromo ? `— $${discountedTotal.toFixed(2)}` : ""}</>}
+                            </Button>
+                          ) : (
+                            <Button size="lg" className="w-full h-13 text-base font-bold rounded-xl" onClick={handleContinueToPayment}>
+                              <CreditCard className="w-4 h-4 mr-2" />
+                              Enter Card Details{appliedPromo ? ` — $${discountedTotal.toFixed(2)}` : ""}
+                            </Button>
+                          )}
+                          <div className="flex justify-center">
+                            <CardScanHelper />
+                          </div>
+                        </div>
+                      ) : !clientSecret ? (
+                        <div className="flex items-center justify-center py-16 gap-3 text-muted-foreground">
+                          <Loader2 className="w-5 h-5 animate-spin" />
+                          <span>Preparing payment…</span>
+                        </div>
+                      ) : (
+                        <>
+                          {isTestMode && (
+                            <div className="flex items-center gap-2.5 bg-amber-50 border border-amber-300 rounded-lg px-4 py-3 mb-4">
+                              <span className="text-amber-600 font-bold text-xs uppercase tracking-wider bg-amber-200 px-2 py-0.5 rounded">Test Mode</span>
+                              <span className="text-sm text-amber-800">No real money will be charged. Use card <strong>4242 4242 4242 4242</strong>, any future expiry and CVC.</span>
+                            </div>
+                          )}
+                          <div className="bg-background rounded-2xl border shadow-sm p-5">
+                            <div className="flex items-center justify-between mb-4">
+                              <h3 className="font-semibold flex items-center gap-2">
+                                <CreditCard className="w-4 h-4 text-primary" />
+                                Card Details
+                              </h3>
+                              <CardScanHelper />
+                            </div>
+                            <Elements stripe={isTestMode ? testStripePromise : liveStripePromise} options={{ clientSecret, appearance: { theme: "stripe" } }}>
+                              <StripePaymentForm
+                                onSuccess={() => setPaymentConfirmed(true)}
+                                customerEmail={email}
+                              />
+                            </Elements>
+                          </div>
+                        </>
+                      )}
+                    </>
+                  )}
 
-                {paymentConfirmed && (!isKiosk || kioskPayMode === "card") && (
-                  <Button size="lg" className="w-full h-13 text-base font-bold rounded-xl" onClick={handlePaymentNext}>
+                  <p className="text-xs text-muted-foreground flex items-center gap-1.5 mt-3">
+                    <Lock className="w-3.5 h-3.5" />
+                    Payments are processed securely by Stripe. Your card details are never stored on our servers.
+                  </p>
+                </div>
+
+                {/* CTA — advance to agreement */}
+                {paymentConfirmed && (
+                  <Button size="lg" className="w-full h-13 text-base font-bold rounded-xl" onClick={handleBookNext}>
                     Continue to Agreement
                     <ArrowRight className="w-4 h-4 ml-2" />
                   </Button>
@@ -1778,625 +1654,449 @@ export default function StorefrontBook() {
               </div>
             )}
 
-            {/* ── STEP 3: RENTAL AGREEMENT ── */}
-            {step === "agreement" && (
+            {/* ════════════════════════════════════════
+                SCREEN 2: AGREEMENT → VERIFY → CONFIRMED
+                ════════════════════════════════════════ */}
+            {step === "complete" && (
               <div className="space-y-6">
-                <h1 className="text-2xl font-bold">Rental Agreement</h1>
 
-                {/* ── Required Fields Section ── */}
-                {agreementText && (() => {
-                  const renterKeys = Array.from(agreementText.matchAll(/{{([^}]+)}}/g))
-                    .map(m => m[1].trim())
-                    .filter(k => !(k in autoFillMap));
-                  const uniqueKeys = [...new Set(renterKeys)];
-                  if (uniqueKeys.length === 0) return null;
-
-                  const requiredUnfilled = uniqueKeys.filter(k => {
-                    const def = contractFields.find(f => f.key === k);
-                    const isRequired = def?.required ?? true;
-                    const val = customFieldValues[k];
-                    return isRequired && !val;
-                  });
-
-                  return (
-                    <div className="bg-background rounded-2xl border shadow-sm overflow-hidden">
-                      <div className={`px-6 py-4 border-b flex items-center gap-3 ${requiredUnfilled.length === 0 ? "bg-green-50/60" : "bg-amber-50/60"}`}>
-                        {requiredUnfilled.length === 0
-                          ? <><CheckCircle2 className="w-5 h-5 text-green-600 shrink-0" /><div><p className="font-semibold text-green-800">All required fields complete</p><p className="text-xs text-green-600 mt-0.5">Your information has been filled in — review the agreement below before signing.</p></div></>
-                          : <><AlertTriangle className="w-5 h-5 text-amber-600 shrink-0" /><div><p className="font-semibold text-amber-800">Complete Required Information</p><p className="text-xs text-amber-600 mt-0.5">Fill in the fields below before you can sign the agreement.</p></div></>
-                        }
-                      </div>
-                      <div className="p-6 grid grid-cols-1 gap-4">
-                        {uniqueKeys.map(k => {
-                          const def = contractFields.find(f => f.key === k);
-                          const label = def?.label || k.replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase());
-                          const isRequired = def?.required ?? true;
-                          const placeholder = def?.placeholder || label;
-                          const description = def?.description;
-                          const type = def?.type || "text";
-                          const val = customFieldValues[k] ?? "";
-                          const isFilledIn = type === "checkbox" ? true : !!val;
-
-                          return (
-                            <div key={k} className={`rounded-xl border p-4 transition-colors ${isFilledIn ? "border-green-200 bg-green-50/30" : isRequired ? "border-amber-200 bg-amber-50/30" : "border-slate-200 bg-slate-50/30"}`}>
-                              <div className="flex items-center gap-2 mb-2">
-                                <label className="text-sm font-semibold text-foreground">{label}</label>
-                                <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full border ${isRequired ? "bg-red-100 text-red-600 border-red-200" : "bg-slate-100 text-slate-500 border-slate-200"}`}>
-                                  {isRequired ? "Required" : "Optional"}
-                                </span>
-                                {isFilledIn && type !== "checkbox" && <CheckCircle2 className="w-3.5 h-3.5 text-green-500 ml-auto" />}
-                              </div>
-                              {description && <p className="text-xs text-muted-foreground mb-2">{description}</p>}
-
-                              {type === "textarea" ? (
-                                <textarea
-                                  value={val}
-                                  onChange={e => setCustomFieldValues(prev => ({ ...prev, [k]: e.target.value }))}
-                                  placeholder={placeholder}
-                                  rows={3}
-                                  className="w-full text-sm border rounded-lg px-3 py-2 bg-background focus:outline-none focus:ring-2 focus:ring-primary/30 resize-none"
-                                />
-                              ) : type === "checkbox" ? (
-                                <label className="flex items-center gap-3 cursor-pointer">
-                                  <input
-                                    type="checkbox"
-                                    checked={val === "true"}
-                                    onChange={e => setCustomFieldValues(prev => ({ ...prev, [k]: e.target.checked ? "true" : "false" }))}
-                                    className="w-4 h-4 accent-primary"
-                                  />
-                                  <span className="text-sm text-foreground">{placeholder || label}</span>
-                                </label>
-                              ) : (
-                                <input
-                                  type={type === "date" ? "date" : type === "number" ? "number" : "text"}
-                                  value={val}
-                                  onChange={e => setCustomFieldValues(prev => ({ ...prev, [k]: e.target.value }))}
-                                  placeholder={placeholder}
-                                  className="w-full text-sm border rounded-lg px-3 py-2 bg-background focus:outline-none focus:ring-2 focus:ring-primary/30"
-                                />
-                              )}
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  );
-                })()}
-
-                <div className="bg-background rounded-2xl border shadow-sm p-6 space-y-4 max-h-96 overflow-y-auto text-sm text-muted-foreground leading-relaxed">
-                  <h2 className="text-base font-bold text-foreground">Vehicle Rental Agreement</h2>
-                  <p><strong className="text-foreground">Rental Period:</strong> {startFormattedWithTime} — {endFormattedWithTime} ({days} day{days > 1 ? "s" : ""})</p>
-                  <p><strong className="text-foreground">Vehicle:</strong> {listing.title}</p>
-                  <p><strong className="text-foreground">Renter:</strong> {name} ({email})</p>
-                  <Separator />
-                  {agreementText
-                    ? agreementText.split("\n\n").filter(Boolean).map((para, i) =>
-                        renderAgreementParagraph(para, i)
-                      )
-                    : <p className="text-muted-foreground italic">Loading agreement…</p>
-                  }
-                  <p className="text-xs italic">By signing below, you confirm you have read, understood, and agree to all terms in this rental agreement.</p>
-                </div>
-
-                {/* ── Listing Rules — each requires initials ── */}
-                {listingRules.length > 0 && (
-                  <div className="bg-background rounded-2xl border shadow-sm p-6 space-y-4">
-                    <div className="flex items-center gap-2">
-                      <ShieldCheck className="w-4 h-4 text-primary" />
-                      <h3 className="font-semibold">Rental Rules — Initial Each to Acknowledge</h3>
-                    </div>
-                    <p className="text-sm text-muted-foreground">Type your initials next to each rule confirming you have read and agree to it.</p>
-                    <div className="space-y-3">
-                      {listingRules.map(rule => {
-                        const initialed = !!ruleInitials[rule.id]?.trim();
-                        return (
-                          <div key={rule.id} className={`flex gap-4 items-start rounded-xl border p-4 transition-colors ${initialed ? "border-green-200 bg-green-50/40" : "border-dashed border-muted-foreground/30 bg-muted/20"}`}>
-                            <div className="flex-1 min-w-0">
-                              <p className="font-medium text-sm">{rule.title}</p>
-                              {rule.description && <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed">{rule.description}</p>}
-                              {rule.fee > 0 && (
-                                <p className="text-xs text-amber-700 mt-1 font-medium flex items-center gap-1">
-                                  <AlertTriangle className="w-3 h-3" />
-                                  Violation fee: ${rule.fee.toFixed(2)}
-                                </p>
-                              )}
-                            </div>
-                            <div className="shrink-0 flex flex-col items-center gap-1.5 w-16">
-                              <input
-                                type="text"
-                                value={ruleInitials[rule.id] ?? ""}
-                                onChange={e => setRuleInitials(prev => ({ ...prev, [rule.id]: e.target.value.slice(0, 4).toUpperCase() }))}
-                                placeholder="Init."
-                                maxLength={4}
-                                className="w-16 h-9 text-center font-bold uppercase text-sm border rounded-lg bg-background focus:outline-none focus:ring-2 focus:ring-primary/40 transition-all"
-                              />
-                              {initialed && <CheckCircle2 className="w-4 h-4 text-green-600" />}
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                    {listingRules.some(r => !ruleInitials[r.id]?.trim()) && (
-                      <p className="text-xs text-amber-700 flex items-center gap-1.5">
-                        <AlertTriangle className="w-3.5 h-3.5" />
-                        All rules must be initialed before you can sign the agreement.
-                      </p>
-                    )}
-                  </div>
-                )}
-
-                <div className="bg-background rounded-2xl border shadow-sm p-6 space-y-4">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <FileText className="w-4 h-4 text-primary" />
-                      <h3 className="font-semibold">Sign the Agreement</h3>
-                    </div>
-                    {sigHasContent && (
-                      <button
-                        type="button"
-                        onClick={clearSig}
-                        className="text-xs text-muted-foreground hover:text-destructive underline"
-                      >
-                        Clear
-                      </button>
-                    )}
-                  </div>
-                  <p className="text-sm text-muted-foreground">
-                    Draw your signature below using your mouse or finger
-                  </p>
-
-                  {/* Signature canvas */}
-                  <div className={`relative border-2 rounded-xl overflow-hidden bg-white transition-colors ${sigHasContent ? "border-primary" : "border-dashed border-muted-foreground/40"}`} style={{ touchAction: "none" }}>
-                    <canvas
-                      ref={sigCanvasRef}
-                      width={800}
-                      height={200}
-                      className="w-full block cursor-crosshair"
-                      style={{ height: "160px" }}
-                      onMouseDown={startSigDraw}
-                      onMouseMove={drawSig}
-                      onMouseUp={stopSigDraw}
-                      onMouseLeave={stopSigDraw}
-                      onTouchStart={startSigDraw}
-                      onTouchMove={drawSig}
-                      onTouchEnd={stopSigDraw}
-                    />
-                    {!sigHasContent && (
-                      <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none select-none">
-                        <span className="text-muted-foreground/50 text-sm font-light italic">Sign here</span>
-                        <span className="text-muted-foreground/30 text-xs mt-1">{name}</span>
-                      </div>
-                    )}
-                    {/* Bottom border line simulating a signature line */}
-                    <div className="absolute bottom-8 left-8 right-8 border-b border-muted-foreground/20 pointer-events-none" />
-                  </div>
-
-                  <p className="text-xs text-muted-foreground flex items-center gap-1.5">
-                    <User className="w-3 h-3" />
-                    Signing as: <strong>{name}</strong>
-                  </p>
-
-                  <label className="flex items-start gap-3 cursor-pointer">
-                    <input type="checkbox" checked={agreeChecked} onChange={e => setAgreeChecked(e.target.checked)} className="mt-0.5 w-4 h-4 accent-primary" />
-                    <span className="text-sm">I have read and agree to all terms in the rental agreement above, including the cancellation policy and damage liability.</span>
-                  </label>
-                </div>
-
-                <Button
-                  size="lg"
-                  className="w-full h-13 text-base font-bold rounded-xl"
-                  onClick={handleFinalSubmit}
-                  disabled={isSubmitting || !agreeChecked || !sigHasContent || listingRules.some(r => !ruleInitials[r.id]?.trim())}
-                >
-                  {isSubmitting ? "Submitting…" : "Sign & Continue to ID Verification"}
-                  <ScanFace className="w-4 h-4 ml-2" />
-                </Button>
-              </div>
-            )}
-
-            {/* ── STEP 4: IDENTITY VERIFICATION ── */}
-            {step === "verification" && (
-              <div className="space-y-6">
-                <h1 className="text-2xl font-bold">Identity Verification</h1>
-
-                {isTestMode && (
-                  <div className="flex items-start gap-3 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 text-sm">
-                    <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
-                    <div>
-                      <span className="font-semibold text-amber-800">Test Mode — </span>
-                      <span className="text-amber-700">No real documents are collected. Use Stripe's test flow to simulate the full verification experience.</span>
-                    </div>
-                  </div>
-                )}
-
-                {identityStatus === "verified" ? (
-                  <div className="bg-green-50 border border-green-200 rounded-2xl p-8 flex flex-col items-center gap-4 text-center">
-                    <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center">
-                      <BadgeCheck className="w-9 h-9 text-green-600" />
-                    </div>
-                    <div>
-                      <p className="text-xl font-bold text-green-800">Identity Verified!</p>
-                      <p className="text-green-700 text-sm mt-1">Taking you to your confirmation…</p>
-                    </div>
-                    <Loader2 className="w-5 h-5 animate-spin text-green-600" />
-                  </div>
-                ) : (
+                {/* ── AGREEMENT PHASE ── */}
+                {completePhase === "agreement" && (
                   <>
-                    {/* Partnership intro card */}
-                    <div className="bg-background rounded-2xl border shadow-sm overflow-hidden">
-                      {/* Partnership header */}
-                      <div className="bg-gradient-to-br from-primary/8 via-[#635BFF]/6 to-primary/5 px-6 py-6 border-b">
-                        {/* Logos row */}
-                        <div className="flex items-center justify-center gap-3 mb-4">
-                          {/* OutdoorShare brand */}
-                          <div className="flex items-center gap-2">
-                            <div className="w-9 h-9 bg-primary rounded-xl flex items-center justify-center shadow-sm">
-                              <Mountain className="w-5 h-5 text-white" />
-                            </div>
-                            <span className="font-bold text-sm text-foreground">{(businessProfile as any)?.name || "OutdoorShare"}</span>
+                    <h1 className="text-2xl font-bold">Rental Agreement</h1>
+
+                    {/* Required contract fields */}
+                    {agreementText && (() => {
+                      const renterKeys = Array.from(agreementText.matchAll(/{{([^}]+)}}/g))
+                        .map(m => m[1].trim())
+                        .filter(k => !(k in autoFillMap));
+                      const uniqueKeys = [...new Set(renterKeys)];
+                      if (uniqueKeys.length === 0) return null;
+
+                      const requiredUnfilled = uniqueKeys.filter(k => {
+                        const def = contractFields.find(f => f.key === k);
+                        const isRequired = def?.required ?? true;
+                        const val = customFieldValues[k];
+                        return isRequired && !val;
+                      });
+
+                      return (
+                        <div className="bg-background rounded-2xl border shadow-sm overflow-hidden">
+                          <div className={`px-6 py-4 border-b flex items-center gap-3 ${requiredUnfilled.length === 0 ? "bg-green-50/60" : "bg-amber-50/60"}`}>
+                            {requiredUnfilled.length === 0
+                              ? <><CheckCircle2 className="w-5 h-5 text-green-600 shrink-0" /><div><p className="font-semibold text-green-800">All required fields complete</p><p className="text-xs text-green-600 mt-0.5">Review the agreement below before signing.</p></div></>
+                              : <><AlertTriangle className="w-5 h-5 text-amber-600 shrink-0" /><div><p className="font-semibold text-amber-800">Complete Required Information</p><p className="text-xs text-amber-600 mt-0.5">Fill in the fields below before signing.</p></div></>
+                            }
                           </div>
-                          {/* Times / partnership divider */}
-                          <div className="flex items-center justify-center w-7 h-7 rounded-full bg-muted border text-muted-foreground text-xs font-bold shrink-0">×</div>
-                          {/* Stripe Identity brand */}
-                          <div className="flex items-center gap-1.5">
-                            <div className="flex items-center gap-1">
-                              {/* Stripe "S" mark */}
-                              <svg width="22" height="22" viewBox="0 0 22 22" fill="none" xmlns="http://www.w3.org/2000/svg" className="shrink-0">
-                                <rect width="22" height="22" rx="5" fill="#635BFF"/>
-                                <path d="M11.08 8.22c0-.6.5-.84 1.32-.84.94 0 2.12.28 3.06.78V5.44a8.13 8.13 0 0 0-3.06-.56c-2.5 0-4.16 1.3-4.16 3.48 0 3.38 4.66 2.84 4.66 4.3 0 .7-.62.92-1.48.92-1.28 0-2.9-.52-4.18-1.24v2.76c1.42.62 2.86.88 4.18.88 2.56 0 4.32-1.26 4.32-3.48-.02-3.66-4.66-3-4.66-4.28z" fill="white"/>
-                              </svg>
-                              <span className="font-bold text-sm" style={{ color: "#635BFF" }}>Stripe</span>
-                            </div>
-                            <span className="text-xs font-semibold px-1.5 py-0.5 rounded-md" style={{ background: "#635BFF18", color: "#635BFF" }}>Identity</span>
+                          <div className="p-6 grid grid-cols-1 gap-4">
+                            {uniqueKeys.map(k => {
+                              const def = contractFields.find(f => f.key === k);
+                              const label = def?.label || k.replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase());
+                              const isRequired = def?.required ?? true;
+                              const placeholder = def?.placeholder || label;
+                              const description = def?.description;
+                              const type = def?.type || "text";
+                              const val = customFieldValues[k] ?? "";
+                              const isFilledIn = type === "checkbox" ? true : !!val;
+
+                              return (
+                                <div key={k} className={`rounded-xl border p-4 transition-colors ${isFilledIn ? "border-green-200 bg-green-50/30" : isRequired ? "border-amber-200 bg-amber-50/30" : "border-slate-200 bg-slate-50/30"}`}>
+                                  <div className="flex items-center gap-2 mb-2">
+                                    <label className="text-sm font-semibold text-foreground">{label}</label>
+                                    <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full border ${isRequired ? "bg-red-100 text-red-600 border-red-200" : "bg-slate-100 text-slate-500 border-slate-200"}`}>
+                                      {isRequired ? "Required" : "Optional"}
+                                    </span>
+                                    {isFilledIn && type !== "checkbox" && <CheckCircle2 className="w-3.5 h-3.5 text-green-500 ml-auto" />}
+                                  </div>
+                                  {description && <p className="text-xs text-muted-foreground mb-2">{description}</p>}
+                                  {type === "textarea" ? (
+                                    <textarea
+                                      value={val}
+                                      onChange={e => setCustomFieldValues(prev => ({ ...prev, [k]: e.target.value }))}
+                                      placeholder={placeholder}
+                                      rows={3}
+                                      className="w-full text-sm border rounded-lg px-3 py-2 bg-background focus:outline-none focus:ring-2 focus:ring-primary/30 resize-none"
+                                    />
+                                  ) : type === "checkbox" ? (
+                                    <label className="flex items-center gap-3 cursor-pointer">
+                                      <input
+                                        type="checkbox"
+                                        checked={val === "true"}
+                                        onChange={e => setCustomFieldValues(prev => ({ ...prev, [k]: e.target.checked ? "true" : "false" }))}
+                                        className="w-4 h-4 accent-primary"
+                                      />
+                                      <span className="text-sm text-foreground">{placeholder || label}</span>
+                                    </label>
+                                  ) : (
+                                    <input
+                                      type={type === "date" ? "date" : type === "number" ? "number" : "text"}
+                                      value={val}
+                                      onChange={e => setCustomFieldValues(prev => ({ ...prev, [k]: e.target.value }))}
+                                      placeholder={placeholder}
+                                      className="w-full text-sm border rounded-lg px-3 py-2 bg-background focus:outline-none focus:ring-2 focus:ring-primary/30"
+                                    />
+                                  )}
+                                </div>
+                              );
+                            })}
                           </div>
                         </div>
-                        {/* Headline */}
-                        <div className="text-center">
-                          <h2 className="font-bold text-base text-foreground">Secure Identity Verification</h2>
-                          <p className="text-sm text-muted-foreground mt-1 leading-relaxed">
-                            {(businessProfile as any)?.name || "OutdoorShare"} has partnered with <span className="font-semibold" style={{ color: "#635BFF" }}>Stripe Identity</span> to verify renters securely — protecting both you and our equipment.
+                      );
+                    })()}
+
+                    {/* Agreement text */}
+                    <div className="bg-background rounded-2xl border shadow-sm p-6 space-y-4 max-h-96 overflow-y-auto text-sm text-muted-foreground leading-relaxed">
+                      <h2 className="text-base font-bold text-foreground">Rental Agreement</h2>
+                      <p><strong className="text-foreground">Rental Period:</strong> {startFormattedWithTime} — {endFormattedWithTime} ({days} day{days > 1 ? "s" : ""})</p>
+                      <p><strong className="text-foreground">Item:</strong> {listing.title}</p>
+                      <p><strong className="text-foreground">Renter:</strong> {name} ({email})</p>
+                      <Separator />
+                      {agreementText
+                        ? agreementText.split("\n\n").filter(Boolean).map((para, i) => renderAgreementParagraph(para, i))
+                        : <p className="text-muted-foreground italic">Loading agreement…</p>
+                      }
+                      <p className="text-xs italic">By signing below, you confirm you have read, understood, and agree to all terms in this rental agreement.</p>
+                    </div>
+
+                    {/* Listing rules */}
+                    {listingRules.length > 0 && (
+                      <div className="bg-background rounded-2xl border shadow-sm p-6 space-y-4">
+                        <div className="flex items-center gap-2">
+                          <ShieldCheck className="w-4 h-4 text-primary" />
+                          <h3 className="font-semibold">Rental Rules — Initial Each to Acknowledge</h3>
+                        </div>
+                        <p className="text-sm text-muted-foreground">Type your initials next to each rule confirming you have read and agree to it.</p>
+                        <div className="space-y-3">
+                          {listingRules.map(rule => {
+                            const initialed = !!ruleInitials[rule.id]?.trim();
+                            return (
+                              <div key={rule.id} className={`flex gap-4 items-start rounded-xl border p-4 transition-colors ${initialed ? "border-green-200 bg-green-50/40" : "border-dashed border-muted-foreground/30 bg-muted/20"}`}>
+                                <div className="flex-1 min-w-0">
+                                  <p className="font-medium text-sm">{rule.title}</p>
+                                  {rule.description && <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed">{rule.description}</p>}
+                                  {rule.fee > 0 && (
+                                    <p className="text-xs text-amber-700 mt-1 font-medium flex items-center gap-1">
+                                      <AlertTriangle className="w-3 h-3" />
+                                      Violation fee: ${rule.fee.toFixed(2)}
+                                    </p>
+                                  )}
+                                </div>
+                                <div className="shrink-0 flex flex-col items-center gap-1.5 w-16">
+                                  <input
+                                    type="text"
+                                    value={ruleInitials[rule.id] ?? ""}
+                                    onChange={e => setRuleInitials(prev => ({ ...prev, [rule.id]: e.target.value.slice(0, 4).toUpperCase() }))}
+                                    placeholder="Init."
+                                    maxLength={4}
+                                    className="w-16 h-9 text-center font-bold uppercase text-sm border rounded-lg bg-background focus:outline-none focus:ring-2 focus:ring-primary/40 transition-all"
+                                  />
+                                  {initialed && <CheckCircle2 className="w-4 h-4 text-green-600" />}
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                        {listingRules.some(r => !ruleInitials[r.id]?.trim()) && (
+                          <p className="text-xs text-amber-700 flex items-center gap-1.5">
+                            <AlertTriangle className="w-3.5 h-3.5" />
+                            All rules must be initialed before you can sign the agreement.
                           </p>
-                        </div>
-                      </div>
-                      {/* What's needed section */}
-                      <div className="p-5 space-y-4">
-                        <p className="text-xs text-muted-foreground text-center uppercase tracking-wider font-semibold">What you'll need</p>
-                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                          {[
-                            { icon: CreditCard, label: "Government-issued ID", sub: "Passport, driver's license, or national ID" },
-                            { icon: ScanFace, label: "Live selfie", sub: "A quick photo to match your ID" },
-                            { icon: ShieldCheck, label: "Encrypted & private", sub: "Documents never stored by us" },
-                          ].map(({ icon: Icon, label, sub }) => (
-                            <div key={label} className="flex flex-col gap-1 bg-muted/40 rounded-xl p-4">
-                              <Icon className="w-5 h-5 text-primary mb-1" />
-                              <p className="text-xs font-semibold leading-snug">{label}</p>
-                              <p className="text-xs text-muted-foreground">{sub}</p>
-                            </div>
-                          ))}
-                        </div>
-                        <p className="text-xs text-center text-muted-foreground leading-relaxed">
-                          Your documents are processed directly by Stripe — we only receive a verified/not verified result. Stripe's privacy policy applies.
-                        </p>
-                      </div>
-                    </div>
-
-                    {/* Error state */}
-                    {identityStatus === "failed" && identityError && (
-                      <div className="flex items-start gap-3 bg-destructive/10 border border-destructive/20 rounded-xl p-4 text-sm text-destructive">
-                        <XCircle className="w-4 h-4 mt-0.5 shrink-0" />
-                        <div>
-                          <p className="font-semibold">Verification not completed</p>
-                          <p className="mt-0.5 text-destructive/80">{identityError}</p>
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Loading state while Stripe modal is open */}
-                    {identityStatus === "pending" ? (
-                      <div className="flex items-center justify-center gap-3 py-8 text-muted-foreground">
-                        <Loader2 className="w-5 h-5 animate-spin" />
-                        <span>Verification in progress…</span>
-                      </div>
-                    ) : identitySessionLoading ? (
-                      <Button size="lg" className="w-full h-13 text-base font-bold rounded-xl gap-2" disabled>
-                        <Loader2 className="w-4 h-4 animate-spin" />
-                        Preparing verification…
-                      </Button>
-                    ) : identitySessionFailed ? (
-                      <div className="space-y-3">
-                        <div className="flex items-start gap-3 bg-amber-50 border border-amber-200 rounded-xl p-4 text-sm text-amber-800">
-                          <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0 text-amber-600" />
-                          <div>
-                            <p className="font-semibold">Couldn't start verification session</p>
-                            <p className="text-amber-700 mt-0.5">There was a problem connecting to our verification service. Please try again.</p>
-                          </div>
-                        </div>
-                        <Button
-                          size="lg"
-                          variant="outline"
-                          className="w-full h-13 text-base font-bold rounded-xl gap-2"
-                          onClick={() => fetchIdentitySession(session?.id ?? undefined)}
-                        >
-                          <RefreshCw className="w-4 h-4" />
-                          Retry
-                        </Button>
-                      </div>
-                    ) : identityStatus === "failed" ? (
-                      <Button
-                        size="lg"
-                        className="w-full h-13 text-base font-bold rounded-xl gap-2"
-                        onClick={handleRetryVerification}
-                      >
-                        <RefreshCw className="w-4 h-4" />Try Again
-                      </Button>
-                    ) : (
-                      <Button
-                        size="lg"
-                        className="w-full h-13 text-base font-bold rounded-xl gap-2"
-                        onClick={handleStartVerification}
-                        disabled={!identityClientSecret}
-                      >
-                        <ScanFace className="w-4 h-4" />Start Identity Verification
-                      </Button>
-                    )}
-                  </>
-                )}
-              </div>
-            )}
-
-            {/* ── PHOTOS ── */}
-            {step === "photos" && (
-              <div className="max-w-2xl mx-auto">
-                <div className="bg-white rounded-2xl border shadow-sm overflow-hidden">
-                  {/* Header */}
-                  <div className="flex items-center justify-between px-6 py-4 border-b">
-                    <div className="flex items-center gap-3">
-                      <div className="w-9 h-9 rounded-full bg-primary/10 flex items-center justify-center">
-                        <Car className="w-5 h-5 text-primary" />
-                      </div>
-                      <div>
-                        <p className="font-bold text-base leading-tight">Pickup</p>
-                        <p className="text-sm text-muted-foreground leading-tight">Upload pictures</p>
-                      </div>
-                    </div>
-                    <Button variant="ghost" size="icon" onClick={() => { setStep("confirmation"); window.scrollTo(0, 0); }}>
-                      <X className="w-4 h-4" />
-                    </Button>
-                  </div>
-
-                  {/* Body */}
-                  <div className="px-6 py-5 space-y-5">
-                    <p className="font-semibold text-base">Upload pictures</p>
-
-                    {/* Upload zone */}
-                    <div
-                      className="border-2 border-dashed border-gray-200 rounded-xl p-6 text-center cursor-pointer hover:border-primary/50 transition-colors"
-                      onClick={() => beforePhotoInputRef.current?.click()}
-                      onDragOver={e => e.preventDefault()}
-                      onDrop={e => { e.preventDefault(); addBeforePhotos(e.dataTransfer.files); }}
-                    >
-                      <Upload className="w-9 h-9 text-gray-400 mx-auto mb-2" />
-                      <p className="font-medium text-sm">Choose a file</p>
-                      <p className="text-xs text-muted-foreground mt-1">We suggest uploading as many photos as possible up to 15</p>
-                      <p className="text-xs text-muted-foreground mt-1">You can add upto 15 images</p>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="mt-3"
-                        onClick={e => { e.stopPropagation(); beforePhotoInputRef.current?.click(); }}
-                      >
-                        Upload
-                      </Button>
-                    </div>
-                    <input
-                      ref={beforePhotoInputRef}
-                      type="file"
-                      accept="image/*"
-                      multiple
-                      className="hidden"
-                      onChange={e => addBeforePhotos(e.target.files)}
-                    />
-
-                    {/* Staged thumbnails */}
-                    {beforePreviews.length > 0 && (
-                      <div className="flex flex-wrap gap-2">
-                        {beforePreviews.map((src, i) => (
-                          <div key={i} className="relative w-20 h-20 rounded-lg overflow-hidden border">
-                            <img src={src} alt="" className="w-full h-full object-cover" />
-                            <button
-                              onClick={() => removeBeforePhoto(i)}
-                              className="absolute top-0.5 right-0.5 bg-black/60 text-white rounded-full w-5 h-5 flex items-center justify-center hover:bg-black/80"
-                            >
-                              <X className="w-3 h-3" />
-                            </button>
-                          </div>
-                        ))}
-                        {beforePhotos.length < 15 && (
-                          <button
-                            onClick={() => beforePhotoInputRef.current?.click()}
-                            className="w-20 h-20 rounded-lg border-2 border-dashed border-gray-200 flex flex-col items-center justify-center text-gray-400 hover:border-primary/50 transition-colors"
-                          >
-                            <ImagePlus className="w-5 h-5 mb-1" />
-                            <span className="text-xs">Add</span>
-                          </button>
                         )}
                       </div>
                     )}
 
-                    {/* Required angles checklist */}
-                    <div className="space-y-2 pt-1">
-                      {["1 Front", "1 Left Side", "1 Right Side", "1 Rear", "1 Interior"].map(label => (
-                        <div key={label} className="flex items-center gap-2 text-sm">
-                          <div className="w-5 h-5 rounded-full bg-primary flex items-center justify-center shrink-0">
-                            <Check className="w-3 h-3 text-white" />
-                          </div>
-                          <span>{label}</span>
+                    {/* Signature */}
+                    <div className="bg-background rounded-2xl border shadow-sm p-6 space-y-4">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <FileText className="w-4 h-4 text-primary" />
+                          <h3 className="font-semibold">Sign the Agreement</h3>
                         </div>
-                      ))}
+                        {sigHasContent && (
+                          <button type="button" onClick={clearSig} className="text-xs text-muted-foreground hover:text-destructive underline">Clear</button>
+                        )}
+                      </div>
+                      <p className="text-sm text-muted-foreground">Draw your signature below using your mouse or finger</p>
+                      <div className={`relative border-2 rounded-xl overflow-hidden bg-white transition-colors ${sigHasContent ? "border-primary" : "border-dashed border-muted-foreground/40"}`} style={{ touchAction: "none" }}>
+                        <canvas
+                          ref={sigCanvasRef}
+                          width={800}
+                          height={200}
+                          className="w-full block cursor-crosshair"
+                          style={{ height: "160px" }}
+                          onMouseDown={startSigDraw}
+                          onMouseMove={drawSig}
+                          onMouseUp={stopSigDraw}
+                          onMouseLeave={stopSigDraw}
+                          onTouchStart={startSigDraw}
+                          onTouchMove={drawSig}
+                          onTouchEnd={stopSigDraw}
+                        />
+                        {!sigHasContent && (
+                          <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none select-none">
+                            <span className="text-muted-foreground/50 text-sm font-light italic">Sign here</span>
+                            <span className="text-muted-foreground/30 text-xs mt-1">{name}</span>
+                          </div>
+                        )}
+                        <div className="absolute bottom-8 left-8 right-8 border-b border-muted-foreground/20 pointer-events-none" />
+                      </div>
+                      <p className="text-xs text-muted-foreground flex items-center gap-1.5">
+                        <User className="w-3 h-3" />
+                        Signing as: <strong>{name}</strong>
+                      </p>
+                      <label className="flex items-start gap-3 cursor-pointer">
+                        <input type="checkbox" checked={agreeChecked} onChange={e => setAgreeChecked(e.target.checked)} className="mt-0.5 w-4 h-4 accent-primary" />
+                        <span className="text-sm">I have read and agree to all terms in the rental agreement above, including the cancellation policy and damage liability.</span>
+                      </label>
                     </div>
-                  </div>
 
-                  {/* Footer */}
-                  <div className="px-6 py-4 border-t flex gap-3">
                     <Button
-                      variant="outline"
-                      className="flex-1"
-                      onClick={() => { setStep("verification"); window.scrollTo(0, 0); }}
+                      size="lg"
+                      className="w-full h-13 text-base font-bold rounded-xl"
+                      onClick={handleFinalSubmit}
+                      disabled={isSubmitting || !agreeChecked || !sigHasContent || listingRules.some(r => !ruleInitials[r.id]?.trim())}
                     >
-                      Back
+                      {isSubmitting ? "Submitting…" : "Sign & Verify My Identity"}
+                      <ScanFace className="w-4 h-4 ml-2" />
                     </Button>
-                    <Button
-                      className="flex-1 bg-primary hover:bg-primary/90"
-                      disabled={uploadingPhotos}
-                      onClick={handlePhotosAndContinue}
-                    >
-                      {uploadingPhotos
-                        ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Uploading…</>
-                        : "Start My Rental"
-                      }
-                    </Button>
-                  </div>
-                </div>
-              </div>
-            )}
+                  </>
+                )}
 
-            {/* ── CONFIRMATION ── */}
-            {step === "confirmation" && (
-              <div className="space-y-8">
-                {/* Success banner */}
-                <div className="bg-green-50 border border-green-200 rounded-2xl p-6 flex items-center gap-5">
-                  <div className="w-14 h-14 bg-green-100 text-green-600 rounded-full flex items-center justify-center shrink-0">
-                    <CheckCircle2 className="w-7 h-7" />
-                  </div>
-                  <div>
-                    <h1 className="text-xl font-black tracking-tight text-green-900">Booking Requested!</h1>
-                    {confirmedBooking && <p className="text-green-700 text-sm mt-0.5">Reference #{confirmedBooking.id} · {listing.title}</p>}
-                    {isKiosk ? (
-                      <p className="text-green-700/80 text-sm mt-1">
-                        A confirmation has been sent to <strong>{email}</strong> with a link to create your account and view your booking anytime.
-                      </p>
-                    ) : (
-                      <p className="text-green-700/80 text-sm mt-1">
-                        We'll review and email a confirmation to <strong>{email}</strong>. Bring a valid ID on {startFormatted}.
-                      </p>
+                {/* ── VERIFICATION PHASE ── */}
+                {completePhase === "verification" && (
+                  <>
+                    <h1 className="text-2xl font-bold">Verify Your Identity</h1>
+
+                    {isTestMode && (
+                      <div className="flex items-start gap-3 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 text-sm">
+                        <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                        <div>
+                          <span className="font-semibold text-amber-800">Test Mode — </span>
+                          <span className="text-amber-700">No real documents are collected. Use Stripe's test flow to simulate the verification experience.</span>
+                        </div>
+                      </div>
                     )}
-                  </div>
-                </div>
 
-                {/* Profile + bookings split */}
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                  {/* Profile card */}
-                  <div className="lg:col-span-1 space-y-4">
-                    <div className="bg-background rounded-2xl border shadow-sm p-5 space-y-4">
-                      <div className="flex items-center gap-3">
-                        <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center">
-                          <User className="w-6 h-6 text-primary" />
+                    {identityStatus === "verified" ? (
+                      <div className="bg-green-50 border border-green-200 rounded-2xl p-8 flex flex-col items-center gap-4 text-center">
+                        <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center">
+                          <BadgeCheck className="w-9 h-9 text-green-600" />
                         </div>
                         <div>
-                          <p className="font-bold leading-tight">{name}</p>
-                          <p className="text-xs text-muted-foreground">{email}</p>
+                          <p className="text-xl font-bold text-green-800">Identity Verified!</p>
+                          <p className="text-green-700 text-sm mt-1">Confirming your booking…</p>
                         </div>
+                        <Loader2 className="w-5 h-5 animate-spin text-green-600" />
                       </div>
-                      <Separator />
-                      {phone && (
-                        <div className="text-sm">
-                          <p className="text-xs text-muted-foreground uppercase tracking-wider font-semibold mb-0.5">Phone</p>
-                          <p>{phone}</p>
-                        </div>
-                      )}
-                      {session?.billingAddress && (
-                        <div className="text-sm">
-                          <p className="text-xs text-muted-foreground uppercase tracking-wider font-semibold mb-0.5">Billing Address</p>
-                          <p>{session.billingAddress}</p>
-                          <p>{session.billingCity}, {session.billingState} {session.billingZip}</p>
-                        </div>
-                      )}
-                      {session?.cardLastFour && (
-                        <div className="text-sm">
-                          <p className="text-xs text-muted-foreground uppercase tracking-wider font-semibold mb-0.5">Payment Method</p>
-                          <div className="flex items-center gap-2">
-                            <CreditCard className="w-4 h-4 text-muted-foreground" />
-                            <span>{session.cardBrand} •••• {session.cardLastFour}</span>
-                          </div>
-                        </div>
-                      )}
-                      <Separator />
-                      <Button variant="outline" size="sm" className="w-full" onClick={() => setLocation(sfBase || "/")}>
-                        Browse More Listings
-                      </Button>
-                    </div>
-                  </div>
-
-                  {/* Bookings list */}
-                  <div className="lg:col-span-2 space-y-4">
-                    <h2 className="font-bold text-lg">My Bookings</h2>
-                    {bookingsLoading ? (
-                      <div className="space-y-3">
-                        {[1,2,3].map(i => <div key={i} className="animate-pulse bg-muted rounded-xl h-20" />)}
-                      </div>
-                    ) : customerBookings.length === 0 ? (
-                      <div className="bg-muted/30 rounded-2xl p-8 text-center text-muted-foreground text-sm">No bookings found</div>
                     ) : (
-                      <div className="space-y-3">
-                        {customerBookings.map(b => {
-                          const isNew = b.id === confirmedBooking?.id;
-                          const statusColors: Record<string, string> = {
-                            pending: "bg-amber-100 text-amber-800",
-                            confirmed: "bg-blue-100 text-blue-800",
-                            active: "bg-green-100 text-green-800",
-                            completed: "bg-muted text-muted-foreground",
-                            cancelled: "bg-red-100 text-red-800",
-                          };
-                          return (
-                            <div
-                              key={b.id}
-                              onClick={() => setLocation(`${sfBase}/my-bookings/${b.id}`)}
-                              className={`bg-background rounded-2xl border p-4 flex items-center gap-4 cursor-pointer hover:border-primary/40 hover:shadow-sm transition-all ${isNew ? "border-primary ring-1 ring-primary/20" : ""}`}
-                            >
-                              <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
-                                <CalendarIcon className="w-5 h-5 text-primary" />
-                              </div>
-                              <div className="flex-1 min-w-0">
-                                <div className="flex items-center gap-2 mb-0.5">
-                                  <p className="font-semibold text-sm truncate">{b.listingTitle}</p>
-                                  {isNew && <span className="text-[10px] font-bold bg-primary text-primary-foreground px-1.5 py-0.5 rounded-full">NEW</span>}
+                      <>
+                        <div className="bg-background rounded-2xl border shadow-sm overflow-hidden">
+                          <div className="bg-gradient-to-br from-primary/8 via-[#635BFF]/6 to-primary/5 px-6 py-6 border-b">
+                            <div className="flex items-center justify-center gap-3 mb-4">
+                              <div className="flex items-center gap-2">
+                                <div className="w-9 h-9 bg-primary rounded-xl flex items-center justify-center shadow-sm">
+                                  <Mountain className="w-5 h-5 text-white" />
                                 </div>
-                                <p className="text-xs text-muted-foreground">
-                                  {b.startDate} → {b.endDate}
-                                </p>
+                                <span className="font-bold text-sm text-foreground">{(businessProfile as any)?.name || "OutdoorShare"}</span>
                               </div>
-                              <div className="text-right shrink-0 space-y-1">
-                                <span className={`text-xs font-semibold px-2 py-0.5 rounded-full capitalize ${statusColors[b.status] ?? "bg-muted text-muted-foreground"}`}>
-                                  {b.status}
-                                </span>
-                                <p className="text-xs font-bold text-foreground">${parseFloat(b.totalPrice).toFixed(2)}</p>
+                              <div className="flex items-center justify-center w-7 h-7 rounded-full bg-muted border text-muted-foreground text-xs font-bold shrink-0">×</div>
+                              <div className="flex items-center gap-1.5">
+                                <div className="flex items-center gap-1">
+                                  <svg width="22" height="22" viewBox="0 0 22 22" fill="none" xmlns="http://www.w3.org/2000/svg" className="shrink-0">
+                                    <rect width="22" height="22" rx="5" fill="#635BFF"/>
+                                    <path d="M11.08 8.22c0-.6.5-.84 1.32-.84.94 0 2.12.28 3.06.78V5.44a8.13 8.13 0 0 0-3.06-.56c-2.5 0-4.16 1.3-4.16 3.48 0 3.38 4.66 2.84 4.66 4.3 0 .7-.62.92-1.48.92-1.28 0-2.9-.52-4.18-1.24v2.76c1.42.62 2.86.88 4.18.88 2.56 0 4.32-1.26 4.32-3.48-.02-3.66-4.66-3-4.66-4.28z" fill="white"/>
+                                  </svg>
+                                  <span className="font-bold text-sm" style={{ color: "#635BFF" }}>Stripe</span>
+                                </div>
+                                <span className="text-xs font-semibold px-1.5 py-0.5 rounded-md" style={{ background: "#635BFF18", color: "#635BFF" }}>Identity</span>
                               </div>
                             </div>
-                          );
-                        })}
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="w-full mt-1"
-                          onClick={() => setLocation(`${sfBase}/my-bookings`)}
-                        >
-                          View All My Bookings
-                          <ArrowRight className="w-3.5 h-3.5 ml-1.5" />
-                        </Button>
-                      </div>
+                            <div className="text-center">
+                              <h2 className="font-bold text-base text-foreground">Secure Identity Verification</h2>
+                              <p className="text-sm text-muted-foreground mt-1 leading-relaxed">
+                                {(businessProfile as any)?.name || "OutdoorShare"} has partnered with <span className="font-semibold" style={{ color: "#635BFF" }}>Stripe Identity</span> to verify renters securely — protecting both you and our equipment.
+                              </p>
+                            </div>
+                          </div>
+                          <div className="p-5 space-y-4">
+                            <p className="text-xs text-muted-foreground text-center uppercase tracking-wider font-semibold">What you'll need</p>
+                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                              {[
+                                { icon: CreditCard, label: "Government-issued ID", sub: "Passport, driver's license, or national ID" },
+                                { icon: ScanFace, label: "Live selfie", sub: "A quick photo to match your ID" },
+                                { icon: ShieldCheck, label: "Encrypted & private", sub: "Documents never stored by us" },
+                              ].map(({ icon: Icon, label, sub }) => (
+                                <div key={label} className="flex flex-col gap-1 bg-muted/40 rounded-xl p-4">
+                                  <Icon className="w-5 h-5 text-primary mb-1" />
+                                  <p className="text-xs font-semibold leading-snug">{label}</p>
+                                  <p className="text-xs text-muted-foreground">{sub}</p>
+                                </div>
+                              ))}
+                            </div>
+                            <p className="text-xs text-center text-muted-foreground leading-relaxed">
+                              Your documents are processed directly by Stripe — we only receive a verified/not verified result.
+                            </p>
+                          </div>
+                        </div>
+
+                        {identityStatus === "failed" && identityError && (
+                          <div className="flex items-start gap-3 bg-destructive/10 border border-destructive/20 rounded-xl p-4 text-sm text-destructive">
+                            <XCircle className="w-4 h-4 mt-0.5 shrink-0" />
+                            <div>
+                              <p className="font-semibold">Verification not completed</p>
+                              <p className="mt-0.5 text-destructive/80">{identityError}</p>
+                            </div>
+                          </div>
+                        )}
+
+                        {identityStatus === "pending" ? (
+                          <div className="flex items-center justify-center gap-3 py-8 text-muted-foreground">
+                            <Loader2 className="w-5 h-5 animate-spin" />
+                            <span>Verification in progress…</span>
+                          </div>
+                        ) : identitySessionLoading ? (
+                          <Button size="lg" className="w-full h-13 text-base font-bold rounded-xl gap-2" disabled>
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                            Preparing verification…
+                          </Button>
+                        ) : identitySessionFailed ? (
+                          <div className="space-y-3">
+                            <div className="flex items-start gap-3 bg-amber-50 border border-amber-200 rounded-xl p-4 text-sm text-amber-800">
+                              <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0 text-amber-600" />
+                              <div>
+                                <p className="font-semibold">Couldn't start verification session</p>
+                                <p className="text-amber-700 mt-0.5">There was a problem connecting to our verification service. Please try again.</p>
+                              </div>
+                            </div>
+                            <Button size="lg" variant="outline" className="w-full h-13 text-base font-bold rounded-xl gap-2" onClick={() => fetchIdentitySession(session?.id ?? undefined)}>
+                              <RefreshCw className="w-4 h-4" />
+                              Retry
+                            </Button>
+                          </div>
+                        ) : identityStatus === "failed" ? (
+                          <Button size="lg" className="w-full h-13 text-base font-bold rounded-xl gap-2" onClick={handleRetryVerification}>
+                            <RefreshCw className="w-4 h-4" />Try Again
+                          </Button>
+                        ) : (
+                          <Button size="lg" className="w-full h-13 text-base font-bold rounded-xl gap-2" onClick={handleStartVerification} disabled={!identityClientSecret}>
+                            <ScanFace className="w-4 h-4" />Start Identity Verification
+                          </Button>
+                        )}
+                      </>
                     )}
+                  </>
+                )}
+
+                {/* ── CONFIRMED PHASE ── */}
+                {completePhase === "confirmed" && (
+                  <div className="space-y-8">
+                    <div className="bg-green-50 border border-green-200 rounded-2xl p-6 flex items-center gap-5">
+                      <div className="w-14 h-14 bg-green-100 text-green-600 rounded-full flex items-center justify-center shrink-0">
+                        <CheckCircle2 className="w-7 h-7" />
+                      </div>
+                      <div>
+                        <h1 className="text-xl font-black tracking-tight text-green-900">Booking Requested!</h1>
+                        {confirmedBooking && <p className="text-green-700 text-sm mt-0.5">Reference #{confirmedBooking.id} · {listing.title}</p>}
+                        {isKiosk ? (
+                          <p className="text-green-700/80 text-sm mt-1">
+                            A confirmation has been sent to <strong>{email}</strong> with a link to create your account and view your booking anytime.
+                          </p>
+                        ) : (
+                          <p className="text-green-700/80 text-sm mt-1">
+                            We'll review and email a confirmation to <strong>{email}</strong>. Bring a valid ID on {startFormatted}.
+                          </p>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                      <div className="lg:col-span-1 space-y-4">
+                        <div className="bg-background rounded-2xl border shadow-sm p-5 space-y-4">
+                          <div className="flex items-center gap-3">
+                            <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center">
+                              <User className="w-6 h-6 text-primary" />
+                            </div>
+                            <div>
+                              <p className="font-bold leading-tight">{name}</p>
+                              <p className="text-xs text-muted-foreground">{email}</p>
+                            </div>
+                          </div>
+                          <Separator />
+                          {phone && (
+                            <div className="text-sm">
+                              <p className="text-xs text-muted-foreground uppercase tracking-wider font-semibold mb-0.5">Phone</p>
+                              <p>{phone}</p>
+                            </div>
+                          )}
+                          <Separator />
+                          <Button variant="outline" size="sm" className="w-full" onClick={() => setLocation(sfBase || "/")}>
+                            Browse More Listings
+                          </Button>
+                        </div>
+                      </div>
+
+                      <div className="lg:col-span-2 space-y-4">
+                        <h2 className="font-bold text-lg">My Bookings</h2>
+                        {bookingsLoading ? (
+                          <div className="space-y-3">
+                            {[1,2,3].map(i => <div key={i} className="animate-pulse bg-muted rounded-xl h-20" />)}
+                          </div>
+                        ) : customerBookings.length === 0 ? (
+                          <div className="bg-muted/30 rounded-2xl p-8 text-center text-muted-foreground text-sm">No bookings found</div>
+                        ) : (
+                          <div className="space-y-3">
+                            {customerBookings.map(b => {
+                              const isNew = b.id === confirmedBooking?.id;
+                              const statusColors: Record<string, string> = {
+                                pending: "bg-amber-100 text-amber-800",
+                                confirmed: "bg-blue-100 text-blue-800",
+                                active: "bg-green-100 text-green-800",
+                                completed: "bg-muted text-muted-foreground",
+                                cancelled: "bg-red-100 text-red-800",
+                              };
+                              return (
+                                <div
+                                  key={b.id}
+                                  onClick={() => setLocation(`${sfBase}/my-bookings/${b.id}`)}
+                                  className={`bg-background rounded-2xl border p-4 flex items-center gap-4 cursor-pointer hover:border-primary/40 hover:shadow-sm transition-all ${isNew ? "border-primary ring-1 ring-primary/20" : ""}`}
+                                >
+                                  <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
+                                    <CalendarIcon className="w-5 h-5 text-primary" />
+                                  </div>
+                                  <div className="flex-1 min-w-0">
+                                    <div className="flex items-center gap-2 mb-0.5">
+                                      <p className="font-semibold text-sm truncate">{b.listingTitle}</p>
+                                      {isNew && <span className="text-[10px] font-bold bg-primary text-primary-foreground px-1.5 py-0.5 rounded-full">NEW</span>}
+                                    </div>
+                                    <p className="text-xs text-muted-foreground">{b.startDate} → {b.endDate}</p>
+                                  </div>
+                                  <div className="text-right shrink-0 space-y-1">
+                                    <span className={`text-xs font-semibold px-2 py-0.5 rounded-full capitalize ${statusColors[b.status] ?? "bg-muted text-muted-foreground"}`}>
+                                      {b.status}
+                                    </span>
+                                    <p className="text-xs font-bold text-foreground">${parseFloat(b.totalPrice).toFixed(2)}</p>
+                                  </div>
+                                </div>
+                              );
+                            })}
+                            <Button variant="outline" size="sm" className="w-full mt-1" onClick={() => setLocation(`${sfBase}/my-bookings`)}>
+                              View All My Bookings
+                              <ArrowRight className="w-3.5 h-3.5 ml-1.5" />
+                            </Button>
+                          </div>
+                        )}
+                      </div>
+                    </div>
                   </div>
-                </div>
+                )}
               </div>
             )}
           </div>
 
           {/* ── SIDEBAR SUMMARY ── */}
-          {step !== "confirmation" && step !== "photos" && (
+          {completePhase !== "confirmed" && (
             <div className="order-2 lg:order-2 lg:col-span-2">
               <div className="sticky top-32 space-y-4">
-
-                {/* Price breakdown — always at the top */}
                 {dateRange?.from && dateRange?.to && (
                   <div className="bg-background rounded-2xl border shadow-sm p-5 space-y-3">
                     <h3 className="font-bold text-sm flex items-center gap-2">
@@ -2465,7 +2165,6 @@ export default function StorefrontBook() {
                   </div>
                 )}
 
-                {/* Listing photo + name — below the breakdown */}
                 <div className="bg-background rounded-2xl border shadow-sm overflow-hidden">
                   <div className="aspect-[16/9] bg-muted relative">
                     {listing.imageUrls?.[0] ? (
@@ -2479,7 +2178,6 @@ export default function StorefrontBook() {
                     <h3 className="font-semibold text-sm leading-snug">{listing.title}</h3>
                   </div>
                 </div>
-
               </div>
             </div>
           )}
