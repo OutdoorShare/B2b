@@ -117,7 +117,7 @@ export default function StorefrontHome() {
               <span className="text-white text-xs font-semibold drop-shadow">All</span>
             </button>
 
-            {categories?.filter((cat, idx, arr) => (cat.listingCount ?? 0) > 0 && arr.findIndex(c => c.slug === cat.slug) === idx).map(cat => {
+            {categories?.filter((cat, idx, arr) => arr.findIndex(c => c.slug === cat.slug) === idx).map(cat => {
               const Icon = getCategoryIcon(cat.slug);
               const isActive = activeCategory === cat.id;
               return (
