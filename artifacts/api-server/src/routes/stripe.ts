@@ -239,7 +239,6 @@ router.post("/stripe/payment-intent", async (req, res) => {
       amount: amountCents,
       currency: "usd",
       receipt_email: customerEmail,
-      setup_future_usage: "off_session",
       description: `Rental booking — ${tenant.name}${isTestMode ? " [TEST MODE]" : ""}`,
       metadata: {
         tenant_id: String(tenant.id),

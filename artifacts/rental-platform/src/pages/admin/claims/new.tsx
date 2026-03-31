@@ -1,5 +1,5 @@
 import { adminPath } from "@/lib/admin-nav";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -8,11 +8,18 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
-import { ArrowLeft, ShieldAlert } from "lucide-react";
+import { ArrowLeft, ShieldAlert, AlertTriangle } from "lucide-react";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
 type ClaimType = "damage" | "theft" | "overage" | "dispute" | "other";
+
+type ListingRule = {
+  id: number;
+  title: string;
+  description: string | null;
+  fee: number;
+};
 
 export default function AdminClaimsNew() {
   const [, setLocation] = useLocation();
@@ -27,6 +34,28 @@ export default function AdminClaimsNew() {
   const [type, setType] = useState<ClaimType>("damage");
   const [description, setDescription] = useState("");
   const [claimedAmount, setClaimedAmount] = useState("");
+  const [listingRules, setListingRules] = useState<ListingRule[]>([]);
+  const [selectedRuleId, setSelectedRuleId] = useState<string>("");
+
+  // Fetch listing rules when listing ID is known
+  useEffect(() => {
+    const lid = parseInt(listingId);
+    if (!lid) { setListingRules([]); setSelectedRuleId(""); return; }
+    fetch(`${BASE}/api/listings/${lid}/rules`)
+      .then(r => r.json())
+      .then((data: ListingRule[]) => { if (Array.isArray(data)) setListingRules(data.filter(r => r.fee > 0)); })
+      .catch(() => {});
+  }, [listingId]);
+
+  // Auto-fill claimed amount when a rule is selected
+  const handleRuleSelect = (ruleId: string) => {
+    setSelectedRuleId(ruleId);
+    const rule = listingRules.find(r => r.id === parseInt(ruleId));
+    if (rule) {
+      setClaimedAmount(rule.fee.toFixed(2));
+      if (!description) setDescription(`Violation of rule: "${rule.title}"`);
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -119,6 +148,32 @@ export default function AdminClaimsNew() {
             </div>
           </CardContent>
         </Card>
+
+        {listingRules.length > 0 && (
+          <Card className="border-amber-200 bg-amber-50/50">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base flex items-center gap-2">
+                <AlertTriangle className="w-4 h-4 text-amber-600" />
+                Violated Rule (optional)
+              </CardTitle>
+              <CardDescription>Select a rule to auto-fill the claimed amount.</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Select value={selectedRuleId} onValueChange={handleRuleSelect}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select a violated rule…" />
+                </SelectTrigger>
+                <SelectContent>
+                  {listingRules.map(rule => (
+                    <SelectItem key={rule.id} value={String(rule.id)}>
+                      {rule.title} — ${rule.fee.toFixed(2)} fee
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </CardContent>
+          </Card>
+        )}
 
         <Card>
           <CardHeader>

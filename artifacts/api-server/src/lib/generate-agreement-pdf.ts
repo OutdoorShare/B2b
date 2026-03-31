@@ -5,6 +5,14 @@ import { randomBytes } from "crypto";
 
 const UPLOADS_DIR = path.resolve(process.cwd(), "uploads");
 
+export interface RuleInitialEntry {
+  ruleId: number;
+  title: string;
+  fee: number;
+  initials: string;
+  initialedAt: string;
+}
+
 export interface AgreementPdfOptions {
   bookingId: number;
   companyName: string;
@@ -17,6 +25,7 @@ export interface AgreementPdfOptions {
   signerName: string;
   signedAt: Date;
   signatureDataUrl: string;
+  ruleInitials?: RuleInitialEntry[];
 }
 
 export async function generateAgreementPdf(opts: AgreementPdfOptions): Promise<string> {
@@ -85,6 +94,47 @@ export async function generateAgreementPdf(opts: AgreementPdfOptions): Promise<s
     for (const para of paragraphs) {
       doc.text(para, 60, doc.y, { width: PAGE_WIDTH, align: "justify" });
       doc.moveDown(0.8);
+    }
+
+    // ── Rental Rules & Initials ──────────────────────────────────────────────
+    if (opts.ruleInitials && opts.ruleInitials.length > 0) {
+      doc.moveDown(0.5);
+      doc.fillColor(PRIMARY).font("Helvetica-Bold").fontSize(13).text("Rental Rules & Acknowledgments", 60);
+      doc.moveDown(0.3);
+      doc.moveTo(60, doc.y).lineTo(60 + PAGE_WIDTH, doc.y).strokeColor("#dddddd").lineWidth(1).stroke();
+      doc.moveDown(0.5);
+
+      for (const rule of opts.ruleInitials) {
+        // Check if we need a new page
+        if (doc.y > doc.page.height - 120) doc.addPage();
+
+        const rowTop = doc.y;
+        const rowHeight = 44;
+
+        // Rule row background
+        doc.rect(60, rowTop, PAGE_WIDTH, rowHeight).fill(LIGHT_GRAY).stroke("#e8e8e8");
+
+        // Initials box on the right
+        const initialsBoxW = 56;
+        const initialsBoxX = 60 + PAGE_WIDTH - initialsBoxW - 10;
+        doc.rect(initialsBoxX, rowTop + 6, initialsBoxW, rowHeight - 12).fill("#ffffff").stroke("#cccccc");
+        doc.fillColor(DARK).font("Helvetica-Bold").fontSize(14)
+          .text(rule.initials, initialsBoxX, rowTop + 13, { width: initialsBoxW, align: "center" });
+
+        // Rule text
+        doc.fillColor(DARK).font("Helvetica-Bold").fontSize(9).text(rule.title, 75, rowTop + 8, { width: PAGE_WIDTH - initialsBoxW - 30 });
+        if (rule.fee > 0) {
+          doc.fillColor("#92400e").font("Helvetica").fontSize(8)
+            .text(`Violation fee: $${rule.fee.toFixed(2)}`, 75, rowTop + 22);
+        }
+
+        doc.y = rowTop + rowHeight + 4;
+      }
+
+      doc.moveDown(0.5);
+      doc.fillColor(MID_GRAY).font("Helvetica-Oblique").fontSize(7.5)
+        .text("Each rule above was initialed by the renter, confirming they read and accepted the stated terms.", 60, doc.y, { width: PAGE_WIDTH });
+      doc.moveDown(1);
     }
 
     // ── Signature section ────────────────────────────────────────────────────

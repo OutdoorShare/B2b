@@ -111,7 +111,7 @@ router.post("/bookings", async (req, res) => {
     const totalPrice = basePrice + addonsTotal;
     const addonsData = addons.length > 0 ? JSON.stringify(addons) : null;
 
-    const { addons: _addons, assignedUnitIds: rawUnitIds, agreementSignedAt: _ignoredTs, agreementSignatureDataUrl, ...restBody } = body;
+    const { addons: _addons, assignedUnitIds: rawUnitIds, agreementSignedAt: _ignoredTs, agreementSignatureDataUrl, ruleInitials: ruleInitialsJson, ...restBody } = body;
     const assignedUnitIds = Array.isArray(rawUnitIds) && rawUnitIds.length > 0 ? JSON.stringify(rawUnitIds) : null;
     // Set agreementSignedAt server-side when the customer provides their signature
     const agreementSignedAt = restBody.agreementSignerName ? new Date() : null;
@@ -123,6 +123,7 @@ router.post("/bookings", async (req, res) => {
       assignedUnitIds,
       agreementSignedAt,
       agreementSignature: agreementSignatureDataUrl ?? null,
+      ruleInitials: ruleInitialsJson ?? null,
     }).returning();
 
     // Generate and save agreement PDF in the background
@@ -137,6 +138,9 @@ router.post("/bookings", async (req, res) => {
           if (biz?.businessName) companyName = biz.businessName;
         }
         const signedAtDate = agreementSignedAt ?? new Date();
+        const parsedRuleInitials = ruleInitialsJson
+          ? (() => { try { return JSON.parse(ruleInitialsJson); } catch { return []; } })()
+          : [];
         const pdfFilename = await generateAgreementPdf({
           bookingId: created.id,
           companyName,
@@ -149,6 +153,7 @@ router.post("/bookings", async (req, res) => {
           signerName: restBody.agreementSignerName,
           signedAt: signedAtDate,
           signatureDataUrl: agreementSignatureDataUrl,
+          ruleInitials: parsedRuleInitials,
         });
         await db.update(bookingsTable)
           .set({ agreementPdfPath: pdfFilename })

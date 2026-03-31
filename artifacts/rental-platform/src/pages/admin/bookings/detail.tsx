@@ -466,6 +466,30 @@ export default function AdminBookingDetail() {
                   </>
                 )}
 
+                {/* Initialed rules */}
+                {(booking as any).ruleInitials && (() => {
+                  try {
+                    const rules = JSON.parse((booking as any).ruleInitials) as Array<{ ruleId: number; title: string; fee: number; initials: string }>;
+                    if (!rules.length) return null;
+                    return (
+                      <>
+                        <Separator />
+                        <div>
+                          <div className="text-xs text-muted-foreground mb-2">Initialed Rules</div>
+                          <div className="space-y-1.5">
+                            {rules.map(r => (
+                              <div key={r.ruleId} className="flex items-center justify-between gap-2 bg-muted/40 rounded-lg px-3 py-2">
+                                <div className="text-xs font-medium">{r.title}</div>
+                                <span className="font-bold text-sm bg-white border rounded px-2 py-0.5 tabular-nums shrink-0">{r.initials}</span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      </>
+                    );
+                  } catch { return null; }
+                })()}
+
                 {(booking as any).agreementText && (
                   <>
                     <Separator />

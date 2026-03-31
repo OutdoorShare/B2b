@@ -73,6 +73,14 @@ type Addon = {
   isActive: boolean;
 };
 
+type ListingRule = {
+  id: number;
+  title: string;
+  description: string | null;
+  fee: number;
+  sortOrder: number;
+};
+
 interface CustomerSession {
   id: number;
   email: string;
@@ -244,6 +252,9 @@ export default function StorefrontBook() {
   const sigCanvasRef = useRef<HTMLCanvasElement>(null);
   const isDrawingRef = useRef(false);
   const [sigHasContent, setSigHasContent] = useState(false);
+  // Per-rule initials: { [ruleId]: "JD" }
+  const [listingRules, setListingRules] = useState<ListingRule[]>([]);
+  const [ruleInitials, setRuleInitials] = useState<Record<number, string>>({});
 
   // Step 4: Stripe Identity verification
   const [identityClientSecret, setIdentityClientSecret] = useState<string | null>(null);
@@ -288,6 +299,15 @@ export default function StorefrontBook() {
         const required = new Set(active.filter(a => a.isRequired || a.name.toLowerCase().includes("protection")).map(a => a.id));
         setSelectedAddonIds(required);
       })
+      .catch(() => {});
+  }, [listingId]);
+
+  // Fetch listing rules (for per-rule initialing in agreement step)
+  useEffect(() => {
+    if (!listingId) return;
+    fetch(`${BASE}/api/listings/${listingId}/rules`)
+      .then(r => r.json())
+      .then((data: ListingRule[]) => { if (Array.isArray(data)) setListingRules(data); })
       .catch(() => {});
   }, [listingId]);
 
@@ -572,7 +592,7 @@ export default function StorefrontBook() {
         }),
       });
       // Note: payments always accepted — OutdoorShare holds funds if tenant not yet connected
-      if (!res.ok) { toast({ title: "Unable to initialize payment", variant: "destructive" }); return; }
+      if (!res.ok) { const errData = await res.json().catch(() => ({})); toast({ title: "Unable to initialize payment", description: errData.error ?? `HTTP ${res.status}`, variant: "destructive" }); return; }
       const data = await res.json();
       setClientSecret(data.clientSecret);
       setPaymentIntentId(data.paymentIntentId);
@@ -706,6 +726,13 @@ export default function StorefrontBook() {
       }
     }
 
+    // Validate all listing rules have been initialed
+    const uninitialedRules = listingRules.filter(r => !ruleInitials[r.id]?.trim());
+    if (uninitialedRules.length > 0) {
+      toast({ title: "Please initial all rental rules", description: `${uninitialedRules.length} rule${uninitialedRules.length > 1 ? "s" : ""} still need your initials.`, variant: "destructive" });
+      return;
+    }
+
     const signatureDataUrl = sigCanvasRef.current?.toDataURL("image/png") ?? "";
 
     setIsSubmitting(true);
@@ -742,6 +769,15 @@ export default function StorefrontBook() {
           appliedPromoCode: appliedPromo?.code || undefined,
           discountAmount: promoDiscount > 0 ? promoDiscount : undefined,
           depositPaid: deposit > 0 ? String(deposit) : undefined,
+          ruleInitials: listingRules.length > 0
+            ? JSON.stringify(listingRules.map(r => ({
+                ruleId: r.id,
+                title: r.title,
+                fee: r.fee,
+                initials: ruleInitials[r.id] ?? "",
+                initialedAt: new Date().toISOString(),
+              })))
+            : undefined,
         })
       });
       const data = await res.json();
@@ -1477,6 +1513,53 @@ export default function StorefrontBook() {
                   <p className="text-xs italic">By signing below, you confirm you have read, understood, and agree to all terms in this rental agreement.</p>
                 </div>
 
+                {/* ── Listing Rules — each requires initials ── */}
+                {listingRules.length > 0 && (
+                  <div className="bg-background rounded-2xl border shadow-sm p-6 space-y-4">
+                    <div className="flex items-center gap-2">
+                      <ShieldCheck className="w-4 h-4 text-primary" />
+                      <h3 className="font-semibold">Rental Rules — Initial Each to Acknowledge</h3>
+                    </div>
+                    <p className="text-sm text-muted-foreground">Type your initials next to each rule confirming you have read and agree to it.</p>
+                    <div className="space-y-3">
+                      {listingRules.map(rule => {
+                        const initialed = !!ruleInitials[rule.id]?.trim();
+                        return (
+                          <div key={rule.id} className={`flex gap-4 items-start rounded-xl border p-4 transition-colors ${initialed ? "border-green-200 bg-green-50/40" : "border-dashed border-muted-foreground/30 bg-muted/20"}`}>
+                            <div className="flex-1 min-w-0">
+                              <p className="font-medium text-sm">{rule.title}</p>
+                              {rule.description && <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed">{rule.description}</p>}
+                              {rule.fee > 0 && (
+                                <p className="text-xs text-amber-700 mt-1 font-medium flex items-center gap-1">
+                                  <AlertTriangle className="w-3 h-3" />
+                                  Violation fee: ${rule.fee.toFixed(2)}
+                                </p>
+                              )}
+                            </div>
+                            <div className="shrink-0 flex flex-col items-center gap-1.5 w-16">
+                              <input
+                                type="text"
+                                value={ruleInitials[rule.id] ?? ""}
+                                onChange={e => setRuleInitials(prev => ({ ...prev, [rule.id]: e.target.value.slice(0, 4).toUpperCase() }))}
+                                placeholder="Init."
+                                maxLength={4}
+                                className="w-16 h-9 text-center font-bold uppercase text-sm border rounded-lg bg-background focus:outline-none focus:ring-2 focus:ring-primary/40 transition-all"
+                              />
+                              {initialed && <CheckCircle2 className="w-4 h-4 text-green-600" />}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                    {listingRules.some(r => !ruleInitials[r.id]?.trim()) && (
+                      <p className="text-xs text-amber-700 flex items-center gap-1.5">
+                        <AlertTriangle className="w-3.5 h-3.5" />
+                        All rules must be initialed before you can sign the agreement.
+                      </p>
+                    )}
+                  </div>
+                )}
+
                 <div className="bg-background rounded-2xl border shadow-sm p-6 space-y-4">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
@@ -1538,7 +1621,7 @@ export default function StorefrontBook() {
                   size="lg"
                   className="w-full h-13 text-base font-bold rounded-xl"
                   onClick={handleFinalSubmit}
-                  disabled={isSubmitting || !agreeChecked || !sigHasContent}
+                  disabled={isSubmitting || !agreeChecked || !sigHasContent || listingRules.some(r => !ruleInitials[r.id]?.trim())}
                 >
                   {isSubmitting ? "Submitting…" : "Sign & Continue to ID Verification"}
                   <ScanFace className="w-4 h-4 ml-2" />

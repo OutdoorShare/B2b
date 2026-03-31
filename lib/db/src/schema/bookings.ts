@@ -39,6 +39,8 @@ export const bookingsTable = pgTable("bookings", {
   // Security deposit authorized hold
   depositHoldIntentId: text("deposit_hold_intent_id"),
   depositHoldStatus: text("deposit_hold_status", { enum: ["authorized", "captured", "released"] }),
+  // Per-rule initials: JSON array of {ruleId, title, initials, initialedAt}
+  ruleInitials: text("rule_initials"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
