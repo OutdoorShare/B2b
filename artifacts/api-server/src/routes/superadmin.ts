@@ -1,7 +1,7 @@
 import { Router, type IRouter, type Request, type Response, type NextFunction } from "express";
 import { db } from "@workspace/db";
 import { tenantsTable, listingsTable, bookingsTable, superadminUsersTable, businessProfileTable, platformSettingsTable, categoriesTable } from "@workspace/db/schema";
-import { eq, sql, desc } from "drizzle-orm";
+import { eq, sql, desc, and, ne } from "drizzle-orm";
 import { scrypt, randomBytes, timingSafeEqual } from "crypto";
 import { promisify } from "util";
 import { sendWelcomeEmail, sendAccountUpdatedEmail } from "../services/gmail";
@@ -161,6 +161,12 @@ router.post("/superadmin/tenants", requireSuperAdmin, async (req, res) => {
       res.status(409).json({ error: "A tenant with this slug already exists" });
       return;
     }
+    const nameExists = await db.select().from(tenantsTable)
+      .where(sql`lower(${tenantsTable.name}) = lower(${name})`);
+    if (nameExists.length > 0) {
+      res.status(409).json({ error: "A company with this name already exists" });
+      return;
+    }
     const adminPasswordHash = await hashPassword(password);
     const [tenant] = await db.insert(tenantsTable).values({
       name, slug, email, adminPasswordHash,
@@ -194,8 +200,24 @@ router.put("/superadmin/tenants/:id", requireSuperAdmin, async (req, res) => {
     const updates: Partial<typeof tenantsTable.$inferInsert> & { updatedAt?: Date } = {
       updatedAt: new Date(),
     };
-    if (name !== undefined) updates.name = name;
-    if (slug !== undefined) updates.slug = slug;
+    if (name !== undefined) {
+      const nameConflict = await db.select().from(tenantsTable)
+        .where(and(sql`lower(${tenantsTable.name}) = lower(${name})`, ne(tenantsTable.id, id)));
+      if (nameConflict.length > 0) {
+        res.status(409).json({ error: "A company with this name already exists" });
+        return;
+      }
+      updates.name = name;
+    }
+    if (slug !== undefined) {
+      const slugConflict = await db.select().from(tenantsTable)
+        .where(and(eq(tenantsTable.slug, slug), ne(tenantsTable.id, id)));
+      if (slugConflict.length > 0) {
+        res.status(409).json({ error: "A tenant with this slug already exists" });
+        return;
+      }
+      updates.slug = slug;
+    }
     if (email !== undefined) updates.email = email;
     if (plan !== undefined) updates.plan = plan;
     if (status !== undefined) updates.status = status;
