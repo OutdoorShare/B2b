@@ -170,7 +170,7 @@ export default function AdminSettings() {
         <p className="text-muted-foreground mt-1">Manage your business profile and preferences</p>
       </div>
 
-      <Tabs defaultValue="branding" className="w-full">
+      <Tabs defaultValue={new URLSearchParams(window.location.search).get("tab") ?? "branding"} className="w-full">
         <TabsList className="grid w-full grid-cols-5">
           <TabsTrigger value="general">General</TabsTrigger>
           <TabsTrigger value="branding">Branding</TabsTrigger>

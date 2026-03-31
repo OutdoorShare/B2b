@@ -110,6 +110,19 @@ router.post("/stripe/connect/dashboard", requireAdminAuth, async (req, res) => {
   }
 });
 
+// ── Connect: public readiness check (no auth required — called from booking page) ──
+router.get("/stripe/connect/check/:slug", async (req, res) => {
+  try {
+    const { slug } = req.params;
+    const [tenant] = await db.select().from(tenantsTable).where(eq(tenantsTable.slug, slug));
+    if (!tenant) { res.status(404).json({ ready: false, reason: "tenant_not_found" }); return; }
+    const ready = !!(tenant.stripeAccountId && tenant.stripeChargesEnabled);
+    res.json({ ready, reason: ready ? "ok" : "connect_not_configured" });
+  } catch (e: any) {
+    res.status(500).json({ ready: false, reason: "error" });
+  }
+});
+
 // ── Payment Intent: create for a booking ─────────────────────────────────────
 // Called from booking page before submitting, returns clientSecret to frontend
 router.post("/stripe/payment-intent", async (req, res) => {
@@ -123,16 +136,17 @@ router.post("/stripe/payment-intent", async (req, res) => {
     const [tenant] = await db.select().from(tenantsTable).where(eq(tenantsTable.slug, tenantSlug));
     if (!tenant) { res.status(404).json({ error: "Tenant not found" }); return; }
 
-    const transferData = tenant.stripeAccountId && tenant.stripeChargesEnabled
-      ? {
-          destination: tenant.stripeAccountId,
-          amount: Math.round(amountCents * (1 - PLATFORM_FEE_PERCENT)),
-        }
-      : undefined;
+    // Require Stripe Connect to be fully set up before accepting payments
+    if (!tenant.stripeAccountId || !tenant.stripeChargesEnabled) {
+      res.status(402).json({
+        error: "payments_not_configured",
+        message: "This business has not yet set up their payment account. Please contact them directly.",
+      });
+      return;
+    }
 
-    const platformFeeAmount = transferData
-      ? Math.round(amountCents * PLATFORM_FEE_PERCENT)
-      : 0;
+    const platformFeeAmount = Math.round(amountCents * PLATFORM_FEE_PERCENT);
+    const transferAmount = amountCents - platformFeeAmount;
 
     const intent = await stripe.paymentIntents.create({
       amount: amountCents,
@@ -144,7 +158,11 @@ router.post("/stripe/payment-intent", async (req, res) => {
         customer_name: customerName ?? "",
         ...(bookingMeta ?? {}),
       },
-      ...(transferData ? { transfer_data: transferData, application_fee_amount: platformFeeAmount } : {}),
+      transfer_data: {
+        destination: tenant.stripeAccountId,
+        amount: transferAmount,
+      },
+      application_fee_amount: platformFeeAmount,
     });
 
     res.json({

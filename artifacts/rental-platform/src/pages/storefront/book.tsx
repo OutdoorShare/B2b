@@ -179,6 +179,9 @@ export default function StorefrontBook() {
   const isDrawingRef = useRef(false);
   const [sigHasContent, setSigHasContent] = useState(false);
 
+  // Payment setup state — set to true when the tenant hasn't connected Stripe
+  const [paymentsNotReady, setPaymentsNotReady] = useState(false);
+
   // Step 4: Stripe Identity verification
   const [identityClientSecret, setIdentityClientSecret] = useState<string | null>(null);
   const [identitySessionId, setIdentitySessionId] = useState<string | null>(null);
@@ -315,6 +318,11 @@ export default function StorefrontBook() {
           bookingMeta: { listing_id: String(listingId) },
         }),
       });
+      if (res.status === 402) {
+        // Tenant hasn't set up Stripe Connect — block payment step
+        setPaymentsNotReady(true);
+        return;
+      }
       if (!res.ok) { toast({ title: "Unable to initialize payment", variant: "destructive" }); return; }
       const data = await res.json();
       setClientSecret(data.clientSecret);
@@ -838,7 +846,22 @@ export default function StorefrontBook() {
               <div className="space-y-6">
                 <h1 className="text-2xl font-bold">Payment</h1>
 
-                {!clientSecret ? (
+                {paymentsNotReady ? (
+                  <div className="rounded-2xl border border-amber-200 bg-amber-50 p-8 flex flex-col items-center gap-4 text-center">
+                    <div className="w-14 h-14 rounded-full bg-amber-100 flex items-center justify-center">
+                      <AlertTriangle className="w-7 h-7 text-amber-600" />
+                    </div>
+                    <div className="space-y-1">
+                      <p className="text-lg font-bold text-amber-900">Payments not set up</p>
+                      <p className="text-sm text-amber-800 max-w-sm">
+                        This business hasn't connected their payment account yet. Please contact them directly to complete your booking.
+                      </p>
+                    </div>
+                    <Button variant="outline" size="sm" onClick={() => setLocation(sfBase || "/")}>
+                      Back to listings
+                    </Button>
+                  </div>
+                ) : !clientSecret ? (
                   <div className="flex items-center justify-center py-16 gap-3 text-muted-foreground">
                     <Loader2 className="w-5 h-5 animate-spin" />
                     <span>Preparing payment…</span>

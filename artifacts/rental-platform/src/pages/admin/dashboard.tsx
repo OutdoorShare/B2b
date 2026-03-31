@@ -1,3 +1,4 @@
+import { useState, useEffect } from "react";
 import { 
   useGetAnalyticsSummary, 
   useGetTopListings,
@@ -7,10 +8,24 @@ import {
   getGetBookingsQueryKey
 } from "@workspace/api-client-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { DollarSign, CalendarDays, Package, TrendingUp, Tent } from "lucide-react";
+import { DollarSign, CalendarDays, Package, TrendingUp, Tent, AlertTriangle, ArrowRight } from "lucide-react";
 import { Link } from "wouter";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { format } from "date-fns";
+
+const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
+
+function adminHeaders(): HeadersInit {
+  try {
+    const raw = localStorage.getItem("admin_session");
+    if (raw) {
+      const s = JSON.parse(raw);
+      if (s?.token) return { "x-admin-token": s.token };
+    }
+  } catch { /* ignore */ }
+  return {};
+}
 
 export default function AdminDashboard() {
   const { data: summary, isLoading: isLoadingSummary } = useGetAnalyticsSummary({
@@ -25,6 +40,18 @@ export default function AdminDashboard() {
     query: { queryKey: getGetBookingsQueryKey({ status: "pending" }) }
   });
 
+  const [connectStatus, setConnectStatus] = useState<{ connected: boolean; chargesEnabled: boolean } | null>(null);
+
+  useEffect(() => {
+    fetch(`${BASE}/api/stripe/connect/status`, { headers: adminHeaders() })
+      .then(r => r.ok ? r.json() : { connected: false })
+      .then(d => setConnectStatus(d))
+      .catch(() => setConnectStatus({ connected: false, chargesEnabled: false }));
+  }, []);
+
+  const paymentsReady = connectStatus?.connected && connectStatus?.chargesEnabled;
+  const showConnectBanner = connectStatus !== null && !paymentsReady;
+
   if (isLoadingSummary || isLoadingTop || isLoadingBookings) {
     return <div className="p-8">Loading dashboard...</div>;
   }
@@ -37,6 +64,28 @@ export default function AdminDashboard() {
           <p className="text-muted-foreground mt-1">Overview of your rental business</p>
         </div>
       </div>
+
+      {/* ── Stripe Connect required banner ── */}
+      {showConnectBanner && (
+        <div className="rounded-xl border border-amber-300 bg-amber-50 px-5 py-4 flex flex-col sm:flex-row sm:items-center gap-4">
+          <div className="flex items-start gap-3 flex-1">
+            <div className="mt-0.5 shrink-0 w-8 h-8 rounded-full bg-amber-100 flex items-center justify-center">
+              <AlertTriangle className="w-4 h-4 text-amber-600" />
+            </div>
+            <div>
+              <p className="font-semibold text-amber-900">Action required: Set up payments to accept bookings</p>
+              <p className="text-sm text-amber-800 mt-0.5">
+                Customers cannot complete bookings until you connect your Stripe account. Payments are sent directly to you after each confirmed rental.
+              </p>
+            </div>
+          </div>
+          <Link href="/admin/settings?tab=payments">
+            <Button size="sm" className="shrink-0 bg-amber-600 hover:bg-amber-700 text-white gap-1.5 whitespace-nowrap">
+              Connect Stripe <ArrowRight className="w-3.5 h-3.5" />
+            </Button>
+          </Link>
+        </div>
+      )}
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         <Card>
