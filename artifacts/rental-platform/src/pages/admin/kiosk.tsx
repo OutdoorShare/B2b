@@ -283,7 +283,7 @@ export default function AdminKiosk() {
                   className="w-full h-14 text-lg font-bold rounded-xl"
                   disabled={!tenantSlug}
                   onClick={() => {
-                    if (tenantSlug) setLocation(`/${tenantSlug}/book?listingId=${selected.id}`);
+                    if (tenantSlug) setLocation(`/${tenantSlug}/book?listingId=${selected.id}&kiosk=1`);
                   }}
                 >
                   <Monitor className="w-5 h-5 mr-2" />

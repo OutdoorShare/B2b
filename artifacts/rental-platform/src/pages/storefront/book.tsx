@@ -40,6 +40,24 @@ for (let h = 6; h <= 22; h++) {
   }
 }
 
+/** Returns the current time rounded UP to the nearest 30-min slot, clamped to TIME_OPTIONS range. */
+function currentTimeSlot(): string {
+  const now = new Date();
+  let h = now.getHours();
+  let m = now.getMinutes();
+  // Round up to next 30-minute boundary
+  if (m === 0) { /* exactly on a slot — keep as-is */ }
+  else if (m <= 30) { m = 30; }
+  else { m = 0; h += 1; }
+  // Clamp to operating range (6:00 AM – 10:00 PM)
+  if (h < 6) { h = 6; m = 0; }
+  if (h > 22 || (h === 22 && m > 0)) { h = 22; m = 0; }
+  const hour12 = h % 12 === 0 ? 12 : h % 12;
+  const ampm = h < 12 ? "AM" : "PM";
+  const minStr = m === 0 ? "00" : "30";
+  return `${hour12}:${minStr} ${ampm}`;
+}
+
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
 type Step = "dates" | "payment" | "agreement" | "verification" | "confirmation";
@@ -158,6 +176,7 @@ export default function StorefrontBook() {
   const listingId = listingIdStr ? parseInt(listingIdStr) : 0;
   const urlStart = searchParams.get("startDate");
   const urlEnd = searchParams.get("endDate");
+  const isKiosk = searchParams.get("kiosk") === "1";
 
   const { data: listing, isLoading } = useGetListing(listingId, {
     query: { enabled: !!listingId, queryKey: getGetListingQueryKey(listingId) }
@@ -177,7 +196,7 @@ export default function StorefrontBook() {
     }
     return { from: new Date(), to: addDays(new Date(), 3) };
   });
-  const [pickupTime, setPickupTime] = useState<string>("10:00 AM");
+  const [pickupTime, setPickupTime] = useState<string>(() => isKiosk ? currentTimeSlot() : "10:00 AM");
   const [dropoffTime, setDropoffTime] = useState<string>("10:00 AM");
   const [notes, setNotes] = useState("");
   const [name, setName] = useState(session?.name ?? "");
