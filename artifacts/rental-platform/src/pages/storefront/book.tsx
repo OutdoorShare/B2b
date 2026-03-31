@@ -711,6 +711,7 @@ export default function StorefrontBook() {
                     selected={dateRange}
                     onSelect={setDateRange}
                     disabled={{ before: new Date() }}
+                    defaultMonth={dateRange?.from}
                     numberOfMonths={1}
                     className="[--cell-size:2.25rem] sm:[--cell-size:3rem] w-full"
                     classNames={{ root: "w-full" }}
