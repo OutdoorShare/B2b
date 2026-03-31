@@ -344,4 +344,26 @@ router.get("/analytics/category-breakdown", async (req, res) => {
   }
 });
 
+// ── GET /analytics/booking-source ────────────────────────────────────────────
+router.get("/analytics/booking-source", async (req, res) => {
+  try {
+    const tenantFilter = req.tenantId ? eq(bookingsTable.tenantId, req.tenantId) : undefined;
+    const stats = await db
+      .select({ source: bookingsTable.source, count: count() })
+      .from(bookingsTable)
+      .where(tenantFilter)
+      .groupBy(bookingsTable.source);
+
+    const total = stats.reduce((s, r) => s + Number(r.count), 0);
+    res.json(stats.map(s => ({
+      source: s.source,
+      count: Number(s.count),
+      percentage: total > 0 ? Math.round((Number(s.count) / total) * 100) : 0,
+    })));
+  } catch (err) {
+    req.log.error(err);
+    res.status(500).json({ error: "Failed to fetch booking source breakdown" });
+  }
+});
+
 export default router;

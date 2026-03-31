@@ -13,7 +13,7 @@ import {
   PieChart, Pie, Cell, Legend,
   CartesianGrid
 } from "recharts";
-import { MapPin, Tag, TrendingUp, Users } from "lucide-react";
+import { MapPin, Tag, TrendingUp, Users, Smartphone, Globe, Phone, UserCheck } from "lucide-react";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
@@ -72,6 +72,26 @@ export default function AdminAnalytics() {
       .then(d => { setCategoryData(Array.isArray(d) ? d : []); setCategoryLoading(false); })
       .catch(() => setCategoryLoading(false));
   }, []);
+
+  // ── Booking Source (custom endpoint) ──────────────────────────────────────
+  type SourceStat = { source: string; count: number; percentage: number };
+  const [sourceData, setSourceData] = useState<SourceStat[]>([]);
+  const [sourceLoading, setSourceLoading] = useState(true);
+
+  useEffect(() => {
+    setSourceLoading(true);
+    fetch(`${BASE}/api/analytics/booking-source`)
+      .then(r => r.json())
+      .then(d => { setSourceData(Array.isArray(d) ? d : []); setSourceLoading(false); })
+      .catch(() => setSourceLoading(false));
+  }, []);
+
+  const SOURCE_META: Record<string, { label: string; color: string; icon: React.ReactNode }> = {
+    online:  { label: "Online",   color: "#3b82f6", icon: <Globe  className="w-3.5 h-3.5" /> },
+    kiosk:   { label: "Kiosk",    color: "#8b5cf6", icon: <Smartphone className="w-3.5 h-3.5" /> },
+    walkin:  { label: "Walk-in",  color: "#f59e0b", icon: <UserCheck className="w-3.5 h-3.5" /> },
+    phone:   { label: "Phone",    color: "#64748b", icon: <Phone  className="w-3.5 h-3.5" /> },
+  };
 
   const activeLocationData = (locationMode === "state" ? locationData.byState : locationData.byCity).slice(0, 10);
   const hasLocationData = activeLocationData.length > 0;
@@ -292,7 +312,82 @@ export default function AdminAnalytics() {
         </Card>
       </div>
 
-      {/* Row 3: Category Breakdown */}
+      {/* Row 3: Booking Source + Category Breakdown */}
+      {/* Booking Source */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Globe className="w-5 h-5 text-primary" />
+            Bookings by Source
+          </CardTitle>
+          <CardDescription>Where your bookings are coming from — online, kiosk, or in-person.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          {sourceLoading ? (
+            <div className="h-[200px] flex items-center justify-center text-muted-foreground">Loading chart...</div>
+          ) : sourceData.length === 0 ? (
+            <div className="h-[200px] flex flex-col items-center justify-center text-muted-foreground gap-2">
+              <Globe className="w-10 h-10 opacity-20" />
+              <p>No booking data yet</p>
+            </div>
+          ) : (
+            <div className="flex flex-col sm:flex-row items-center gap-8">
+              {/* Donut */}
+              <div className="w-[200px] h-[200px] shrink-0">
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie
+                      data={sourceData.map(s => ({
+                        name: SOURCE_META[s.source]?.label ?? s.source,
+                        value: s.count,
+                      }))}
+                      cx="50%" cy="50%"
+                      innerRadius={55} outerRadius={80}
+                      paddingAngle={4}
+                      dataKey="value"
+                    >
+                      {sourceData.map((s, i) => (
+                        <Cell key={i} fill={SOURCE_META[s.source]?.color ?? PIE_COLORS[i % PIE_COLORS.length]} />
+                      ))}
+                    </Pie>
+                    <Tooltip formatter={(v: number, n: string) => [v, n]} />
+                  </PieChart>
+                </ResponsiveContainer>
+              </div>
+
+              {/* Legend list */}
+              <div className="flex-1 space-y-3 w-full">
+                {sourceData.sort((a, b) => b.count - a.count).map(s => {
+                  const meta = SOURCE_META[s.source] ?? { label: s.source, color: "#64748b", icon: null };
+                  return (
+                    <div key={s.source} className="flex items-center gap-3">
+                      <div className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: meta.color }} />
+                      <div className="flex items-center gap-1.5 text-sm min-w-0 flex-1">
+                        {meta.icon}
+                        <span className="font-medium">{meta.label}</span>
+                      </div>
+                      <div className="text-sm text-muted-foreground tabular-nums">
+                        {s.count} booking{s.count !== 1 ? "s" : ""}
+                      </div>
+                      <div className="text-sm font-semibold tabular-nums w-10 text-right">
+                        {s.percentage}%
+                      </div>
+                      <div className="w-24 h-2 bg-muted rounded-full overflow-hidden">
+                        <div
+                          className="h-full rounded-full transition-all"
+                          style={{ width: `${s.percentage}%`, backgroundColor: meta.color }}
+                        />
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Row 4: Category Breakdown */}
       <div className="grid gap-4 lg:grid-cols-2">
 
         {/* Category bar chart */}

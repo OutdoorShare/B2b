@@ -19,6 +19,23 @@ import { Link, useLocation } from "wouter";
 import { ArrowLeft, User, Phone, Mail, Calendar, Package, StickyNote, ShieldAlert, Pencil, FileSignature, FileText, ChevronDown, ChevronUp, Download, Camera, CheckCircle2, Loader2, ExternalLink, ImageIcon, Clock, ShieldCheck, ShieldX, Shield, AlertCircle, Copy, Send, UserCheck, Lock, LockOpen, DollarSign } from "lucide-react";
 import { format, differenceInDays } from "date-fns";
 
+const SOURCE_CONFIG: Record<string, { label: string; className: string }> = {
+  online:  { label: "Online",  className: "bg-blue-100   text-blue-800   border-blue-200"   },
+  kiosk:   { label: "Kiosk",   className: "bg-purple-100 text-purple-800 border-purple-200" },
+  walkin:  { label: "Walk-in", className: "bg-amber-100  text-amber-800  border-amber-200"  },
+  phone:   { label: "Phone",   className: "bg-gray-100   text-gray-700   border-gray-200"   },
+};
+
+function SourceBadge({ source }: { source?: string | null }) {
+  if (!source) return null;
+  const cfg = SOURCE_CONFIG[source] ?? { label: source, className: "bg-muted text-muted-foreground border-border" };
+  return (
+    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold border ${cfg.className}`}>
+      {cfg.label}
+    </span>
+  );
+}
+
 export default function AdminBookingDetail() {
   const params = useParams<{ slug: string; id: string }>();
   const id = params?.id ? parseInt(params.id) : 0;
@@ -177,8 +194,9 @@ export default function AdminBookingDetail() {
         <div className="flex-1 flex items-center justify-between">
           <div>
             <h2 className="text-3xl font-bold tracking-tight">Booking #{booking.id}</h2>
-            <p className="text-muted-foreground mt-1">
-              Placed on {format(new Date(booking.createdAt), 'MMM d, yyyy h:mm a')} via {booking.source}
+            <p className="text-muted-foreground mt-1 flex items-center gap-2">
+              Placed on {format(new Date(booking.createdAt), 'MMM d, yyyy h:mm a')}
+              <SourceBadge source={booking.source} />
             </p>
           </div>
           {getStatusBadge(booking.status)}

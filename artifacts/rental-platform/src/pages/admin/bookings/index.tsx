@@ -31,6 +31,23 @@ import {
 type ViewMode = "list" | "calendar";
 type TabKey = "recent" | "upcoming" | "cancelled" | "all";
 
+const SOURCE_CONFIG: Record<string, { label: string; className: string }> = {
+  online:  { label: "Online",   className: "bg-blue-100   text-blue-800   border-blue-200"   },
+  kiosk:   { label: "Kiosk",    className: "bg-purple-100 text-purple-800 border-purple-200" },
+  walkin:  { label: "Walk-in",  className: "bg-amber-100  text-amber-800  border-amber-200"  },
+  phone:   { label: "Phone",    className: "bg-gray-100   text-gray-700   border-gray-200"   },
+};
+
+function SourceBadge({ source }: { source?: string | null }) {
+  if (!source) return null;
+  const cfg = SOURCE_CONFIG[source] ?? { label: source, className: "bg-muted text-muted-foreground border-border" };
+  return (
+    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold border ${cfg.className}`}>
+      {cfg.label}
+    </span>
+  );
+}
+
 const STATUS_COLORS: Record<string, string> = {
   pending:   "bg-amber-100  text-amber-900  border-amber-300",
   confirmed: "bg-blue-100   text-blue-900   border-blue-300",
@@ -255,6 +272,7 @@ export default function AdminBookings() {
                       <TableHead>Customer</TableHead>
                       <TableHead>Listing</TableHead>
                       <TableHead>Dates</TableHead>
+                      <TableHead>Source</TableHead>
                       <TableHead>Status</TableHead>
                       <TableHead>Total</TableHead>
                       <TableHead className="text-right">Actions</TableHead>
@@ -275,6 +293,7 @@ export default function AdminBookings() {
                             {format(new Date(booking.endDate), "MMM d, yyyy")}
                           </div>
                         </TableCell>
+                        <TableCell><SourceBadge source={(booking as any).source} /></TableCell>
                         <TableCell>{getStatusBadge(booking.status)}</TableCell>
                         <TableCell className="font-medium">${booking.totalPrice.toFixed(2)}</TableCell>
                         <TableCell className="text-right">
