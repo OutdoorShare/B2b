@@ -333,8 +333,8 @@ export default function StorefrontBook() {
 
   // ── 2 screens ──
   const [step, setStep] = useState<Step>("book");
-  // Sub-state within "complete" screen
-  type CompletePhase = "agreement" | "verification" | "confirmed";
+  // Sub-state within "complete" screen (kiosk adds "photos" before "confirmed")
+  type CompletePhase = "agreement" | "verification" | "photos" | "confirmed";
   const [completePhase, setCompletePhase] = useState<CompletePhase>("agreement");
 
   const [session, setSession] = useState<CustomerSession | null>(loadSession);
@@ -420,6 +420,13 @@ export default function StorefrontBook() {
   // Add-ons
   const [availableAddons, setAvailableAddons] = useState<Addon[]>([]);
   const [selectedAddonIds, setSelectedAddonIds] = useState<Set<number>>(new Set());
+
+  // Kiosk pickup photos (only used in kiosk mode)
+  const beforePhotoInputRef = useRef<HTMLInputElement>(null);
+  const [beforePhotos, setBeforePhotos] = useState<File[]>([]);
+  const [beforePreviews, setBeforePreviews] = useState<string[]>([]);
+  const [savedPhotos, setSavedPhotos] = useState<string[]>([]);
+  const [uploadingPhotos, setUploadingPhotos] = useState(false);
 
   // Fetch agreement + fields
   useEffect(() => {
@@ -986,7 +993,7 @@ export default function StorefrontBook() {
         if (statusData.verified) {
           setIdentityStatus("verified");
           sessionStorage.removeItem(`identity_session_${listingId}`);
-          setTimeout(() => { setCompletePhase("confirmed"); window.scrollTo(0, 0); }, 1200);
+          setTimeout(() => { setCompletePhase(isKiosk ? "photos" : "confirmed"); window.scrollTo(0, 0); }, 1200);
         } else {
           setIdentityStatus("failed");
           setIdentityError("Identity could not be verified. Please try again or contact support.");
@@ -994,7 +1001,7 @@ export default function StorefrontBook() {
       } else {
         setIdentityStatus("verified");
         sessionStorage.removeItem(`identity_session_${listingId}`);
-        setTimeout(() => { setCompletePhase("confirmed"); window.scrollTo(0, 0); }, 1200);
+        setTimeout(() => { setCompletePhase(isKiosk ? "photos" : "confirmed"); window.scrollTo(0, 0); }, 1200);
       }
     } catch {
       setIdentityStatus("failed");
@@ -1041,7 +1048,7 @@ export default function StorefrontBook() {
         if (statusData.verified) {
           setIdentityStatus("verified");
           sessionStorage.removeItem(`identity_session_${listingId}`);
-          setTimeout(() => { setCompletePhase("confirmed"); window.scrollTo(0, 0); }, 1200);
+          setTimeout(() => { setCompletePhase(isKiosk ? "photos" : "confirmed"); window.scrollTo(0, 0); }, 1200);
         } else {
           setIdentityStatus("failed");
           setIdentityError("Identity could not be verified. Please try again or contact support.");
@@ -1049,7 +1056,7 @@ export default function StorefrontBook() {
       } else {
         setIdentityStatus("verified");
         sessionStorage.removeItem(`identity_session_${listingId}`);
-        setTimeout(() => { setCompletePhase("confirmed"); window.scrollTo(0, 0); }, 1200);
+        setTimeout(() => { setCompletePhase(isKiosk ? "photos" : "confirmed"); window.scrollTo(0, 0); }, 1200);
       }
     } catch {
       setIdentityStatus("failed");
@@ -1060,8 +1067,15 @@ export default function StorefrontBook() {
   };
 
   // ── Progress indicator ──
-  const progressStep = step === "book" ? 0 : completePhase === "agreement" ? 1 : completePhase === "verification" ? 2 : 3;
-  const progressLabels = ["Details & Payment", "Agreement", "Verify ID", "Confirmed"];
+  const progressLabels = isKiosk
+    ? ["Details & Payment", "Agreement", "Verify ID", "Photos", "Confirmed"]
+    : ["Details & Payment", "Agreement", "Verify ID", "Confirmed"];
+  const progressStep = step === "book" ? 0
+    : completePhase === "agreement" ? 1
+    : completePhase === "verification" ? 2
+    : isKiosk && completePhase === "photos" ? 3
+    : isKiosk ? 4
+    : 3;
 
   return (
     <div className="min-h-screen bg-muted/20">
@@ -1089,8 +1103,8 @@ export default function StorefrontBook() {
       </div>
 
       <div className="max-w-5xl mx-auto px-4 py-8">
-        {/* Back button */}
-        {completePhase !== "verification" && completePhase !== "confirmed" && (
+        {/* Back button — hide during verification, photos, and confirmed */}
+        {completePhase !== "verification" && completePhase !== "photos" && completePhase !== "confirmed" && (
           <Button variant="ghost" className="mb-6 pl-0 hover:bg-transparent text-muted-foreground" onClick={() => {
             if (step === "book") { window.history.back(); }
             else { setStep("book"); window.scrollTo({ top: 0, behavior: "smooth" }); }
@@ -1985,6 +1999,131 @@ export default function StorefrontBook() {
                       </>
                     )}
                   </>
+                )}
+
+                {/* ── PHOTOS PHASE (kiosk only) ── */}
+                {completePhase === "photos" && (
+                  <div className="space-y-6">
+                    <div>
+                      <h1 className="text-2xl font-bold">Equipment Pickup Photos</h1>
+                      <p className="text-muted-foreground text-sm mt-1">Take photos of the equipment right now before leaving. These protect both you and the owner in case of any later damage claims.</p>
+                    </div>
+
+                    <div className="bg-blue-50 border border-blue-200 rounded-xl px-4 py-3 flex items-start gap-3 text-sm text-blue-800">
+                      <Upload className="w-4 h-4 text-blue-600 shrink-0 mt-0.5" />
+                      <div>
+                        <p className="font-semibold">Photograph all sides and any existing damage</p>
+                        <p className="text-blue-700 text-xs mt-0.5">Minimum 2 photos recommended. The more the better.</p>
+                      </div>
+                    </div>
+
+                    {/* Photo grid */}
+                    <div className="grid grid-cols-3 gap-3">
+                      {beforePreviews.map((src, i) => (
+                        <div key={i} className="relative aspect-square rounded-xl overflow-hidden border-2 border-primary/20 bg-muted group">
+                          <img src={src} alt={`Photo ${i + 1}`} className="w-full h-full object-cover" />
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const newFiles = beforePhotos.filter((_, j) => j !== i);
+                              const newPreviews = beforePreviews.filter((_, j) => j !== i);
+                              URL.revokeObjectURL(beforePreviews[i]);
+                              setBeforePhotos(newFiles);
+                              setBeforePreviews(newPreviews);
+                            }}
+                            className="absolute top-1.5 right-1.5 bg-black/60 text-white rounded-full p-0.5 opacity-0 group-hover:opacity-100 transition-opacity"
+                          >
+                            <X className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      ))}
+                      {savedPhotos.map((url, i) => (
+                        <div key={`saved-${i}`} className="relative aspect-square rounded-xl overflow-hidden border-2 border-green-300 bg-muted">
+                          <img src={url} alt={`Saved ${i + 1}`} className="w-full h-full object-cover" />
+                          <div className="absolute bottom-1.5 right-1.5 bg-green-600 text-white rounded-full p-0.5">
+                            <Check className="w-3 h-3" />
+                          </div>
+                        </div>
+                      ))}
+                      <button
+                        type="button"
+                        onClick={() => beforePhotoInputRef.current?.click()}
+                        className="aspect-square rounded-xl border-2 border-dashed border-muted-foreground/30 hover:border-primary/50 bg-muted/40 hover:bg-muted/60 flex flex-col items-center justify-center gap-1.5 transition-all text-muted-foreground hover:text-primary"
+                      >
+                        <ImagePlus className="w-6 h-6" />
+                        <span className="text-xs font-medium">Add photo</span>
+                      </button>
+                    </div>
+
+                    <input
+                      ref={beforePhotoInputRef}
+                      type="file"
+                      accept="image/*"
+                      multiple
+                      capture="environment"
+                      className="hidden"
+                      onChange={e => {
+                        const files = Array.from(e.target.files ?? []);
+                        if (!files.length) return;
+                        setBeforePhotos(prev => [...prev, ...files]);
+                        setBeforePreviews(prev => [...prev, ...files.map(f => URL.createObjectURL(f))]);
+                        e.target.value = "";
+                      }}
+                    />
+
+                    <div className="space-y-3">
+                      {(beforePhotos.length > 0 || savedPhotos.length === 0) && (
+                        <Button
+                          size="lg"
+                          className="w-full h-13 text-base font-bold rounded-xl"
+                          disabled={uploadingPhotos || beforePhotos.length === 0}
+                          onClick={async () => {
+                            if (!confirmedBooking || beforePhotos.length === 0) return;
+                            setUploadingPhotos(true);
+                            try {
+                              const fd = new FormData();
+                              beforePhotos.forEach(f => fd.append("photos", f));
+                              const r = await fetch(`${BASE}/api/bookings/${confirmedBooking.id}/before-photos`, { method: "POST", body: fd });
+                              const data = await r.json();
+                              if (r.ok) {
+                                setSavedPhotos(data.photos ?? []);
+                                setBeforePhotos([]);
+                                beforePreviews.forEach(u => URL.revokeObjectURL(u));
+                                setBeforePreviews([]);
+                                toast({ title: `${data.photos?.length ?? 0} photo${(data.photos?.length ?? 0) !== 1 ? "s" : ""} saved!` });
+                              }
+                            } catch {
+                              toast({ title: "Upload failed — please try again", variant: "destructive" });
+                            } finally {
+                              setUploadingPhotos(false);
+                            }
+                          }}
+                        >
+                          {uploadingPhotos
+                            ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Uploading…</>
+                            : <><Upload className="w-4 h-4 mr-2" />Upload {beforePhotos.length} Photo{beforePhotos.length !== 1 ? "s" : ""}</>}
+                        </Button>
+                      )}
+
+                      <Button
+                        size="lg"
+                        variant={savedPhotos.length > 0 ? "default" : "outline"}
+                        className="w-full h-13 text-base font-bold rounded-xl"
+                        onClick={() => { setCompletePhase("confirmed"); window.scrollTo(0, 0); }}
+                      >
+                        {savedPhotos.length > 0 ? (
+                          <><CheckCircle2 className="w-4 h-4 mr-2" />Continue to Confirmation</>
+                        ) : (
+                          "Skip for now — continue without photos"
+                        )}
+                        <ArrowRight className="w-4 h-4 ml-2" />
+                      </Button>
+                    </div>
+
+                    <p className="text-xs text-center text-muted-foreground">
+                      Powered by OutdoorShare — your photos are securely stored and linked to Booking #{confirmedBooking?.id}.
+                    </p>
+                  </div>
                 )}
 
                 {/* ── CONFIRMED PHASE ── */}
