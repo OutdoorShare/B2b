@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from "react";
+import { useParams } from "wouter";
 import {
   useGetBusinessProfile,
   useUpdateBusinessProfile,
@@ -24,6 +25,7 @@ export default function AdminSettings() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [copied, setCopied] = useState(false);
+  const { slug: urlSlug } = useParams<{ slug: string }>();
 
   const { data: profile, isLoading } = useGetBusinessProfile({
     query: { queryKey: getGetBusinessProfileQueryKey() }
@@ -83,7 +85,8 @@ export default function AdminSettings() {
   };
 
   const getStorefrontUrl = () => {
-    const slug = (profile as any)?.siteSlug ?? "";
+    // Use URL param slug first (always present in admin routes), fall back to profile
+    const slug = urlSlug ?? (profile as any)?.siteSlug ?? "";
     return slug ? `${window.location.origin}/${slug}` : window.location.origin;
   };
 
@@ -199,7 +202,7 @@ export default function AdminSettings() {
           <TabsContent value="general" className="space-y-6 pt-6">
             {/* Storefront URL banner */}
             {(() => {
-              const slug = (profile as any)?.siteSlug ?? "";
+              const slug = urlSlug ?? (profile as any)?.siteSlug ?? "";
               const liveSlug = slugifyPreview(formData.name || "");
               const currentUrl = slug ? `${window.location.origin}/${slug}` : "";
               const previewUrl = liveSlug ? `${window.location.origin}/${liveSlug}` : "";

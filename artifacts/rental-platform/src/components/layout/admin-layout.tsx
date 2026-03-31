@@ -92,11 +92,8 @@ export function AdminLayout({ children }: { children: React.ReactNode }) {
   const slug = getAdminSlug();
   const adminBase = `/${slug}/admin`;
 
-  const { data: profile } = useGetBusinessProfile({
-    query: { queryKey: ["/api/business", "admin-layout"] }
-  });
-  const siteSlug = (profile as any)?.siteSlug as string | null | undefined;
-  const storefrontHref = siteSlug ? `/${siteSlug}` : "/";
+  // Use URL slug (always present in admin routes /:slug/admin/...) as the reliable source
+  const storefrontHref = slug ? `/${slug}` : "/";
 
   const activeItem = NAV_ITEMS.find(item => {
     const href = `${adminBase}${item.path}`;
