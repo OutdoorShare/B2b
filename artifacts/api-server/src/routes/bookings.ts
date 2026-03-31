@@ -7,7 +7,7 @@ import { db } from "@workspace/db";
 import { bookingsTable, listingsTable, businessProfileTable, tenantsTable } from "@workspace/db/schema";
 import { eq, and, gte, lte } from "drizzle-orm";
 import { generateAgreementPdf } from "../lib/generate-agreement-pdf";
-import { sendPickupLinkEmail } from "../services/gmail";
+import { sendPickupLinkEmail, sendKioskAccountSetupEmail } from "../services/gmail";
 
 const UPLOADS_DIR_BOOKINGS = path.resolve(process.cwd(), "uploads");
 
@@ -144,6 +144,40 @@ router.post("/bookings", async (req, res) => {
       } catch (pdfErr) {
         req.log.error(pdfErr, "Failed to generate agreement PDF");
       }
+    }
+
+    // Send kiosk account-setup email in the background
+    if (created.source === "kiosk" && created.customerEmail) {
+      (async () => {
+        try {
+          let companyName = "Rental Company";
+          let tenantSlug = "";
+          if (req.tenantId) {
+            const [biz] = await db
+              .select({ businessName: businessProfileTable.businessName })
+              .from(businessProfileTable)
+              .where(eq(businessProfileTable.tenantId, req.tenantId));
+            if (biz?.businessName) companyName = biz.businessName;
+            const [t] = await db
+              .select({ slug: tenantsTable.slug })
+              .from(tenantsTable)
+              .where(eq(tenantsTable.id, req.tenantId));
+            if (t?.slug) tenantSlug = t.slug;
+          }
+          await sendKioskAccountSetupEmail({
+            customerName: created.customerName,
+            customerEmail: created.customerEmail,
+            bookingId: created.id,
+            tenantSlug,
+            companyName,
+            startDate: created.startDate,
+            endDate: created.endDate,
+            listingTitle: listing.title,
+          });
+        } catch (emailErr) {
+          req.log.warn(emailErr, "Failed to send kiosk account-setup email");
+        }
+      })();
     }
 
     res.status(201).json(formatBooking(created, listing.title));

@@ -18,7 +18,7 @@ import {
   ArrowLeft, ArrowRight, CheckCircle2, Calendar as CalendarIcon,
   Lock, User, CreditCard, FileText, Eye, EyeOff, ShieldCheck,
   Zap, AlertTriangle, Umbrella, Star, Loader2, BadgeCheck,
-  ScanFace, RefreshCw, XCircle, Clock, Tag
+  ScanFace, RefreshCw, XCircle, Clock, Tag, Monitor
 } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { differenceInDays, format, addDays } from "date-fns";
@@ -536,6 +536,14 @@ export default function StorefrontBook() {
     if (!name || !email || !phone) {
       toast({ title: "Please fill in your name, email, and phone", variant: "destructive" }); return;
     }
+
+    // Kiosk mode: no login or account creation — go straight to payment
+    if (isKiosk) {
+      setStep("payment");
+      setShowStripeForm(false);
+      return;
+    }
+
     // Already logged in — go straight to payment
     if (session) {
       setStep("payment");
@@ -650,7 +658,7 @@ export default function StorefrontBook() {
           dropoffTime,
           quantity: 1,
           notes: notes || undefined,
-          source: "online",
+          source: isKiosk ? "kiosk" : "online",
           addons: selectedAddons,
           agreementSignerName: name.trim(),
           agreementText: agreementText ? resolveAgreementText(agreementText) : undefined,
@@ -673,10 +681,15 @@ export default function StorefrontBook() {
         }).catch(() => {});
       }
 
-      // Create Stripe Identity session for the verification step
-      setStep("verification");
-      fetchIdentitySession(session?.id ?? undefined);
-      window.scrollTo(0, 0);
+      // Kiosk: skip Stripe Identity — go straight to confirmation
+      if (isKiosk) {
+        setStep("confirmation");
+        window.scrollTo(0, 0);
+      } else {
+        setStep("verification");
+        fetchIdentitySession(session?.id ?? undefined);
+        window.scrollTo(0, 0);
+      }
     } catch {
       toast({ title: "Booking failed", description: "Please try again.", variant: "destructive" });
     } finally { setIsSubmitting(false); }
@@ -962,7 +975,14 @@ export default function StorefrontBook() {
                 </div>
 
                 {/* ── Login / Account status banner ── */}
-                {!session ? (
+                {isKiosk ? (
+                  <div className="flex items-start gap-3 bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 rounded-xl px-4 py-3">
+                    <Monitor className="w-4 h-4 text-blue-600 dark:text-blue-400 shrink-0 mt-0.5" />
+                    <p className="text-sm text-blue-800 dark:text-blue-200 leading-relaxed">
+                      <span className="font-semibold">Kiosk booking</span> — No account needed. After booking, we'll email you a link to create your account and view your rental details.
+                    </p>
+                  </div>
+                ) : !session ? (
                   showLoginPanel ? (
                     /* Expanded login form */
                     <div className="bg-background border-2 border-primary/20 rounded-2xl p-5 space-y-4 shadow-sm">
@@ -1065,8 +1085,8 @@ export default function StorefrontBook() {
                   </div>
                 </div>
 
-                {/* New-customer account creation (only when not logged in) */}
-                {!session && !showLoginPanel && (
+                {/* New-customer account creation (only when not logged in and not kiosk) */}
+                {!isKiosk && !session && !showLoginPanel && (
                   <div className="bg-muted/40 rounded-2xl p-5 space-y-3 border">
                     <div className="flex items-center gap-2">
                       <Lock className="w-4 h-4 text-primary" />
@@ -1435,9 +1455,15 @@ export default function StorefrontBook() {
                   <div>
                     <h1 className="text-xl font-black tracking-tight text-green-900">Booking Requested!</h1>
                     {confirmedBooking && <p className="text-green-700 text-sm mt-0.5">Reference #{confirmedBooking.id} · {listing.title}</p>}
-                    <p className="text-green-700/80 text-sm mt-1">
-                      We'll review and email a confirmation to <strong>{email}</strong>. Bring a valid ID on {startFormatted}.
-                    </p>
+                    {isKiosk ? (
+                      <p className="text-green-700/80 text-sm mt-1">
+                        A confirmation has been sent to <strong>{email}</strong> with a link to create your account and view your booking anytime.
+                      </p>
+                    ) : (
+                      <p className="text-green-700/80 text-sm mt-1">
+                        We'll review and email a confirmation to <strong>{email}</strong>. Bring a valid ID on {startFormatted}.
+                      </p>
+                    )}
                   </div>
                 </div>
 

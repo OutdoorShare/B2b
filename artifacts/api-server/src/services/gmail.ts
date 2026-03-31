@@ -386,6 +386,59 @@ export async function sendClaimChargeEmail(opts: {
   });
 }
 
+// ── Kiosk account setup email ──────────────────────────────────────────────────
+export async function sendKioskAccountSetupEmail(opts: {
+  customerName: string;
+  customerEmail: string;
+  bookingId: number;
+  tenantSlug: string;
+  companyName: string;
+  startDate: string;
+  endDate: string;
+  listingTitle: string;
+}): Promise<void> {
+  const { customerName, customerEmail, bookingId, tenantSlug, companyName, startDate, endDate, listingTitle } = opts;
+  const registerUrl = `${APP_URL}/${tenantSlug}/register?email=${encodeURIComponent(customerEmail)}`;
+
+  const body = `
+    <p style="margin:0 0 8px;font-size:18px;font-weight:700;color:${BRAND_DARK};">Your booking is confirmed, ${customerName}!</p>
+    <p style="margin:0 0 20px;font-size:15px;color:#374151;line-height:1.6;">
+      Thank you for booking with <strong>${companyName}</strong>. Your rental has been reserved — see the details below.
+    </p>
+
+    ${infoTable([
+      { label: "Booking #",  value: `#${bookingId}`, mono: true },
+      { label: "Item",       value: listingTitle },
+      { label: "Pickup",     value: startDate },
+      { label: "Return",     value: endDate },
+      { label: "Company",    value: companyName },
+    ])}
+
+    <p style="margin:0 0 20px;font-size:15px;color:#374151;line-height:1.6;">
+      <strong>Set up your free account</strong> to track your booking, view your rental agreement, and manage future rentals — all in one place.
+    </p>
+
+    ${ctaButton("Create My Account &amp; View Booking", registerUrl)}
+
+    <p style="margin:0;font-size:13px;color:#9ca3af;text-align:center;">
+      Already booked? Your email <strong>${customerEmail}</strong> is pre-filled — just choose a password to finish.
+    </p>
+  `;
+
+  const html = emailShell({
+    preheader: `Your rental at ${companyName} is confirmed (#${bookingId}). Set up your account to view it anytime.`,
+    badgeLabel: "Booking Confirmed",
+    badgeColor: BRAND_GREEN,
+    body,
+  });
+
+  const gmail = await getUncachableGmailClient();
+  await gmail.users.messages.send({
+    userId: "me",
+    requestBody: { raw: makeRawEmail(customerEmail, `Your rental at ${companyName} is confirmed — set up your account`, html) },
+  });
+}
+
 export async function sendClaimAlertEmail(opts: {
   claimId: number;
   customerName: string;
