@@ -6,10 +6,11 @@ import { sql } from "drizzle-orm";
 
 const router: IRouter = Router();
 
-function formatListing(l: typeof listingsTable.$inferSelect, categoryName?: string | null) {
+function formatListing(l: typeof listingsTable.$inferSelect, categoryName?: string | null, categorySlug?: string | null) {
   return {
     ...l,
     categoryName: categoryName ?? null,
+    categorySlug: categorySlug ?? null,
     pricePerDay: parseFloat(l.pricePerDay ?? "0"),
     pricePerWeek: l.pricePerWeek ? parseFloat(l.pricePerWeek) : null,
     pricePerHour: l.pricePerHour ? parseFloat(l.pricePerHour) : null,
@@ -55,7 +56,7 @@ router.get("/listings", async (req, res) => {
       .select()
       .from(categoriesTable)
       .where(catConditions.length > 0 ? and(...catConditions) : undefined);
-    const catMap = Object.fromEntries(cats.map(c => [c.id, c.name]));
+    const catMap = Object.fromEntries(cats.map(c => [c.id, { name: c.name, slug: c.slug }]));
 
     // Scope booking stats to this tenant
     const statsConditions: any[] = [sql`${bookingsTable.status} != 'cancelled'`];
@@ -75,7 +76,7 @@ router.get("/listings", async (req, res) => {
     );
 
     const result = listings.map(l => ({
-      ...formatListing(l, catMap[l.categoryId ?? -1]),
+      ...formatListing(l, catMap[l.categoryId ?? -1]?.name, catMap[l.categoryId ?? -1]?.slug),
       totalBookings: statsMap[l.id]?.totalBookings ?? 0,
       totalRevenue: statsMap[l.id]?.totalRevenue ?? 0,
     }));
@@ -116,11 +117,13 @@ router.get("/listings/:id", async (req, res) => {
     if (!listing) { res.status(404).json({ error: "Not found" }); return; }
 
     let categoryName: string | null = null;
+    let categorySlug: string | null = null;
     if (listing.categoryId) {
       const catConditions = [eq(categoriesTable.id, listing.categoryId)];
       if (req.tenantId) catConditions.push(eq(categoriesTable.tenantId, req.tenantId));
       const [cat] = await db.select().from(categoriesTable).where(and(...catConditions));
       categoryName = cat?.name ?? null;
+      categorySlug = cat?.slug ?? null;
     }
 
     const statsConditions = [
@@ -134,7 +137,7 @@ router.get("/listings/:id", async (req, res) => {
       .where(and(...statsConditions));
 
     res.json({
-      ...formatListing(listing, categoryName),
+      ...formatListing(listing, categoryName, categorySlug),
       totalBookings: Number(stats?.totalBookings ?? 0),
       totalRevenue: parseFloat(stats?.totalRevenue ?? "0"),
     });

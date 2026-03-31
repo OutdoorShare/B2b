@@ -560,12 +560,78 @@ router.put("/superadmin/agreement", requireSuperAdmin, async (req, res) => {
   }
 });
 
-// ── GET /platform/agreement (public — used by booking flow) ───────────────────
-router.get("/platform/agreement", async (_req, res) => {
+// ── GET /superadmin/agreement/categories — list all category-specific overrides
+router.get("/superadmin/agreement/categories", requireSuperAdmin, async (_req, res) => {
   try {
+    // Get all category-specific agreement settings
+    const rows = await db.select().from(platformSettingsTable)
+      .where(sql`${platformSettingsTable.key} LIKE 'rental_agreement_category_%'`);
+    const overrides = rows.map(r => ({
+      categorySlug: r.key.replace("rental_agreement_category_", ""),
+      value: r.value ?? "",
+      updatedAt: r.updatedAt?.toISOString() ?? null,
+    }));
+    // Get distinct categories from all tenants for the picker
+    const cats = await db
+      .selectDistinct({ slug: categoriesTable.slug, name: categoriesTable.name })
+      .from(categoriesTable)
+      .orderBy(categoriesTable.name);
+    res.json({ overrides, categories: cats });
+  } catch {
+    res.status(500).json({ error: "Failed to fetch category agreements" });
+  }
+});
+
+// ── PUT /superadmin/agreement/category/:slug — save a category-specific override
+router.put("/superadmin/agreement/category/:slug", requireSuperAdmin, async (req, res) => {
+  try {
+    const { slug } = req.params;
+    const { value } = req.body;
+    if (typeof value !== "string") { res.status(400).json({ error: "value is required" }); return; }
+    const key = `rental_agreement_category_${slug}`;
+    const now = new Date();
+    const existing = await db.select({ id: platformSettingsTable.id })
+      .from(platformSettingsTable).where(eq(platformSettingsTable.key, key)).limit(1);
+    if (existing.length > 0) {
+      await db.update(platformSettingsTable).set({ value, updatedAt: now }).where(eq(platformSettingsTable.key, key));
+    } else {
+      await db.insert(platformSettingsTable).values({ key, value, updatedAt: now });
+    }
+    res.json({ ok: true, updatedAt: now.toISOString() });
+  } catch {
+    res.status(500).json({ error: "Failed to save category agreement" });
+  }
+});
+
+// ── DELETE /superadmin/agreement/category/:slug — remove category-specific override
+router.delete("/superadmin/agreement/category/:slug", requireSuperAdmin, async (req, res) => {
+  try {
+    const { slug } = req.params;
+    const key = `rental_agreement_category_${slug}`;
+    await db.delete(platformSettingsTable).where(eq(platformSettingsTable.key, key));
+    res.json({ ok: true });
+  } catch {
+    res.status(500).json({ error: "Failed to delete category agreement" });
+  }
+});
+
+// ── GET /platform/agreement (public — used by booking flow) ───────────────────
+router.get("/platform/agreement", async (req, res) => {
+  try {
+    const { categorySlug } = req.query;
+    // Try category-specific agreement first
+    if (categorySlug && typeof categorySlug === "string") {
+      const key = `rental_agreement_category_${categorySlug}`;
+      const [catRow] = await db.select().from(platformSettingsTable)
+        .where(eq(platformSettingsTable.key, key)).limit(1);
+      if (catRow?.value) {
+        return res.json({ value: catRow.value, updatedAt: catRow.updatedAt?.toISOString() ?? null, isCustom: true });
+      }
+    }
+    // Fall back to global agreement
     const [row] = await db.select().from(platformSettingsTable)
       .where(eq(platformSettingsTable.key, "rental_agreement")).limit(1);
-    res.json({ value: row?.value ?? "", updatedAt: row?.updatedAt?.toISOString() ?? null });
+    res.json({ value: row?.value ?? "", updatedAt: row?.updatedAt?.toISOString() ?? null, isCustom: false });
   } catch {
     res.status(500).json({ error: "Failed to fetch agreement" });
   }

@@ -197,13 +197,17 @@ export default function StorefrontBook() {
   const [availableAddons, setAvailableAddons] = useState<Addon[]>([]);
   const [selectedAddonIds, setSelectedAddonIds] = useState<Set<number>>(new Set());
 
-  // Fetch the global agreement text
+  // Fetch the agreement text — use category-specific if available, else global
   useEffect(() => {
-    fetch(`${BASE}/api/platform/agreement`)
+    const slug = (listing as any)?.categorySlug;
+    const url = slug
+      ? `${BASE}/api/platform/agreement?categorySlug=${encodeURIComponent(slug)}`
+      : `${BASE}/api/platform/agreement`;
+    fetch(url)
       .then(r => r.json())
       .then(d => { if (d.value) setAgreementText(d.value); })
       .catch(() => {});
-  }, []);
+  }, [(listing as any)?.categorySlug]);
 
   // Fetch addons for the listing; auto-select required ones
   useEffect(() => {
