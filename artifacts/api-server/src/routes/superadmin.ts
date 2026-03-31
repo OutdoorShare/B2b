@@ -4,6 +4,7 @@ import { tenantsTable, listingsTable, bookingsTable, superadminUsersTable, busin
 import { eq, sql, desc } from "drizzle-orm";
 import { scrypt, randomBytes, timingSafeEqual } from "crypto";
 import { promisify } from "util";
+import { sendWelcomeEmail, sendAccountUpdatedEmail } from "../services/gmail";
 
 const scryptAsync = promisify(scrypt);
 const router: IRouter = Router();
@@ -144,6 +145,12 @@ router.post("/superadmin/tenants", requireSuperAdmin, async (req, res) => {
       phone: phone ?? null,
       notes: notes ?? null,
     }).returning();
+
+    // Send welcome email (non-blocking — don't fail the request if email fails)
+    sendWelcomeEmail({ toEmail: email, companyName: name, slug, password }).catch((err) =>
+      console.error("[email] Failed to send welcome email:", err?.message)
+    );
+
     res.status(201).json(safeTenant(tenant));
   } catch (e) {
     res.status(500).json({ error: "Failed to create tenant" });
@@ -170,6 +177,19 @@ router.put("/superadmin/tenants/:id", requireSuperAdmin, async (req, res) => {
     if (password) updates.adminPasswordHash = await hashPassword(password);
     const [updated] = await db.update(tenantsTable).set(updates).where(eq(tenantsTable.id, id)).returning();
     if (!updated) { res.status(404).json({ error: "Tenant not found" }); return; }
+
+    // Send account-updated email (non-blocking)
+    const recipientEmail = email ?? updated.email;
+    const recipientSlug = slug ?? updated.slug;
+    const recipientName = name ?? updated.name;
+    sendAccountUpdatedEmail({
+      toEmail: recipientEmail,
+      companyName: recipientName,
+      slug: recipientSlug,
+      passwordChanged: !!password,
+      newPassword: password || undefined,
+    }).catch((err) => console.error("[email] Failed to send update email:", err?.message));
+
     res.json(safeTenant(updated));
   } catch (e) {
     res.status(500).json({ error: "Failed to update tenant" });
