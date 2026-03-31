@@ -898,7 +898,7 @@ export default function StorefrontBook() {
 
         <div className={`grid grid-cols-1 gap-8 ${step !== "confirmation" ? "lg:grid-cols-5" : ""}`}>
           {/* Main content */}
-          <div className={step !== "confirmation" ? "order-2 lg:order-1 lg:col-span-3" : ""}>
+          <div className={step !== "confirmation" ? "order-1 lg:order-1 lg:col-span-3" : ""}>
 
             {/* ── STEP 1: DATES & INFO ── */}
             {step === "dates" && (
@@ -1887,7 +1887,7 @@ export default function StorefrontBook() {
 
           {/* ── SIDEBAR SUMMARY ── */}
           {step !== "confirmation" && (
-            <div className="order-1 lg:order-2 lg:col-span-2">
+            <div className="order-2 lg:order-2 lg:col-span-2">
               <div className="sticky top-32 space-y-4">
 
                 {/* Price breakdown — always at the top */}
