@@ -3,6 +3,7 @@ import { db } from "@workspace/db";
 import { claimsTable, bookingsTable, listingsTable, tenantsTable } from "@workspace/db/schema";
 import { eq, desc, and, gte, lte } from "drizzle-orm";
 import { sendClaimAlertEmail } from "../services/gmail";
+import { getStripeForTenant } from "../services/stripe";
 
 const router: IRouter = Router();
 
@@ -99,7 +100,64 @@ router.post("/claims", async (req, res) => {
       })
       .returning();
 
-    res.status(201).json(formatClaim(created));
+    // ── Auto-capture security deposit to OutdoorShare platform account ──────────
+    // Fire-and-forget: capture the authorized deposit hold (if any) on the booking.
+    // The hold was created without transfer_data, so funds land on the platform account.
+    let depositCaptureIntentId: string | null = null;
+    let depositCapturedAmountCents: number | null = null;
+    if (created.bookingId) {
+      try {
+        const [booking] = await db
+          .select({
+            depositHoldIntentId: bookingsTable.depositHoldIntentId,
+            depositHoldStatus: bookingsTable.depositHoldStatus,
+            tenantId: bookingsTable.tenantId,
+          })
+          .from(bookingsTable)
+          .where(eq(bookingsTable.id, created.bookingId))
+          .limit(1);
+
+        if (booking?.depositHoldIntentId && booking.depositHoldStatus === "authorized") {
+          const [tenant] = await db
+            .select({ testMode: tenantsTable.testMode })
+            .from(tenantsTable)
+            .where(eq(tenantsTable.id, booking.tenantId!))
+            .limit(1);
+
+          const stripeClient = getStripeForTenant(!!tenant?.testMode);
+          const captured = await stripeClient.paymentIntents.capture(booking.depositHoldIntentId);
+          depositCaptureIntentId = captured.id;
+          depositCapturedAmountCents = captured.amount_received ?? captured.amount;
+
+          // Mark booking deposit as captured
+          await db
+            .update(bookingsTable)
+            .set({ depositHoldStatus: "captured", updatedAt: new Date() })
+            .where(eq(bookingsTable.id, created.bookingId));
+
+          // Persist capture info on the claim
+          await db
+            .update(claimsTable)
+            .set({
+              chargeStatus: "deposit_captured",
+              chargedAmount: String((depositCapturedAmountCents ?? 0) / 100),
+              stripeChargeRefs: JSON.stringify([captured.id]),
+              updatedAt: new Date(),
+            })
+            .where(eq(claimsTable.id, created.id));
+
+          req.log.info({ claimId: created.id, intentId: captured.id }, "Deposit auto-captured on claim submission");
+        }
+      } catch (e: any) {
+        req.log.warn({ err: e }, "Deposit auto-capture failed (non-fatal) — claim still created");
+      }
+    }
+
+    res.status(201).json({
+      ...formatClaim(created),
+      depositCaptured: !!depositCaptureIntentId,
+      depositCapturedAmount: depositCapturedAmountCents != null ? depositCapturedAmountCents / 100 : null,
+    });
 
     // Fire-and-forget email alert to superadmin
     (async () => {

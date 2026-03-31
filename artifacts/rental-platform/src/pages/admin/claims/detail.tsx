@@ -30,6 +30,9 @@ interface Claim {
   description: string;
   claimedAmount: number | null;
   settledAmount: number | null;
+  chargeStatus: string | null;
+  chargedAmount: number | null;
+  stripeChargeRefs: string | null;
   status: ClaimStatus;
   adminNotes: string | null;
   evidenceUrls: string | null;
@@ -347,6 +350,19 @@ export default function AdminClaimDetail() {
             <h3 className="font-semibold flex items-center gap-2 text-sm">
               <DollarSign className="w-4 h-4 text-primary" /> Resolution
             </h3>
+
+            {/* Deposit auto-capture notice */}
+            {claim.chargeStatus === "deposit_captured" && (
+              <div className="flex items-start gap-2.5 rounded-xl bg-green-50 border border-green-200 px-4 py-3">
+                <CheckCircle2 className="w-4 h-4 text-green-600 shrink-0 mt-0.5" />
+                <div className="text-sm">
+                  <p className="font-semibold text-green-800">Security deposit captured</p>
+                  <p className="text-green-700 text-xs mt-0.5">
+                    ${claim.chargedAmount != null ? Number(claim.chargedAmount).toFixed(2) : "—"} sent to OutdoorShare upon claim submission.
+                  </p>
+                </div>
+              </div>
+            )}
 
             <div className="space-y-1.5">
               <Label>Status</Label>
