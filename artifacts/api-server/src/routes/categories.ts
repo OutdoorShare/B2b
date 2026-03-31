@@ -7,8 +7,10 @@ const router: IRouter = Router();
 
 router.get("/categories", async (req, res) => {
   try {
-    const catWhere = req.tenantId ? eq(categoriesTable.tenantId, req.tenantId) : undefined;
-    const cats = await db.select().from(categoriesTable).where(catWhere).orderBy(categoriesTable.name);
+    if (!req.tenantId) { res.json([]); return; }
+    const cats = await db.select().from(categoriesTable)
+      .where(eq(categoriesTable.tenantId, req.tenantId))
+      .orderBy(categoriesTable.name);
     
     const withCounts = await Promise.all(cats.map(async (cat) => {
       // Only count *active* listings so that the storefront filter bar

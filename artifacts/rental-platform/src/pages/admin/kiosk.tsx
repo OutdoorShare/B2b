@@ -129,7 +129,7 @@ export default function AdminKiosk() {
           >
             All Listings
           </button>
-          {categories?.map(cat => (
+          {categories?.filter((cat, i, arr) => arr.findIndex(c => c.id === cat.id) === i).map(cat => (
             <button
               key={cat.id}
               onClick={() => setActiveCategory(cat.id)}
