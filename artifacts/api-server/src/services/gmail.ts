@@ -53,12 +53,16 @@ async function getUncachableGmailClient() {
 
 const PLATFORM_FROM = "OutdoorShare <contact.us@myoutdoorshare.com>";
 
+function encodeSubject(subject: string): string {
+  return `=?UTF-8?B?${Buffer.from(subject, "utf8").toString("base64")}?=`;
+}
+
 function makeRawEmail(to: string, subject: string, htmlBody: string, from?: string, replyTo?: string): string {
   const boundary = "boundary_outdoorshare";
   const lines = [
     `From: ${from ?? PLATFORM_FROM}`,
     `To: ${to}`,
-    `Subject: ${subject}`,
+    `Subject: ${encodeSubject(subject)}`,
     `MIME-Version: 1.0`,
     `Content-Type: multipart/alternative; boundary="${boundary}"`,
   ];
