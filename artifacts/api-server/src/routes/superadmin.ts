@@ -437,6 +437,93 @@ router.delete("/superadmin/tenants/:id/listings/:lid", requireSuperAdmin, async 
   } catch { res.status(500).json({ error: "Failed to delete listing" }); }
 });
 
+// ── GET /superadmin/tenants/:id/analytics ─────────────────────────────────────
+router.get("/superadmin/tenants/:id/analytics", requireSuperAdmin, async (req, res) => {
+  try {
+    const tenantId = parseInt(req.params.id);
+    const [tenant] = await db.select().from(tenantsTable).where(eq(tenantsTable.id, tenantId)).limit(1);
+    if (!tenant) return res.status(404).json({ error: "Tenant not found" });
+
+    const feePercent = tenant.platformFeePercent ? parseFloat(tenant.platformFeePercent) : 5;
+
+    // All non-cancelled bookings for this tenant
+    const bookings = await db
+      .select({
+        id: bookingsTable.id,
+        status: bookingsTable.status,
+        totalPrice: bookingsTable.totalPrice,
+        createdAt: bookingsTable.createdAt,
+        listingId: bookingsTable.listingId,
+      })
+      .from(bookingsTable)
+      .where(eq(bookingsTable.tenantId, tenantId))
+      .orderBy(desc(bookingsTable.createdAt));
+
+    const nonCancelled = bookings.filter(b => b.status !== "cancelled");
+    const totalRevenue = nonCancelled.reduce((s, b) => s + parseFloat(b.totalPrice ?? "0"), 0);
+    const feesRetained = totalRevenue * feePercent / 100;
+
+    // Status breakdown
+    const statusMap: Record<string, number> = {};
+    for (const b of bookings) statusMap[b.status] = (statusMap[b.status] ?? 0) + 1;
+
+    // Revenue by month (last 12 months)
+    const now = new Date();
+    const months: { month: string; revenue: number; bookings: number }[] = [];
+    for (let i = 11; i >= 0; i--) {
+      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      const label = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+      const mStart = new Date(d.getFullYear(), d.getMonth(), 1);
+      const mEnd   = new Date(d.getFullYear(), d.getMonth() + 1, 1);
+      const mBooks = nonCancelled.filter(b => b.createdAt >= mStart && b.createdAt < mEnd);
+      months.push({ month: label, revenue: mBooks.reduce((s, b) => s + parseFloat(b.totalPrice ?? "0"), 0), bookings: mBooks.length });
+    }
+
+    // Category breakdown (join listings → categories)
+    const { categoriesTable } = await import("@workspace/db/schema");
+    const catRows = await db
+      .select({
+        catName: categoriesTable.name,
+        listingId: listingsTable.id,
+      })
+      .from(listingsTable)
+      .leftJoin(categoriesTable, eq(listingsTable.categoryId, categoriesTable.id))
+      .where(eq(listingsTable.tenantId, tenantId));
+
+    const listingCatMap: Record<number, string> = {};
+    for (const r of catRows) listingCatMap[r.listingId] = r.catName ?? "Uncategorized";
+
+    const catMap: Record<string, { bookings: number; revenue: number }> = {};
+    for (const b of nonCancelled) {
+      const cat = listingCatMap[b.listingId ?? -1] ?? "Uncategorized";
+      if (!catMap[cat]) catMap[cat] = { bookings: 0, revenue: 0 };
+      catMap[cat].bookings++;
+      catMap[cat].revenue += parseFloat(b.totalPrice ?? "0");
+    }
+    const categoryBreakdown = Object.entries(catMap)
+      .map(([name, v]) => ({ name, ...v }))
+      .sort((a, b) => b.revenue - a.revenue);
+
+    // Claims count
+    const claimRows = await db.select({ id: claimsTable.id, status: claimsTable.status }).from(claimsTable).where(eq(claimsTable.tenantId, tenantId));
+
+    res.json({
+      totalRevenue,
+      feesRetained,
+      feePercent,
+      totalBookings: bookings.length,
+      statusBreakdown: statusMap,
+      revenueByMonth: months,
+      categoryBreakdown,
+      claimsCount: claimRows.length,
+      openClaims: claimRows.filter(c => c.status === "open").length,
+    });
+  } catch (err) {
+    req.log.error(err);
+    res.status(500).json({ error: "Failed to fetch analytics" });
+  }
+});
+
 // ── GET /superadmin/tenants/:id/bookings ──────────────────────────────────────
 router.get("/superadmin/tenants/:id/bookings", requireSuperAdmin, async (req, res) => {
   try {

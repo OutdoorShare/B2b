@@ -4,8 +4,13 @@ import {
   ArrowLeft, Building2, Package, CalendarDays, Settings2,
   Plus, Edit2, Trash2, Save, X, CheckCircle2, XCircle,
   AlertTriangle, Eye, EyeOff, ExternalLink, RefreshCcw,
-  Globe, Phone, Mail, MapPin, Palette
+  Globe, Phone, Mail, MapPin, Palette, BarChart3, ShieldAlert,
+  TrendingUp, DollarSign, AlertCircle, Clock
 } from "lucide-react";
+import {
+  AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid,
+  Tooltip, ResponsiveContainer, Cell
+} from "recharts";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -522,6 +527,282 @@ function BookingsTab({ tenantId }: { tenantId: number }) {
   );
 }
 
+// ─── Analytics Tab ────────────────────────────────────────────────────────────
+const CAT_COLORS = ["#3ab549","#166534","#15803d","#16a34a","#22c55e","#4ade80"];
+const STATUS_CHIP: Record<string, string> = { pending: "bg-amber-800 text-amber-200", confirmed: "bg-blue-800 text-blue-200", active: "bg-green-800 text-green-200", completed: "bg-slate-700 text-slate-300", cancelled: "bg-red-800 text-red-200" };
+
+type TenantAnalytics = {
+  totalRevenue: number; feesRetained: number; feePercent: number;
+  totalBookings: number; statusBreakdown: Record<string, number>;
+  revenueByMonth: { month: string; revenue: number; bookings: number }[];
+  categoryBreakdown: { name: string; bookings: number; revenue: number }[];
+  claimsCount: number; openClaims: number;
+};
+
+function AnalyticsTab({ tenantId }: { tenantId: number }) {
+  const [data, setData] = useState<TenantAnalytics | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    const r = await sa(`/superadmin/tenants/${tenantId}/analytics`);
+    if (r.ok) setData(await r.json());
+    setLoading(false);
+  }, [tenantId]);
+
+  useEffect(() => { load(); }, [load]);
+
+  if (loading) return <div className="text-slate-400 py-12 text-center">Loading analytics…</div>;
+  if (!data)   return <div className="text-red-400 py-8">Failed to load analytics</div>;
+
+  const summaryCards = [
+    { icon: DollarSign, label: "Total Revenue",     value: `$${data.totalRevenue.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, color: "text-green-400",  bg: "bg-green-500/10 border-green-500/20" },
+    { icon: TrendingUp, label: "Fees Retained",     value: `$${data.feesRetained.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, note: `${data.feePercent}% platform fee`, color: "text-blue-400",   bg: "bg-blue-500/10 border-blue-500/20" },
+    { icon: CalendarDays, label: "Total Bookings",  value: String(data.totalBookings),  color: "text-violet-400", bg: "bg-violet-500/10 border-violet-500/20" },
+    { icon: ShieldAlert, label: "Open Claims",      value: String(data.openClaims),     color: data.openClaims > 0 ? "text-red-400" : "text-slate-400", bg: data.openClaims > 0 ? "bg-red-500/10 border-red-500/20" : "bg-slate-800 border-slate-700" },
+  ];
+
+  return (
+    <div className="space-y-6">
+      {/* Summary Cards */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        {summaryCards.map(c => (
+          <div key={c.label} className={`rounded-xl border p-4 ${c.bg}`}>
+            <div className={`flex items-center gap-1.5 mb-2 ${c.color}`}>
+              <c.icon className="w-4 h-4" />
+              <span className="text-xs font-semibold">{c.label}</span>
+            </div>
+            <p className={`text-2xl font-black ${c.color}`}>{c.value}</p>
+            {c.note && <p className="text-slate-500 text-[10px] mt-0.5">{c.note}</p>}
+          </div>
+        ))}
+      </div>
+
+      {/* Booking Status Breakdown */}
+      <div className="bg-slate-900 border border-slate-800 rounded-xl p-4">
+        <p className="text-slate-300 font-semibold text-sm mb-3">Booking Status Breakdown</p>
+        <div className="flex flex-wrap gap-2">
+          {Object.entries(data.statusBreakdown).map(([status, count]) => (
+            <span key={status} className={`text-xs font-bold px-2.5 py-1 rounded-full capitalize ${STATUS_CHIP[status] ?? "bg-slate-700 text-slate-300"}`}>
+              {status}: {count}
+            </span>
+          ))}
+          {Object.keys(data.statusBreakdown).length === 0 && <span className="text-slate-500 text-sm">No bookings yet</span>}
+        </div>
+      </div>
+
+      {/* Revenue by Month chart */}
+      <div className="bg-slate-900 border border-slate-800 rounded-xl p-4">
+        <p className="text-slate-300 font-semibold text-sm mb-4">Revenue — Last 12 Months</p>
+        {data.revenueByMonth.every(m => m.revenue === 0) ? (
+          <div className="h-40 flex items-center justify-center text-slate-600 text-sm">No revenue data yet</div>
+        ) : (
+          <div className="h-48">
+            <ResponsiveContainer width="100%" height="100%">
+              <AreaChart data={data.revenueByMonth} margin={{ top: 5, right: 10, left: 0, bottom: 0 }}>
+                <defs>
+                  <linearGradient id="saRevGrad" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%"  stopColor="#3ab549" stopOpacity={0.3} />
+                    <stop offset="95%" stopColor="#3ab549" stopOpacity={0} />
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} />
+                <XAxis dataKey="month" stroke="#475569" fontSize={10} tickLine={false} axisLine={false} tickFormatter={v => v.substring(5)} />
+                <YAxis stroke="#475569" fontSize={10} tickLine={false} axisLine={false} tickFormatter={v => `$${v}`} width={55} />
+                <Tooltip
+                  contentStyle={{ background: "#1e293b", border: "1px solid #334155", borderRadius: 8, fontSize: 12 }}
+                  labelStyle={{ color: "#94a3b8" }}
+                  formatter={(v: number) => [`$${v.toFixed(2)}`, "Revenue"]}
+                />
+                <Area type="monotone" dataKey="revenue" stroke="#3ab549" strokeWidth={2} fill="url(#saRevGrad)" />
+              </AreaChart>
+            </ResponsiveContainer>
+          </div>
+        )}
+      </div>
+
+      {/* Category Breakdown */}
+      {data.categoryBreakdown.length > 0 && (
+        <div className="grid lg:grid-cols-2 gap-4">
+          {/* Bar chart */}
+          <div className="bg-slate-900 border border-slate-800 rounded-xl p-4">
+            <p className="text-slate-300 font-semibold text-sm mb-4">Revenue by Category</p>
+            <div className="h-48">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={data.categoryBreakdown} layout="vertical" margin={{ top: 0, right: 20, left: 0, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#1e293b" />
+                  <XAxis type="number" stroke="#475569" fontSize={10} tickLine={false} axisLine={false} tickFormatter={v => `$${v}`} />
+                  <YAxis type="category" dataKey="name" stroke="#475569" fontSize={10} tickLine={false} axisLine={false} width={90} />
+                  <Tooltip
+                    contentStyle={{ background: "#1e293b", border: "1px solid #334155", borderRadius: 8, fontSize: 12 }}
+                    formatter={(v: number) => [`$${v.toFixed(2)}`, "Revenue"]}
+                  />
+                  <Bar dataKey="revenue" radius={[0, 3, 3, 0]} maxBarSize={20}>
+                    {data.categoryBreakdown.map((_, i) => <Cell key={i} fill={CAT_COLORS[i % CAT_COLORS.length]} />)}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+          {/* Table */}
+          <div className="bg-slate-900 border border-slate-800 rounded-xl p-4">
+            <p className="text-slate-300 font-semibold text-sm mb-3">Category Summary</p>
+            <table className="w-full text-sm">
+              <thead><tr className="text-slate-500 text-xs border-b border-slate-800">
+                <th className="text-left py-2 font-medium">Category</th>
+                <th className="text-right py-2 font-medium">Bookings</th>
+                <th className="text-right py-2 font-medium">Revenue</th>
+                <th className="text-right py-2 font-medium">Fee</th>
+              </tr></thead>
+              <tbody>
+                {data.categoryBreakdown.map(c => (
+                  <tr key={c.name} className="border-b border-slate-800/50 last:border-0">
+                    <td className="py-2 text-slate-200">{c.name}</td>
+                    <td className="py-2 text-right text-slate-400">{c.bookings}</td>
+                    <td className="py-2 text-right text-slate-200">${c.revenue.toFixed(2)}</td>
+                    <td className="py-2 text-right text-blue-400 text-xs">${(c.revenue * data.feePercent / 100).toFixed(2)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Claims Tab ───────────────────────────────────────────────────────────────
+type ClaimRow = { id: number; customerName: string; customerEmail: string; type: string; status: string; claimedAmount: number | null; settledAmount: number | null; adminNotes: string | null; description: string; createdAt: string };
+const CLAIM_STATUS: Record<string, string> = { open: "bg-red-800 text-red-200", reviewing: "bg-yellow-800 text-yellow-200", resolved: "bg-green-800 text-green-200", denied: "bg-slate-700 text-slate-400" };
+
+function ClaimsTab({ tenantId }: { tenantId: number }) {
+  const [claims, setClaims] = useState<ClaimRow[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [selected, setSelected] = useState<ClaimRow | null>(null);
+  const [editStatus, setEditStatus] = useState("");
+  const [editNotes, setEditNotes] = useState("");
+  const [editSettled, setEditSettled] = useState("");
+  const [saving, setSaving] = useState(false);
+  const { toast } = useToast();
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    const r = await sa(`/superadmin/claims?tenantId=${tenantId}`);
+    if (r.ok) setClaims(await r.json());
+    setLoading(false);
+  }, [tenantId]);
+
+  useEffect(() => { load(); }, [load]);
+
+  function openClaim(c: ClaimRow) {
+    setSelected(c);
+    setEditStatus(c.status);
+    setEditNotes(c.adminNotes ?? "");
+    setEditSettled(c.settledAmount != null ? String(c.settledAmount) : "");
+  }
+
+  async function saveClaim() {
+    if (!selected) return;
+    setSaving(true);
+    const r = await sa(`/superadmin/claims/${selected.id}`, {
+      method: "PUT",
+      body: JSON.stringify({ status: editStatus, adminNotes: editNotes || null, settledAmount: editSettled !== "" ? parseFloat(editSettled) : null }),
+    });
+    setSaving(false);
+    if (!r.ok) { toast({ title: "Failed to save", variant: "destructive" }); return; }
+    toast({ title: "Claim updated" });
+    const updated = await r.json();
+    setClaims(prev => prev.map(c => c.id === updated.id ? { ...c, ...updated } : c));
+    setSelected(null);
+  }
+
+  const openCount = claims.filter(c => c.status === "open").length;
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <p className="text-slate-400 text-sm">{claims.length} total claim{claims.length !== 1 ? "s" : ""}</p>
+          {openCount > 0 && <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-red-800 text-red-200">{openCount} open</span>}
+        </div>
+        <Button variant="ghost" size="sm" onClick={load} className="text-slate-400 hover:text-white hover:bg-slate-800"><RefreshCcw className="w-3.5 h-3.5" /></Button>
+      </div>
+
+      {loading ? <div className="text-slate-400 py-8 text-center">Loading…</div> : claims.length === 0 ? (
+        <div className="bg-slate-900 border border-slate-800 rounded-xl p-12 text-center">
+          <ShieldAlert className="w-10 h-10 text-slate-700 mx-auto mb-3" />
+          <p className="text-slate-400 font-semibold">No claims filed for this company</p>
+        </div>
+      ) : (
+        <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden">
+          <table className="w-full text-sm">
+            <thead><tr className="border-b border-slate-800">
+              {["#","Customer","Type","Claimed","Settled","Status","Date",""].map(h => (
+                <th key={h} className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">{h}</th>
+              ))}
+            </tr></thead>
+            <tbody>
+              {claims.map(c => (
+                <tr key={c.id} className="border-b border-slate-800/50 hover:bg-slate-800/30 group">
+                  <td className="px-4 py-3 text-slate-500 font-mono text-xs">#{c.id}</td>
+                  <td className="px-4 py-3"><p className="text-white font-medium">{c.customerName}</p><p className="text-xs text-slate-500">{c.customerEmail}</p></td>
+                  <td className="px-4 py-3 text-slate-300 capitalize text-xs">{c.type}</td>
+                  <td className="px-4 py-3 text-slate-300 text-xs">{c.claimedAmount != null ? `$${c.claimedAmount.toFixed(2)}` : "—"}</td>
+                  <td className="px-4 py-3 text-slate-300 text-xs">{c.settledAmount != null ? `$${c.settledAmount.toFixed(2)}` : "—"}</td>
+                  <td className="px-4 py-3"><span className={`text-[11px] font-bold px-2 py-0.5 rounded-full capitalize ${CLAIM_STATUS[c.status] ?? "bg-slate-700 text-slate-300"}`}>{c.status}</span></td>
+                  <td className="px-4 py-3 text-slate-500 text-xs">{format(new Date(c.createdAt), "MMM d, yy")}</td>
+                  <td className="px-4 py-3"><button onClick={() => openClaim(c)} className="p-1.5 rounded text-slate-400 hover:text-white hover:bg-slate-700 opacity-0 group-hover:opacity-100 transition-opacity"><Edit2 className="w-3.5 h-3.5" /></button></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {/* Edit Dialog */}
+      <Dialog open={!!selected} onOpenChange={v => { if (!v) setSelected(null); }}>
+        <DialogContent className="bg-slate-900 border-slate-700 text-white max-w-md">
+          <DialogHeader><DialogTitle className="text-white">Claim #{selected?.id}</DialogTitle></DialogHeader>
+          {selected && (
+            <div className="space-y-4 py-2">
+              <div className="bg-slate-800 rounded-lg p-3 text-sm space-y-1">
+                <p className="text-white font-medium">{selected.customerName}</p>
+                <p className="text-slate-400">{selected.customerEmail}</p>
+                <p className="text-slate-500 text-xs capitalize">{selected.type} claim</p>
+              </div>
+              <div className="bg-slate-800 rounded-lg p-3 text-sm text-slate-300">{selected.description}</div>
+              <div className="space-y-3">
+                <div>
+                  <Label className="text-slate-400 text-xs">Status</Label>
+                  <Select value={editStatus} onValueChange={setEditStatus}>
+                    <SelectTrigger className="mt-1 bg-slate-800 border-slate-700 text-white"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {["open","reviewing","resolved","denied"].map(s => <SelectItem key={s} value={s} className="capitalize">{s}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label className="text-slate-400 text-xs">Settled Amount ($)</Label>
+                  <Input type="number" value={editSettled} onChange={e => setEditSettled(e.target.value)} placeholder="0.00" className="mt-1 bg-slate-800 border-slate-700 text-white" />
+                </div>
+                <div>
+                  <Label className="text-slate-400 text-xs">Admin Notes</Label>
+                  <Textarea value={editNotes} onChange={e => setEditNotes(e.target.value)} placeholder="Internal notes…" rows={3} className="mt-1 bg-slate-800 border-slate-700 text-white resize-none" />
+                </div>
+              </div>
+              <DialogFooter>
+                <Button variant="ghost" onClick={() => setSelected(null)} className="text-slate-400">Cancel</Button>
+                <Button onClick={saveClaim} disabled={saving} className="bg-[#3ab549] hover:bg-[#2d9c3a] text-white font-bold">{saving ? "Saving…" : "Save"}</Button>
+              </DialogFooter>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}
+
 // ─── Main Page ────────────────────────────────────────────────────────────────
 export default function CompanyDetailPage() {
   const params = useParams<{ id: string }>();
@@ -580,7 +861,7 @@ export default function CompanyDetailPage() {
 
       {/* Tabs */}
       <Tabs defaultValue="account">
-        <TabsList className="bg-slate-900 border border-slate-800">
+        <TabsList className="bg-slate-900 border border-slate-800 flex-wrap h-auto">
           <TabsTrigger value="account" className="data-[state=active]:bg-slate-800 data-[state=active]:text-white text-slate-400 gap-1.5">
             <Settings2 className="w-3.5 h-3.5" />Account
           </TabsTrigger>
@@ -592,6 +873,12 @@ export default function CompanyDetailPage() {
           </TabsTrigger>
           <TabsTrigger value="bookings" className="data-[state=active]:bg-slate-800 data-[state=active]:text-white text-slate-400 gap-1.5">
             <CalendarDays className="w-3.5 h-3.5" />Bookings
+          </TabsTrigger>
+          <TabsTrigger value="analytics" className="data-[state=active]:bg-slate-800 data-[state=active]:text-white text-slate-400 gap-1.5">
+            <BarChart3 className="w-3.5 h-3.5" />Analytics
+          </TabsTrigger>
+          <TabsTrigger value="claims" className="data-[state=active]:bg-slate-800 data-[state=active]:text-white text-slate-400 gap-1.5">
+            <ShieldAlert className="w-3.5 h-3.5" />Claims
           </TabsTrigger>
         </TabsList>
 
@@ -606,6 +893,12 @@ export default function CompanyDetailPage() {
         </TabsContent>
         <TabsContent value="bookings" className="mt-6">
           <BookingsTab tenantId={tenantId} />
+        </TabsContent>
+        <TabsContent value="analytics" className="mt-6">
+          <AnalyticsTab tenantId={tenantId} />
+        </TabsContent>
+        <TabsContent value="claims" className="mt-6">
+          <ClaimsTab tenantId={tenantId} />
         </TabsContent>
       </Tabs>
     </div>
