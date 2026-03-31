@@ -122,9 +122,9 @@ router.post("/bookings", async (req, res) => {
     // Set agreementSignedAt server-side when the customer provides their signature
     const agreementSignedAt = restBody.agreementSignerName ? new Date() : null;
 
-    // Check if this tenant has instant booking enabled
-    let autoConfirm = false;
-    if (req.tenantId) {
+    // Kiosk bookings are always auto-confirmed; otherwise check the tenant's instant booking setting
+    let autoConfirm = restBody.source === "kiosk";
+    if (!autoConfirm && req.tenantId) {
       const [biz] = await db.select({ instantBooking: businessProfileTable.instantBooking })
         .from(businessProfileTable)
         .where(eq(businessProfileTable.tenantId, req.tenantId));
