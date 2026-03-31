@@ -16,7 +16,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { Link, useLocation } from "wouter";
-import { ArrowLeft, User, Phone, Mail, Calendar, Package, StickyNote, ShieldAlert, Pencil, FileSignature, ChevronDown, ChevronUp, Download, Camera, CheckCircle2, Loader2, ExternalLink, ImageIcon, Clock, ShieldCheck, ShieldX, Shield, AlertCircle, Copy, Send, UserCheck, Lock, LockOpen, DollarSign } from "lucide-react";
+import { ArrowLeft, User, Phone, Mail, Calendar, Package, StickyNote, ShieldAlert, Pencil, FileSignature, FileText, ChevronDown, ChevronUp, Download, Camera, CheckCircle2, Loader2, ExternalLink, ImageIcon, Clock, ShieldCheck, ShieldX, Shield, AlertCircle, Copy, Send, UserCheck, Lock, LockOpen, DollarSign } from "lucide-react";
 import { format, differenceInDays } from "date-fns";
 
 export default function AdminBookingDetail() {
@@ -415,17 +415,27 @@ export default function AdminBookingDetail() {
                   </CardTitle>
                   <div className="flex items-center gap-2">
                     {(booking as any).agreementPdfPath && (
-                      <a
-                        href={`${import.meta.env.BASE_URL.replace(/\/$/, "")}/api/bookings/${id}/agreement-pdf`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        download={`rental-agreement-${id}.pdf`}
-                      >
-                        <Button variant="outline" size="sm" className="gap-1.5">
-                          <Download className="w-3.5 h-3.5" />
-                          Download PDF
-                        </Button>
-                      </a>
+                      <div className="flex items-center gap-1.5">
+                        <a
+                          href={`${import.meta.env.BASE_URL.replace(/\/$/, "")}/api/bookings/${id}/agreement-pdf`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                        >
+                          <Button variant="outline" size="sm" className="gap-1.5">
+                            <FileText className="w-3.5 h-3.5" />
+                            View PDF
+                          </Button>
+                        </a>
+                        <a
+                          href={`${import.meta.env.BASE_URL.replace(/\/$/, "")}/api/bookings/${id}/agreement-pdf?download=1`}
+                          download={`rental-agreement-${id}.pdf`}
+                        >
+                          <Button variant="ghost" size="sm" className="gap-1.5 text-muted-foreground">
+                            <Download className="w-3.5 h-3.5" />
+                            Download
+                          </Button>
+                        </a>
+                      </div>
                     )}
                     <Badge variant="outline" className="border-green-300 text-green-700 bg-green-50">
                       Signed

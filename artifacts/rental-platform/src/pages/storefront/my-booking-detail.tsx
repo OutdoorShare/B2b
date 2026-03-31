@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import {
   ArrowLeft, Calendar, Package, User, Phone, Mail,
-  Clock, CheckCircle2, XCircle, AlertCircle, FileSignature,
+  Clock, CheckCircle2, XCircle, AlertCircle, FileSignature, FileText, ExternalLink,
   StickyNote, ShieldCheck, MessageSquare, CreditCard,
   MapPin, Monitor, Smartphone, Phone as PhoneIcon, Users,
   Receipt, Tag, Camera, ImagePlus, Upload, X as XIcon, Loader2
@@ -498,10 +498,34 @@ export default function MyBookingDetail() {
       {/* Signed Agreement */}
       {booking.agreementSignerName && (
         <div className="rounded-2xl border border-green-200 bg-green-50 p-5 space-y-3">
-          <h2 className="font-semibold flex items-center gap-2 text-sm text-green-700">
-            <FileSignature className="w-4 h-4" />
-            Rental Agreement Signed
-          </h2>
+          <div className="flex items-center justify-between gap-2">
+            <h2 className="font-semibold flex items-center gap-2 text-sm text-green-700">
+              <FileSignature className="w-4 h-4" />
+              Rental Agreement Signed
+            </h2>
+            {(booking as any).agreementPdfPath && (
+              <div className="flex items-center gap-1.5">
+                <a
+                  href={`${BASE}/api/bookings/${booking.id}/agreement-pdf`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1 text-xs font-medium text-green-700 hover:text-green-900 bg-white border border-green-200 rounded-md px-2.5 py-1.5 transition-colors hover:bg-green-50"
+                >
+                  <FileText className="w-3.5 h-3.5" />
+                  View PDF
+                  <ExternalLink className="w-3 h-3 ml-0.5 opacity-60" />
+                </a>
+                <a
+                  href={`${BASE}/api/bookings/${booking.id}/agreement-pdf?download=1`}
+                  download={`rental-agreement-${booking.id}.pdf`}
+                  className="inline-flex items-center gap-1 text-xs font-medium text-green-600/70 hover:text-green-800 transition-colors px-1"
+                  title="Download PDF"
+                >
+                  ↓
+                </a>
+              </div>
+            )}
+          </div>
           <div className="grid grid-cols-2 gap-3 text-sm">
             <div>
               <div className="text-green-600/70 text-xs mb-0.5">Signed by</div>

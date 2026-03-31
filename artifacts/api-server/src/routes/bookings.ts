@@ -313,8 +313,12 @@ router.get("/bookings/:id/agreement-pdf", async (req, res) => {
     const filepath = path.join(UPLOADS_DIR_BOOKINGS, booking.agreementPdfPath);
     if (!fs.existsSync(filepath)) { res.status(404).json({ error: "PDF file not found" }); return; }
 
+    const forceDownload = req.query.download === "1";
     res.setHeader("Content-Type", "application/pdf");
-    res.setHeader("Content-Disposition", `attachment; filename="rental-agreement-${booking.id}.pdf"`);
+    res.setHeader(
+      "Content-Disposition",
+      `${forceDownload ? "attachment" : "inline"}; filename="rental-agreement-${booking.id}.pdf"`
+    );
     fs.createReadStream(filepath).pipe(res);
   } catch (err) {
     req.log.error(err);
