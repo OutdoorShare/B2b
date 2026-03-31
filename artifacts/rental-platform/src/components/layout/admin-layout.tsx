@@ -16,6 +16,7 @@ import {
   Wallet,
   Tag,
   Plus,
+  Rocket,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useGetBusinessProfile } from "@workspace/api-client-react";
@@ -23,6 +24,7 @@ import { getAdminSlug } from "@/lib/admin-nav";
 
 const NAV_ITEMS = [
   { name: "Dashboard", path: "", icon: LayoutDashboard },
+  { name: "Launchpad", path: "/launchpad", icon: Rocket },
   { name: "Listings", path: "/listings", icon: Package },
   { name: "Bookings", path: "/bookings", icon: CalendarDays },
   { name: "Quotes", path: "/quotes", icon: FileText },
