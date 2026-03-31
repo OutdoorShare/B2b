@@ -98,7 +98,7 @@ router.put("/business", async (req, res) => {
       socialInstagram, socialFacebook, socialTwitter,
       depositRequired, depositPercent,
       cancellationPolicy, rentalTerms,
-      kioskModeEnabled, embedCode,
+      kioskModeEnabled, instantBooking, embedCode,
     } = req.body;
 
     const safeBody = {
@@ -125,6 +125,7 @@ router.put("/business", async (req, res) => {
       ...(cancellationPolicy !== undefined && { cancellationPolicy }),
       ...(rentalTerms        !== undefined && { rentalTerms }),
       ...(kioskModeEnabled   !== undefined && { kioskModeEnabled }),
+      ...(instantBooking     !== undefined && { instantBooking }),
       ...(embedCode          !== undefined && { embedCode }),
       depositPercent: depositPercent !== undefined ? String(depositPercent) : undefined,
     };

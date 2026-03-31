@@ -121,6 +121,16 @@ router.post("/bookings", async (req, res) => {
     const assignedUnitIds = Array.isArray(rawUnitIds) && rawUnitIds.length > 0 ? JSON.stringify(rawUnitIds) : null;
     // Set agreementSignedAt server-side when the customer provides their signature
     const agreementSignedAt = restBody.agreementSignerName ? new Date() : null;
+
+    // Check if this tenant has instant booking enabled
+    let autoConfirm = false;
+    if (req.tenantId) {
+      const [biz] = await db.select({ instantBooking: businessProfileTable.instantBooking })
+        .from(businessProfileTable)
+        .where(eq(businessProfileTable.tenantId, req.tenantId));
+      autoConfirm = biz?.instantBooking ?? false;
+    }
+
     const [created] = await db.insert(bookingsTable).values({
       ...restBody,
       tenantId: req.tenantId ?? null,
@@ -130,6 +140,7 @@ router.post("/bookings", async (req, res) => {
       agreementSignedAt,
       agreementSignature: agreementSignatureDataUrl ?? null,
       ruleInitials: ruleInitialsJson ?? null,
+      ...(autoConfirm ? { status: "confirmed" } : {}),
     }).returning();
 
     // Generate and save agreement PDF in the background

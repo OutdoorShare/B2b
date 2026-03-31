@@ -566,6 +566,18 @@ export default function AdminSettings() {
               <CardContent className="space-y-6">
                 <div className="flex items-center justify-between border rounded-lg p-4">
                   <div className="space-y-0.5">
+                    <Label className="text-base">Instant Booking</Label>
+                    <p className="text-sm text-muted-foreground">
+                      When on, new bookings are automatically confirmed. When off, each booking requires your manual approval.
+                    </p>
+                  </div>
+                  <Switch
+                    checked={formData.instantBooking || false}
+                    onCheckedChange={checked => handleSwitchChange("instantBooking", checked)}
+                  />
+                </div>
+                <div className="flex items-center justify-between border rounded-lg p-4">
+                  <div className="space-y-0.5">
                     <Label className="text-base">Require Security Deposit</Label>
                     <p className="text-sm text-muted-foreground">Hold a deposit on customer cards during rentals.</p>
                   </div>

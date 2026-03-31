@@ -29,6 +29,7 @@ export const businessProfileTable = pgTable("business_profile", {
   cancellationPolicy: text("cancellation_policy").notNull().default("Full refund if cancelled 48 hours before start date."),
   rentalTerms: text("rental_terms"),
   kioskModeEnabled: boolean("kiosk_mode_enabled").notNull().default(false),
+  instantBooking: boolean("instant_booking").notNull().default(false),
   embedCode: text("embed_code"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
