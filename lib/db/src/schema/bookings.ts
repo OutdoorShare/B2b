@@ -28,6 +28,9 @@ export const bookingsTable = pgTable("bookings", {
   stripePaymentIntentId: text("stripe_payment_intent_id"),
   stripePaymentStatus: text("stripe_payment_status"),
   stripePlatformFee: decimal("stripe_platform_fee", { precision: 10, scale: 2 }),
+  pickupToken: text("pickup_token"),
+  pickupPhotos: text("pickup_photos"),
+  pickupCompletedAt: timestamp("pickup_completed_at"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });

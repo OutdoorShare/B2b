@@ -268,6 +268,61 @@ export async function sendAccountUpdatedEmail(opts: {
   });
 }
 
+// ── Pickup link email (to renter) ────────────────────────────────────────────
+export async function sendPickupLinkEmail(opts: {
+  toEmail: string;
+  customerName: string;
+  pickupUrl: string;
+  listingTitle: string;
+  startDate: string;
+  endDate: string;
+  companyName: string;
+}): Promise<void> {
+  const { toEmail, customerName, pickupUrl, listingTitle, startDate, endDate, companyName } = opts;
+
+  const tableRows: { label: string; value: string }[] = [
+    { label: "Equipment",   value: listingTitle },
+    { label: "Pickup Date", value: startDate },
+    { label: "Return Date", value: endDate },
+    { label: "Company",     value: companyName },
+  ];
+
+  const body = `
+    <p style="margin:0 0 8px;font-size:18px;font-weight:700;color:${BRAND_DARK};">Pre-Pickup Photo Check Required</p>
+    <p style="margin:0 0 20px;font-size:15px;color:#374151;line-height:1.6;">
+      Hi <strong>${customerName}</strong>, it's almost time to pick up your rental from <strong>${companyName}</strong>.
+      Before pickup, please document the condition of the equipment by uploading photos using the link below.
+      These photos protect you in case of any future damage claims.
+    </p>
+    ${infoTable(tableRows)}
+    <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:16px;margin:20px 0;">
+      <p style="margin:0;font-size:13px;color:#166534;font-weight:600;">📸 What to photograph:</p>
+      <ul style="margin:8px 0 0;padding-left:20px;font-size:13px;color:#15803d;line-height:1.8;">
+        <li>All sides of the equipment (front, back, left, right)</li>
+        <li>Any existing scratches, dents, or damage</li>
+        <li>Serial numbers or identifying markings</li>
+      </ul>
+    </div>
+    ${ctaButton("Upload Pickup Photos", pickupUrl, BRAND_GREEN)}
+    <p style="margin:0;font-size:13px;color:#9ca3af;text-align:center;">
+      This link is unique to your booking and expires after pickup is complete.
+    </p>
+  `;
+
+  const html = emailShell({
+    preheader: `Upload pickup photos for your ${listingTitle} rental — required before pickup.`,
+    badgeLabel: "Action Required — Upload Pickup Photos",
+    badgeColor: BRAND_GREEN,
+    body,
+  });
+
+  const gmail = await getUncachableGmailClient();
+  await gmail.users.messages.send({
+    userId: "me",
+    requestBody: { raw: makeRawEmail(toEmail, `[${companyName}] Please upload pickup photos for your rental`, html) },
+  });
+}
+
 // ── Claim alert email (to superadmin) ─────────────────────────────────────────
 export async function sendClaimChargeEmail(opts: {
   claimId: number;

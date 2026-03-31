@@ -1,12 +1,31 @@
 import { Router, type IRouter } from "express";
 import fs from "fs";
 import path from "path";
+import multer from "multer";
+import { randomBytes } from "crypto";
 import { db } from "@workspace/db";
 import { bookingsTable, listingsTable, businessProfileTable } from "@workspace/db/schema";
 import { eq, and, gte, lte } from "drizzle-orm";
 import { generateAgreementPdf } from "../lib/generate-agreement-pdf";
+import { sendPickupLinkEmail } from "../services/gmail";
 
 const UPLOADS_DIR_BOOKINGS = path.resolve(process.cwd(), "uploads");
+
+// Multer for pickup photo uploads (stored in same uploads dir)
+const pickupUpload = multer({
+  storage: multer.diskStorage({
+    destination: (_req, _file, cb) => cb(null, UPLOADS_DIR_BOOKINGS),
+    filename: (_req, file, cb) => {
+      const ext = path.extname(file.originalname).toLowerCase() || ".jpg";
+      cb(null, `pickup_${randomBytes(10).toString("hex")}${ext}`);
+    },
+  }),
+  limits: { fileSize: 10 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => {
+    if (file.mimetype.startsWith("image/")) cb(null, true);
+    else cb(new Error("Only image files allowed"));
+  },
+});
 
 const router: IRouter = Router();
 
@@ -16,6 +35,8 @@ function formatBooking(b: typeof bookingsTable.$inferSelect, listingTitle: strin
     listingTitle,
     totalPrice: parseFloat(b.totalPrice ?? "0"),
     depositPaid: b.depositPaid ? parseFloat(b.depositPaid) : null,
+    pickupPhotos: b.pickupPhotos ? JSON.parse(b.pickupPhotos) : [],
+    pickupCompletedAt: b.pickupCompletedAt ? b.pickupCompletedAt.toISOString() : null,
     createdAt: b.createdAt.toISOString(),
     updatedAt: b.updatedAt.toISOString(),
   };
@@ -249,6 +270,113 @@ router.put("/bookings/:id", async (req, res) => {
   } catch (err) {
     req.log.error(err);
     res.status(500).json({ error: "Failed to update booking" });
+  }
+});
+
+// ── POST /bookings/:id/send-pickup-link ────────────────────────────────────────
+// Admin: generate a unique token and email the renter their pickup photo link
+router.post("/bookings/:id/send-pickup-link", async (req, res) => {
+  try {
+    const bookingId = Number(req.params.id);
+    const conditions = [eq(bookingsTable.id, bookingId)];
+    if (req.tenantId) conditions.push(eq(bookingsTable.tenantId, req.tenantId));
+
+    const [booking] = await db.select().from(bookingsTable).where(and(...conditions));
+    if (!booking) { res.status(404).json({ error: "Booking not found" }); return; }
+
+    // Generate a token (or reuse existing one)
+    const token = booking.pickupToken ?? randomBytes(24).toString("hex");
+    await db.update(bookingsTable).set({ pickupToken: token, updatedAt: new Date() }).where(eq(bookingsTable.id, bookingId));
+
+    // Get listing title and business profile for the email
+    const [listing] = await db.select({ title: listingsTable.title }).from(listingsTable).where(eq(listingsTable.id, booking.listingId));
+    let companyName = "OutdoorShare";
+    if (req.tenantId) {
+      const [biz] = await db.select({ name: businessProfileTable.name }).from(businessProfileTable).where(eq(businessProfileTable.tenantId, req.tenantId));
+      if (biz?.name) companyName = biz.name;
+    }
+
+    const BASE = process.env.APP_URL || `https://${process.env.REPLIT_DEV_DOMAIN}`;
+    const slug = req.headers["x-tenant-slug"] as string ?? "";
+    const pickupUrl = `${BASE}/${slug}/pickup/${token}`;
+
+    sendPickupLinkEmail({
+      toEmail: booking.customerEmail,
+      customerName: booking.customerName,
+      pickupUrl,
+      listingTitle: listing?.title ?? "Rental Equipment",
+      startDate: booking.startDate,
+      endDate: booking.endDate,
+      companyName,
+    }).catch(err => console.error("[pickup email]", err));
+
+    res.json({ ok: true, token, pickupUrl });
+  } catch (err) {
+    req.log.error(err);
+    res.status(500).json({ error: "Failed to send pickup link" });
+  }
+});
+
+// ── GET /pickup/:token ────────────────────────────────────────────────────────
+// Public: renter loads their pickup page
+router.get("/pickup/:token", async (req, res) => {
+  try {
+    const { token } = req.params;
+    const [booking] = await db.select().from(bookingsTable).where(eq(bookingsTable.pickupToken, token));
+    if (!booking) { res.status(404).json({ error: "Pickup link not found or expired" }); return; }
+
+    const [listing] = await db.select({ title: listingsTable.title, imageUrls: listingsTable.imageUrls }).from(listingsTable).where(eq(listingsTable.id, booking.listingId));
+    let companyName = "OutdoorShare";
+    let logoUrl: string | null = null;
+    if (booking.tenantId) {
+      const [biz] = await db.select({ name: businessProfileTable.name, logoUrl: businessProfileTable.logoUrl }).from(businessProfileTable).where(eq(businessProfileTable.tenantId, booking.tenantId));
+      if (biz?.name) companyName = biz.name;
+      if (biz?.logoUrl) logoUrl = biz.logoUrl;
+    }
+
+    res.json({
+      bookingId: booking.id,
+      customerName: booking.customerName,
+      startDate: booking.startDate,
+      endDate: booking.endDate,
+      listingTitle: listing?.title ?? "Rental Equipment",
+      listingImage: Array.isArray(listing?.imageUrls) && listing.imageUrls.length > 0 ? listing.imageUrls[0] : null,
+      companyName,
+      logoUrl,
+      pickupCompleted: !!booking.pickupCompletedAt,
+      pickupPhotos: booking.pickupPhotos ? JSON.parse(booking.pickupPhotos) : [],
+    });
+  } catch (err) {
+    req.log.error(err);
+    res.status(500).json({ error: "Failed to load pickup info" });
+  }
+});
+
+// ── POST /pickup/:token/photos ────────────────────────────────────────────────
+// Public: renter uploads pickup condition photos
+router.post("/pickup/:token/photos", pickupUpload.array("photos", 20), async (req, res) => {
+  try {
+    const { token } = req.params;
+    const [booking] = await db.select().from(bookingsTable).where(eq(bookingsTable.pickupToken, token));
+    if (!booking) { res.status(404).json({ error: "Pickup link not found" }); return; }
+
+    const files = req.files as Express.Multer.File[];
+    if (!files || files.length === 0) { res.status(400).json({ error: "No photos uploaded" }); return; }
+
+    const existingPhotos: string[] = booking.pickupPhotos ? JSON.parse(booking.pickupPhotos) : [];
+    const newPhotoUrls = files.map(f => `/api/uploads/${f.filename}`);
+    const allPhotos = [...existingPhotos, ...newPhotoUrls];
+
+    await db.update(bookingsTable).set({
+      pickupPhotos: JSON.stringify(allPhotos),
+      pickupCompletedAt: booking.pickupCompletedAt ?? new Date(),
+      updatedAt: new Date(),
+    }).where(eq(bookingsTable.id, booking.id));
+
+    res.json({ ok: true, photos: allPhotos, count: allPhotos.length });
+  } catch (err) {
+    req.log.error(err);
+    res.status(500).json({ error: "Failed to upload pickup photos" });
   }
 });
 

@@ -1,4 +1,4 @@
-import { adminPath } from "@/lib/admin-nav";
+import { adminPath, getAdminSession } from "@/lib/admin-nav";
 import { useState, useEffect } from "react";
 import { useParams } from "wouter";
 import { 
@@ -16,7 +16,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { Link, useLocation } from "wouter";
-import { ArrowLeft, User, Phone, Mail, Calendar, Package, StickyNote, ShieldAlert, Pencil, FileSignature, ChevronDown, ChevronUp, Download } from "lucide-react";
+import { ArrowLeft, User, Phone, Mail, Calendar, Package, StickyNote, ShieldAlert, Pencil, FileSignature, ChevronDown, ChevronUp, Download, Camera, CheckCircle2, Loader2, ExternalLink, ImageIcon } from "lucide-react";
 import { format, differenceInDays } from "date-fns";
 
 export default function AdminBookingDetail() {
@@ -33,6 +33,8 @@ export default function AdminBookingDetail() {
   const updateBooking = useUpdateBooking();
   const [adminNotes, setAdminNotes] = useState("");
   const [agreementExpanded, setAgreementExpanded] = useState(false);
+  const [sendingPickupLink, setSendingPickupLink] = useState(false);
+  const [pickupLinkSent, setPickupLinkSent] = useState(false);
 
   useEffect(() => {
     if (booking?.adminNotes) {
@@ -42,6 +44,22 @@ export default function AdminBookingDetail() {
 
   if (isLoading) return <div className="p-8">Loading booking details...</div>;
   if (!booking) return <div className="p-8">Booking not found</div>;
+
+  const sendPickupLink = async () => {
+    setSendingPickupLink(true);
+    try {
+      const r = await fetch(`/api/bookings/${id}/send-pickup-link`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...(getAdminSession()?.token ? { "x-admin-token": getAdminSession()!.token } : {}) },
+      });
+      const data = await r.json();
+      if (!r.ok || data.error) { toast({ title: "Error", description: data.error ?? "Failed to send link", variant: "destructive" }); return; }
+      setPickupLinkSent(true);
+      toast({ title: "Pickup link sent!", description: "The renter has been emailed a link to upload pre-pickup photos." });
+    } finally {
+      setSendingPickupLink(false);
+    }
+  };
 
   const handleStatusChange = (newStatus: any) => {
     updateBooking.mutate(
@@ -132,6 +150,19 @@ export default function AdminBookingDetail() {
               Submit Claim
             </Button>
           </Link>
+        )}
+
+        {/* Send Pickup Photo Link */}
+        {['confirmed', 'active'].includes(booking.status) && (
+          <Button
+            variant="outline"
+            className={`gap-2 ${(booking as any).pickupCompletedAt ? "border-green-300 text-green-700" : "border-blue-300 text-blue-700 hover:bg-blue-50 hover:border-blue-400"}`}
+            onClick={sendPickupLink}
+            disabled={sendingPickupLink || pickupLinkSent}
+          >
+            {sendingPickupLink ? <Loader2 className="w-4 h-4 animate-spin" /> : (booking as any).pickupCompletedAt ? <CheckCircle2 className="w-4 h-4" /> : <Camera className="w-4 h-4" />}
+            {(booking as any).pickupCompletedAt ? "Photos Submitted" : pickupLinkSent ? "Link Sent!" : "Send Pickup Link"}
+          </Button>
         )}
 
         <Button 
@@ -335,8 +366,51 @@ export default function AdminBookingDetail() {
           )}
         </div>
 
-        {/* Right Column: Payment */}
+        {/* Right Column: Payment + Pickup Photos */}
         <div className="lg:col-span-1 space-y-8">
+
+          {/* Pickup Photos Card */}
+          {((booking as any).pickupPhotos?.length > 0 || (booking as any).pickupCompletedAt) && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Camera className="w-5 h-5 text-primary" />
+                  Pre-Pickup Photos
+                  {(booking as any).pickupCompletedAt && (
+                    <span className="ml-auto">
+                      <CheckCircle2 className="w-4 h-4 text-green-600" />
+                    </span>
+                  )}
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                {(booking as any).pickupPhotos?.length > 0 ? (
+                  <div className="grid grid-cols-2 gap-2">
+                    {(booking as any).pickupPhotos.map((url: string, i: number) => (
+                      <a key={i} href={url} target="_blank" rel="noopener noreferrer" className="relative group">
+                        <div className="aspect-square rounded-lg overflow-hidden bg-gray-100">
+                          <img src={url} alt={`Pickup photo ${i + 1}`} className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
+                        </div>
+                        <div className="absolute inset-0 flex items-center justify-center bg-black/0 group-hover:bg-black/20 rounded-lg transition-colors">
+                          <ExternalLink className="w-5 h-5 text-white opacity-0 group-hover:opacity-100 transition-opacity" />
+                        </div>
+                      </a>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="text-center py-4 text-muted-foreground text-sm">
+                    <ImageIcon className="w-8 h-8 mx-auto mb-2 opacity-40" />
+                    <p>Link sent — awaiting renter photos</p>
+                  </div>
+                )}
+                {(booking as any).pickupCompletedAt && (
+                  <p className="text-xs text-muted-foreground mt-3">
+                    Submitted {format(new Date((booking as any).pickupCompletedAt), "MMM d, yyyy h:mm a")}
+                  </p>
+                )}
+              </CardContent>
+            </Card>
+          )}
           <Card>
             <CardHeader>
               <CardTitle>Payment Summary</CardTitle>
