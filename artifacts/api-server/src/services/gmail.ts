@@ -76,6 +76,105 @@ const APP_URL =
   process.env.APP_URL ||
   (process.env.REPLIT_DEV_DOMAIN ? `https://${process.env.REPLIT_DEV_DOMAIN}` : "https://outdoorshare.app");
 
+// ── Brand constants ────────────────────────────────────────────────────────────
+const BRAND_GREEN = "#3ab549";
+const BRAND_DARK = "#1a2332";
+const LOGO_URL = `${APP_URL}/outdoorshare-logo.png`;
+
+// ── Shared HTML wrapper ────────────────────────────────────────────────────────
+function emailShell(opts: {
+  preheader: string;
+  badgeLabel: string;
+  badgeColor: string;
+  body: string;
+}): string {
+  const { preheader, badgeLabel, badgeColor, body } = opts;
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>OutdoorShare</title>
+</head>
+<body style="margin:0;padding:0;background:#f0f2f0;font-family:'Helvetica Neue',Arial,sans-serif;">
+  <!-- preheader text (hidden) -->
+  <span style="display:none;max-height:0;overflow:hidden;mso-hide:all;">${preheader}</span>
+
+  <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#f0f2f0;min-height:100vh;">
+    <tr>
+      <td align="center" valign="top" style="padding:40px 16px;">
+
+        <!-- Card -->
+        <table width="600" cellpadding="0" cellspacing="0" border="0" style="max-width:600px;width:100%;background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,0.10);">
+
+          <!-- Header: logo on dark bg -->
+          <tr>
+            <td style="background:${BRAND_DARK};padding:28px 40px;text-align:center;">
+              <img src="${LOGO_URL}" alt="OutdoorShare" width="180" style="display:inline-block;max-width:180px;height:auto;" />
+            </td>
+          </tr>
+
+          <!-- Badge strip -->
+          <tr>
+            <td style="background:${badgeColor};padding:12px 40px;text-align:center;">
+              <span style="color:#ffffff;font-size:13px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;">${badgeLabel}</span>
+            </td>
+          </tr>
+
+          <!-- Body content -->
+          <tr>
+            <td style="padding:36px 40px;">
+              ${body}
+            </td>
+          </tr>
+
+          <!-- Footer -->
+          <tr>
+            <td style="background:#f8faf8;padding:20px 40px;text-align:center;border-top:1px solid #e5e7eb;">
+              <p style="margin:0 0 6px 0;font-size:13px;color:#6b7280;">
+                <strong style="color:${BRAND_GREEN};">OutdoorShare</strong> &mdash; Find New Boundaries
+              </p>
+              <p style="margin:0;font-size:11px;color:#9ca3af;">
+                This email was sent by the OutdoorShare platform. Please do not reply to this message.
+              </p>
+            </td>
+          </tr>
+
+        </table>
+        <!-- /Card -->
+
+      </td>
+    </tr>
+  </table>
+</body>
+</html>`;
+}
+
+// ── Shared CTA button ──────────────────────────────────────────────────────────
+function ctaButton(label: string, url: string, color = BRAND_GREEN): string {
+  return `<table cellpadding="0" cellspacing="0" border="0" style="margin:32px auto;">
+    <tr>
+      <td align="center" style="border-radius:8px;background:${color};">
+        <a href="${url}" target="_blank" style="display:inline-block;padding:14px 40px;font-size:16px;font-weight:700;color:#ffffff;text-decoration:none;border-radius:8px;letter-spacing:0.3px;">${label}</a>
+      </td>
+    </tr>
+  </table>`;
+}
+
+// ── Info table ─────────────────────────────────────────────────────────────────
+function infoTable(rows: { label: string; value: string; mono?: boolean }[]): string {
+  const rowsHtml = rows.map(r => `
+    <tr>
+      <td style="padding:10px 16px;background:#f8faf8;font-size:13px;color:#6b7280;font-weight:600;white-space:nowrap;border-bottom:1px solid #e5e7eb;width:130px;">${r.label}</td>
+      <td style="padding:10px 16px;font-size:14px;color:#111827;border-bottom:1px solid #e5e7eb;${r.mono ? "font-family:monospace;letter-spacing:0.5px;" : ""}">${r.value}</td>
+    </tr>`).join("");
+
+  return `<table cellpadding="0" cellspacing="0" border="0" width="100%" style="border-radius:8px;overflow:hidden;border:1px solid #e5e7eb;margin:24px 0;">
+    <tbody>${rowsHtml}</tbody>
+  </table>`;
+}
+
+// ── Welcome email ──────────────────────────────────────────────────────────────
 export async function sendWelcomeEmail(opts: {
   toEmail: string;
   companyName: string;
@@ -84,49 +183,33 @@ export async function sendWelcomeEmail(opts: {
 }): Promise<void> {
   const { toEmail, companyName, slug, password } = opts;
   const loginUrl = `${APP_URL}/admin`;
+  const storefrontUrl = `${APP_URL}/${slug}`;
 
-  const html = `
-<!DOCTYPE html>
-<html>
-<body style="font-family: Arial, sans-serif; background: #f4f4f4; margin: 0; padding: 0;">
-  <div style="max-width: 600px; margin: 40px auto; background: #ffffff; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.08);">
-    <div style="background: #16a34a; padding: 32px 40px;">
-      <h1 style="color: #ffffff; margin: 0; font-size: 24px;">Welcome to OutdoorShare</h1>
-    </div>
-    <div style="padding: 32px 40px;">
-      <p style="font-size: 16px; color: #333;">Hi there,</p>
-      <p style="font-size: 16px; color: #333;">
-        Your rental management account for <strong>${companyName}</strong> has been created and is ready to go.
-      </p>
-      <table style="background: #f9fafb; border-radius: 6px; padding: 20px 24px; width: 100%; border-collapse: collapse; margin: 24px 0;">
-        <tr>
-          <td style="padding: 8px 0; color: #555; font-size: 14px; width: 120px;"><strong>Email</strong></td>
-          <td style="padding: 8px 0; font-size: 14px; color: #111;">${toEmail}</td>
-        </tr>
-        <tr>
-          <td style="padding: 8px 0; color: #555; font-size: 14px;"><strong>Password</strong></td>
-          <td style="padding: 8px 0; font-size: 14px; color: #111; font-family: monospace;">${password}</td>
-        </tr>
-        <tr>
-          <td style="padding: 8px 0; color: #555; font-size: 14px;"><strong>Storefront</strong></td>
-          <td style="padding: 8px 0; font-size: 14px;"><a href="${APP_URL}/${slug}" style="color: #16a34a;">${APP_URL}/${slug}</a></td>
-        </tr>
-      </table>
-      <div style="text-align: center; margin: 32px 0;">
-        <a href="${loginUrl}" style="background: #16a34a; color: #fff; text-decoration: none; padding: 14px 36px; border-radius: 6px; font-size: 16px; font-weight: bold; display: inline-block;">
-          Log In to Your Dashboard
-        </a>
-      </div>
-      <p style="font-size: 14px; color: #888; text-align: center;">
-        We recommend changing your password after your first login.
-      </p>
-    </div>
-    <div style="background: #f0fdf4; padding: 16px 40px; text-align: center; border-top: 1px solid #e5e7eb;">
-      <p style="font-size: 12px; color: #999; margin: 0;">Powered by OutdoorShare &mdash; Rental Management Platform</p>
-    </div>
-  </div>
-</body>
-</html>`;
+  const body = `
+    <p style="margin:0 0 8px;font-size:18px;font-weight:700;color:${BRAND_DARK};">Welcome aboard, ${companyName}! 🎉</p>
+    <p style="margin:0 0 20px;font-size:15px;color:#374151;line-height:1.6;">
+      Your rental management account has been created and is ready to use. Below are your login credentials — keep them safe.
+    </p>
+
+    ${infoTable([
+      { label: "Email", value: toEmail },
+      { label: "Password", value: password, mono: true },
+      { label: "Storefront", value: `<a href="${storefrontUrl}" style="color:${BRAND_GREEN};text-decoration:none;">${storefrontUrl}</a>` },
+    ])}
+
+    ${ctaButton("Log In to Your Dashboard", loginUrl)}
+
+    <p style="margin:0;font-size:13px;color:#9ca3af;text-align:center;">
+      We recommend changing your password after your first login.
+    </p>
+  `;
+
+  const html = emailShell({
+    preheader: `Your OutdoorShare account for ${companyName} is ready. Log in to get started.`,
+    badgeLabel: "Account Created",
+    badgeColor: BRAND_GREEN,
+    body,
+  });
 
   const gmail = await getUncachableGmailClient();
   await gmail.users.messages.send({
@@ -135,6 +218,7 @@ export async function sendWelcomeEmail(opts: {
   });
 }
 
+// ── Account updated email ──────────────────────────────────────────────────────
 export async function sendAccountUpdatedEmail(opts: {
   toEmail: string;
   companyName: string;
@@ -144,53 +228,38 @@ export async function sendAccountUpdatedEmail(opts: {
 }): Promise<void> {
   const { toEmail, companyName, slug, passwordChanged, newPassword } = opts;
   const loginUrl = `${APP_URL}/admin`;
+  const storefrontUrl = `${APP_URL}/${slug}`;
 
-  const passwordSection = passwordChanged && newPassword
-    ? `<tr>
-        <td style="padding: 8px 0; color: #555; font-size: 14px; width: 140px;"><strong>New Password</strong></td>
-        <td style="padding: 8px 0; font-size: 14px; color: #111; font-family: monospace;">${newPassword}</td>
-       </tr>`
-    : "";
+  const tableRows: { label: string; value: string; mono?: boolean }[] = [
+    { label: "Email", value: toEmail },
+    { label: "Storefront", value: `<a href="${storefrontUrl}" style="color:${BRAND_GREEN};text-decoration:none;">${storefrontUrl}</a>` },
+  ];
+  if (passwordChanged && newPassword) {
+    tableRows.push({ label: "New Password", value: newPassword, mono: true });
+  }
 
-  const html = `
-<!DOCTYPE html>
-<html>
-<body style="font-family: Arial, sans-serif; background: #f4f4f4; margin: 0; padding: 0;">
-  <div style="max-width: 600px; margin: 40px auto; background: #ffffff; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.08);">
-    <div style="background: #1d4ed8; padding: 32px 40px;">
-      <h1 style="color: #ffffff; margin: 0; font-size: 24px;">Account Updated</h1>
-    </div>
-    <div style="padding: 32px 40px;">
-      <p style="font-size: 16px; color: #333;">Hi there,</p>
-      <p style="font-size: 16px; color: #333;">
-        Your <strong>OutdoorShare</strong> account for <strong>${companyName}</strong> has been updated by the platform administrator.
-      </p>
-      <table style="background: #f9fafb; border-radius: 6px; padding: 20px 24px; width: 100%; border-collapse: collapse; margin: 24px 0;">
-        <tr>
-          <td style="padding: 8px 0; color: #555; font-size: 14px; width: 140px;"><strong>Email</strong></td>
-          <td style="padding: 8px 0; font-size: 14px; color: #111;">${toEmail}</td>
-        </tr>
-        <tr>
-          <td style="padding: 8px 0; color: #555; font-size: 14px;"><strong>Storefront</strong></td>
-          <td style="padding: 8px 0; font-size: 14px;"><a href="${APP_URL}/${slug}" style="color: #1d4ed8;">${APP_URL}/${slug}</a></td>
-        </tr>
-        ${passwordSection}
-      </table>
-      <div style="text-align: center; margin: 32px 0;">
-        <a href="${loginUrl}" style="background: #1d4ed8; color: #fff; text-decoration: none; padding: 14px 36px; border-radius: 6px; font-size: 16px; font-weight: bold; display: inline-block;">
-          Log In to Your Dashboard
-        </a>
-      </div>
-      <p style="font-size: 14px; color: #888; text-align: center;">
-        If you did not expect this change, please contact us immediately.
-      </p>
-    </div>
-    <div style="background: #eff6ff; padding: 16px 40px; text-align: center; border-top: 1px solid #e5e7eb;">
-      <p style="font-size: 12px; color: #999; margin: 0;">Powered by OutdoorShare &mdash; Rental Management Platform</p>
-    </div>
-  </div>
-</body>
-</html>`;
+  const body = `
+    <p style="margin:0 0 8px;font-size:18px;font-weight:700;color:${BRAND_DARK};">Your account has been updated</p>
+    <p style="margin:0 0 20px;font-size:15px;color:#374151;line-height:1.6;">
+      Your <strong>OutdoorShare</strong> account for <strong>${companyName}</strong> was updated by the platform administrator.
+      ${passwordChanged && newPassword ? "Your password has been changed — please update it after logging in." : "Review the details below."}
+    </p>
+
+    ${infoTable(tableRows)}
+
+    ${ctaButton("Log In to Your Dashboard", loginUrl)}
+
+    <p style="margin:0;font-size:13px;color:#9ca3af;text-align:center;">
+      If you did not expect this change, please contact OutdoorShare support immediately.
+    </p>
+  `;
+
+  const html = emailShell({
+    preheader: `Your OutdoorShare account for ${companyName} has been updated.`,
+    badgeLabel: "Account Updated",
+    badgeColor: "#0e7490",
+    body,
+  });
 
   const gmail = await getUncachableGmailClient();
   await gmail.users.messages.send({
