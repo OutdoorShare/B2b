@@ -17,7 +17,8 @@ import { useToast } from "@/hooks/use-toast";
 import {
   ArrowLeft, Edit, ExternalLink, Package, Tag, DollarSign,
   CalendarDays, TrendingUp, Wrench,
-  Check, ChevronRight, Ban, Trash2, CalendarOff
+  Check, ChevronRight, Ban, Trash2, CalendarOff,
+  ShieldCheck, Users, Search, X, Clock,
 } from "lucide-react";
 import { format, addDays, startOfDay, isAfter } from "date-fns";
 import { UnitIdentifiersManager } from "@/components/unit-identifiers-manager";
@@ -56,6 +57,11 @@ export default function AdminListingDetail() {
   const { toast } = useToast();
   const [activeImage, setActiveImage] = useState(0);
   const [addons, setAddons] = useState<Addon[]>([]);
+
+  // Bookings filter state
+  type BookingTab = "all" | "upcoming" | "recent" | "cancelled";
+  const [bookingTab, setBookingTab] = useState<BookingTab>("recent");
+  const [bookingSearch, setBookingSearch] = useState("");
 
   // Blocked dates state
   type BlockedDate = { id: number; startDate: string; endDate: string; reason: string | null };
@@ -381,42 +387,168 @@ export default function AdminListingDetail() {
             )}
           </div>
 
-          {/* Recent bookings */}
-          <div className="bg-background rounded-2xl border p-5 space-y-3">
-            <div className="flex items-center justify-between">
-              <h3 className="font-semibold text-sm flex items-center gap-2">
-                <CalendarDays className="w-4 h-4 text-primary" /> Recent Bookings
-              </h3>
-              <Link href={adminPath(`/bookings?listingId=${listing.id}`)}>
-                <button className="text-xs text-primary hover:underline">View all</button>
-              </Link>
+          {/* Bookings quick link */}
+          <div className="bg-background rounded-2xl border p-5 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <CalendarDays className="w-4 h-4 text-primary" />
+              <span className="font-semibold text-sm">Bookings</span>
+              <span className="text-xs bg-muted text-muted-foreground px-2 py-0.5 rounded-full font-semibold">{bookings.length}</span>
             </div>
-            {recentBookings.length === 0 ? (
-              <p className="text-sm text-muted-foreground">No bookings yet.</p>
-            ) : (
-              <div className="space-y-2">
-                {recentBookings.map(b => (
-                  <Link key={b.id} href={adminPath(`/bookings/${b.id}`)}>
-                    <div className="flex items-center gap-3 p-2 rounded-lg hover:bg-muted/50 transition-colors cursor-pointer group">
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-semibold truncate">{b.customerName}</p>
-                        <p className="text-xs text-muted-foreground">{b.startDate} → {b.endDate}</p>
-                      </div>
-                      <div className="text-right shrink-0 space-y-0.5">
-                        <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${BOOKING_STATUS_COLORS[b.status] ?? "bg-muted text-muted-foreground"}`}>
-                          {b.status}
-                        </span>
-                        <p className="text-xs font-bold">${typeof b.totalPrice === "number" ? b.totalPrice.toFixed(2) : parseFloat(String(b.totalPrice ?? 0)).toFixed(2)}</p>
-                      </div>
-                      <ChevronRight className="w-3.5 h-3.5 text-muted-foreground group-hover:text-foreground shrink-0" />
-                    </div>
-                  </Link>
-                ))}
-              </div>
-            )}
+            <Link href={adminPath(`/bookings?listingId=${listing.id}`)}>
+              <button className="text-xs text-primary hover:underline flex items-center gap-1">View all <ChevronRight className="w-3 h-3" /></button>
+            </Link>
           </div>
         </div>
       </div>
+
+      {/* ── Bookings Panel ──────────────────────────────────────────────────── */}
+      {(() => {
+        const today = startOfDay(new Date());
+
+        const tabFiltered = (() => {
+          const all = [...bookings];
+          if (bookingTab === "upcoming") {
+            return all
+              .filter(b => b.status !== "cancelled" && isAfter(startOfDay(new Date(b.startDate)), today) || startOfDay(new Date(b.startDate)).getTime() === today.getTime() && b.status !== "cancelled")
+              .sort((a, b) => new Date(a.startDate).getTime() - new Date(b.startDate).getTime());
+          }
+          if (bookingTab === "recent") {
+            return all
+              .filter(b => b.status !== "cancelled")
+              .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+          }
+          if (bookingTab === "cancelled") {
+            return all
+              .filter(b => b.status === "cancelled")
+              .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+          }
+          // all
+          return all.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+        })();
+
+        const q = bookingSearch.trim().toLowerCase();
+        const displayed = q
+          ? tabFiltered.filter(b =>
+              (b.customerName ?? "").toLowerCase().includes(q) ||
+              (b.customerEmail ?? "").toLowerCase().includes(q) ||
+              (b.startDate ?? "").includes(q) ||
+              (b.endDate ?? "").includes(q) ||
+              (b.status ?? "").includes(q) ||
+              String(b.id).includes(q)
+            )
+          : tabFiltered;
+
+        const TABS: { key: BookingTab; label: string; count: number }[] = [
+          { key: "recent",    label: "Recent",    count: bookings.filter(b => b.status !== "cancelled").length },
+          { key: "upcoming",  label: "Upcoming",  count: bookings.filter(b => b.status !== "cancelled" && !isAfter(today, startOfDay(new Date(b.startDate))) ).length },
+          { key: "cancelled", label: "Cancelled", count: bookings.filter(b => b.status === "cancelled").length },
+          { key: "all",       label: "All",       count: bookings.length },
+        ];
+
+        return (
+          <div className="bg-background rounded-2xl border overflow-hidden">
+            {/* Header */}
+            <div className="px-5 py-4 border-b bg-muted/20 flex flex-col sm:flex-row sm:items-center gap-3">
+              <div className="flex items-center gap-2 shrink-0">
+                <CalendarDays className="w-4 h-4 text-primary" />
+                <h3 className="font-semibold text-sm">Bookings</h3>
+              </div>
+              {/* Tabs */}
+              <div className="flex items-center gap-1 flex-wrap">
+                {TABS.map(t => (
+                  <button
+                    key={t.key}
+                    onClick={() => setBookingTab(t.key)}
+                    className={`px-3 py-1 rounded-full text-xs font-semibold transition-colors flex items-center gap-1.5 ${
+                      bookingTab === t.key
+                        ? "bg-primary text-primary-foreground"
+                        : "bg-muted text-muted-foreground hover:bg-muted/80"
+                    }`}
+                  >
+                    {t.label}
+                    <span className={`text-[10px] px-1.5 py-px rounded-full ${bookingTab === t.key ? "bg-primary-foreground/20 text-primary-foreground" : "bg-background text-muted-foreground"}`}>
+                      {t.count}
+                    </span>
+                  </button>
+                ))}
+              </div>
+              {/* Search */}
+              <div className="relative sm:ml-auto w-full sm:w-64">
+                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
+                <input
+                  value={bookingSearch}
+                  onChange={e => setBookingSearch(e.target.value)}
+                  placeholder="Search by name, date, status…"
+                  className="w-full h-8 pl-8 pr-8 rounded-lg border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+                />
+                {bookingSearch && (
+                  <button
+                    onClick={() => setBookingSearch("")}
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* Booking rows */}
+            <div className="divide-y">
+              {displayed.length === 0 ? (
+                <div className="py-12 text-center text-muted-foreground">
+                  <CalendarDays className="w-8 h-8 mx-auto mb-2 text-muted" />
+                  <p className="text-sm font-medium">
+                    {bookingSearch ? "No bookings match your search" : "No bookings in this view"}
+                  </p>
+                </div>
+              ) : (
+                displayed.map(b => {
+                  const price = typeof b.totalPrice === "number" ? b.totalPrice : parseFloat(String(b.totalPrice ?? "0"));
+                  const isUpcoming = !isAfter(today, startOfDay(new Date(b.startDate)));
+                  return (
+                    <Link key={b.id} href={adminPath(`/bookings/${b.id}`)}>
+                      <div className="flex items-center gap-4 px-5 py-3.5 hover:bg-muted/40 transition-colors cursor-pointer group">
+                        {/* Avatar */}
+                        <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
+                          <Users className="w-4 h-4 text-primary" />
+                        </div>
+                        {/* Customer + dates */}
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-semibold truncate">{b.customerName || "—"}</p>
+                          <p className="text-xs text-muted-foreground flex items-center gap-1 mt-0.5">
+                            <Clock className="w-3 h-3 shrink-0" />
+                            {b.startDate} → {b.endDate}
+                          </p>
+                        </div>
+                        {/* Upcoming badge */}
+                        {isUpcoming && b.status !== "cancelled" && (
+                          <span className="hidden sm:inline-flex text-[10px] font-semibold px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-200 shrink-0">
+                            Upcoming
+                          </span>
+                        )}
+                        {/* Status */}
+                        <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full capitalize shrink-0 ${BOOKING_STATUS_COLORS[b.status] ?? "bg-muted text-muted-foreground"}`}>
+                          {b.status}
+                        </span>
+                        {/* Price */}
+                        <span className="text-sm font-bold shrink-0 w-20 text-right">${price.toFixed(2)}</span>
+                        <ChevronRight className="w-4 h-4 text-muted-foreground group-hover:text-foreground shrink-0" />
+                      </div>
+                    </Link>
+                  );
+                })
+              )}
+            </div>
+
+            {/* Footer count */}
+            {displayed.length > 0 && (
+              <div className="px-5 py-2.5 border-t bg-muted/10 text-xs text-muted-foreground text-right">
+                {displayed.length} booking{displayed.length !== 1 ? "s" : ""}{bookingSearch ? ` matching "${bookingSearch}"` : ""}
+              </div>
+            )}
+          </div>
+        );
+      })()}
 
       {/* ── Availability Management ─────────────────────────────────────────── */}
       {(() => {
