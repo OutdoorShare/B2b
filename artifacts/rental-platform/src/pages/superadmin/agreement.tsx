@@ -1,12 +1,14 @@
 import { useState, useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
+import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
 import { useToast } from "@/hooks/use-toast";
 import {
   FileText, Save, Eye, Edit3, RotateCcw, Clock,
   Info, CheckCircle2, Globe, Tag, Plus, Trash2, ChevronRight,
-  Zap, UserCheck, GripVertical,
+  Zap, UserCheck, GripVertical, FormInput, ToggleLeft, ToggleRight,
+  Pencil, X, Hash, Calendar, AlignLeft, CheckSquare,
 } from "lucide-react";
 import { format } from "date-fns";
 
@@ -41,7 +43,7 @@ const DEFAULT_AGREEMENT = `1. Use of Vehicle. The renter agrees to use the vehic
 type Tab = "edit" | "preview";
 
 // ── Token definitions ────────────────────────────────────────────────────────
-export const AUTO_TOKENS = [
+const AUTO_TOKENS = [
   { key: "renter_name",    label: "Renter Name",    example: "Jane Smith" },
   { key: "renter_email",   label: "Renter Email",   example: "jane@example.com" },
   { key: "renter_phone",   label: "Renter Phone",   example: "(555) 123-4567" },
@@ -57,7 +59,7 @@ export const AUTO_TOKENS = [
   { key: "company_name",   label: "Company Name",   example: "My Rental Co." },
 ] as const;
 
-export const RENTER_TOKENS = [
+const RENTER_TOKENS = [
   { key: "drivers_license",    label: "Driver's License #"  },
   { key: "home_address",       label: "Home Address"        },
   { key: "emergency_contact",  label: "Emergency Contact"   },
@@ -162,6 +164,8 @@ function AgreementEditor({
   onDelete,
   saving,
   deleting,
+  customFields,
+  onInsertTokenRef,
 }: {
   label: string;
   description: string;
@@ -172,6 +176,8 @@ function AgreementEditor({
   onDelete?: () => void;
   saving: boolean;
   deleting?: boolean;
+  customFields?: ContractField[];
+  onInsertTokenRef?: React.MutableRefObject<((token: string) => void) | null>;
 }) {
   const [text, setText] = useState(initialValue);
   const [tab, setTab] = useState<Tab2>("edit");
@@ -201,6 +207,12 @@ function AgreementEditor({
       }
     });
   }
+
+  // Expose insertToken for the ContractFieldsManager
+  useEffect(() => {
+    if (onInsertTokenRef) onInsertTokenRef.current = insertToken;
+  });
+
 
   function handleDrop(e: React.DragEvent<HTMLTextAreaElement>) {
     e.preventDefault();
@@ -334,6 +346,38 @@ function AgreementEditor({
                 </div>
               </div>
 
+              {customFields && customFields.length > 0 && (
+                <>
+                  <Separator className="bg-slate-800 mb-4" />
+                  <div>
+                    <div className="flex items-center gap-1.5 mb-2">
+                      <FormInput className="w-3 h-3 text-purple-400" />
+                      <p className="text-[11px] font-semibold text-purple-400 uppercase tracking-wider">Custom Fields</p>
+                    </div>
+                    <p className="text-[10px] text-slate-600 mb-2 leading-snug">Defined contract fields renters complete before signing.</p>
+                    <div className="flex flex-col gap-1.5">
+                      {customFields.map(f => (
+                        <div
+                          key={f.id}
+                          draggable
+                          onDragStart={e => {
+                            e.dataTransfer.setData("text/plain", `{{${f.key}}}`);
+                            e.dataTransfer.effectAllowed = "copy";
+                          }}
+                          onClick={() => insertToken(`{{${f.key}}}`)}
+                          title={`Click or drag to insert {{${f.key}}}`}
+                          className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-mono font-medium cursor-grab active:cursor-grabbing select-none transition-all hover:scale-105 bg-purple-500/15 text-purple-300 border border-purple-500/30 hover:bg-purple-500/25"
+                        >
+                          <GripVertical className="w-2.5 h-2.5 opacity-50 shrink-0" />
+                          <span className="truncate flex-1">{`{{${f.key}}}`}</span>
+                          {f.required && <span className="text-[9px] text-red-400 font-bold shrink-0">REQ</span>}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </>
+              )}
+
               <Separator className="bg-slate-800 my-4" />
               <p className="text-[10px] text-slate-600 leading-snug">
                 <strong className="text-slate-500">Tip:</strong> You can also type <span className="font-mono text-slate-400 bg-slate-800 px-0.5 rounded">{"{{any_label}}"}</span> directly — unknown tokens become blank fields the renter fills in.
@@ -388,6 +432,263 @@ function AgreementEditor({
   );
 }
 
+// ── Contract Fields ────────────────────────────────────────────────────────────
+export type ContractField = {
+  id: string;
+  label: string;
+  key: string;        // token key e.g. "drivers_license"
+  type: "text" | "date" | "number" | "textarea" | "checkbox";
+  required: boolean;
+  placeholder: string;
+  description: string;
+};
+
+const FIELD_TYPE_CONFIG: Record<ContractField["type"], { label: string; icon: React.ReactNode }> = {
+  text:     { label: "Text",      icon: <FormInput className="w-3.5 h-3.5" /> },
+  date:     { label: "Date",      icon: <Calendar  className="w-3.5 h-3.5" /> },
+  number:   { label: "Number",    icon: <Hash      className="w-3.5 h-3.5" /> },
+  textarea: { label: "Long text", icon: <AlignLeft className="w-3.5 h-3.5" /> },
+  checkbox: { label: "Checkbox",  icon: <CheckSquare className="w-3.5 h-3.5" /> },
+};
+
+function labelToKey(label: string): string {
+  return label.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, "");
+}
+
+function ContractFieldsManager({
+  fields,
+  saving,
+  onSave,
+  onInsertToken,
+}: {
+  fields: ContractField[];
+  saving: boolean;
+  onSave: (fields: ContractField[]) => void;
+  onInsertToken: (token: string) => void;
+}) {
+  const [localFields, setLocalFields] = useState<ContractField[]>(fields);
+  const [adding, setAdding] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [draft, setDraft] = useState<Partial<ContractField>>({ type: "text", required: true, placeholder: "", description: "" });
+
+  useEffect(() => { setLocalFields(fields); }, [fields]);
+
+  const isDirty = JSON.stringify(localFields) !== JSON.stringify(fields);
+
+  function startAdd() {
+    setDraft({ label: "", key: "", type: "text", required: true, placeholder: "", description: "" });
+    setAdding(true);
+    setEditingId(null);
+  }
+
+  function startEdit(f: ContractField) {
+    setDraft({ ...f });
+    setEditingId(f.id);
+    setAdding(false);
+  }
+
+  function cancelForm() { setAdding(false); setEditingId(null); }
+
+  function commitField() {
+    if (!draft.label?.trim()) return;
+    const key = draft.key?.trim() || labelToKey(draft.label);
+    const field: ContractField = {
+      id: editingId ?? crypto.randomUUID(),
+      label: draft.label!.trim(),
+      key,
+      type: draft.type ?? "text",
+      required: draft.required ?? true,
+      placeholder: draft.placeholder ?? "",
+      description: draft.description ?? "",
+    };
+    if (editingId) {
+      setLocalFields(prev => prev.map(f => f.id === editingId ? field : f));
+    } else {
+      setLocalFields(prev => [...prev, field]);
+    }
+    cancelForm();
+  }
+
+  function deleteField(id: string) {
+    setLocalFields(prev => prev.filter(f => f.id !== id));
+  }
+
+  return (
+    <div className="bg-slate-900 border border-slate-700 rounded-2xl overflow-hidden">
+      {/* Header */}
+      <div className="flex items-center justify-between gap-4 px-5 py-4 border-b border-slate-800">
+        <div className="flex items-center gap-2.5">
+          <FormInput className="w-4 h-4 text-amber-400" />
+          <div>
+            <p className="text-sm font-bold text-white">Contract Fields</p>
+            <p className="text-xs text-slate-400">Fields the renter must fill in before signing.</p>
+          </div>
+        </div>
+        <div className="flex items-center gap-2">
+          {isDirty && (
+            <Button
+              size="sm"
+              className="bg-amber-500 hover:bg-amber-600 text-white gap-1.5"
+              onClick={() => onSave(localFields)}
+              disabled={saving}
+            >
+              <Save className="w-3.5 h-3.5" />
+              {saving ? "Saving…" : "Save Fields"}
+            </Button>
+          )}
+          <Button size="sm" variant="outline" className="border-slate-700 text-slate-300 hover:bg-slate-800 gap-1.5" onClick={startAdd}>
+            <Plus className="w-3.5 h-3.5" /> Add Field
+          </Button>
+        </div>
+      </div>
+
+      {/* Field list */}
+      <div className="divide-y divide-slate-800">
+        {localFields.length === 0 && !adding && (
+          <div className="px-5 py-8 text-center text-slate-500 text-sm">
+            <FormInput className="w-8 h-8 mx-auto mb-2 opacity-30" />
+            No custom fields yet. Click <strong className="text-slate-400">Add Field</strong> to define fields renters will fill in.
+          </div>
+        )}
+
+        {localFields.map(f => (
+          editingId === f.id ? (
+            <FieldForm key={f.id} draft={draft} onChange={setDraft} onCommit={commitField} onCancel={cancelForm} isEdit />
+          ) : (
+            <div key={f.id} className="flex items-center gap-3 px-5 py-3 group hover:bg-slate-800/40">
+              <div className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 ${FIELD_TYPE_CONFIG[f.type].icon ? "bg-amber-500/15 text-amber-400" : "bg-slate-800 text-slate-500"}`}>
+                {FIELD_TYPE_CONFIG[f.type].icon}
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="text-sm font-semibold text-white">{f.label}</span>
+                  <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${f.required ? "bg-red-500/20 text-red-400 border border-red-500/30" : "bg-slate-700 text-slate-400 border border-slate-600"}`}>
+                    {f.required ? "Required" : "Optional"}
+                  </span>
+                  <span className="text-[10px] text-slate-500 bg-slate-800 px-1.5 py-0.5 rounded font-mono">{FIELD_TYPE_CONFIG[f.type].label}</span>
+                </div>
+                <p className="text-xs text-slate-500 font-mono mt-0.5">{`{{${f.key}}}`}</p>
+              </div>
+              <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                <button
+                  onClick={() => onInsertToken(`{{${f.key}}}`)}
+                  title="Insert token into agreement"
+                  className="text-[10px] text-amber-400 border border-amber-500/30 bg-amber-500/10 hover:bg-amber-500/20 px-2 py-1 rounded font-medium transition-colors"
+                >
+                  Insert ↗
+                </button>
+                <button onClick={() => startEdit(f)} className="p-1.5 text-slate-400 hover:text-white rounded-lg hover:bg-slate-700 transition-colors">
+                  <Pencil className="w-3.5 h-3.5" />
+                </button>
+                <button onClick={() => deleteField(f.id)} className="p-1.5 text-slate-400 hover:text-red-400 rounded-lg hover:bg-red-900/30 transition-colors">
+                  <Trash2 className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            </div>
+          )
+        ))}
+
+        {adding && <FieldForm draft={draft} onChange={setDraft} onCommit={commitField} onCancel={cancelForm} isEdit={false} />}
+      </div>
+    </div>
+  );
+}
+
+function FieldForm({
+  draft,
+  onChange,
+  onCommit,
+  onCancel,
+  isEdit,
+}: {
+  draft: Partial<ContractField>;
+  onChange: (d: Partial<ContractField>) => void;
+  onCommit: () => void;
+  onCancel: () => void;
+  isEdit: boolean;
+}) {
+  return (
+    <div className="px-5 py-4 bg-slate-800/60 space-y-3 border-l-2 border-amber-500">
+      <p className="text-xs font-semibold text-amber-400 uppercase tracking-wider">{isEdit ? "Edit Field" : "New Field"}</p>
+      <div className="grid grid-cols-2 gap-3">
+        <div>
+          <label className="text-[11px] text-slate-400 mb-1 block">Field Label <span className="text-red-400">*</span></label>
+          <Input
+            value={draft.label ?? ""}
+            onChange={e => {
+              const label = e.target.value;
+              onChange({ ...draft, label, key: labelToKey(label) });
+            }}
+            placeholder="e.g. Driver's License #"
+            className="bg-slate-900 border-slate-700 text-white text-sm h-8"
+            autoFocus
+          />
+        </div>
+        <div>
+          <label className="text-[11px] text-slate-400 mb-1 block">Token key (auto-generated)</label>
+          <Input
+            value={draft.key ?? ""}
+            onChange={e => onChange({ ...draft, key: e.target.value })}
+            placeholder="drivers_license"
+            className="bg-slate-900 border-slate-700 text-slate-300 text-sm h-8 font-mono"
+          />
+        </div>
+        <div>
+          <label className="text-[11px] text-slate-400 mb-1 block">Field Type</label>
+          <select
+            value={draft.type ?? "text"}
+            onChange={e => onChange({ ...draft, type: e.target.value as ContractField["type"] })}
+            className="w-full h-8 bg-slate-900 border border-slate-700 rounded-md text-sm text-white px-2 focus:outline-none"
+          >
+            {(Object.keys(FIELD_TYPE_CONFIG) as ContractField["type"][]).map(t => (
+              <option key={t} value={t}>{FIELD_TYPE_CONFIG[t].label}</option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <label className="text-[11px] text-slate-400 mb-1 block">Placeholder hint</label>
+          <Input
+            value={draft.placeholder ?? ""}
+            onChange={e => onChange({ ...draft, placeholder: e.target.value })}
+            placeholder="e.g. DL-123456789"
+            className="bg-slate-900 border-slate-700 text-white text-sm h-8"
+          />
+        </div>
+      </div>
+      <div>
+        <label className="text-[11px] text-slate-400 mb-1 block">Help text (shown to renter)</label>
+        <Input
+          value={draft.description ?? ""}
+          onChange={e => onChange({ ...draft, description: e.target.value })}
+          placeholder="e.g. Your state-issued driver's license number"
+          className="bg-slate-900 border-slate-700 text-white text-sm h-8"
+        />
+      </div>
+      <div className="flex items-center justify-between">
+        <button
+          onClick={() => onChange({ ...draft, required: !draft.required })}
+          className="flex items-center gap-2 text-sm"
+        >
+          {draft.required
+            ? <ToggleRight className="w-6 h-6 text-red-400" />
+            : <ToggleLeft  className="w-6 h-6 text-slate-500" />}
+          <span className={draft.required ? "text-red-400 font-semibold" : "text-slate-400"}>
+            {draft.required ? "Required — renter must fill this in" : "Optional — renter may skip"}
+          </span>
+        </button>
+        <div className="flex gap-2">
+          <Button size="sm" variant="ghost" onClick={onCancel} className="text-slate-400 hover:text-white gap-1">
+            <X className="w-3.5 h-3.5" /> Cancel
+          </Button>
+          <Button size="sm" className="bg-amber-500 hover:bg-amber-600 text-white gap-1.5" onClick={onCommit} disabled={!draft.label?.trim()}>
+            <CheckCircle2 className="w-3.5 h-3.5" /> {isEdit ? "Update" : "Add Field"}
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── Types ─────────────────────────────────────────────────────────────────────
 type Category = { slug: string; name: string };
 type Override = { categorySlug: string; value: string; updatedAt: string | null };
@@ -410,18 +711,25 @@ export default function SuperAdminAgreementPage() {
   const [catSaving, setCatSaving] = useState<string | null>(null);
   const [catDeleting, setCatDeleting] = useState<string | null>(null);
 
+  // Contract fields
+  const [contractFields, setContractFields] = useState<ContractField[]>([]);
+  const [fieldsSaving, setFieldsSaving] = useState(false);
+  const insertTokenRef = useRef<((token: string) => void) | null>(null);
+
   useEffect(() => {
     Promise.all([
       apiFetch("superadmin/agreement"),
       apiFetch("superadmin/agreement/categories"),
+      apiFetch("superadmin/agreement/fields"),
     ])
-      .then(([global, catData]) => {
+      .then(([global, catData, fieldsData]) => {
         const val = global.value || DEFAULT_AGREEMENT;
         setGlobalText(val);
         setGlobalSaved(val);
         setGlobalUpdatedAt(global.updatedAt);
         setCategories(catData.categories ?? []);
         setOverrides(catData.overrides ?? []);
+        setContractFields(fieldsData.fields ?? []);
       })
       .catch(() => {
         setGlobalText(DEFAULT_AGREEMENT);
@@ -429,6 +737,19 @@ export default function SuperAdminAgreementPage() {
       })
       .finally(() => setLoading(false));
   }, []);
+
+  async function saveContractFields(fields: ContractField[]) {
+    setFieldsSaving(true);
+    try {
+      await apiFetch("superadmin/agreement/fields", { method: "PUT", body: JSON.stringify({ fields }) });
+      setContractFields(fields);
+      toast({ title: "Contract fields saved", description: `${fields.length} field${fields.length !== 1 ? "s" : ""} will appear in the signing form.` });
+    } catch (e: any) {
+      toast({ title: "Save failed", description: e.message, variant: "destructive" });
+    } finally {
+      setFieldsSaving(false);
+    }
+  }
 
   async function saveGlobal(value: string) {
     setGlobalSaving(true);
@@ -514,10 +835,19 @@ export default function SuperAdminAgreementPage() {
           <p>
             Insert <span className="font-mono text-emerald-300 bg-emerald-500/10 px-1 rounded text-xs">{"{{token}}"}</span> placeholders in your agreement text.{" "}
             <span className="text-emerald-400">Auto-filled tokens</span> (green) are replaced with booking data automatically.{" "}
-            <span className="text-amber-400">Renter tokens</span> (amber) appear as input fields the renter must complete before signing.
+            <span className="text-amber-400">Renter tokens</span> (amber) and{" "}
+            <span className="text-purple-400">custom fields</span> appear as input fields the renter must complete before signing.
           </p>
         </div>
       </div>
+
+      {/* Contract Fields Manager */}
+      <ContractFieldsManager
+        fields={contractFields}
+        saving={fieldsSaving}
+        onSave={saveContractFields}
+        onInsertToken={(token) => { if (insertTokenRef.current) insertTokenRef.current(token); }}
+      />
 
       <div className="flex gap-5 items-start">
         {/* Sidebar */}
@@ -580,6 +910,8 @@ export default function SuperAdminAgreementPage() {
             updatedAt={globalUpdatedAt}
             onSave={saveGlobal}
             saving={globalSaving}
+            customFields={contractFields}
+            onInsertTokenRef={insertTokenRef}
           />
         ) : activeOverride ? (
           <AgreementEditor
@@ -593,6 +925,8 @@ export default function SuperAdminAgreementPage() {
             onDelete={() => deleteCategoryAgreement((active as any).slug)}
             saving={catSaving === (active as any).slug}
             deleting={catDeleting === (active as any).slug}
+            customFields={contractFields}
+            onInsertTokenRef={insertTokenRef}
           />
         ) : null}
       </div>

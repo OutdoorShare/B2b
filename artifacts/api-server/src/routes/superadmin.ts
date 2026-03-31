@@ -889,6 +889,38 @@ router.delete("/superadmin/agreement/category/:slug", requireSuperAdmin, async (
   }
 });
 
+// ── GET /superadmin/agreement/fields ─────────────────────────────────────────
+router.get("/superadmin/agreement/fields", requireSuperAdmin, async (_req, res) => {
+  try {
+    const [row] = await db.select().from(platformSettingsTable)
+      .where(eq(platformSettingsTable.key, "rental_agreement_fields")).limit(1);
+    res.json({ fields: row?.value ? JSON.parse(row.value) : [], updatedAt: row?.updatedAt?.toISOString() ?? null });
+  } catch {
+    res.status(500).json({ error: "Failed to fetch fields" });
+  }
+});
+
+// ── PUT /superadmin/agreement/fields ─────────────────────────────────────────
+router.put("/superadmin/agreement/fields", requireSuperAdmin, async (req, res) => {
+  try {
+    const { fields } = req.body;
+    if (!Array.isArray(fields)) { res.status(400).json({ error: "fields must be an array" }); return; }
+    const value = JSON.stringify(fields);
+    const now = new Date();
+    const existing = await db.select({ id: platformSettingsTable.id })
+      .from(platformSettingsTable).where(eq(platformSettingsTable.key, "rental_agreement_fields")).limit(1);
+    if (existing.length > 0) {
+      await db.update(platformSettingsTable).set({ value, updatedAt: now })
+        .where(eq(platformSettingsTable.key, "rental_agreement_fields"));
+    } else {
+      await db.insert(platformSettingsTable).values({ key: "rental_agreement_fields", value, updatedAt: now });
+    }
+    res.json({ ok: true, updatedAt: now.toISOString() });
+  } catch {
+    res.status(500).json({ error: "Failed to save fields" });
+  }
+});
+
 // ── GET /superadmin/claims ─────────────────────────────────────────────────────
 router.get("/superadmin/claims", requireSuperAdmin, async (req, res) => {
   try {
@@ -1113,6 +1145,17 @@ router.get("/superadmin/customers/lookup", requireSuperAdmin, async (req, res) =
     });
   } catch (err) {
     res.status(500).json({ error: "Failed to lookup customer" });
+  }
+});
+
+// ── GET /platform/agreement/fields (public — used by booking flow) ────────────
+router.get("/platform/agreement/fields", async (_req, res) => {
+  try {
+    const [row] = await db.select().from(platformSettingsTable)
+      .where(eq(platformSettingsTable.key, "rental_agreement_fields")).limit(1);
+    res.json({ fields: row?.value ? JSON.parse(row.value) : [] });
+  } catch {
+    res.status(500).json({ error: "Failed to fetch fields" });
   }
 });
 

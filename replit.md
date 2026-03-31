@@ -88,6 +88,16 @@ artifacts-monorepo/
 - Customer booking history on confirmation page
 - Slug-aware navigation: all storefront links stay within the `/:slug/` path prefix
 
+### Rental Agreement + Contract Fields System
+- Agreement templates use `{{token}}` syntax; auto-fill tokens (green) populate from booking data; renter-fill tokens appear as inputs
+- **Contract Fields** (Super Admin): Define typed fields (text/date/number/textarea/checkbox) with Required/Optional toggle, placeholder, and help text. Stored in `platform_settings` key `rental_agreement_fields`
+- Super Admin agreement page has a **Contract Fields Manager** above the editor: add/edit/delete fields, each with a token key (`{{field_key}}`), type, required toggle
+- Fields appear as purple chips in the token picker panel; "Insert ↗" button inserts the token into the active editor at cursor
+- Renter signing flow fetches field definitions from `GET /api/platform/agreement/fields` (public)
+- Agreement step shows a dedicated **"Complete Required Information"** card above the agreement text with proper input types, Required/Optional badges, and green completion indicators
+- Agreement text shows filled values as highlighted spans (not inline inputs)
+- Validation lists missing required fields by label name in the error toast
+
 ## Multi-Tenancy Architecture
 
 Every rental company is a **tenant**. Each tenant has: id, name, slug, email, adminPasswordHash, adminToken.

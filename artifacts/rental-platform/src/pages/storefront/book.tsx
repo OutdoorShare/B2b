@@ -412,6 +412,12 @@ export default function StorefrontBook() {
   const [agreeChecked, setAgreeChecked] = useState(false);
   const [agreementText, setAgreementText] = useState("");
   const [customFieldValues, setCustomFieldValues] = useState<Record<string, string>>({});
+  // Contract field definitions fetched from platform
+  const [contractFields, setContractFields] = useState<Array<{
+    id: string; label: string; key: string;
+    type: "text" | "date" | "number" | "textarea" | "checkbox";
+    required: boolean; placeholder: string; description: string;
+  }>>([]);
   const sigCanvasRef = useRef<HTMLCanvasElement>(null);
   const isDrawingRef = useRef(false);
   const [sigHasContent, setSigHasContent] = useState(false);
@@ -461,16 +467,19 @@ export default function StorefrontBook() {
   const [availableAddons, setAvailableAddons] = useState<Addon[]>([]);
   const [selectedAddonIds, setSelectedAddonIds] = useState<Set<number>>(new Set());
 
-  // Fetch the agreement text — use category-specific if available, else global
+  // Fetch the agreement text and field definitions in parallel
   useEffect(() => {
     const slug = (listing as any)?.categorySlug;
     const url = slug
       ? `${BASE}/api/platform/agreement?categorySlug=${encodeURIComponent(slug)}`
       : `${BASE}/api/platform/agreement`;
-    fetch(url)
-      .then(r => r.json())
-      .then(d => { if (d.value) setAgreementText(d.value); })
-      .catch(() => {});
+    Promise.all([
+      fetch(url).then(r => r.json()),
+      fetch(`${BASE}/api/platform/agreement/fields`).then(r => r.json()),
+    ]).then(([d, f]) => {
+      if (d.value) setAgreementText(d.value);
+      if (f.fields) setContractFields(f.fields);
+    }).catch(() => {});
   }, [(listing as any)?.categorySlug]);
 
   // Fetch addons for the listing; auto-select required ones
@@ -608,7 +617,7 @@ export default function StorefrontBook() {
   };
 
   // Render agreement template as React nodes — auto-fill tokens become
-  // highlighted spans; unknown tokens become inputs the renter must complete
+  // highlighted spans; renter-fill tokens show current value or dashed placeholder
   function renderAgreementParagraph(para: string, paraIdx: number) {
     const parts = para.split(/({{[^}]+}})/g);
     return (
@@ -624,17 +633,21 @@ export default function StorefrontBook() {
               </span>
             );
           }
-          // Unknown token → inline input the renter must complete
-          const label = key.replace(/_/g, " ");
+          // Renter-fill token: show value if set, or dashed placeholder
+          const fieldDef = contractFields.find(f => f.key === key);
+          const currentVal = customFieldValues[key];
+          const label = fieldDef?.label || key.replace(/_/g, " ");
+          const isRequired = fieldDef?.required ?? true;
+          if (currentVal) {
+            return (
+              <span key={i} className={`inline-block font-semibold px-1 rounded mx-0.5 ${isRequired ? "bg-amber-100 text-amber-900 border border-amber-300" : "bg-blue-50 text-blue-900 border border-blue-200"}`}>
+                {fieldDef?.type === "checkbox" ? (currentVal === "true" ? "✓ Yes" : "✗ No") : currentVal}
+              </span>
+            );
+          }
           return (
-            <span key={i} className="inline-flex items-center gap-1 mx-0.5 align-middle">
-              <input
-                type="text"
-                value={customFieldValues[key] ?? ""}
-                onChange={e => setCustomFieldValues(prev => ({ ...prev, [key]: e.target.value }))}
-                placeholder={label}
-                className="border-b-2 border-amber-400 bg-amber-50 text-amber-900 text-xs px-1.5 py-0.5 rounded-sm focus:outline-none focus:border-amber-600 min-w-[120px] font-medium placeholder:text-amber-400/60"
-              />
+            <span key={i} className={`inline-block mx-0.5 px-1.5 rounded border-b-2 italic text-xs ${isRequired ? "border-red-400 text-red-500 bg-red-50" : "border-slate-300 text-slate-400 bg-slate-50"}`}>
+              [{label}]
             </span>
           );
         })}
@@ -914,13 +927,24 @@ export default function StorefrontBook() {
     if (!agreeChecked) {
       toast({ title: "Please accept the rental terms", variant: "destructive" }); return;
     }
-    // Validate all renter-fill fields are completed
+    // Validate all required renter-fill fields are completed
     if (agreementText) {
-      const unfilledKeys = Array.from(agreementText.matchAll(/{{([^}]+)}}/g))
+      const unfilledRequired = Array.from(agreementText.matchAll(/{{([^}]+)}}/g))
         .map(m => m[1].trim())
-        .filter(k => !(k in autoFillMap) && !customFieldValues[k]);
-      if (unfilledKeys.length > 0) {
-        toast({ title: "Please complete all required fields", description: "Fill in the highlighted fields in the agreement above.", variant: "destructive" });
+        .filter(k => {
+          if (k in autoFillMap) return false;
+          const def = contractFields.find(f => f.key === k);
+          const isRequired = def?.required ?? true;
+          if (!isRequired) return false;
+          const val = customFieldValues[k];
+          return !val;
+        });
+      if (unfilledRequired.length > 0) {
+        const labels = unfilledRequired.map(k => {
+          const def = contractFields.find(f => f.key === k);
+          return def?.label || k.replace(/_/g, " ");
+        });
+        toast({ title: "Please complete all required fields", description: `Missing: ${labels.join(", ")}`, variant: "destructive" });
         return;
       }
     }
@@ -1759,6 +1783,86 @@ export default function StorefrontBook() {
               <div className="space-y-6">
                 <h1 className="text-2xl font-bold">Rental Agreement</h1>
 
+                {/* ── Required Fields Section ── */}
+                {agreementText && (() => {
+                  const renterKeys = Array.from(agreementText.matchAll(/{{([^}]+)}}/g))
+                    .map(m => m[1].trim())
+                    .filter(k => !(k in autoFillMap));
+                  const uniqueKeys = [...new Set(renterKeys)];
+                  if (uniqueKeys.length === 0) return null;
+
+                  const requiredUnfilled = uniqueKeys.filter(k => {
+                    const def = contractFields.find(f => f.key === k);
+                    const isRequired = def?.required ?? true;
+                    const val = customFieldValues[k];
+                    return isRequired && !val;
+                  });
+
+                  return (
+                    <div className="bg-background rounded-2xl border shadow-sm overflow-hidden">
+                      <div className={`px-6 py-4 border-b flex items-center gap-3 ${requiredUnfilled.length === 0 ? "bg-green-50/60" : "bg-amber-50/60"}`}>
+                        {requiredUnfilled.length === 0
+                          ? <><CheckCircle2 className="w-5 h-5 text-green-600 shrink-0" /><div><p className="font-semibold text-green-800">All required fields complete</p><p className="text-xs text-green-600 mt-0.5">Your information has been filled in — review the agreement below before signing.</p></div></>
+                          : <><AlertTriangle className="w-5 h-5 text-amber-600 shrink-0" /><div><p className="font-semibold text-amber-800">Complete Required Information</p><p className="text-xs text-amber-600 mt-0.5">Fill in the fields below before you can sign the agreement.</p></div></>
+                        }
+                      </div>
+                      <div className="p-6 grid grid-cols-1 gap-4">
+                        {uniqueKeys.map(k => {
+                          const def = contractFields.find(f => f.key === k);
+                          const label = def?.label || k.replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase());
+                          const isRequired = def?.required ?? true;
+                          const placeholder = def?.placeholder || label;
+                          const description = def?.description;
+                          const type = def?.type || "text";
+                          const val = customFieldValues[k] ?? "";
+                          const isFilledIn = type === "checkbox" ? true : !!val;
+
+                          return (
+                            <div key={k} className={`rounded-xl border p-4 transition-colors ${isFilledIn ? "border-green-200 bg-green-50/30" : isRequired ? "border-amber-200 bg-amber-50/30" : "border-slate-200 bg-slate-50/30"}`}>
+                              <div className="flex items-center gap-2 mb-2">
+                                <label className="text-sm font-semibold text-foreground">{label}</label>
+                                <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full border ${isRequired ? "bg-red-100 text-red-600 border-red-200" : "bg-slate-100 text-slate-500 border-slate-200"}`}>
+                                  {isRequired ? "Required" : "Optional"}
+                                </span>
+                                {isFilledIn && type !== "checkbox" && <CheckCircle2 className="w-3.5 h-3.5 text-green-500 ml-auto" />}
+                              </div>
+                              {description && <p className="text-xs text-muted-foreground mb-2">{description}</p>}
+
+                              {type === "textarea" ? (
+                                <textarea
+                                  value={val}
+                                  onChange={e => setCustomFieldValues(prev => ({ ...prev, [k]: e.target.value }))}
+                                  placeholder={placeholder}
+                                  rows={3}
+                                  className="w-full text-sm border rounded-lg px-3 py-2 bg-background focus:outline-none focus:ring-2 focus:ring-primary/30 resize-none"
+                                />
+                              ) : type === "checkbox" ? (
+                                <label className="flex items-center gap-3 cursor-pointer">
+                                  <input
+                                    type="checkbox"
+                                    checked={val === "true"}
+                                    onChange={e => setCustomFieldValues(prev => ({ ...prev, [k]: e.target.checked ? "true" : "false" }))}
+                                    className="w-4 h-4 accent-primary"
+                                  />
+                                  <span className="text-sm text-foreground">{placeholder || label}</span>
+                                </label>
+                              ) : (
+                                <input
+                                  type={type === "date" ? "date" : type === "number" ? "number" : "text"}
+                                  value={val}
+                                  onChange={e => setCustomFieldValues(prev => ({ ...prev, [k]: e.target.value }))}
+                                  placeholder={placeholder}
+                                  className="w-full text-sm border rounded-lg px-3 py-2 bg-background focus:outline-none focus:ring-2 focus:ring-primary/30"
+                                />
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  );
+                })()}
+
                 <div className="bg-background rounded-2xl border shadow-sm p-6 space-y-4 max-h-96 overflow-y-auto text-sm text-muted-foreground leading-relaxed">
                   <h2 className="text-base font-bold text-foreground">Vehicle Rental Agreement</h2>
                   <p><strong className="text-foreground">Rental Period:</strong> {startFormattedWithTime} — {endFormattedWithTime} ({days} day{days > 1 ? "s" : ""})</p>
@@ -1771,20 +1875,6 @@ export default function StorefrontBook() {
                       )
                     : <p className="text-muted-foreground italic">Loading agreement…</p>
                   }
-                  {/* Notice if there are renter-fill fields outstanding */}
-                  {agreementText && (() => {
-                    const unfilled = Array.from(agreementText.matchAll(/{{([^}]+)}}/g))
-                      .map(m => m[1].trim())
-                      .filter(k => !(k in autoFillMap) && !customFieldValues[k]);
-                    return unfilled.length > 0 ? (
-                      <div className="flex items-start gap-2 bg-amber-50 border border-amber-200 rounded-lg p-3 mt-2">
-                        <span className="text-amber-500 text-xs mt-0.5">⚠️</span>
-                        <p className="text-xs text-amber-700">
-                          Please fill in the highlighted field{unfilled.length > 1 ? "s" : ""} above before signing.
-                        </p>
-                      </div>
-                    ) : null;
-                  })()}
                   <p className="text-xs italic">By signing below, you confirm you have read, understood, and agree to all terms in this rental agreement.</p>
                 </div>
 
