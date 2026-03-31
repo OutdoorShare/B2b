@@ -433,6 +433,24 @@ export default function StorefrontBook() {
   const [beforePreviews, setBeforePreviews] = useState<string[]>([]);
   const [uploadingPhotos, setUploadingPhotos] = useState(false);
   const beforePhotoInputRef = useRef<HTMLInputElement>(null);
+
+  const addBeforePhotos = useCallback((files: FileList | null) => {
+    if (!files) return;
+    const valid = Array.from(files).filter(f => f.type.startsWith("image/")).slice(0, 15 - beforePhotos.length);
+    if (valid.length === 0) return;
+    setBeforePhotos(prev => [...prev, ...valid]);
+    valid.forEach(f => {
+      const reader = new FileReader();
+      reader.onload = e => setBeforePreviews(prev => [...prev, e.target?.result as string]);
+      reader.readAsDataURL(f);
+    });
+  }, [beforePhotos.length]);
+
+  const removeBeforePhoto = (idx: number) => {
+    setBeforePhotos(prev => prev.filter((_, i) => i !== idx));
+    setBeforePreviews(prev => prev.filter((_, i) => i !== idx));
+  };
+
   const [customerBookings, setCustomerBookings] = useState<any[]>([]);
   const [bookingsLoading, setBookingsLoading] = useState(false);
 
@@ -1042,23 +1060,6 @@ export default function StorefrontBook() {
     }
     setStep("confirmation");
     window.scrollTo(0, 0);
-  };
-
-  const addBeforePhotos = useCallback((files: FileList | null) => {
-    if (!files) return;
-    const valid = Array.from(files).filter(f => f.type.startsWith("image/")).slice(0, 15 - beforePhotos.length);
-    if (valid.length === 0) return;
-    setBeforePhotos(prev => [...prev, ...valid]);
-    valid.forEach(f => {
-      const reader = new FileReader();
-      reader.onload = e => setBeforePreviews(prev => [...prev, e.target?.result as string]);
-      reader.readAsDataURL(f);
-    });
-  }, [beforePhotos.length]);
-
-  const removeBeforePhoto = (idx: number) => {
-    setBeforePhotos(prev => prev.filter((_, i) => i !== idx));
-    setBeforePreviews(prev => prev.filter((_, i) => i !== idx));
   };
 
   // Retry: fetch a brand-new session and immediately launch the Stripe modal

@@ -7,7 +7,13 @@ import { db } from "@workspace/db";
 import { bookingsTable, listingsTable, businessProfileTable, tenantsTable } from "@workspace/db/schema";
 import { eq, and, gte, lte, isNull, or } from "drizzle-orm";
 import { generateAgreementPdf } from "../lib/generate-agreement-pdf";
-import { sendPickupLinkEmail, sendKioskAccountSetupEmail } from "../services/gmail";
+import {
+  sendPickupLinkEmail,
+  sendKioskAccountSetupEmail,
+  sendBookingPickupReminderEmail,
+  sendAdminPickupReminderEmail,
+  sendReadyToAdventureEmail,
+} from "../services/gmail";
 
 const UPLOADS_DIR_BOOKINGS = path.resolve(process.cwd(), "uploads");
 
@@ -197,6 +203,55 @@ router.post("/bookings", async (req, res) => {
           });
         } catch (emailErr) {
           req.log.warn(emailErr, "Failed to send kiosk account-setup email");
+        }
+      })();
+    }
+
+    // Send non-kiosk booking confirmation + pickup photo reminder to renter & admin
+    if (created.source !== "kiosk" && created.customerEmail) {
+      (async () => {
+        try {
+          let companyName = "Rental Company";
+          let tenantSlug = "";
+          let adminEmail: string | undefined;
+          if (req.tenantId) {
+            const [biz] = await db
+              .select({ businessName: businessProfileTable.businessName })
+              .from(businessProfileTable)
+              .where(eq(businessProfileTable.tenantId, req.tenantId));
+            if (biz?.businessName) companyName = biz.businessName;
+            const [t] = await db
+              .select({ slug: tenantsTable.slug, email: tenantsTable.email })
+              .from(tenantsTable)
+              .where(eq(tenantsTable.id, req.tenantId));
+            if (t?.slug) tenantSlug = t.slug;
+            if (t?.email) adminEmail = t.email;
+          }
+          await sendBookingPickupReminderEmail({
+            customerName: created.customerName,
+            customerEmail: created.customerEmail,
+            bookingId: created.id,
+            listingTitle: listing.title,
+            startDate: created.startDate,
+            endDate: created.endDate,
+            companyName,
+            adminEmail,
+          });
+          if (adminEmail && tenantSlug) {
+            await sendAdminPickupReminderEmail({
+              adminEmail,
+              customerName: created.customerName,
+              customerEmail: created.customerEmail,
+              bookingId: created.id,
+              listingTitle: listing.title,
+              startDate: created.startDate,
+              endDate: created.endDate,
+              companyName,
+              tenantSlug,
+            });
+          }
+        } catch (emailErr) {
+          req.log.warn(emailErr, "Failed to send non-kiosk booking emails");
         }
       })();
     }
@@ -466,6 +521,7 @@ router.post("/bookings/:id/before-photos", pickupUpload.array("photos", 15), asy
     const files = req.files as Express.Multer.File[];
     if (!files || files.length === 0) { res.status(400).json({ error: "No photos uploaded" }); return; }
 
+    const isFirstCompletion = !booking.pickupCompletedAt;
     const existingPhotos: string[] = booking.pickupPhotos ? JSON.parse(booking.pickupPhotos) : [];
     const newPhotoUrls = files.map(f => `/api/uploads/${f.filename}`);
     const allPhotos = [...existingPhotos, ...newPhotoUrls];
@@ -475,6 +531,36 @@ router.post("/bookings/:id/before-photos", pickupUpload.array("photos", 15), asy
       pickupCompletedAt: booking.pickupCompletedAt ?? new Date(),
       updatedAt: new Date(),
     }).where(eq(bookingsTable.id, booking.id));
+
+    // Send "ready to adventure" email on first completion
+    if (isFirstCompletion && booking.customerEmail) {
+      (async () => {
+        try {
+          let companyName = "Rental Company";
+          let adminEmail: string | undefined;
+          if (booking.tenantId) {
+            const [biz] = await db.select({ businessName: businessProfileTable.businessName })
+              .from(businessProfileTable).where(eq(businessProfileTable.tenantId, booking.tenantId));
+            if (biz?.businessName) companyName = biz.businessName;
+            const [t] = await db.select({ email: tenantsTable.email })
+              .from(tenantsTable).where(eq(tenantsTable.id, booking.tenantId));
+            if (t?.email) adminEmail = t.email;
+          }
+          await sendReadyToAdventureEmail({
+            customerName: booking.customerName,
+            customerEmail: booking.customerEmail,
+            bookingId: booking.id,
+            listingTitle: booking.listingId ? (await db.select({ title: listingsTable.title }).from(listingsTable).where(eq(listingsTable.id, booking.listingId)))[0]?.title ?? "your rental" : "your rental",
+            startDate: booking.startDate,
+            endDate: booking.endDate,
+            companyName,
+            adminEmail,
+          });
+        } catch (emailErr) {
+          req.log.warn(emailErr, "Failed to send ready-to-adventure email");
+        }
+      })();
+    }
 
     res.json({ ok: true, photos: allPhotos, count: allPhotos.length });
   } catch (err) {
@@ -494,6 +580,7 @@ router.post("/pickup/:token/photos", pickupUpload.array("photos", 20), async (re
     const files = req.files as Express.Multer.File[];
     if (!files || files.length === 0) { res.status(400).json({ error: "No photos uploaded" }); return; }
 
+    const isFirstCompletion = !booking.pickupCompletedAt;
     const existingPhotos: string[] = booking.pickupPhotos ? JSON.parse(booking.pickupPhotos) : [];
     const newPhotoUrls = files.map(f => `/api/uploads/${f.filename}`);
     const allPhotos = [...existingPhotos, ...newPhotoUrls];
@@ -503,6 +590,39 @@ router.post("/pickup/:token/photos", pickupUpload.array("photos", 20), async (re
       pickupCompletedAt: booking.pickupCompletedAt ?? new Date(),
       updatedAt: new Date(),
     }).where(eq(bookingsTable.id, booking.id));
+
+    // Send "ready to adventure" email on first completion
+    if (isFirstCompletion && booking.customerEmail) {
+      (async () => {
+        try {
+          let companyName = "Rental Company";
+          let adminEmail: string | undefined;
+          if (booking.tenantId) {
+            const [biz] = await db.select({ businessName: businessProfileTable.businessName })
+              .from(businessProfileTable).where(eq(businessProfileTable.tenantId, booking.tenantId));
+            if (biz?.businessName) companyName = biz.businessName;
+            const [t] = await db.select({ email: tenantsTable.email })
+              .from(tenantsTable).where(eq(tenantsTable.id, booking.tenantId));
+            if (t?.email) adminEmail = t.email;
+          }
+          const listingTitle = booking.listingId
+            ? (await db.select({ title: listingsTable.title }).from(listingsTable).where(eq(listingsTable.id, booking.listingId)))[0]?.title ?? "your rental"
+            : "your rental";
+          await sendReadyToAdventureEmail({
+            customerName: booking.customerName,
+            customerEmail: booking.customerEmail,
+            bookingId: booking.id,
+            listingTitle,
+            startDate: booking.startDate,
+            endDate: booking.endDate,
+            companyName,
+            adminEmail,
+          });
+        } catch (emailErr) {
+          req.log.warn(emailErr, "Failed to send ready-to-adventure email");
+        }
+      })();
+    }
 
     res.json({ ok: true, photos: allPhotos, count: allPhotos.length });
   } catch (err) {

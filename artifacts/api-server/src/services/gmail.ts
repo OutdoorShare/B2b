@@ -560,3 +560,177 @@ export async function sendClaimAlertEmail(opts: {
     requestBody: { raw: makeRawEmail(toEmail, `[Claim #${claimId}] New ${typeLabel} claim — ${companyName}`, html) },
   });
 }
+
+// ── Booking confirmation + pickup reminder (to renter, non-kiosk) ──────────────
+export async function sendBookingPickupReminderEmail(opts: {
+  customerName: string;
+  customerEmail: string;
+  bookingId: number;
+  listingTitle: string;
+  startDate: string;
+  endDate: string;
+  companyName: string;
+  adminEmail?: string;
+}): Promise<void> {
+  const { customerName, customerEmail, bookingId, listingTitle, startDate, endDate, companyName, adminEmail } = opts;
+  const fromHeader = `${companyName} <contact.us@myoutdoorshare.com>`;
+
+  const body = `
+    <p style="margin:0 0 8px;font-size:18px;font-weight:700;color:${BRAND_DARK};">Your booking is confirmed, ${customerName}!</p>
+    <p style="margin:0 0 20px;font-size:15px;color:#374151;line-height:1.6;">
+      Thank you for booking with <strong>${companyName}</strong>. Your rental is all set — see the details below.
+    </p>
+
+    ${infoTable([
+      { label: "Booking #",  value: `#${bookingId}`, mono: true },
+      { label: "Item",       value: listingTitle },
+      { label: "Pickup",     value: startDate },
+      { label: "Return",     value: endDate },
+      { label: "Company",    value: companyName },
+    ])}
+
+    <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:16px;margin:24px 0;">
+      <p style="margin:0 0 6px;font-size:14px;font-weight:700;color:#166534;">📸 When you arrive — take pickup photos</p>
+      <p style="margin:0 0 10px;font-size:13px;color:#15803d;line-height:1.6;">
+        Before taking your rental, you'll be asked to photograph the equipment. This protects you against any future damage claims.
+      </p>
+      <ul style="margin:0;padding-left:20px;font-size:13px;color:#15803d;line-height:2;">
+        <li>1 Front</li>
+        <li>1 Left Side</li>
+        <li>1 Right Side</li>
+        <li>1 Rear</li>
+        <li>1 Interior</li>
+      </ul>
+    </div>
+
+    <p style="margin:0;font-size:13px;color:#9ca3af;text-align:center;">
+      Questions? Reply to this email and <strong>${companyName}</strong> will get back to you.
+    </p>
+  `;
+
+  const html = emailShell({
+    preheader: `Your ${listingTitle} rental at ${companyName} is confirmed — see what to expect at pickup.`,
+    badgeLabel: "Booking Confirmed",
+    badgeColor: BRAND_GREEN,
+    body,
+  });
+
+  const gmail = await getUncachableGmailClient();
+  await gmail.users.messages.send({
+    userId: "me",
+    requestBody: { raw: makeRawEmail(customerEmail, `[${companyName}] Your rental is confirmed — here's what to expect`, html, fromHeader, adminEmail) },
+  });
+}
+
+// ── Admin pickup reminder (to tenant admin, non-kiosk booking) ────────────────
+export async function sendAdminPickupReminderEmail(opts: {
+  adminEmail: string;
+  customerName: string;
+  customerEmail: string;
+  bookingId: number;
+  listingTitle: string;
+  startDate: string;
+  endDate: string;
+  companyName: string;
+  tenantSlug: string;
+}): Promise<void> {
+  const { adminEmail, customerName, customerEmail, bookingId, listingTitle, startDate, endDate, companyName, tenantSlug } = opts;
+  const adminBookingsUrl = `${APP_URL}/${tenantSlug}/admin/bookings`;
+
+  const body = `
+    <p style="margin:0 0 8px;font-size:18px;font-weight:700;color:${BRAND_DARK};">New rental booking received</p>
+    <p style="margin:0 0 20px;font-size:15px;color:#374151;line-height:1.6;">
+      <strong>${customerName}</strong> has completed an online booking for <strong>${listingTitle}</strong>. See the details below.
+    </p>
+
+    ${infoTable([
+      { label: "Booking #",  value: `#${bookingId}`, mono: true },
+      { label: "Customer",   value: customerName },
+      { label: "Email",      value: customerEmail },
+      { label: "Item",       value: listingTitle },
+      { label: "Pickup",     value: startDate },
+      { label: "Return",     value: endDate },
+    ])}
+
+    <div style="background:#fff7ed;border:1px solid #fed7aa;border-radius:8px;padding:16px;margin:24px 0;">
+      <p style="margin:0 0 6px;font-size:14px;font-weight:700;color:#9a3412;">⚠️ Pickup reminder</p>
+      <p style="margin:0;font-size:13px;color:#c2410c;line-height:1.6;">
+        Before releasing the equipment to <strong>${customerName}</strong>, please ensure they complete the pickup photo documentation.
+        This step is required to protect your business against any future damage disputes.
+      </p>
+    </div>
+
+    ${ctaButton("View Booking in Dashboard", adminBookingsUrl, BRAND_DARK)}
+
+    <p style="margin:0;font-size:13px;color:#9ca3af;text-align:center;">
+      This is an automated reminder sent when a new online booking is confirmed.
+    </p>
+  `;
+
+  const html = emailShell({
+    preheader: `New booking from ${customerName} for ${listingTitle} starting ${startDate} — pickup photo reminder.`,
+    badgeLabel: "New Booking — Pickup Reminder",
+    badgeColor: "#f97316",
+    body,
+  });
+
+  const gmail = await getUncachableGmailClient();
+  await gmail.users.messages.send({
+    userId: "me",
+    requestBody: { raw: makeRawEmail(adminEmail, `[${companyName}] New booking — ${customerName} · ${listingTitle}`, html) },
+  });
+}
+
+// ── Ready to adventure email (to renter after pickup photos completed) ─────────
+export async function sendReadyToAdventureEmail(opts: {
+  customerName: string;
+  customerEmail: string;
+  bookingId: number;
+  listingTitle: string;
+  startDate: string;
+  endDate: string;
+  companyName: string;
+  adminEmail?: string;
+}): Promise<void> {
+  const { customerName, customerEmail, bookingId, listingTitle, startDate, endDate, companyName, adminEmail } = opts;
+  const fromHeader = `${companyName} <contact.us@myoutdoorshare.com>`;
+
+  const body = `
+    <p style="margin:0 0 8px;font-size:18px;font-weight:700;color:${BRAND_DARK};">You're all set — enjoy your adventure, ${customerName}!</p>
+    <p style="margin:0 0 20px;font-size:15px;color:#374151;line-height:1.6;">
+      Your pickup is complete and your <strong>${listingTitle}</strong> rental is officially underway. Your photos have been saved — you're good to go!
+    </p>
+
+    ${infoTable([
+      { label: "Booking #",  value: `#${bookingId}`, mono: true },
+      { label: "Item",       value: listingTitle },
+      { label: "Started",    value: startDate },
+      { label: "Return by",  value: endDate },
+      { label: "Company",    value: companyName },
+    ])}
+
+    <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:20px;margin:24px 0;text-align:center;">
+      <p style="margin:0 0 6px;font-size:22px;">🏔️</p>
+      <p style="margin:0;font-size:15px;font-weight:700;color:#166534;">Find New Boundaries</p>
+      <p style="margin:4px 0 0;font-size:13px;color:#15803d;">Make the most of your rental and stay safe out there.</p>
+    </div>
+
+    <p style="margin:0;font-size:14px;color:#374151;line-height:1.6;text-align:center;">
+      Please return your rental by <strong>${endDate}</strong>.<br />
+      Questions along the way? Reply to this email and <strong>${companyName}</strong> will be happy to help.
+    </p>
+  `;
+
+  const html = emailShell({
+    preheader: `Pickup complete — your ${listingTitle} adventure is officially underway. Enjoy!`,
+    badgeLabel: "Pickup Complete — Adventure Begins!",
+    badgeColor: BRAND_GREEN,
+    body,
+  });
+
+  const gmail = await getUncachableGmailClient();
+  await gmail.users.messages.send({
+    userId: "me",
+    requestBody: { raw: makeRawEmail(customerEmail, `[${companyName}] You're all set — enjoy your adventure! 🏔️`, html, fromHeader, adminEmail) },
+  });
+}
