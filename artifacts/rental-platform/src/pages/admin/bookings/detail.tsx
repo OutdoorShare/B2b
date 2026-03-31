@@ -17,7 +17,7 @@ import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { Link, useLocation } from "wouter";
 import { ArrowLeft, User, Phone, Mail, Calendar, Package, StickyNote, ShieldAlert, Pencil, FileSignature, FileText, ChevronDown, ChevronUp, Download, Camera, CheckCircle2, Loader2, ExternalLink, ImageIcon, Clock, ShieldCheck, ShieldX, Shield, AlertCircle, Copy, Send, UserCheck, Lock, LockOpen, DollarSign } from "lucide-react";
-import { format, differenceInDays } from "date-fns";
+import { format, differenceInDays, startOfDay } from "date-fns";
 
 const SOURCE_CONFIG: Record<string, { label: string; className: string }> = {
   online:  { label: "Online",  className: "bg-blue-100   text-blue-800   border-blue-200"   },
@@ -397,6 +397,52 @@ export default function AdminBookingDetail() {
                   )}
                 </div>
               </div>
+
+              {/* Time remaining */}
+              {(() => {
+                const skip = ["cancelled", "completed", "no_show"];
+                if (skip.includes(booking.status)) return null;
+                const today  = startOfDay(new Date());
+                const start  = startOfDay(new Date(booking.startDate + "T00:00:00"));
+                const end    = startOfDay(new Date(booking.endDate   + "T00:00:00"));
+                const daysToStart = differenceInDays(start, today);
+                const daysToEnd   = differenceInDays(end,   today);
+                const totalDays   = Math.max(1, differenceInDays(end, start));
+                const elapsed     = Math.max(0, differenceInDays(today, start));
+                const pct         = Math.min(100, Math.round((elapsed / totalDays) * 100));
+
+                let label = "";
+                let sub = "";
+                let barColor = "bg-primary";
+                let textColor = "text-primary";
+                let bgColor = "bg-primary/5 border-primary/20";
+
+                if (daysToStart > 1)   { label = `Starts in ${daysToStart} days`;   sub = `Pickup: ${format(start, "EEEE, MMM d")}`; barColor = "bg-blue-500"; textColor = "text-blue-700"; bgColor = "bg-blue-50 border-blue-200"; }
+                else if (daysToStart === 1) { label = "Starts tomorrow";             sub = `Pickup: ${format(start, "EEEE, MMM d")}`; barColor = "bg-blue-500"; textColor = "text-blue-700"; bgColor = "bg-blue-50 border-blue-200"; }
+                else if (daysToStart === 0){ label = "Pickup day!";                  sub = "Equipment should be picked up today"; barColor = "bg-green-500"; textColor = "text-green-700"; bgColor = "bg-green-50 border-green-200"; }
+                else if (daysToEnd > 1)  { label = `${daysToEnd} days remaining`;   sub = `Due back: ${format(end, "EEEE, MMM d")}`; barColor = "bg-green-500"; textColor = "text-green-700"; bgColor = "bg-green-50 border-green-200"; }
+                else if (daysToEnd === 1){ label = "Returns tomorrow";               sub = `Due back: ${format(end, "EEEE, MMM d")}`; barColor = "bg-amber-500"; textColor = "text-amber-700"; bgColor = "bg-amber-50 border-amber-200"; }
+                else if (daysToEnd === 0){ label = "Due back today";                 sub = "Equipment should be returned by end of day"; barColor = "bg-amber-500"; textColor = "text-amber-700"; bgColor = "bg-amber-50 border-amber-200"; }
+                else                     { label = `Overdue by ${Math.abs(daysToEnd)} day${Math.abs(daysToEnd) !== 1 ? "s" : ""}`; sub = `Was due ${format(end, "EEEE, MMM d")}`; barColor = "bg-red-500"; textColor = "text-red-700"; bgColor = "bg-red-50 border-red-200"; }
+
+                return (
+                  <div className={`rounded-xl border p-4 space-y-2 ${bgColor}`}>
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <Clock className={`w-4 h-4 ${textColor}`} />
+                        <span className={`font-bold text-sm ${textColor}`}>{label}</span>
+                      </div>
+                      {daysToStart < 0 && <span className="text-xs text-muted-foreground">{pct}% elapsed</span>}
+                    </div>
+                    {daysToStart < 0 && (
+                      <div className="h-2 bg-white/60 rounded-full overflow-hidden">
+                        <div className={`h-full rounded-full transition-all ${barColor}`} style={{ width: `${pct}%` }} />
+                      </div>
+                    )}
+                    <p className="text-xs text-muted-foreground">{sub}</p>
+                  </div>
+                );
+              })()}
             </CardContent>
           </Card>
 

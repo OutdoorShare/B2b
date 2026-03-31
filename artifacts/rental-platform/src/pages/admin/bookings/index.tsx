@@ -21,7 +21,7 @@ import {
 import {
   format, startOfMonth, endOfMonth, startOfWeek, endOfWeek,
   addDays, addMonths, subMonths, isSameMonth, isSameDay,
-  isWithinInterval, parseISO, startOfDay, endOfDay
+  isWithinInterval, parseISO, startOfDay, endOfDay, differenceInDays
 } from "date-fns";
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem,
@@ -55,6 +55,26 @@ const STATUS_COLORS: Record<string, string> = {
   completed: "bg-gray-100   text-gray-600   border-gray-300",
   cancelled: "bg-red-100    text-red-700    border-red-300",
 };
+
+function getRentalTimeStatus(startStr: string, endStr: string, status: string) {
+  const skipped = ["cancelled", "completed", "no_show"];
+  if (skipped.includes(status)) return null;
+  const today = startOfDay(new Date());
+  const start = startOfDay(new Date(startStr + "T00:00:00"));
+  const end   = startOfDay(new Date(endStr   + "T00:00:00"));
+  const daysToStart = differenceInDays(start, today);
+  const daysToEnd   = differenceInDays(end,   today);
+  const totalDays   = Math.max(1, differenceInDays(end, start));
+  const elapsed     = Math.max(0, differenceInDays(today, start));
+  const pct         = Math.min(100, Math.round((elapsed / totalDays) * 100));
+  if (daysToStart > 1)  return { label: `Starts in ${daysToStart}d`, color: "text-blue-600 bg-blue-50 border-blue-200", pct: 0, bar: "bg-blue-400" };
+  if (daysToStart === 1) return { label: "Starts tomorrow",          color: "text-blue-600 bg-blue-50 border-blue-200", pct: 0, bar: "bg-blue-400" };
+  if (daysToStart === 0) return { label: "Pickup day!",              color: "text-green-700 bg-green-50 border-green-200", pct: 0, bar: "bg-green-500" };
+  if (daysToEnd > 1)    return { label: `${daysToEnd}d remaining`,  color: "text-green-700 bg-green-50 border-green-200", pct, bar: "bg-green-500" };
+  if (daysToEnd === 1)  return { label: "Returns tomorrow",          color: "text-amber-700 bg-amber-50 border-amber-200", pct, bar: "bg-amber-500" };
+  if (daysToEnd === 0)  return { label: "Due back today",            color: "text-amber-700 bg-amber-50 border-amber-200", pct: 100, bar: "bg-amber-500" };
+  return { label: `Overdue ${Math.abs(daysToEnd)}d`,                 color: "text-red-700 bg-red-50 border-red-300", pct: 100, bar: "bg-red-500" };
+}
 
 const STATUS_DOT: Record<string, string> = {
   pending:   "bg-amber-400",
@@ -292,6 +312,22 @@ export default function AdminBookings() {
                             {format(new Date(booking.startDate), "MMM d, yyyy")} –<br />
                             {format(new Date(booking.endDate), "MMM d, yyyy")}
                           </div>
+                          {(() => {
+                            const ts = getRentalTimeStatus(booking.startDate, booking.endDate, booking.status);
+                            if (!ts) return null;
+                            return (
+                              <div className="mt-1.5 space-y-1">
+                                <span className={`inline-flex items-center text-[10px] font-semibold px-1.5 py-0.5 rounded border ${ts.color}`}>
+                                  {ts.label}
+                                </span>
+                                {ts.pct > 0 && (
+                                  <div className="h-1 w-full bg-muted rounded-full overflow-hidden">
+                                    <div className={`h-full rounded-full ${ts.bar}`} style={{ width: `${ts.pct}%` }} />
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })()}
                         </TableCell>
                         <TableCell><SourceBadge source={(booking as any).source} /></TableCell>
                         <TableCell>{getStatusBadge(booking.status)}</TableCell>

@@ -9,7 +9,7 @@ import {
   MapPin, Monitor, Smartphone, Phone as PhoneIcon, Users,
   Receipt, Tag, Camera, ImagePlus, Upload, X as XIcon, Loader2, RotateCcw
 } from "lucide-react";
-import { format, differenceInDays } from "date-fns";
+import { format, differenceInDays, startOfDay } from "date-fns";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
@@ -244,6 +244,51 @@ export default function MyBookingDetail() {
           <span>This booking has been cancelled. Contact the rental company if you have questions.</span>
         </div>
       )}
+
+      {/* Time remaining */}
+      {(() => {
+        const skip = ["cancelled", "completed", "no_show"];
+        if (skip.includes(booking.status)) return null;
+        const today     = startOfDay(new Date());
+        const start     = startOfDay(startDate);
+        const end       = startOfDay(endDate);
+        const daysToStart = differenceInDays(start, today);
+        const daysToEnd   = differenceInDays(end,   today);
+        const totalDays   = Math.max(1, differenceInDays(end, start));
+        const elapsed     = Math.max(0, differenceInDays(today, start));
+        const pct         = Math.min(100, Math.round((elapsed / totalDays) * 100));
+
+        let label = "", sub = "", icon = <Clock className="w-4 h-4" />;
+        let border = "border-primary/20", bg = "bg-primary/5", text = "text-primary", bar = "bg-primary";
+
+        if (daysToStart > 1)    { label = `Starts in ${daysToStart} days`;   sub = `Pickup on ${format(start, "EEEE, MMMM d")}`; border="border-blue-200"; bg="bg-blue-50"; text="text-blue-700"; bar="bg-blue-500"; }
+        else if (daysToStart===1){ label = "Starts tomorrow";                 sub = `Pickup on ${format(start, "EEEE, MMMM d")}`; border="border-blue-200"; bg="bg-blue-50"; text="text-blue-700"; bar="bg-blue-500"; }
+        else if (daysToStart===0){ label = "Today is your pickup day!";       sub = "Check in with the rental company when you arrive"; border="border-green-200"; bg="bg-green-50"; text="text-green-700"; bar="bg-green-500"; }
+        else if (daysToEnd > 1) { label = `${daysToEnd} days remaining`;     sub = `Return by ${format(end, "EEEE, MMMM d")}`; border="border-green-200"; bg="bg-green-50"; text="text-green-700"; bar="bg-green-500"; }
+        else if (daysToEnd===1) { label = "Return tomorrow";                  sub = `Due back ${format(end, "EEEE, MMMM d")}`; border="border-amber-200"; bg="bg-amber-50"; text="text-amber-700"; bar="bg-amber-500"; }
+        else if (daysToEnd===0) { label = "Return due today";                 sub = "Please return the equipment by end of day"; border="border-amber-200"; bg="bg-amber-50"; text="text-amber-700"; bar="bg-amber-500"; }
+        else                    { label = `Overdue by ${Math.abs(daysToEnd)} day${Math.abs(daysToEnd)!==1?"s":""}`; sub = `Was due back ${format(end, "EEEE, MMMM d")}`; border="border-red-200"; bg="bg-red-50"; text="text-red-700"; bar="bg-red-500"; }
+
+        return (
+          <div className={`rounded-2xl border ${border} ${bg} p-4 space-y-2.5`}>
+            <div className="flex items-center justify-between">
+              <div className={`flex items-center gap-2 font-semibold text-sm ${text}`}>
+                <Clock className="w-4 h-4" />
+                {label}
+              </div>
+              {daysToStart < 0 && (
+                <span className="text-xs text-muted-foreground">{pct}% of rental used</span>
+              )}
+            </div>
+            {daysToStart < 0 && (
+              <div className="h-2.5 bg-black/10 rounded-full overflow-hidden">
+                <div className={`h-full rounded-full ${bar} transition-all`} style={{ width: `${pct}%` }} />
+              </div>
+            )}
+            <p className="text-xs text-muted-foreground">{sub}</p>
+          </div>
+        );
+      })()}
 
       {/* ── Pickup Photos Section (confirmed + active bookings) ── */}
       {["confirmed", "active"].includes(booking.status) && (

@@ -7,7 +7,7 @@ import {
   Calendar, ChevronRight, Package, Clock, CheckCircle2,
   XCircle, AlertCircle, User, LogOut, ArrowRight, RotateCcw
 } from "lucide-react";
-import { format } from "date-fns";
+import { format, differenceInDays, startOfDay } from "date-fns";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
@@ -186,12 +186,34 @@ export default function MyBookings() {
   );
 }
 
+function getRentalTimeChip(startDate: Date, endDate: Date, status: string) {
+  const skip = ["cancelled", "completed", "no_show"];
+  if (skip.includes(status)) return null;
+  const today     = startOfDay(new Date());
+  const start     = startOfDay(startDate);
+  const end       = startOfDay(endDate);
+  const daysToStart = differenceInDays(start, today);
+  const daysToEnd   = differenceInDays(end,   today);
+  const totalDays   = Math.max(1, differenceInDays(end, start));
+  const elapsed     = Math.max(0, differenceInDays(today, start));
+  const pct         = Math.min(100, Math.round((elapsed / totalDays) * 100));
+
+  if (daysToStart > 1)    return { label: `Starts in ${daysToStart} days`, pct: null, color: "text-blue-700 bg-blue-50 border-blue-200", bar: "bg-blue-500" };
+  if (daysToStart === 1)  return { label: "Starts tomorrow",                pct: null, color: "text-blue-700 bg-blue-50 border-blue-200", bar: "bg-blue-500" };
+  if (daysToStart === 0)  return { label: "Pickup day!",                    pct: null, color: "text-green-700 bg-green-50 border-green-200", bar: "bg-green-500" };
+  if (daysToEnd > 1)      return { label: `${daysToEnd} days remaining`,    pct, color: "text-green-700 bg-green-50 border-green-200", bar: "bg-green-500" };
+  if (daysToEnd === 1)    return { label: "Returns tomorrow",               pct, color: "text-amber-700 bg-amber-50 border-amber-200", bar: "bg-amber-500" };
+  if (daysToEnd === 0)    return { label: "Due back today",                 pct: 100, color: "text-amber-700 bg-amber-50 border-amber-200", bar: "bg-amber-500" };
+  return { label: `Overdue ${Math.abs(daysToEnd)}d`, pct: 100, color: "text-red-700 bg-red-50 border-red-300", bar: "bg-red-500" };
+}
+
 function BookingCard({ booking, base, showRebook }: { booking: any; base: string; showRebook: boolean }) {
   const [, setLocation] = useLocation();
   const { label, color } = statusConfig(booking.status);
   const startDate = new Date(booking.startDate + "T00:00:00");
   const endDate = new Date(booking.endDate + "T00:00:00");
   const nights = Math.max(1, Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24)));
+  const timeChip = getRentalTimeChip(startDate, endDate, booking.status);
 
   const handleRebook = (e: React.MouseEvent) => {
     e.preventDefault();
@@ -219,6 +241,19 @@ function BookingCard({ booking, base, showRebook }: { booking: any; base: string
               <span className="text-muted-foreground/40">·</span>
               <span>{nights} day{nights > 1 ? "s" : ""}</span>
             </div>
+            {timeChip && (
+              <div className="mt-2 space-y-1">
+                <span className={`inline-flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded-full border ${timeChip.color}`}>
+                  <Clock className="w-3 h-3" />
+                  {timeChip.label}
+                </span>
+                {timeChip.pct !== null && timeChip.pct > 0 && (
+                  <div className="h-1 w-full max-w-[180px] bg-muted rounded-full overflow-hidden">
+                    <div className={`h-full rounded-full ${timeChip.bar}`} style={{ width: `${timeChip.pct}%` }} />
+                  </div>
+                )}
+              </div>
+            )}
           </div>
           <div className="flex items-center gap-2 shrink-0">
             {showRebook && booking.listingId ? (
