@@ -389,30 +389,47 @@ router.get("/superadmin/tenants/:id", requireSuperAdmin, async (req, res) => {
 });
 
 // ── GET/PUT /superadmin/tenants/:id/business ───────────────────────────────────
-router.get("/superadmin/tenants/:id/business", requireSuperAdmin, async (_req, res) => {
+router.get("/superadmin/tenants/:id/business", requireSuperAdmin, async (req, res) => {
   try {
-    let [p] = await db.select().from(businessProfileTable).limit(1);
+    const tenantId = parseInt(req.params.id);
+    let [p] = await db.select().from(businessProfileTable).where(eq(businessProfileTable.tenantId, tenantId)).limit(1);
     if (!p) {
-      const [created] = await db.insert(businessProfileTable).values({}).returning();
+      const [created] = await db.insert(businessProfileTable).values({ tenantId }).returning();
       p = created;
     }
     res.json({ ...p, depositPercent: parseFloat(p.depositPercent ?? "25"), createdAt: p.createdAt.toISOString(), updatedAt: p.updatedAt.toISOString() });
-  } catch { res.status(500).json({ error: "Failed to fetch business profile" }); }
+  } catch (err) {
+    console.error("Failed to fetch business profile:", err);
+    res.status(500).json({ error: "Failed to fetch business profile" });
+  }
 });
 
 router.put("/superadmin/tenants/:id/business", requireSuperAdmin, async (req, res) => {
   try {
-    let [p] = await db.select().from(businessProfileTable).limit(1);
-    const body = req.body;
+    const tenantId = parseInt(req.params.id);
+    // Strip non-updatable fields that the frontend echoes back
+    const { id: _id, createdAt: _ca, updatedAt: _ua, tenantId: _tid, ...body } = req.body;
+    let [p] = await db.select().from(businessProfileTable).where(eq(businessProfileTable.tenantId, tenantId)).limit(1);
     if (!p) {
-      const [created] = await db.insert(businessProfileTable).values({ ...body, depositPercent: String(body.depositPercent ?? "25") }).returning();
+      const [created] = await db.insert(businessProfileTable).values({
+        ...body,
+        tenantId,
+        depositPercent: String(body.depositPercent ?? "25"),
+      }).returning();
       p = created;
     } else {
-      const [updated] = await db.update(businessProfileTable).set({ ...body, depositPercent: body.depositPercent !== undefined ? String(body.depositPercent) : undefined, updatedAt: new Date() }).where(eq(businessProfileTable.id, p.id)).returning();
+      const [updated] = await db.update(businessProfileTable).set({
+        ...body,
+        depositPercent: body.depositPercent !== undefined ? String(body.depositPercent) : undefined,
+        updatedAt: new Date(),
+      }).where(eq(businessProfileTable.id, p.id)).returning();
       p = updated;
     }
     res.json({ ...p, depositPercent: parseFloat(p.depositPercent ?? "25"), createdAt: p.createdAt.toISOString(), updatedAt: p.updatedAt.toISOString() });
-  } catch { res.status(500).json({ error: "Failed to update business profile" }); }
+  } catch (err) {
+    console.error("Failed to update business profile:", err);
+    res.status(500).json({ error: "Failed to update business profile" });
+  }
 });
 
 // ── GET/POST/PUT/DELETE /superadmin/tenants/:id/listings ──────────────────────
