@@ -3,7 +3,9 @@ import { useLocation, useParams } from "wouter";
 import type { DateRange } from "react-day-picker";
 import { 
   useGetListing,
-  getGetListingQueryKey
+  getGetListingQueryKey,
+  useGetBusinessProfile,
+  getGetBusinessProfileQueryKey,
 } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -146,6 +148,10 @@ export default function StorefrontBook() {
     query: { enabled: !!listingId, queryKey: getGetListingQueryKey(listingId) }
   });
 
+  const { data: businessProfile } = useGetBusinessProfile({
+    query: { queryKey: getGetBusinessProfileQueryKey() }
+  });
+
   const [step, setStep] = useState<Step>("dates");
   const [session, setSession] = useState<CustomerSession | null>(loadSession);
 
@@ -175,6 +181,7 @@ export default function StorefrontBook() {
   // Step 3: agreement
   const [agreeChecked, setAgreeChecked] = useState(false);
   const [agreementText, setAgreementText] = useState("");
+  const [customFieldValues, setCustomFieldValues] = useState<Record<string, string>>({});
   const sigCanvasRef = useRef<HTMLCanvasElement>(null);
   const isDrawingRef = useRef(false);
   const [sigHasContent, setSigHasContent] = useState(false);
@@ -249,6 +256,68 @@ export default function StorefrontBook() {
       .reduce((sum, a) => sum + (a.priceType === "per_day" ? a.price * days : a.price), 0);
   }, [availableAddons, selectedAddonIds, days]);
   const total = subtotal + addonsSubtotal + deposit;
+
+  // ── Agreement token resolution ─────────────────────────────────────────────
+  // Map of known auto-fill token keys → their runtime values
+  const autoFillMap: Record<string, string> = {
+    renter_name:    name || "—",
+    renter_email:   email || "—",
+    renter_phone:   phone || "—",
+    listing_title:  listing?.title || "—",
+    category:       (listing as any)?.categoryName || "—",
+    start_date:     dateRange?.from ? format(dateRange.from, "MMM d, yyyy") : "—",
+    end_date:       dateRange?.to   ? format(dateRange.to,   "MMM d, yyyy") : "—",
+    rental_days:    String(days),
+    price_per_day:  listing?.pricePerDay ? `$${parseFloat(String(listing.pricePerDay)).toFixed(2)}` : "—",
+    subtotal:       `$${subtotal.toFixed(2)}`,
+    deposit_amount: deposit > 0 ? `$${deposit.toFixed(2)}` : "$0.00",
+    total_price:    `$${total.toFixed(2)}`,
+    company_name:   (businessProfile as any)?.name || "—",
+  };
+
+  // Render agreement template as React nodes — auto-fill tokens become
+  // highlighted spans; unknown tokens become inputs the renter must complete
+  function renderAgreementParagraph(para: string, paraIdx: number) {
+    const parts = para.split(/({{[^}]+}})/g);
+    return (
+      <p key={paraIdx}>
+        {parts.map((part, i) => {
+          const m = part.match(/^{{(.+)}}$/);
+          if (!m) return <span key={i}>{part}</span>;
+          const key = m[1].trim();
+          if (autoFillMap[key] !== undefined) {
+            return (
+              <span key={i} className="font-semibold text-foreground underline decoration-primary/40 decoration-dotted">
+                {autoFillMap[key]}
+              </span>
+            );
+          }
+          // Unknown token → inline input the renter must complete
+          const label = key.replace(/_/g, " ");
+          return (
+            <span key={i} className="inline-flex items-center gap-1 mx-0.5 align-middle">
+              <input
+                type="text"
+                value={customFieldValues[key] ?? ""}
+                onChange={e => setCustomFieldValues(prev => ({ ...prev, [key]: e.target.value }))}
+                placeholder={label}
+                className="border-b-2 border-amber-400 bg-amber-50 text-amber-900 text-xs px-1.5 py-0.5 rounded-sm focus:outline-none focus:border-amber-600 min-w-[120px] font-medium placeholder:text-amber-400/60"
+              />
+            </span>
+          );
+        })}
+      </p>
+    );
+  }
+
+  // Resolve all tokens to final text for booking submission
+  function resolveAgreementText(template: string): string {
+    return template.replace(/{{([^}]+)}}/g, (_, key) => {
+      const k = key.trim();
+      if (autoFillMap[k] !== undefined) return autoFillMap[k];
+      return customFieldValues[k] || `[${k}]`;
+    });
+  }
 
   useEffect(() => {
     if (session) {
@@ -404,6 +473,16 @@ export default function StorefrontBook() {
     if (!agreeChecked) {
       toast({ title: "Please accept the rental terms", variant: "destructive" }); return;
     }
+    // Validate all renter-fill fields are completed
+    if (agreementText) {
+      const unfilledKeys = Array.from(agreementText.matchAll(/{{([^}]+)}}/g))
+        .map(m => m[1].trim())
+        .filter(k => !(k in autoFillMap) && !customFieldValues[k]);
+      if (unfilledKeys.length > 0) {
+        toast({ title: "Please complete all required fields", description: "Fill in the highlighted fields in the agreement above.", variant: "destructive" });
+        return;
+      }
+    }
 
     const signatureDataUrl = sigCanvasRef.current?.toDataURL("image/png") ?? "";
 
@@ -433,7 +512,7 @@ export default function StorefrontBook() {
           source: "online",
           addons: selectedAddons,
           agreementSignerName: name.trim(),
-          agreementText: agreementText || undefined,
+          agreementText: agreementText ? resolveAgreementText(agreementText) : undefined,
           agreementSignatureDataUrl: signatureDataUrl,
           stripePaymentIntentId: paymentIntentId || undefined,
         })
@@ -913,11 +992,25 @@ export default function StorefrontBook() {
                   <p><strong className="text-foreground">Renter:</strong> {name} ({email})</p>
                   <Separator />
                   {agreementText
-                    ? agreementText.split("\n\n").filter(Boolean).map((para, i) => (
-                        <p key={i}>{para}</p>
-                      ))
+                    ? agreementText.split("\n\n").filter(Boolean).map((para, i) =>
+                        renderAgreementParagraph(para, i)
+                      )
                     : <p className="text-muted-foreground italic">Loading agreement…</p>
                   }
+                  {/* Notice if there are renter-fill fields outstanding */}
+                  {agreementText && (() => {
+                    const unfilled = Array.from(agreementText.matchAll(/{{([^}]+)}}/g))
+                      .map(m => m[1].trim())
+                      .filter(k => !(k in autoFillMap) && !customFieldValues[k]);
+                    return unfilled.length > 0 ? (
+                      <div className="flex items-start gap-2 bg-amber-50 border border-amber-200 rounded-lg p-3 mt-2">
+                        <span className="text-amber-500 text-xs mt-0.5">⚠️</span>
+                        <p className="text-xs text-amber-700">
+                          Please fill in the highlighted field{unfilled.length > 1 ? "s" : ""} above before signing.
+                        </p>
+                      </div>
+                    ) : null;
+                  })()}
                   <p className="text-xs italic">By signing below, you confirm you have read, understood, and agree to all terms in this rental agreement.</p>
                 </div>
 
