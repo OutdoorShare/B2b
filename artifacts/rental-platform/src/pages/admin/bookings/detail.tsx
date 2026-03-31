@@ -203,52 +203,96 @@ export default function AdminBookingDetail() {
         </div>
       </div>
 
+      {/* Contextual action bar */}
       <div className="flex flex-wrap gap-3 items-center">
         <Button variant="outline" className="gap-2" onClick={() => setLocation(adminPath(`/bookings/${id}/edit`))}>
-          <Pencil className="w-4 h-4" /> Edit Booking
+          <Pencil className="w-4 h-4" /> Edit
         </Button>
-        <Button 
-          variant={booking.status === 'confirmed' ? "default" : "outline"}
-          onClick={() => handleStatusChange('confirmed')}
-          disabled={booking.status === 'confirmed'}
-        >
-          Confirm Booking
-        </Button>
-        <Button 
-          variant={booking.status === 'active' ? "default" : "outline"}
-          onClick={() => handleStatusChange('active')}
-          disabled={booking.status === 'active'}
-          className={booking.status === 'active' ? "bg-green-600 hover:bg-green-700" : ""}
-        >
-          Mark as Picked Up
-        </Button>
-        <Button 
-          variant={booking.status === 'completed' ? "default" : "outline"}
-          onClick={() => handleStatusChange('completed')}
-          disabled={booking.status === 'completed'}
-        >
-          Mark as Returned
-        </Button>
+
+        {booking.status === 'pending' && (
+          <Button className="gap-2 bg-blue-600 hover:bg-blue-700 text-white" onClick={() => handleStatusChange('confirmed')}>
+            <CheckCircle2 className="w-4 h-4" /> Confirm Booking
+          </Button>
+        )}
+
+        {booking.status === 'confirmed' && (
+          <Button
+            className="gap-2 bg-green-600 hover:bg-green-700 text-white text-base px-5 py-2.5 h-auto"
+            onClick={() => handleStatusChange('active')}
+          >
+            <CheckCircle2 className="w-5 h-5" /> Mark as Picked Up
+          </Button>
+        )}
+
+        {booking.status === 'active' && (
+          <Button
+            className="gap-2 bg-blue-600 hover:bg-blue-700 text-white"
+            onClick={() => handleStatusChange('completed')}
+          >
+            <CheckCircle2 className="w-4 h-4" /> Mark as Returned
+          </Button>
+        )}
 
         {booking.status === 'completed' && (
           <Link href={adminPath(`/claims/new?bookingId=${booking.id}&listingId=${booking.listingId}&customerName=${encodeURIComponent(booking.customerName)}&customerEmail=${encodeURIComponent(booking.customerEmail)}`)}>
-            <Button variant="outline" className="gap-2 border-amber-300 text-amber-700 hover:bg-amber-50 hover:border-amber-400">
-              <ShieldAlert className="w-4 h-4" />
-              Submit Claim
+            <Button variant="outline" className="gap-2 border-amber-300 text-amber-700 hover:bg-amber-50">
+              <ShieldAlert className="w-4 h-4" /> Submit Claim
             </Button>
           </Link>
         )}
 
+        {/* Secondary status options (collapsed) */}
+        {!['pending'].includes(booking.status) && booking.status !== 'confirmed' && (
+          <Button variant="outline" onClick={() => handleStatusChange('confirmed')} disabled={booking.status === 'confirmed'} className="text-sm">
+            ← Back to Confirmed
+          </Button>
+        )}
 
         <Button 
           variant="ghost"
           className="text-destructive hover:bg-destructive/10 hover:text-destructive ml-auto"
           onClick={() => handleStatusChange('cancelled')}
-          disabled={booking.status === 'cancelled'}
+          disabled={['cancelled', 'completed'].includes(booking.status)}
         >
-          Cancel Booking
+          Cancel
         </Button>
       </div>
+
+      {/* Pickup-day callout for confirmed bookings */}
+      {booking.status === 'confirmed' && (() => {
+        const today    = startOfDay(new Date());
+        const start    = startOfDay(new Date(booking.startDate + "T00:00:00"));
+        const daysAway = differenceInDays(start, today);
+        if (daysAway > 2) return null;
+
+        const isToday    = daysAway === 0;
+        const isTomorrow = daysAway === 1;
+
+        return (
+          <div className={`rounded-xl border-2 p-4 flex items-start gap-4 ${isToday ? "border-green-400 bg-green-50" : "border-blue-300 bg-blue-50"}`}>
+            <div className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 ${isToday ? "bg-green-100" : "bg-blue-100"}`}>
+              <CheckCircle2 className={`w-5 h-5 ${isToday ? "text-green-600" : "text-blue-600"}`} />
+            </div>
+            <div className="flex-1">
+              <p className={`font-bold text-base ${isToday ? "text-green-800" : "text-blue-800"}`}>
+                {isToday ? "Pickup day — customer arrives today!" : isTomorrow ? "Customer arrives tomorrow" : `Customer arrives in ${daysAway} days`}
+              </p>
+              <p className={`text-sm mt-0.5 ${isToday ? "text-green-700" : "text-blue-700"}`}>
+                Complete the checklist below before marking as picked up.
+              </p>
+            </div>
+            {isToday && (
+              <Button
+                size="sm"
+                className="bg-green-600 hover:bg-green-700 text-white shrink-0 gap-1.5"
+                onClick={() => handleStatusChange('active')}
+              >
+                <CheckCircle2 className="w-4 h-4" /> Mark Picked Up
+              </Button>
+            )}
+          </div>
+        );
+      })()}
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         <div className="lg:col-span-2 space-y-8">
@@ -590,6 +634,86 @@ export default function AdminBookingDetail() {
 
         {/* Right Column: Payment + Pickup Photos */}
         <div className="lg:col-span-1 space-y-8">
+
+          {/* ── Pickup Readiness Checklist — confirmed only ── */}
+          {booking.status === 'confirmed' && (
+            <Card className="border-green-200">
+              <CardHeader className="pb-3">
+                <CardTitle className="flex items-center gap-2 text-base text-green-800">
+                  <CheckCircle2 className="w-5 h-5 text-green-600" />
+                  Pickup Checklist
+                </CardTitle>
+                <CardDescription className="text-xs">
+                  Complete these before marking the booking as picked up.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                {/* 1. Agreement */}
+                {(() => {
+                  const signed = !!(booking as any).agreementSignerName;
+                  return (
+                    <div className={`flex items-start gap-3 rounded-xl p-3 border ${signed ? "bg-green-50 border-green-200" : "bg-muted/30 border-border"}`}>
+                      <div className={`w-6 h-6 rounded-full flex items-center justify-center shrink-0 mt-0.5 ${signed ? "bg-green-500" : "bg-muted-foreground/20"}`}>
+                        {signed ? <CheckCircle2 className="w-4 h-4 text-white" /> : <span className="text-muted-foreground text-xs font-bold">1</span>}
+                      </div>
+                      <div>
+                        <p className={`text-sm font-semibold ${signed ? "text-green-800" : "text-foreground"}`}>Rental Agreement</p>
+                        <p className="text-xs text-muted-foreground mt-0.5">
+                          {signed ? `Signed by ${(booking as any).agreementSignerName}` : "Not yet signed by renter"}
+                        </p>
+                      </div>
+                    </div>
+                  );
+                })()}
+
+                {/* 2. Identity */}
+                {(() => {
+                  const verified = verifData?.identityVerificationStatus === "verified";
+                  return (
+                    <div className={`flex items-start gap-3 rounded-xl p-3 border ${verified ? "bg-green-50 border-green-200" : "bg-muted/30 border-border"}`}>
+                      <div className={`w-6 h-6 rounded-full flex items-center justify-center shrink-0 mt-0.5 ${verified ? "bg-green-500" : "bg-muted-foreground/20"}`}>
+                        {verified ? <CheckCircle2 className="w-4 h-4 text-white" /> : <span className="text-muted-foreground text-xs font-bold">2</span>}
+                      </div>
+                      <div>
+                        <p className={`text-sm font-semibold ${verified ? "text-green-800" : "text-foreground"}`}>Identity Verified</p>
+                        <p className="text-xs text-muted-foreground mt-0.5">
+                          {verified ? `Verified via Stripe Identity` : "Not yet verified — check ID at pickup"}
+                        </p>
+                      </div>
+                    </div>
+                  );
+                })()}
+
+                {/* 3. Photos */}
+                {(() => {
+                  const photos = (booking as any).pickupPhotos ?? [];
+                  const done = photos.length > 0;
+                  return (
+                    <div className={`flex items-start gap-3 rounded-xl p-3 border ${done ? "bg-green-50 border-green-200" : "bg-muted/30 border-border"}`}>
+                      <div className={`w-6 h-6 rounded-full flex items-center justify-center shrink-0 mt-0.5 ${done ? "bg-green-500" : "bg-muted-foreground/20"}`}>
+                        {done ? <CheckCircle2 className="w-4 h-4 text-white" /> : <span className="text-muted-foreground text-xs font-bold">3</span>}
+                      </div>
+                      <div>
+                        <p className={`text-sm font-semibold ${done ? "text-green-800" : "text-foreground"}`}>Equipment Photos</p>
+                        <p className="text-xs text-muted-foreground mt-0.5">
+                          {done ? `${photos.length} photo${photos.length !== 1 ? "s" : ""} submitted by renter` : "Renter hasn't submitted photos yet"}
+                        </p>
+                      </div>
+                    </div>
+                  );
+                })()}
+
+                {/* CTA */}
+                <Button
+                  className="w-full gap-2 bg-green-600 hover:bg-green-700 text-white mt-1"
+                  onClick={() => handleStatusChange('active')}
+                >
+                  <CheckCircle2 className="w-4 h-4" />
+                  Mark as Picked Up
+                </Button>
+              </CardContent>
+            </Card>
+          )}
 
           {/* ── Pickup Documentation Card — always visible for confirmed/active ── */}
           {['confirmed', 'active'].includes(booking.status) && (

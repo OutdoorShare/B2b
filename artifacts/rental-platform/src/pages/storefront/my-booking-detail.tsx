@@ -232,12 +232,70 @@ export default function MyBookingDetail() {
           <span>Your booking is awaiting confirmation. You'll receive an email once it's reviewed.</span>
         </div>
       )}
-      {booking.status === "confirmed" && (
-        <div className="rounded-2xl border border-green-200 bg-green-50 p-4 text-sm text-green-800 flex items-start gap-2">
-          <CheckCircle2 className="w-4 h-4 mt-0.5 shrink-0 text-green-600" />
-          <span>Your booking is confirmed! Please bring a valid ID on your pickup date.</span>
-        </div>
-      )}
+      {booking.status === "confirmed" && (() => {
+        const today    = startOfDay(new Date());
+        const start    = startOfDay(startDate);
+        const daysAway = differenceInDays(start, today);
+        const isToday  = daysAway === 0;
+
+        return (
+          <div className={`rounded-2xl border-2 overflow-hidden ${isToday ? "border-green-400" : "border-green-200"}`}>
+            {/* Header */}
+            <div className={`px-5 py-4 flex items-center gap-3 ${isToday ? "bg-green-600" : "bg-green-50"}`}>
+              <div className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 ${isToday ? "bg-white/20" : "bg-green-100"}`}>
+                <CheckCircle2 className={`w-6 h-6 ${isToday ? "text-white" : "text-green-600"}`} />
+              </div>
+              <div>
+                <p className={`font-bold text-base ${isToday ? "text-white" : "text-green-800"}`}>
+                  {isToday ? "Today is your pickup day!" : daysAway === 1 ? "Your pickup is tomorrow" : `Your booking is confirmed`}
+                </p>
+                <p className={`text-sm mt-0.5 ${isToday ? "text-green-100" : "text-green-700"}`}>
+                  {isToday
+                    ? `Head over to pick up your ${booking.listingTitle ?? "rental"}`
+                    : `Pickup on ${format(startDate, "EEEE, MMMM d")}`
+                  }
+                </p>
+              </div>
+            </div>
+
+            {/* Bring with you */}
+            <div className="px-5 pt-4 pb-2">
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3">What to bring</p>
+              <div className="space-y-2">
+                {[
+                  { icon: <User className="w-4 h-4 text-green-600" />, text: "Valid government-issued photo ID" },
+                  { icon: <FileSignature className="w-4 h-4 text-green-600" />, text: "Your signed rental agreement (already completed)" },
+                  { icon: <CreditCard className="w-4 h-4 text-green-600" />, text: "Payment method on file" },
+                ].map(({ icon, text }, i) => (
+                  <div key={i} className="flex items-center gap-3">
+                    <div className="w-7 h-7 rounded-full bg-green-50 border border-green-200 flex items-center justify-center shrink-0">
+                      {icon}
+                    </div>
+                    <span className="text-sm text-foreground">{text}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* What will happen */}
+            <div className="px-5 pt-3 pb-4">
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3">What to expect</p>
+              <ol className="space-y-2">
+                {[
+                  "Staff will check your ID and look up your booking",
+                  "You'll photograph the equipment condition — this protects you from any damage disputes",
+                  "Pick up your gear and enjoy!",
+                ].map((step, i) => (
+                  <li key={i} className="flex items-start gap-2.5 text-sm text-muted-foreground">
+                    <span className="w-5 h-5 rounded-full bg-green-100 text-green-700 text-xs font-bold flex items-center justify-center shrink-0 mt-0.5">{i + 1}</span>
+                    {step}
+                  </li>
+                ))}
+              </ol>
+            </div>
+          </div>
+        );
+      })()}
       {booking.status === "cancelled" && (
         <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-800 flex items-start gap-2">
           <XCircle className="w-4 h-4 mt-0.5 shrink-0 text-red-500" />
