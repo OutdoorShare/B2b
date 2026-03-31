@@ -22,6 +22,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
+import { Switch } from "@/components/ui/switch";
 import { format } from "date-fns";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
@@ -34,7 +35,7 @@ async function sa(path: string, opts?: RequestInit) {
 }
 
 // ─── Types ───────────────────────────────────────────────────────────────────
-type Tenant = { id: number; name: string; slug: string; email: string; plan: string; status: string; maxListings: number; contactName?: string; phone?: string; notes?: string; createdAt: string; listingCount: number; bookingCount: number; platformFeePercent?: string | null };
+type Tenant = { id: number; name: string; slug: string; email: string; plan: string; status: string; maxListings: number; contactName?: string; phone?: string; notes?: string; createdAt: string; listingCount: number; bookingCount: number; platformFeePercent?: string | null; testMode?: boolean };
 type BizProfile = { name: string; tagline: string; description: string; logoUrl?: string; primaryColor: string; accentColor: string; email: string; phone: string; website?: string; location: string; address?: string; city?: string; state?: string; zipCode?: string; socialInstagram?: string; socialFacebook?: string; depositRequired: boolean; depositPercent: number; cancellationPolicy: string; rentalTerms?: string };
 type Listing = { id: number; title: string; description: string; pricePerDay: number; pricePerWeek?: number | null; quantity: number; status: string; brand?: string; model?: string; condition?: string; location?: string; requirements?: string; depositAmount?: number | null; createdAt: string };
 type Booking = { id: number; customerName: string; customerEmail: string; startDate: string; endDate: string; quantity: number; totalPrice: number; status: string; source: string; adminNotes?: string; createdAt: string; listingId: number };
@@ -49,7 +50,7 @@ function AccountTab({ tenant, tenantId, onSaved }: { tenant: Tenant; tenantId: n
   const { toast } = useToast();
   const [saving, setSaving] = useState(false);
   const [showPw, setShowPw] = useState(false);
-  const [form, setForm] = useState({ name: tenant.name, slug: tenant.slug, email: tenant.email, plan: tenant.plan, status: tenant.status, maxListings: String(tenant.maxListings), contactName: tenant.contactName ?? "", phone: tenant.phone ?? "", notes: tenant.notes ?? "", password: "", platformFeePercent: tenant.platformFeePercent != null ? String(tenant.platformFeePercent) : "5.00" });
+  const [form, setForm] = useState({ name: tenant.name, slug: tenant.slug, email: tenant.email, plan: tenant.plan, status: tenant.status, maxListings: String(tenant.maxListings), contactName: tenant.contactName ?? "", phone: tenant.phone ?? "", notes: tenant.notes ?? "", password: "", platformFeePercent: tenant.platformFeePercent != null ? String(tenant.platformFeePercent) : "5.00", testMode: !!tenant.testMode });
   const set = (k: string, v: string) => setForm(f => ({ ...f, [k]: v }));
 
   const save = async () => {
@@ -61,7 +62,7 @@ function AccountTab({ tenant, tenantId, onSaved }: { tenant: Tenant; tenantId: n
         setSaving(false);
         return;
       }
-      const body: any = { name: form.name, slug: form.slug, email: form.email, plan: form.plan, status: form.status, maxListings: parseInt(form.maxListings), contactName: form.contactName || null, phone: form.phone || null, notes: form.notes || null, platformFeePercent: form.platformFeePercent };
+      const body: any = { name: form.name, slug: form.slug, email: form.email, plan: form.plan, status: form.status, maxListings: parseInt(form.maxListings), contactName: form.contactName || null, phone: form.phone || null, notes: form.notes || null, platformFeePercent: form.platformFeePercent, testMode: form.testMode };
       if (form.password) body.password = form.password;
       const res = await sa(`/superadmin/tenants/${tenantId}`, { method: "PUT", body: JSON.stringify(body) });
       if (!res.ok) { const d = await res.json(); toast({ title: d.error ?? "Save failed", variant: "destructive" }); return; }
@@ -139,6 +140,19 @@ function AccountTab({ tenant, tenantId, onSaved }: { tenant: Tenant; tenantId: n
             <span className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm font-medium pointer-events-none">%</span>
           </div>
           <p className="text-xs text-slate-500">Kept by the platform; remainder paid to the owner</p>
+        </div>
+        <div className="col-span-2">
+          <div className="flex items-center justify-between bg-amber-950/30 border border-amber-700/40 rounded-lg px-4 py-3">
+            <div>
+              <p className="text-sm font-medium text-amber-300">Test Mode</p>
+              <p className="text-xs text-amber-600 mt-0.5">When on, bookings use Stripe test keys — no real money is charged. Show test card 4242 4242 4242 4242 to renters.</p>
+            </div>
+            <Switch
+              checked={form.testMode}
+              onCheckedChange={v => setForm(f => ({ ...f, testMode: v }))}
+              className="data-[state=checked]:bg-amber-500"
+            />
+          </div>
         </div>
         <div className="col-span-2 space-y-1.5">
           <Label className="text-slate-300 text-xs">Internal Notes</Label>

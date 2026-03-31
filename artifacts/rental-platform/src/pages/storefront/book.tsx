@@ -25,7 +25,8 @@ import { differenceInDays, format, addDays } from "date-fns";
 import { loadStripe } from "@stripe/stripe-js";
 import { Elements, PaymentElement, useStripe, useElements } from "@stripe/react-stripe-js";
 
-const stripePromise = loadStripe(import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY ?? "");
+const liveStripePromise = loadStripe(import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY ?? "");
+const testStripePromise = loadStripe(import.meta.env.VITE_STRIPE_TEST_PUBLISHABLE_KEY ?? "");
 
 // Generate 30-minute time slots from 6:00 AM to 10:00 PM
 const TIME_OPTIONS: string[] = [];
@@ -192,6 +193,7 @@ export default function StorefrontBook() {
   const [clientSecret, setClientSecret] = useState<string | null>(null);
   const [paymentIntentId, setPaymentIntentId] = useState<string | null>(null);
   const [paymentConfirmed, setPaymentConfirmed] = useState(false);
+  const [isTestMode, setIsTestMode] = useState(false);
 
   // Step 3: agreement
   const [agreeChecked, setAgreeChecked] = useState(false);
@@ -410,6 +412,7 @@ export default function StorefrontBook() {
       const data = await res.json();
       setClientSecret(data.clientSecret);
       setPaymentIntentId(data.paymentIntentId);
+      setIsTestMode(!!data.testMode);
     } catch {
       toast({ title: "Payment setup failed", variant: "destructive" });
     }
@@ -973,6 +976,13 @@ export default function StorefrontBook() {
               <div className="space-y-6">
                 <h1 className="text-2xl font-bold">Payment</h1>
 
+                {isTestMode && (
+                  <div className="flex items-center gap-2.5 bg-amber-50 border border-amber-300 rounded-lg px-4 py-3 mb-2">
+                    <span className="text-amber-600 font-bold text-xs uppercase tracking-wider bg-amber-200 px-2 py-0.5 rounded">Test Mode</span>
+                    <span className="text-sm text-amber-800">No real money will be charged. Use card number <strong>4242 4242 4242 4242</strong> with any future expiry and CVC.</span>
+                  </div>
+                )}
+
                 {!clientSecret ? (
                   <div className="flex items-center justify-center py-16 gap-3 text-muted-foreground">
                     <Loader2 className="w-5 h-5 animate-spin" />
@@ -983,11 +993,11 @@ export default function StorefrontBook() {
                     <BadgeCheck className="w-6 h-6 text-green-600 shrink-0" />
                     <div>
                       <p className="font-semibold text-green-800">Payment authorized</p>
-                      <p className="text-sm text-green-700">Your card has been charged. Continue to sign the agreement.</p>
+                      <p className="text-sm text-green-700">{isTestMode ? "Test payment recorded — no real charge." : "Your card has been charged. Continue to sign the agreement."}</p>
                     </div>
                   </div>
                 ) : (
-                  <Elements stripe={stripePromise} options={{ clientSecret, appearance: { theme: "stripe" } }}>
+                  <Elements stripe={isTestMode ? testStripePromise : liveStripePromise} options={{ clientSecret, appearance: { theme: "stripe" } }}>
                     <StripePaymentForm
                       onSuccess={() => setPaymentConfirmed(true)}
                       customerEmail={email}

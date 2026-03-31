@@ -2,7 +2,7 @@ import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
 import { tenantsTable, bookingsTable, customersTable, listingsTable } from "@workspace/db/schema";
 import { eq, desc, and, isNull, isNotNull } from "drizzle-orm";
-import { stripe, PLATFORM_FEE_PERCENT } from "../services/stripe";
+import { stripe, getStripeForTenant, PLATFORM_FEE_PERCENT } from "../services/stripe";
 import type { Request } from "express";
 
 const router: IRouter = Router();
@@ -222,26 +222,31 @@ router.post("/stripe/payment-intent", async (req, res) => {
     const [tenant] = await db.select().from(tenantsTable).where(eq(tenantsTable.slug, tenantSlug));
     if (!tenant) { res.status(404).json({ error: "Tenant not found" }); return; }
 
+    const isTestMode = !!tenant.testMode;
+    const stripeClient = getStripeForTenant(isTestMode);
+
     const feePercent = tenant.platformFeePercent != null
       ? parseFloat(tenant.platformFeePercent) / 100
       : PLATFORM_FEE_PERCENT;
     const platformFeeAmount = Math.round(amountCents * feePercent);
     const transferAmount = amountCents - platformFeeAmount;
 
-    const tenantConnected = !!(tenant.stripeAccountId && tenant.stripeChargesEnabled);
+    // In test mode, don't route to tenant's connected account (test ≠ live accounts)
+    const tenantConnected = !isTestMode && !!(tenant.stripeAccountId && tenant.stripeChargesEnabled);
 
     // Build payment intent — only route to tenant's account if they're connected
     const intentParams: any = {
       amount: amountCents,
       currency: "usd",
       receipt_email: customerEmail,
-      description: `Rental booking — ${tenant.name}`,
+      description: `Rental booking — ${tenant.name}${isTestMode ? " [TEST MODE]" : ""}`,
       metadata: {
         tenant_id: String(tenant.id),
         tenant_slug: tenantSlug,
         customer_name: customerName ?? "",
         platform_fee_cents: String(platformFeeAmount),
         transfer_amount_cents: String(transferAmount),
+        test_mode: isTestMode ? "true" : "false",
         ...(bookingMeta ?? {}),
       },
     };
@@ -253,13 +258,17 @@ router.post("/stripe/payment-intent", async (req, res) => {
     }
     // Otherwise: full amount held on platform, swept later via sweep-pending
 
-    const intent = await stripe.paymentIntents.create(intentParams);
+    const intent = await stripeClient.paymentIntents.create(intentParams);
 
     res.json({
       clientSecret: intent.client_secret,
       paymentIntentId: intent.id,
       platformFee: (platformFeeAmount / 100).toFixed(2),
       heldOnPlatform: !tenantConnected,
+      testMode: isTestMode,
+      stripePublishableKey: isTestMode
+        ? (process.env.STRIPE_TEST_PUBLISHABLE_KEY ?? "")
+        : (process.env.STRIPE_PUBLISHABLE_KEY ?? ""),
     });
   } catch (e: any) {
     console.error("[stripe/payment-intent]", e.message);
