@@ -39,6 +39,7 @@ app.use(express.urlencoded({ extended: true }));
 
 const uploadsDir = path.resolve(process.cwd(), "uploads");
 app.use("/uploads", express.static(uploadsDir));
+app.use("/api/uploads", express.static(uploadsDir));
 
 app.use("/api", resolveTenant as any);
 app.use("/api", uploadRouter);

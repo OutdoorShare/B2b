@@ -36,9 +36,7 @@ router.post("/upload/image", upload.single("file"), (req, res) => {
     res.status(400).json({ error: "No file uploaded" });
     return;
   }
-  const host = req.get("host") ?? "localhost";
-  const protocol = req.headers["x-forwarded-proto"] ?? req.protocol ?? "http";
-  const url = `${protocol}://${host}/uploads/${req.file.filename}`;
+  const url = `/api/uploads/${req.file.filename}`;
   res.json({ url, filename: req.file.filename });
 });
 
