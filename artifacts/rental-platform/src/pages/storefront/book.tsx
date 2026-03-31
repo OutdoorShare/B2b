@@ -18,7 +18,8 @@ import {
   ArrowLeft, ArrowRight, CheckCircle2, Calendar as CalendarIcon,
   Lock, User, CreditCard, FileText, Eye, EyeOff, ShieldCheck,
   Zap, AlertTriangle, Umbrella, Star, Loader2, BadgeCheck,
-  ScanFace, RefreshCw, XCircle, Clock, Tag, Monitor, QrCode, Smartphone
+  ScanFace, RefreshCw, XCircle, Clock, Tag, Monitor, QrCode, Smartphone,
+  ScanLine, X, Copy, Check
 } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { differenceInDays, format, addDays } from "date-fns";
@@ -115,6 +116,160 @@ const STEP_LABELS: Record<Step, string> = {
 };
 const STEPS: Step[] = ["dates", "payment", "agreement", "verification", "confirmation"];
 
+// ── Card Scan Helper ──────────────────────────────────────────────────────────
+// Uses native autocomplete="cc-number" inputs: on iOS the keyboard offers
+// "Scan Credit Card"; on Android autofill can capture from camera.
+// The scanned values are shown as a reference while the user enters them
+// into Stripe's secure form (we never send raw card data to our server).
+function CardScanHelper() {
+  const [open, setOpen] = useState(false);
+  const [cardNumber, setCardNumber] = useState("");
+  const [expiry, setExpiry] = useState("");
+  const [cvc, setCvc] = useState("");
+  const [copied, setCopied] = useState<"number" | "expiry" | null>(null);
+  const numberRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (open) { setCardNumber(""); setExpiry(""); setCvc(""); setTimeout(() => numberRef.current?.focus(), 150); }
+  }, [open]);
+
+  function fmtNumber(v: string) {
+    const d = v.replace(/\D/g, "").slice(0, 16);
+    return d.replace(/(.{4})(?=.)/g, "$1 ");
+  }
+  function fmtExpiry(v: string) {
+    const d = v.replace(/\D/g, "").slice(0, 4);
+    return d.length > 2 ? `${d.slice(0,2)} / ${d.slice(2)}` : d;
+  }
+
+  function copyToClipboard(text: string, field: "number" | "expiry") {
+    navigator.clipboard.writeText(text.replace(/\s/g, "")).catch(() => {});
+    setCopied(field);
+    setTimeout(() => setCopied(null), 2000);
+  }
+
+  const digits = cardNumber.replace(/\s/g, "");
+  const isScanned = digits.length >= 15;
+
+  if (!open) {
+    return (
+      <button
+        type="button"
+        className="flex items-center gap-1.5 text-xs text-primary/80 hover:text-primary transition-colors"
+        onClick={() => setOpen(true)}
+      >
+        <ScanLine className="w-3.5 h-3.5" />
+        Scan card instead
+      </button>
+    );
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+      <div className="bg-background rounded-2xl w-full max-w-sm shadow-2xl p-6 space-y-4">
+        <div className="flex items-center justify-between">
+          <h3 className="font-semibold text-base flex items-center gap-2">
+            <ScanLine className="w-4 h-4 text-primary" />
+            Scan your card
+          </h3>
+          <button type="button" onClick={() => setOpen(false)} className="rounded-full p-1.5 hover:bg-muted transition-colors">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+
+        <p className="text-sm text-muted-foreground leading-snug">
+          On <strong>iPhone/iPad</strong>: tap the card number field — your keyboard will show a{" "}
+          <strong>"Scan Credit Card"</strong> option. On <strong>Android</strong>: use autofill or type manually.
+        </p>
+
+        <div className="space-y-3">
+          <div className="space-y-1">
+            <label className="text-xs text-muted-foreground font-medium">Card number</label>
+            <input
+              ref={numberRef}
+              type="tel"
+              inputMode="numeric"
+              autoComplete="cc-number"
+              value={cardNumber}
+              onChange={e => setCardNumber(fmtNumber(e.target.value))}
+              placeholder="•••• •••• •••• ••••"
+              maxLength={19}
+              className="w-full border rounded-xl px-4 py-3 font-mono text-base tracking-widest bg-background focus:outline-none focus:ring-2 focus:ring-primary/40 transition-all"
+            />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1">
+              <label className="text-xs text-muted-foreground font-medium">Expiry</label>
+              <input
+                type="tel"
+                inputMode="numeric"
+                autoComplete="cc-exp"
+                value={expiry}
+                onChange={e => setExpiry(fmtExpiry(e.target.value))}
+                placeholder="MM / YY"
+                maxLength={7}
+                className="w-full border rounded-xl px-4 py-3 font-mono text-base tracking-wider bg-background focus:outline-none focus:ring-2 focus:ring-primary/40 transition-all"
+              />
+            </div>
+            <div className="space-y-1">
+              <label className="text-xs text-muted-foreground font-medium">CVC</label>
+              <input
+                type="tel"
+                inputMode="numeric"
+                autoComplete="cc-csc"
+                value={cvc}
+                onChange={e => setCvc(e.target.value.replace(/\D/g, "").slice(0, 4))}
+                placeholder="•••"
+                maxLength={4}
+                className="w-full border rounded-xl px-4 py-3 font-mono text-base tracking-widest bg-background focus:outline-none focus:ring-2 focus:ring-primary/40 transition-all"
+              />
+            </div>
+          </div>
+        </div>
+
+        {isScanned && (
+          <div className="bg-primary/5 border border-primary/20 rounded-xl p-4 space-y-2.5">
+            <p className="text-xs font-semibold text-primary flex items-center gap-1.5">
+              <CheckCircle2 className="w-3.5 h-3.5" /> Card details ready — enter these below
+            </p>
+            <div className="flex items-center justify-between gap-2">
+              <span className="font-mono text-sm font-bold tracking-widest truncate">{cardNumber}</span>
+              <button
+                type="button"
+                onClick={() => copyToClipboard(cardNumber, "number")}
+                className="shrink-0 flex items-center gap-1 text-xs text-primary hover:underline"
+              >
+                {copied === "number" ? <><Check className="w-3.5 h-3.5" />Copied</> : <><Copy className="w-3.5 h-3.5" />Copy</>}
+              </button>
+            </div>
+            {expiry && (
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-sm text-muted-foreground">Exp: <span className="font-mono font-medium">{expiry}</span></span>
+                <button
+                  type="button"
+                  onClick={() => copyToClipboard(expiry, "expiry")}
+                  className="shrink-0 flex items-center gap-1 text-xs text-primary hover:underline"
+                >
+                  {copied === "expiry" ? <><Check className="w-3.5 h-3.5" />Copied</> : <><Copy className="w-3.5 h-3.5" />Copy</>}
+                </button>
+              </div>
+            )}
+            {cvc && <p className="text-sm text-muted-foreground">CVC: <span className="font-mono font-medium">{"•".repeat(cvc.length)}</span></p>}
+          </div>
+        )}
+
+        <button
+          type="button"
+          onClick={() => setOpen(false)}
+          className="w-full bg-primary text-primary-foreground rounded-xl py-3 font-semibold text-sm hover:bg-primary/90 transition-colors"
+        >
+          Done — enter details in the form below
+        </button>
+      </div>
+    </div>
+  );
+}
+
 // ── Stripe Payment Form (uses Stripe Elements context) ────────────────────────
 function StripePaymentForm({ onSuccess, customerEmail }: { onSuccess: () => void; customerEmail: string }) {
   const stripe = useStripe();
@@ -153,11 +308,14 @@ function StripePaymentForm({ onSuccess, customerEmail }: { onSuccess: () => void
 
   return (
     <form onSubmit={handleSubmit} className="space-y-5">
-      <div className="bg-background rounded-2xl border shadow-sm p-6">
-        <h2 className="font-semibold flex items-center gap-2 mb-4">
-          <CreditCard className="w-4 h-4 text-primary" />
-          Card Details
-        </h2>
+      <div className="bg-background rounded-2xl border shadow-sm p-6 space-y-4">
+        <div className="flex items-center justify-between">
+          <h2 className="font-semibold flex items-center gap-2">
+            <CreditCard className="w-4 h-4 text-primary" />
+            Card Details
+          </h2>
+          <CardScanHelper />
+        </div>
         <PaymentElement options={{ layout: "tabs" }} />
       </div>
       {error && (
@@ -1437,11 +1595,16 @@ export default function StorefrontBook() {
 
                 {/* Stripe card payment flow — hidden in kiosk QR mode */}
                 {(!isKiosk || kioskPayMode === "card") && !showStripeForm && !paymentConfirmed ? (
-                  <Button size="lg" className="w-full h-13 text-base font-bold rounded-xl" onClick={handleContinueToPayment}>
-                    <CreditCard className="w-4 h-4 mr-2" />
-                    Continue to Payment
-                    {appliedPromo && <span className="ml-1 opacity-80">— ${discountedTotal.toFixed(2)}</span>}
-                  </Button>
+                  <div className="space-y-3">
+                    <Button size="lg" className="w-full h-13 text-base font-bold rounded-xl" onClick={handleContinueToPayment}>
+                      <CreditCard className="w-4 h-4 mr-2" />
+                      Continue to Payment
+                      {appliedPromo && <span className="ml-1 opacity-80">— ${discountedTotal.toFixed(2)}</span>}
+                    </Button>
+                    <div className="flex justify-center">
+                      <CardScanHelper />
+                    </div>
+                  </div>
                 ) : showStripeForm && !clientSecret ? (
                   <div className="flex items-center justify-center py-16 gap-3 text-muted-foreground">
                     <Loader2 className="w-5 h-5 animate-spin" />
