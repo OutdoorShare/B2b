@@ -15,7 +15,8 @@ import { useToast } from "@/hooks/use-toast";
 import { 
   ArrowLeft, ArrowRight, CheckCircle2, Calendar as CalendarIcon,
   Lock, User, CreditCard, FileText, Eye, EyeOff, ShieldCheck,
-  Zap, AlertTriangle, Umbrella, Star, Loader2, BadgeCheck
+  Zap, AlertTriangle, Umbrella, Star, Loader2, BadgeCheck,
+  ScanFace, RefreshCw, XCircle
 } from "lucide-react";
 import { differenceInDays, format, addDays } from "date-fns";
 import { loadStripe } from "@stripe/stripe-js";
@@ -25,7 +26,7 @@ const stripePromise = loadStripe(import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY ?? 
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
-type Step = "dates" | "payment" | "agreement" | "confirmation";
+type Step = "dates" | "payment" | "agreement" | "verification" | "confirmation";
 
 type Addon = {
   id: number;
@@ -66,9 +67,10 @@ const STEP_LABELS: Record<Step, string> = {
   dates: "Dates & Info",
   payment: "Payment",
   agreement: "Agreement",
+  verification: "Verify ID",
   confirmation: "Confirmed",
 };
-const STEPS: Step[] = ["dates", "payment", "agreement", "confirmation"];
+const STEPS: Step[] = ["dates", "payment", "agreement", "verification", "confirmation"];
 
 // ── Stripe Payment Form (uses Stripe Elements context) ────────────────────────
 function StripePaymentForm({ onSuccess, customerEmail }: { onSuccess: () => void; customerEmail: string }) {
@@ -176,6 +178,12 @@ export default function StorefrontBook() {
   const sigCanvasRef = useRef<HTMLCanvasElement>(null);
   const isDrawingRef = useRef(false);
   const [sigHasContent, setSigHasContent] = useState(false);
+
+  // Step 4: Stripe Identity verification
+  const [identityClientSecret, setIdentityClientSecret] = useState<string | null>(null);
+  const [identitySessionId, setIdentitySessionId] = useState<string | null>(null);
+  const [identityStatus, setIdentityStatus] = useState<"idle" | "pending" | "verified" | "failed">("idle");
+  const [identityError, setIdentityError] = useState<string | null>(null);
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [confirmedBooking, setConfirmedBooking] = useState<{ id: number; totalPrice: number } | null>(null);
@@ -293,6 +301,29 @@ export default function StorefrontBook() {
     setSigHasContent(false);
   }, []);
 
+  // Create Stripe payment intent when entering the payment step
+  const createPaymentIntent = useCallback(async (totalCents: number) => {
+    if (!slug) return;
+    try {
+      const res = await fetch(`${BASE}/api/stripe/payment-intent`, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          tenantSlug: slug,
+          amountCents: totalCents,
+          customerEmail: email,
+          customerName: name,
+          bookingMeta: { listing_id: String(listingId) },
+        }),
+      });
+      if (!res.ok) { toast({ title: "Unable to initialize payment", variant: "destructive" }); return; }
+      const data = await res.json();
+      setClientSecret(data.clientSecret);
+      setPaymentIntentId(data.paymentIntentId);
+    } catch {
+      toast({ title: "Payment setup failed", variant: "destructive" });
+    }
+  }, [slug, email, name, listingId, toast]);
+
   if (!listingIdStr) {
     return (
       <div className="container mx-auto px-4 py-16 text-center">
@@ -344,29 +375,6 @@ export default function StorefrontBook() {
       setAuthError("Connection error, please try again");
     } finally { setIsSubmitting(false); }
   };
-
-  // Create Stripe payment intent when entering the payment step
-  const createPaymentIntent = useCallback(async (totalCents: number) => {
-    if (!slug) return;
-    try {
-      const res = await fetch(`${BASE}/api/stripe/payment-intent`, {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          tenantSlug: slug,
-          amountCents: totalCents,
-          customerEmail: email,
-          customerName: name,
-          bookingMeta: { listing_id: String(listingId) },
-        }),
-      });
-      if (!res.ok) { toast({ title: "Unable to initialize payment", variant: "destructive" }); return; }
-      const data = await res.json();
-      setClientSecret(data.clientSecret);
-      setPaymentIntentId(data.paymentIntentId);
-    } catch {
-      toast({ title: "Payment setup failed", variant: "destructive" });
-    }
-  }, [slug, email, name, listingId, toast]);
 
   const handlePaymentNext = () => {
     if (!paymentConfirmed) {
@@ -421,11 +429,70 @@ export default function StorefrontBook() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
       setConfirmedBooking({ id: data.id, totalPrice: data.totalPrice });
-      setStep("confirmation");
+
+      // Create Stripe Identity session for the verification step
+      try {
+        const idRes = await fetch(`${BASE}/api/stripe/identity/session`, {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            tenantSlug: slug,
+            customerId: session?.id ?? undefined,
+            returnUrl: window.location.href,
+          }),
+        });
+        const idData = await idRes.json();
+        if (idRes.ok && idData.clientSecret) {
+          setIdentityClientSecret(idData.clientSecret);
+          setIdentitySessionId(idData.sessionId);
+        }
+      } catch { /* non-blocking — verification step will handle missing session */ }
+
+      setStep("verification");
       window.scrollTo(0, 0);
     } catch {
       toast({ title: "Booking failed", description: "Please try again.", variant: "destructive" });
     } finally { setIsSubmitting(false); }
+  };
+
+  // ── Stripe Identity verification launcher ─────────────────────────────────
+  const handleStartVerification = async () => {
+    setIdentityError(null);
+    if (!identityClientSecret) {
+      toast({ title: "Verification session unavailable. Please contact support.", variant: "destructive" });
+      return;
+    }
+    setIdentityStatus("pending");
+    try {
+      const stripe = await stripePromise;
+      if (!stripe) { setIdentityStatus("failed"); setIdentityError("Stripe could not load."); return; }
+
+      const { error } = await stripe.verifyIdentity(identityClientSecret);
+      if (error) {
+        setIdentityStatus("failed");
+        setIdentityError(error.message ?? "Verification was not completed.");
+        return;
+      }
+
+      // Modal closed successfully — check status from backend
+      if (identitySessionId) {
+        const statusRes = await fetch(`${BASE}/api/stripe/identity/status/${identitySessionId}`);
+        const statusData = await statusRes.json();
+        if (statusData.verified) {
+          setIdentityStatus("verified");
+          setTimeout(() => { setStep("confirmation"); window.scrollTo(0, 0); }, 1200);
+        } else {
+          setIdentityStatus("failed");
+          setIdentityError("Identity could not be verified. Please try again or contact support.");
+        }
+      } else {
+        // No session ID — treat modal close as verified (test mode fallback)
+        setIdentityStatus("verified");
+        setTimeout(() => { setStep("confirmation"); window.scrollTo(0, 0); }, 1200);
+      }
+    } catch {
+      setIdentityStatus("failed");
+      setIdentityError("Verification failed. Please try again.");
+    }
   };
 
   const stepIndex = STEPS.indexOf(step);
@@ -448,7 +515,7 @@ export default function StorefrontBook() {
                   </div>
                   <span className="hidden sm:inline">{STEP_LABELS[s]}</span>
                 </div>
-                {i < 2 && <div className={`flex-1 h-0.5 mx-2 rounded transition-colors ${stepIndex > i ? "bg-primary" : "bg-muted"}`} />}
+                {i < STEPS.filter(s => s !== "confirmation").length - 1 && <div className={`flex-1 h-0.5 mx-2 rounded transition-colors ${stepIndex > i ? "bg-primary" : "bg-muted"}`} />}
               </div>
             ))}
           </div>
@@ -456,10 +523,12 @@ export default function StorefrontBook() {
       </div>
 
       <div className="max-w-5xl mx-auto px-4 py-8">
-        <Button variant="ghost" className="mb-6 pl-0 hover:bg-transparent text-muted-foreground" onClick={() => step === "dates" ? window.history.back() : setStep(STEPS[stepIndex - 1])}>
-          <ArrowLeft className="w-4 h-4 mr-2" />
-          {step === "dates" ? "Back to listing" : "Back"}
-        </Button>
+        {step !== "verification" && (
+          <Button variant="ghost" className="mb-6 pl-0 hover:bg-transparent text-muted-foreground" onClick={() => step === "dates" ? window.history.back() : setStep(STEPS[stepIndex - 1])}>
+            <ArrowLeft className="w-4 h-4 mr-2" />
+            {step === "dates" ? "Back to listing" : "Back"}
+          </Button>
+        )}
 
         <div className={`grid grid-cols-1 gap-8 ${step !== "confirmation" ? "lg:grid-cols-5" : ""}`}>
           {/* Main content */}
@@ -888,9 +957,99 @@ export default function StorefrontBook() {
                   onClick={handleFinalSubmit}
                   disabled={isSubmitting || !agreeChecked || !sigHasContent}
                 >
-                  {isSubmitting ? "Submitting..." : "Sign & Submit Booking Request"}
-                  <CheckCircle2 className="w-4 h-4 ml-2" />
+                  {isSubmitting ? "Submitting…" : "Sign & Continue to ID Verification"}
+                  <ScanFace className="w-4 h-4 ml-2" />
                 </Button>
+              </div>
+            )}
+
+            {/* ── STEP 4: IDENTITY VERIFICATION ── */}
+            {step === "verification" && (
+              <div className="space-y-6">
+                <h1 className="text-2xl font-bold">Identity Verification</h1>
+
+                {identityStatus === "verified" ? (
+                  <div className="bg-green-50 border border-green-200 rounded-2xl p-8 flex flex-col items-center gap-4 text-center">
+                    <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center">
+                      <BadgeCheck className="w-9 h-9 text-green-600" />
+                    </div>
+                    <div>
+                      <p className="text-xl font-bold text-green-800">Identity Verified!</p>
+                      <p className="text-green-700 text-sm mt-1">Taking you to your confirmation…</p>
+                    </div>
+                    <Loader2 className="w-5 h-5 animate-spin text-green-600" />
+                  </div>
+                ) : (
+                  <>
+                    {/* Explanation card */}
+                    <div className="bg-background rounded-2xl border shadow-sm p-6 space-y-4">
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
+                          <ScanFace className="w-5 h-5 text-primary" />
+                        </div>
+                        <div>
+                          <h2 className="font-semibold">Verify your identity to complete your booking</h2>
+                          <p className="text-sm text-muted-foreground">Required by law for all rentals</p>
+                        </div>
+                      </div>
+                      <Separator />
+                      <p className="text-sm text-muted-foreground leading-relaxed">
+                        To protect our equipment and comply with rental regulations, we require all renters to verify their identity before pickup. This is handled securely by Stripe — we never see or store your document images.
+                      </p>
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-1">
+                        {[
+                          { icon: CreditCard, label: "Government-issued photo ID", sub: "Passport, driver's license, or national ID" },
+                          { icon: ScanFace, label: "Live selfie", sub: "A quick selfie to match your ID" },
+                          { icon: ShieldCheck, label: "Encrypted & secure", sub: "Stripe-verified, never stored by us" },
+                        ].map(({ icon: Icon, label, sub }) => (
+                          <div key={label} className="flex flex-col gap-1 bg-muted/40 rounded-xl p-4">
+                            <Icon className="w-5 h-5 text-primary mb-1" />
+                            <p className="text-xs font-semibold leading-snug">{label}</p>
+                            <p className="text-xs text-muted-foreground">{sub}</p>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Error state */}
+                    {identityStatus === "failed" && identityError && (
+                      <div className="flex items-start gap-3 bg-destructive/10 border border-destructive/20 rounded-xl p-4 text-sm text-destructive">
+                        <XCircle className="w-4 h-4 mt-0.5 shrink-0" />
+                        <div>
+                          <p className="font-semibold">Verification not completed</p>
+                          <p className="mt-0.5 text-destructive/80">{identityError}</p>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Loading state while Stripe modal is open */}
+                    {identityStatus === "pending" ? (
+                      <div className="flex items-center justify-center gap-3 py-8 text-muted-foreground">
+                        <Loader2 className="w-5 h-5 animate-spin" />
+                        <span>Verification in progress…</span>
+                      </div>
+                    ) : (
+                      <Button
+                        size="lg"
+                        className="w-full h-13 text-base font-bold rounded-xl gap-2"
+                        onClick={handleStartVerification}
+                        disabled={!identityClientSecret}
+                      >
+                        {identityStatus === "failed" ? (
+                          <><RefreshCw className="w-4 h-4" />Try Again</>
+                        ) : (
+                          <><ScanFace className="w-4 h-4" />Start Identity Verification</>
+                        )}
+                      </Button>
+                    )}
+
+                    {!identityClientSecret && identityStatus !== "pending" && (
+                      <p className="text-xs text-muted-foreground text-center">
+                        Loading verification session… If this persists, please refresh the page.
+                      </p>
+                    )}
+                  </>
+                )}
               </div>
             )}
 
