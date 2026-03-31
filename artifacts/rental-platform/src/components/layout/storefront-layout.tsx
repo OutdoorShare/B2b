@@ -3,6 +3,7 @@ import { Link, useParams, useLocation } from "wouter";
 import { Tent, Clock, Lock, User, LogOut, BookOpen } from "lucide-react";
 import { useGetBusinessProfile } from "@workspace/api-client-react";
 import { PoweredByBadge } from "@/components/powered-by-badge";
+import { applyBrandColors } from "@/lib/theme";
 
 const OS_GREEN = "#3ab549";
 
@@ -118,6 +119,16 @@ export function StorefrontLayout({ children }: { children: React.ReactNode }) {
   // Brand colors from admin settings
   const primaryColor = profile?.primaryColor || "#1b4332";
   const accentColor  = profile?.accentColor  || "#52b788";
+
+  // Apply CSS custom properties so Tailwind utilities (bg-primary, text-primary, etc.)
+  // pick up the tenant's brand colors across ALL storefront pages.
+  useEffect(() => {
+    applyBrandColors(primaryColor, accentColor);
+    return () => {
+      // Reset to defaults when leaving storefront (e.g. navigating to admin)
+      applyBrandColors("#1b4332", "#52b788");
+    };
+  }, [primaryColor, accentColor]);
 
   // Auto-contrast text colors
   const headerText     = isLight(primaryColor) ? "#111111" : "#ffffff";
