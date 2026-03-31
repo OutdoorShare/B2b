@@ -18,12 +18,13 @@ import {
   ArrowLeft, ArrowRight, CheckCircle2, Calendar as CalendarIcon,
   Lock, User, CreditCard, FileText, Eye, EyeOff, ShieldCheck,
   Zap, AlertTriangle, Umbrella, Star, Loader2, BadgeCheck,
-  ScanFace, RefreshCw, XCircle, Clock, Tag, Monitor
+  ScanFace, RefreshCw, XCircle, Clock, Tag, Monitor, QrCode, Smartphone
 } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { differenceInDays, format, addDays } from "date-fns";
 import { loadStripe } from "@stripe/stripe-js";
 import { Elements, PaymentElement, useStripe, useElements } from "@stripe/react-stripe-js";
+import { QRCodeSVG } from "qrcode.react";
 
 const liveStripePromise = loadStripe(import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY ?? "");
 const testStripePromise = loadStripe(import.meta.env.VITE_STRIPE_TEST_PUBLISHABLE_KEY ?? "");
@@ -215,6 +216,13 @@ export default function StorefrontBook() {
   const [paymentConfirmed, setPaymentConfirmed] = useState(false);
   const [isTestMode, setIsTestMode] = useState(false);
   const [showStripeForm, setShowStripeForm] = useState(false);
+
+  // Kiosk QR-pay (pay on phone via Stripe Checkout)
+  const [kioskPayMode, setKioskPayMode] = useState<"card" | "qr">("card");
+  const [qrSessionId, setQrSessionId] = useState<string | null>(null);
+  const [qrUrl, setQrUrl] = useState<string | null>(null);
+  const [qrLoading, setQrLoading] = useState(false);
+  const [qrPolling, setQrPolling] = useState(false);
 
   // Promo codes
   const [promoInput, setPromoInput] = useState("");
@@ -485,6 +493,60 @@ export default function StorefrontBook() {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     setSigHasContent(false);
   }, []);
+
+  // Kiosk: create Stripe Checkout Session for phone-pay QR code
+  const createQrSession = useCallback(async () => {
+    if (!slug || !listing) return;
+    setQrLoading(true);
+    try {
+      const res = await fetch(`${BASE}/api/stripe/checkout-qr`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          tenantSlug: slug,
+          amountCents: Math.round(discountedTotal * 100),
+          customerEmail: email,
+          customerName: name,
+          listingTitle: listing.title,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to create QR session");
+      setQrSessionId(data.sessionId);
+      setQrUrl(data.url);
+      setIsTestMode(!!data.testMode);
+      setQrPolling(true);
+    } catch {
+      toast({ title: "Unable to generate QR code", description: "Please use card payment instead.", variant: "destructive" });
+    } finally {
+      setQrLoading(false);
+    }
+  }, [slug, listing, discountedTotal, email, name, toast]);
+
+  // Poll Stripe for QR session completion every 2.5 seconds
+  useEffect(() => {
+    if (!qrPolling || !qrSessionId || !slug) return;
+    const interval = setInterval(async () => {
+      try {
+        const res = await fetch(`${BASE}/api/stripe/checkout-qr/${qrSessionId}?tenantSlug=${encodeURIComponent(slug)}`);
+        const data = await res.json();
+        if (data.status === "complete") {
+          clearInterval(interval);
+          setQrPolling(false);
+          if (data.paymentIntentId) setPaymentIntentId(data.paymentIntentId);
+          setPaymentConfirmed(true);
+          toast({ title: "Payment received!", description: "Proceeding to your rental agreement." });
+        } else if (data.status === "expired") {
+          clearInterval(interval);
+          setQrPolling(false);
+          setQrSessionId(null);
+          setQrUrl(null);
+          toast({ title: "QR code expired", description: "Please generate a new one.", variant: "destructive" });
+        }
+      } catch { /* ignore polling errors */ }
+    }, 2500);
+    return () => clearInterval(interval);
+  }, [qrPolling, qrSessionId, slug, toast]);
 
   // Create Stripe payment intent when entering the payment step
   const createPaymentIntent = useCallback(async (totalCents: number) => {
@@ -1120,8 +1182,114 @@ export default function StorefrontBook() {
               <div className="space-y-6">
                 <h1 className="text-2xl font-bold">Payment</h1>
 
-                {/* Promo Code section — only shown before Stripe form loads */}
-                {!showStripeForm && !paymentConfirmed && (
+                {/* ── Kiosk: pay mode toggle (card vs QR) ── */}
+                {isKiosk && !paymentConfirmed && (
+                  <div className="bg-background rounded-2xl border shadow-sm p-1.5 flex gap-1">
+                    <button
+                      onClick={() => { setKioskPayMode("card"); setQrPolling(false); }}
+                      className={`flex-1 flex items-center justify-center gap-2 py-3 px-4 rounded-xl text-sm font-semibold transition-all ${
+                        kioskPayMode === "card"
+                          ? "bg-primary text-primary-foreground shadow-sm"
+                          : "text-muted-foreground hover:text-foreground"
+                      }`}
+                    >
+                      <CreditCard className="w-4 h-4" />
+                      Pay by Card
+                    </button>
+                    <button
+                      onClick={() => {
+                        setKioskPayMode("qr");
+                        setShowStripeForm(false);
+                        if (!qrUrl && !qrLoading) createQrSession();
+                      }}
+                      className={`flex-1 flex items-center justify-center gap-2 py-3 px-4 rounded-xl text-sm font-semibold transition-all ${
+                        kioskPayMode === "qr"
+                          ? "bg-primary text-primary-foreground shadow-sm"
+                          : "text-muted-foreground hover:text-foreground"
+                      }`}
+                    >
+                      <Smartphone className="w-4 h-4" />
+                      Scan to Pay on Phone
+                    </button>
+                  </div>
+                )}
+
+                {/* ── Kiosk QR payment panel ── */}
+                {isKiosk && kioskPayMode === "qr" && !paymentConfirmed && (
+                  <div className="bg-background rounded-2xl border shadow-sm p-6 space-y-5">
+                    <div className="text-center space-y-1">
+                      <h2 className="font-bold text-lg">Scan with your phone</h2>
+                      <p className="text-sm text-muted-foreground">
+                        Open your camera app and point it at the QR code to pay securely via Stripe.
+                      </p>
+                    </div>
+
+                    {qrLoading ? (
+                      <div className="flex flex-col items-center gap-3 py-8">
+                        <Loader2 className="w-8 h-8 animate-spin text-primary" />
+                        <p className="text-sm text-muted-foreground">Generating secure payment link…</p>
+                      </div>
+                    ) : qrUrl ? (
+                      <>
+                        {/* QR Code */}
+                        <div className="flex justify-center">
+                          <div className="bg-white rounded-2xl p-4 shadow-sm border border-border inline-block">
+                            <QRCodeSVG
+                              value={qrUrl}
+                              size={220}
+                              level="M"
+                              includeMargin={false}
+                            />
+                          </div>
+                        </div>
+
+                        {/* Amount */}
+                        <div className="text-center">
+                          <div className="text-3xl font-black tabular-nums">${discountedTotal.toFixed(2)}</div>
+                          <div className="text-xs text-muted-foreground mt-0.5">Total due</div>
+                        </div>
+
+                        {/* Polling indicator */}
+                        <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground">
+                          <span className="relative flex h-2 w-2">
+                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary opacity-75" />
+                            <span className="relative inline-flex rounded-full h-2 w-2 bg-primary" />
+                          </span>
+                          Waiting for payment on your phone…
+                        </div>
+
+                        {isTestMode && (
+                          <div className="flex items-center gap-2.5 bg-amber-50 border border-amber-300 rounded-lg px-4 py-3">
+                            <span className="text-amber-600 font-bold text-xs uppercase tracking-wider bg-amber-200 px-2 py-0.5 rounded">Test Mode</span>
+                            <span className="text-sm text-amber-800">No real charges. Use card <strong>4242 4242 4242 4242</strong> on the phone.</span>
+                          </div>
+                        )}
+
+                        {/* Refresh button */}
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="w-full text-muted-foreground"
+                          onClick={() => { setQrSessionId(null); setQrUrl(null); setQrPolling(false); createQrSession(); }}
+                        >
+                          <RefreshCw className="w-3.5 h-3.5 mr-1.5" />
+                          Generate new QR code
+                        </Button>
+                      </>
+                    ) : (
+                      <div className="flex flex-col items-center gap-4 py-6">
+                        <p className="text-sm text-muted-foreground text-center">Click below to generate a secure payment QR code.</p>
+                        <Button onClick={createQrSession} className="px-8">
+                          <QrCode className="w-4 h-4 mr-2" />
+                          Generate QR Code
+                        </Button>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Promo Code section — only shown before Stripe form loads, and in card mode */}
+                {(!isKiosk || kioskPayMode === "card") && !showStripeForm && !paymentConfirmed && (
                   <div className="bg-background rounded-2xl border shadow-sm p-5 space-y-3">
                     <h2 className="font-semibold text-sm flex items-center gap-2">
                       <Tag className="w-4 h-4 text-primary" />
@@ -1172,8 +1340,8 @@ export default function StorefrontBook() {
                   </div>
                 )}
 
-                {/* Stripe payment flow */}
-                {!showStripeForm && !paymentConfirmed ? (
+                {/* Stripe card payment flow — hidden in kiosk QR mode */}
+                {(!isKiosk || kioskPayMode === "card") && !showStripeForm && !paymentConfirmed ? (
                   <Button size="lg" className="w-full h-13 text-base font-bold rounded-xl" onClick={handleContinueToPayment}>
                     <CreditCard className="w-4 h-4 mr-2" />
                     Continue to Payment

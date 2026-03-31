@@ -547,4 +547,100 @@ router.post("/stripe/webhook", async (req, res) => {
   }
 });
 
+// ── Checkout QR: create a Stripe Checkout Session (phone pay via QR) ──────────
+router.post("/stripe/checkout-qr", async (req, res) => {
+  try {
+    const { tenantSlug, amountCents, customerEmail, customerName, listingTitle } = req.body;
+    if (!tenantSlug || !amountCents || amountCents < 50) {
+      res.status(400).json({ error: "tenantSlug and amountCents (min 50) required" });
+      return;
+    }
+
+    const [tenant] = await db.select().from(tenantsTable).where(eq(tenantsTable.slug, tenantSlug));
+    if (!tenant) { res.status(404).json({ error: "Tenant not found" }); return; }
+
+    const isTestMode = !!tenant.testMode;
+    const stripeClient = getStripeForTenant(isTestMode);
+
+    const feePercent = tenant.platformFeePercent != null
+      ? parseFloat(tenant.platformFeePercent) / 100
+      : PLATFORM_FEE_PERCENT;
+    const platformFeeAmount = Math.round(amountCents * feePercent);
+    const transferAmount = amountCents - platformFeeAmount;
+    const tenantConnected = !isTestMode && !!(tenant.stripeAccountId && tenant.stripeChargesEnabled);
+
+    const protocol = req.headers["x-forwarded-proto"] ?? "https";
+    const host = req.get("host");
+    const baseUrl = `${protocol}://${host}`;
+
+    const sessionParams: any = {
+      mode: "payment",
+      line_items: [{
+        price_data: {
+          currency: "usd",
+          product_data: {
+            name: listingTitle || "Rental Booking",
+            description: `Rental with ${tenant.name}`,
+          },
+          unit_amount: amountCents,
+        },
+        quantity: 1,
+      }],
+      customer_email: customerEmail || undefined,
+      success_url: `${baseUrl}/${tenantSlug}?qr_payment=success`,
+      cancel_url:  `${baseUrl}/${tenantSlug}?qr_payment=cancel`,
+      metadata: {
+        tenant_id: String(tenant.id),
+        tenant_slug: tenantSlug,
+        customer_name: customerName ?? "",
+        test_mode: isTestMode ? "true" : "false",
+      },
+    };
+
+    if (tenantConnected) {
+      sessionParams.payment_intent_data = {
+        transfer_data: { destination: tenant.stripeAccountId, amount: transferAmount },
+        application_fee_amount: platformFeeAmount,
+      };
+    }
+
+    const session = await stripeClient.checkout.sessions.create(sessionParams);
+
+    res.json({
+      sessionId: session.id,
+      url: session.url,
+      testMode: isTestMode,
+    });
+  } catch (e: any) {
+    console.error("[stripe/checkout-qr]", e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ── Checkout QR: poll a session's payment status ──────────────────────────────
+router.get("/stripe/checkout-qr/:sessionId", async (req, res) => {
+  try {
+    const { sessionId } = req.params;
+    const tenantSlug = (req.query.tenantSlug as string)
+      || (req.headers["x-tenant-slug"] as string)
+      || "";
+
+    const [tenant] = await db.select().from(tenantsTable).where(eq(tenantsTable.slug, tenantSlug));
+    const isTestMode = !!tenant?.testMode;
+    const stripeClient = getStripeForTenant(isTestMode);
+
+    const session = await stripeClient.checkout.sessions.retrieve(sessionId);
+    res.json({
+      status: session.status,          // "open" | "complete" | "expired"
+      paymentStatus: session.payment_status, // "paid" | "unpaid" | "no_payment_required"
+      paymentIntentId: typeof session.payment_intent === "string"
+        ? session.payment_intent
+        : (session.payment_intent as any)?.id ?? null,
+    });
+  } catch (e: any) {
+    console.error("[stripe/checkout-qr/status]", e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
 export default router;
