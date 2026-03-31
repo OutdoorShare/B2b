@@ -213,14 +213,18 @@ router.get("/stripe/connect/check/:slug", async (req, res) => {
 // If tenant has NOT connected → funds sit on OutdoorShare platform until they do.
 router.post("/stripe/payment-intent", async (req, res) => {
   try {
-    const { tenantSlug, amountCents, customerEmail, customerName, bookingMeta } = req.body;
+    const { tenantSlug, amountCents, customerEmail, customerName, bookingMeta } = req.body ?? {};
+    console.log(`[payment-intent] slug="${tenantSlug}" amount=${amountCents} body-keys=${Object.keys(req.body ?? {}).join(",")}`);
     if (!tenantSlug || !amountCents || amountCents < 50) {
       res.status(400).json({ error: "tenantSlug and amountCents (min 50) required" });
       return;
     }
 
     const [tenant] = await db.select().from(tenantsTable).where(eq(tenantsTable.slug, tenantSlug));
-    if (!tenant) { res.status(404).json({ error: "Tenant not found" }); return; }
+    if (!tenant) {
+      console.error(`[payment-intent] No tenant for slug="${tenantSlug}"`);
+      res.status(404).json({ error: "Tenant not found" }); return;
+    }
 
     const isTestMode = !!tenant.testMode;
     const stripeClient = getStripeForTenant(isTestMode);
@@ -552,14 +556,18 @@ router.post("/stripe/webhook", async (req, res) => {
 // ── Checkout QR: create a Stripe Checkout Session (phone pay via QR) ──────────
 router.post("/stripe/checkout-qr", async (req, res) => {
   try {
-    const { tenantSlug, amountCents, customerEmail, customerName, listingTitle } = req.body;
+    const { tenantSlug, amountCents, customerEmail, customerName, listingTitle } = req.body ?? {};
+    console.log(`[checkout-qr] slug="${tenantSlug}" amount=${amountCents}`);
     if (!tenantSlug || !amountCents || amountCents < 50) {
       res.status(400).json({ error: "tenantSlug and amountCents (min 50) required" });
       return;
     }
 
     const [tenant] = await db.select().from(tenantsTable).where(eq(tenantsTable.slug, tenantSlug));
-    if (!tenant) { res.status(404).json({ error: "Tenant not found" }); return; }
+    if (!tenant) {
+      console.error(`[checkout-qr] No tenant for slug="${tenantSlug}"`);
+      res.status(404).json({ error: "Tenant not found" }); return;
+    }
 
     const isTestMode = !!tenant.testMode;
     const stripeClient = getStripeForTenant(isTestMode);

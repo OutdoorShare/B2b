@@ -757,13 +757,19 @@ export default function StorefrontBook() {
         }),
       });
       // Note: payments always accepted — OutdoorShare holds funds if tenant not yet connected
-      if (!res.ok) { const errData = await res.json().catch(() => ({})); toast({ title: "Unable to initialize payment", description: errData.error ?? `HTTP ${res.status}`, variant: "destructive" }); return; }
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        toast({ title: "Unable to initialize payment", description: errData.error ?? `HTTP ${res.status}`, variant: "destructive" });
+        setShowStripeForm(false); // Let the user retry
+        return;
+      }
       const data = await res.json();
       setClientSecret(data.clientSecret);
       setPaymentIntentId(data.paymentIntentId);
       setIsTestMode(!!data.testMode);
     } catch {
-      toast({ title: "Payment setup failed", variant: "destructive" });
+      toast({ title: "Payment setup failed — please try again", variant: "destructive" });
+      setShowStripeForm(false); // Let the user retry
     }
   }, [slug, email, name, listingId, toast]);
 
