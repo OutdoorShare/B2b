@@ -239,6 +239,8 @@ router.post("/stripe/payment-intent", async (req, res) => {
       amount: amountCents,
       currency: "usd",
       receipt_email: customerEmail,
+      // Save the payment method for future off-session use (required for deposit hold/charge at pickup)
+      setup_future_usage: "off_session",
       description: `Rental booking — ${tenant.name}${isTestMode ? " [TEST MODE]" : ""}`,
       metadata: {
         tenant_id: String(tenant.id),

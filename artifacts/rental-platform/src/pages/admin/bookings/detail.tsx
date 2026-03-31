@@ -666,11 +666,14 @@ export default function AdminBookingDetail() {
                     {depositHoldStatus === "authorized" && <Badge className="bg-amber-100 text-amber-800 border-amber-300">Hold Active</Badge>}
                     {depositHoldStatus === "released" && <Badge variant="outline" className="border-green-300 text-green-700">Released</Badge>}
                     {depositHoldStatus === "captured" && <Badge variant="destructive">Captured</Badge>}
+                    {depositHoldStatus === "charged" && <Badge className="bg-red-100 text-red-800 border-red-300">Fully Charged</Badge>}
                     {!depositHoldStatus && <Badge variant="outline" className="text-muted-foreground">Not yet authorized</Badge>}
                   </span>
                 </CardTitle>
                 <CardDescription className="text-xs">
-                  ${parseFloat((booking as any).depositPaid).toFixed(2)} hold on renter's card — authorize at pickup, release at return.
+                  {depositHoldStatus === "charged"
+                    ? `$${parseFloat((booking as any).depositPaid).toFixed(2)} fully charged to renter's card (5+ day booking).`
+                    : `$${parseFloat((booking as any).depositPaid).toFixed(2)} hold on renter's card — authorize at pickup, release at return.`}
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-3">
@@ -724,6 +727,12 @@ export default function AdminBookingDetail() {
                   <div className="flex items-center gap-2 bg-red-50 border border-red-200 rounded-xl p-3 text-sm text-red-800">
                     <DollarSign className="w-4 h-4 shrink-0" />
                     <span>Deposit charged to renter for damage claim.</span>
+                  </div>
+                )}
+                {depositHoldStatus === "charged" && (
+                  <div className="flex items-center gap-2 bg-red-50 border border-red-200 rounded-xl p-3 text-sm text-red-800">
+                    <DollarSign className="w-4 h-4 shrink-0" />
+                    <span>Full deposit charged upfront (5+ day rental). No further action needed — funds will be returned manually if no damage.</span>
                   </div>
                 )}
               </CardContent>
