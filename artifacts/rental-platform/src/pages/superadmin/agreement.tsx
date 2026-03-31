@@ -1,13 +1,12 @@
 import { useState, useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
-import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
 import { useToast } from "@/hooks/use-toast";
 import {
   FileText, Save, Eye, Edit3, RotateCcw, Clock,
   Info, CheckCircle2, Globe, Tag, Plus, Trash2, ChevronRight,
-  Zap, UserCheck, GripVertical, FormInput, ToggleLeft, ToggleRight,
+  Zap, UserCheck, FormInput, ToggleLeft, ToggleRight,
   Pencil, X, Hash, Calendar, AlignLeft, CheckSquare,
 } from "lucide-react";
 import { format } from "date-fns";
@@ -39,8 +38,6 @@ const DEFAULT_AGREEMENT = `1. Use of Vehicle. The renter agrees to use the vehic
 6. Payment. The total rental fee includes the base rental amount plus a refundable security deposit. No charge will be processed until this booking is confirmed by our team.
 
 7. Governing Law. This agreement shall be governed by the laws of the state where the rental business is located. Any disputes shall be resolved through binding arbitration.`;
-
-type Tab = "edit" | "preview";
 
 // ── Token definitions ────────────────────────────────────────────────────────
 const AUTO_TOKENS = [
@@ -122,37 +119,8 @@ function renderCustomerPreview(text: string): React.ReactNode[] {
   });
 }
 
-// ── Token chip ────────────────────────────────────────────────────────────────
-function TokenChip({ tokenKey, label, variant, onInsert }: {
-  tokenKey: string;
-  label: string;
-  variant: "auto" | "renter";
-  onInsert: (token: string) => void;
-}) {
-  const token = `{{${tokenKey}}}`;
-  return (
-    <div
-      draggable
-      onDragStart={e => {
-        e.dataTransfer.setData("text/plain", token);
-        e.dataTransfer.effectAllowed = "copy";
-      }}
-      onClick={() => onInsert(token)}
-      title={`Click or drag to insert ${token}`}
-      className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-mono font-medium cursor-grab active:cursor-grabbing select-none transition-all hover:scale-105 ${
-        variant === "auto"
-          ? "bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 hover:bg-emerald-500/25"
-          : "bg-amber-500/15 text-amber-300 border border-amber-500/30 hover:bg-amber-500/25"
-      }`}
-    >
-      <GripVertical className="w-2.5 h-2.5 opacity-50 shrink-0" />
-      <span className="truncate">{`{{${tokenKey}}}`}</span>
-    </div>
-  );
-}
-
 // ── Agreement editor component ────────────────────────────────────────────────
-type Tab2 = "edit" | "preview";
+type ViewMode = "split" | "edit" | "preview";
 
 function AgreementEditor({
   label,
@@ -180,14 +148,14 @@ function AgreementEditor({
   onInsertTokenRef?: React.MutableRefObject<((token: string) => void) | null>;
 }) {
   const [text, setText] = useState(initialValue);
-  const [tab, setTab] = useState<Tab2>("edit");
+  const [viewMode, setViewMode] = useState<ViewMode>("split");
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const cursorRef = useRef<number>(0);
 
   useEffect(() => { setText(initialValue); }, [initialValue]);
 
   const isDirty = text !== savedValue;
-  const paragraphs = text.split("\n\n").filter(Boolean);
+  const paragraphs = text.split(/\n{2,}/).filter(p => p.trim());
 
   function trackCursor() {
     if (textareaRef.current) cursorRef.current = textareaRef.current.selectionStart ?? text.length;
@@ -200,26 +168,21 @@ function AgreementEditor({
     setText(newText);
     const newPos = pos + token.length;
     cursorRef.current = newPos;
+    setViewMode(m => m === "preview" ? "split" : m);
     requestAnimationFrame(() => {
-      if (el) {
-        el.focus();
-        el.setSelectionRange(newPos, newPos);
-      }
+      if (el) { el.focus(); el.setSelectionRange(newPos, newPos); }
     });
   }
 
-  // Expose insertToken for the ContractFieldsManager
   useEffect(() => {
     if (onInsertTokenRef) onInsertTokenRef.current = insertToken;
   });
-
 
   function handleDrop(e: React.DragEvent<HTMLTextAreaElement>) {
     e.preventDefault();
     const token = e.dataTransfer.getData("text/plain");
     if (!token) return;
     const el = e.currentTarget;
-    // Best-effort: insert at current cursor / end
     const pos = typeof el.selectionStart === "number" ? el.selectionStart : text.length;
     const newText = text.slice(0, pos) + token + text.slice(pos);
     setText(newText);
@@ -231,7 +194,7 @@ function AgreementEditor({
   }
 
   return (
-    <div className="flex-1 min-w-0 flex flex-col gap-4">
+    <div className="flex-1 min-w-0 flex flex-col gap-3">
       {/* Header */}
       <div className="flex items-start justify-between gap-4 flex-wrap">
         <div>
@@ -268,165 +231,203 @@ function AgreementEditor({
         </div>
       </div>
 
-      {/* Tabs */}
-      <div className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden flex flex-col">
-        <div className="flex border-b border-slate-800">
-          {(["edit", "preview"] as Tab2[]).map(t => (
-            <button key={t} onClick={() => setTab(t)}
-              className={`flex items-center gap-2 px-5 py-3 text-sm font-medium transition-colors ${
-                tab === t ? "text-white border-b-2 border-emerald-400 bg-slate-800/50" : "text-slate-400 hover:text-slate-200"
-              }`}>
-              {t === "edit" ? <Edit3 className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
-              {t === "edit" ? "Edit" : "Preview (as customer sees it)"}
-            </button>
-          ))}
+      {/* Document editor card */}
+      <div className="border border-slate-700 rounded-2xl overflow-hidden flex flex-col shadow-xl">
+
+        {/* ── Toolbar bar: token insertion ─────────────────────────────── */}
+        <div className="bg-slate-800 border-b border-slate-700 px-3 py-2 flex items-start gap-2 flex-wrap">
+          {/* Auto tokens */}
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <span className="text-[10px] font-bold text-emerald-500 uppercase tracking-wider flex items-center gap-1 shrink-0">
+              <Zap className="w-2.5 h-2.5" /> Auto
+            </span>
+            {AUTO_TOKENS.map(tok => (
+              <button
+                key={tok.key}
+                onClick={() => insertToken(`{{${tok.key}}}`)}
+                title={`Insert {{${tok.key}}} — filled from booking`}
+                className="text-[11px] px-2 py-0.5 rounded-md bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 hover:bg-emerald-500/30 font-medium transition-colors"
+              >
+                {tok.label}
+              </button>
+            ))}
+          </div>
+
+          <div className="w-px h-5 bg-slate-700 self-center shrink-0 mx-0.5" />
+
+          {/* Renter tokens */}
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <span className="text-[10px] font-bold text-amber-500 uppercase tracking-wider flex items-center gap-1 shrink-0">
+              <UserCheck className="w-2.5 h-2.5" /> Renter
+            </span>
+            {RENTER_TOKENS.map(tok => (
+              <button
+                key={tok.key}
+                onClick={() => insertToken(`{{${tok.key}}}`)}
+                title={`Insert {{${tok.key}}} — renter fills in`}
+                className="text-[11px] px-2 py-0.5 rounded-md bg-amber-500/15 text-amber-300 border border-amber-500/30 hover:bg-amber-500/30 font-medium transition-colors"
+              >
+                {tok.label}
+              </button>
+            ))}
+          </div>
+
+          {customFields && customFields.length > 0 && (
+            <>
+              <div className="w-px h-5 bg-slate-700 self-center shrink-0 mx-0.5" />
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <span className="text-[10px] font-bold text-purple-400 uppercase tracking-wider flex items-center gap-1 shrink-0">
+                  <FormInput className="w-2.5 h-2.5" /> Custom
+                </span>
+                {customFields.map(f => (
+                  <button
+                    key={f.id}
+                    onClick={() => insertToken(`{{${f.key}}}`)}
+                    title={`Insert {{${f.key}}}${f.required ? " — required" : ""}`}
+                    className="text-[11px] px-2 py-0.5 rounded-md bg-purple-500/15 text-purple-300 border border-purple-500/30 hover:bg-purple-500/30 font-medium transition-colors"
+                  >
+                    {f.label}{f.required && <span className="text-red-400 ml-0.5">*</span>}
+                  </button>
+                ))}
+              </div>
+            </>
+          )}
         </div>
 
-        {tab === "edit" ? (
-          <div className="flex gap-0 min-h-[540px]">
-            {/* Textarea */}
-            <div className="flex-1 p-4 min-w-0">
-              <p className="text-xs text-slate-500 mb-2">
-                Write agreement text, then click or drag a field token from the right panel to insert it at your cursor.
-              </p>
-              <Textarea
-                ref={textareaRef}
-                value={text}
-                onChange={e => setText(e.target.value)}
-                onClick={trackCursor}
-                onKeyUp={trackCursor}
-                onSelect={trackCursor}
-                onDragOver={e => e.preventDefault()}
-                onDrop={handleDrop}
-                rows={24}
-                className="font-mono text-sm bg-slate-950 border-slate-700 text-slate-100 resize-y leading-relaxed focus:border-emerald-500 focus:ring-emerald-500/20 w-full"
-                placeholder="Type your rental agreement clauses here, then insert field tokens from the panel →"
-              />
-              <div className="flex items-center justify-between mt-2">
-                <p className="text-xs text-slate-500">{text.length} chars · {text.split("\n\n").filter(Boolean).length} clauses</p>
-                {isDirty && (
-                  <button onClick={() => setText(savedValue)} className="text-xs text-slate-500 hover:text-slate-300 underline">
-                    Discard changes
-                  </button>
-                )}
+        {/* ── View mode toggle ──────────────────────────────────────────── */}
+        <div className="bg-slate-900 border-b border-slate-700 px-3 py-1.5 flex items-center gap-1">
+          <span className="text-[11px] text-slate-500 mr-1.5 font-medium">View:</span>
+          {(["split", "edit", "preview"] as ViewMode[]).map(m => (
+            <button
+              key={m}
+              onClick={() => setViewMode(m)}
+              className={`text-[11px] px-2.5 py-1 rounded font-medium transition-colors ${
+                viewMode === m
+                  ? "bg-slate-600 text-white"
+                  : "text-slate-400 hover:text-slate-200 hover:bg-slate-800"
+              }`}
+            >
+              {m === "split" ? "⬜ Split" : m === "edit" ? "✏️ Edit" : "👁 Preview"}
+            </button>
+          ))}
+          <span className="text-[10px] text-slate-600 ml-auto">
+            {text.length.toLocaleString()} chars · {paragraphs.length} ¶
+          </span>
+          {isDirty && (
+            <button onClick={() => setText(savedValue)} className="text-[11px] text-slate-500 hover:text-slate-300 underline ml-2">
+              Discard
+            </button>
+          )}
+        </div>
+
+        {/* ── Editor + Preview panes ────────────────────────────────────── */}
+        <div className="flex min-h-[600px] overflow-hidden">
+
+          {/* EDIT PANE */}
+          {viewMode !== "preview" && (
+            <div className={`flex flex-col bg-white ${viewMode === "split" ? "w-1/2 border-r border-slate-300" : "w-full"}`}>
+              {/* Ruler-style label */}
+              <div className="bg-gray-100 border-b border-gray-200 px-4 py-1 flex items-center gap-2">
+                <Edit3 className="w-3 h-3 text-gray-400" />
+                <span className="text-[11px] text-gray-500 font-medium">Edit Mode — type freely, click a token above to insert at cursor</span>
+              </div>
+              {/* Page-style textarea */}
+              <div className="flex-1 overflow-y-auto" style={{ background: "#f5f5f4" }}>
+                <div className="min-h-full px-10 py-8">
+                  <div className="bg-white shadow-md border border-gray-200 min-h-[520px] relative">
+                    {/* Margin lines (decorative, like paper) */}
+                    <div className="absolute left-16 top-0 bottom-0 border-l border-red-100 pointer-events-none" />
+                    <textarea
+                      ref={textareaRef}
+                      value={text}
+                      onChange={e => setText(e.target.value)}
+                      onClick={trackCursor}
+                      onKeyUp={trackCursor}
+                      onSelect={trackCursor}
+                      onFocus={trackCursor}
+                      onDragOver={e => e.preventDefault()}
+                      onDrop={handleDrop}
+                      spellCheck
+                      className="w-full h-full min-h-[520px] resize-none outline-none text-gray-800 bg-transparent px-10 py-8 text-[14px] leading-7 placeholder:text-gray-300"
+                      style={{ fontFamily: "'Georgia', 'Times New Roman', serif" }}
+                      placeholder="Type your rental agreement here. Use the token buttons above to insert booking fields…"
+                    />
+                  </div>
+                </div>
               </div>
             </div>
+          )}
 
-            {/* Token picker panel */}
-            <div className="w-56 shrink-0 border-l border-slate-800 bg-slate-950 p-3 overflow-y-auto">
-              <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider mb-3">Insert Fields</p>
-
-              {/* Auto-filled section */}
-              <div className="mb-4">
-                <div className="flex items-center gap-1.5 mb-2">
-                  <Zap className="w-3 h-3 text-emerald-400" />
-                  <p className="text-[11px] font-semibold text-emerald-400 uppercase tracking-wider">Auto-filled</p>
-                </div>
-                <p className="text-[10px] text-slate-600 mb-2 leading-snug">Filled automatically from booking data — renter doesn't need to enter these.</p>
-                <div className="flex flex-col gap-1.5">
-                  {AUTO_TOKENS.map(tok => (
-                    <TokenChip key={tok.key} tokenKey={tok.key} label={tok.label} variant="auto" onInsert={insertToken} />
-                  ))}
-                </div>
+          {/* PREVIEW PANE */}
+          {viewMode !== "edit" && (
+            <div className={`flex flex-col bg-gray-100 ${viewMode === "split" ? "w-1/2" : "w-full"} overflow-y-auto`}>
+              {/* Preview label */}
+              <div className="bg-gray-100 border-b border-gray-200 px-4 py-1 flex items-center gap-2 sticky top-0 z-10">
+                <Eye className="w-3 h-3 text-gray-400" />
+                <span className="text-[11px] text-gray-500 font-medium">Preview — as the renter will see it</span>
+                <span className="text-[10px] text-gray-400 ml-2">
+                  <span className="bg-emerald-100 text-emerald-700 px-1 rounded border border-emerald-200">green</span> = auto-filled ·{" "}
+                  <span className="bg-amber-100 text-amber-700 px-1 rounded border border-amber-200">amber</span> = renter fills in
+                </span>
               </div>
+              {/* Document page */}
+              <div className="flex-1 px-10 py-8">
+                <div className="bg-white shadow-md border border-gray-200 px-10 py-8" style={{ fontFamily: "'Georgia', 'Times New Roman', serif" }}>
+                  {/* Document header */}
+                  <div className="text-center mb-6 pb-4 border-b border-gray-200">
+                    <h1 className="text-lg font-bold text-gray-900 tracking-wide uppercase" style={{ letterSpacing: "0.05em" }}>
+                      Rental Agreement
+                    </h1>
+                  </div>
 
-              <Separator className="bg-slate-800 mb-4" />
-
-              {/* Renter fills in */}
-              <div>
-                <div className="flex items-center gap-1.5 mb-2">
-                  <UserCheck className="w-3 h-3 text-amber-400" />
-                  <p className="text-[11px] font-semibold text-amber-400 uppercase tracking-wider">Renter completes</p>
-                </div>
-                <p className="text-[10px] text-slate-600 mb-2 leading-snug">Rendered as input fields the renter must fill in before signing.</p>
-                <div className="flex flex-col gap-1.5">
-                  {RENTER_TOKENS.map(tok => (
-                    <TokenChip key={tok.key} tokenKey={tok.key} label={tok.label} variant="renter" onInsert={insertToken} />
-                  ))}
-                </div>
-              </div>
-
-              {customFields && customFields.length > 0 && (
-                <>
-                  <Separator className="bg-slate-800 mb-4" />
-                  <div>
-                    <div className="flex items-center gap-1.5 mb-2">
-                      <FormInput className="w-3 h-3 text-purple-400" />
-                      <p className="text-[11px] font-semibold text-purple-400 uppercase tracking-wider">Custom Fields</p>
+                  {/* Summary info block */}
+                  <div className="mb-6 text-[13px] text-gray-700 space-y-1 bg-gray-50 border border-gray-200 rounded px-4 py-3">
+                    <div><span className="font-semibold text-gray-900">Rental Period: </span>
+                      <span className="bg-emerald-100 text-emerald-800 rounded px-1 text-xs font-semibold border border-emerald-200">Apr 1, 2026</span>
+                      {" — "}
+                      <span className="bg-emerald-100 text-emerald-800 rounded px-1 text-xs font-semibold border border-emerald-200">Apr 3, 2026</span>
+                      {" (2 days)"}
                     </div>
-                    <p className="text-[10px] text-slate-600 mb-2 leading-snug">Defined contract fields renters complete before signing.</p>
-                    <div className="flex flex-col gap-1.5">
-                      {customFields.map(f => (
-                        <div
-                          key={f.id}
-                          draggable
-                          onDragStart={e => {
-                            e.dataTransfer.setData("text/plain", `{{${f.key}}}`);
-                            e.dataTransfer.effectAllowed = "copy";
-                          }}
-                          onClick={() => insertToken(`{{${f.key}}}`)}
-                          title={`Click or drag to insert {{${f.key}}}`}
-                          className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-mono font-medium cursor-grab active:cursor-grabbing select-none transition-all hover:scale-105 bg-purple-500/15 text-purple-300 border border-purple-500/30 hover:bg-purple-500/25"
-                        >
-                          <GripVertical className="w-2.5 h-2.5 opacity-50 shrink-0" />
-                          <span className="truncate flex-1">{`{{${f.key}}}`}</span>
-                          {f.required && <span className="text-[9px] text-red-400 font-bold shrink-0">REQ</span>}
-                        </div>
-                      ))}
+                    <div><span className="font-semibold text-gray-900">Vehicle: </span>
+                      <span className="bg-emerald-100 text-emerald-800 rounded px-1 text-xs font-semibold border border-emerald-200">Yamaha FX Cruiser Jet Ski</span>
+                    </div>
+                    <div><span className="font-semibold text-gray-900">Renter: </span>
+                      <span className="bg-emerald-100 text-emerald-800 rounded px-1 text-xs font-semibold border border-emerald-200">Jane Smith</span>
+                      {" · "}
+                      <span className="bg-emerald-100 text-emerald-800 rounded px-1 text-xs font-semibold border border-emerald-200">jane@example.com</span>
                     </div>
                   </div>
-                </>
-              )}
 
-              <Separator className="bg-slate-800 my-4" />
-              <p className="text-[10px] text-slate-600 leading-snug">
-                <strong className="text-slate-500">Tip:</strong> You can also type <span className="font-mono text-slate-400 bg-slate-800 px-0.5 rounded">{"{{any_label}}"}</span> directly — unknown tokens become blank fields the renter fills in.
-              </p>
-            </div>
-          </div>
-        ) : (
-          <div className="p-6">
-            <p className="text-xs text-slate-500 mb-5 italic">
-              This is how the agreement appears to renters. <span className="text-emerald-400">Green</span> = auto-filled · <span className="text-amber-400">Amber</span> = renter fills in.
-            </p>
-            <div className="bg-white rounded-2xl border p-6 space-y-4 text-sm text-gray-500 leading-relaxed max-h-[480px] overflow-y-auto">
-              <h2 className="text-base font-bold text-gray-900">Vehicle Rental Agreement</h2>
-              <p>
-                <strong className="text-gray-900">Rental Period:</strong>{" "}
-                <span className="bg-emerald-100 text-emerald-800 rounded px-1 text-xs font-semibold border border-emerald-200">Apr 1, 2026</span>
-                {" — "}
-                <span className="bg-emerald-100 text-emerald-800 rounded px-1 text-xs font-semibold border border-emerald-200">Apr 3, 2026</span>
-                {" (2 days)"}
-              </p>
-              <p>
-                <strong className="text-gray-900">Vehicle:</strong>{" "}
-                <span className="bg-emerald-100 text-emerald-800 rounded px-1 text-xs font-semibold border border-emerald-200">Yamaha FX Cruiser Jet Ski</span>
-              </p>
-              <p>
-                <strong className="text-gray-900">Renter:</strong>{" "}
-                <span className="bg-emerald-100 text-emerald-800 rounded px-1 text-xs font-semibold border border-emerald-200">Jane Smith</span>
-                {" ("}
-                <span className="bg-emerald-100 text-emerald-800 rounded px-1 text-xs font-semibold border border-emerald-200">jane@example.com</span>
-                {")"}
-              </p>
-              <Separator />
-              {paragraphs.map((para, i) => (
-                <p key={i}>{renderCustomerPreview(para)}</p>
-              ))}
-              <p className="text-xs italic">By signing below, you confirm you have read, understood, and agree to all terms in this rental agreement.</p>
-              <Separator />
-              <div className="bg-gray-50 rounded-xl border px-4 py-3 space-y-2">
-                <p className="font-semibold text-gray-800 text-sm">Sign the Agreement</p>
-                <p className="text-xs text-gray-500">Draw your signature below</p>
-                <div className="h-9 border-2 border-dashed rounded-lg bg-white flex items-center px-3 text-gray-400 text-sm italic">Signature canvas</div>
-                <div className="flex items-center gap-2 mt-1">
-                  <CheckCircle2 className="w-4 h-4 text-emerald-500" />
-                  <span className="text-xs text-gray-600">I have read and agree to all terms in the rental agreement above.</span>
+                  {/* Agreement body */}
+                  <div className="text-[13.5px] leading-7 text-gray-700 space-y-4">
+                    {paragraphs.length === 0 ? (
+                      <p className="text-gray-400 italic">Agreement text will appear here as you type…</p>
+                    ) : paragraphs.map((para, i) => (
+                      <p key={i}>{renderCustomerPreview(para)}</p>
+                    ))}
+                  </div>
+
+                  {/* Signature section */}
+                  <div className="mt-8 pt-6 border-t border-gray-200 space-y-4">
+                    <p className="text-[12px] text-gray-500 italic text-center">
+                      By signing below, I confirm I have read, understood, and agree to all terms in this rental agreement.
+                    </p>
+                    <div className="bg-gray-50 border border-gray-200 rounded-lg px-5 py-4 space-y-3">
+                      <p className="font-semibold text-gray-800 text-sm">Sign the Agreement</p>
+                      <div className="h-12 border-2 border-dashed border-gray-300 rounded bg-white flex items-center px-4 text-gray-400 text-sm italic">
+                        Signature canvas
+                      </div>
+                      <div className="flex items-start gap-2">
+                        <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0 mt-0.5" />
+                        <span className="text-xs text-gray-600">I have read and agree to all terms in the rental agreement above.</span>
+                      </div>
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
-          </div>
-        )}
+          )}
+        </div>
       </div>
     </div>
   );
