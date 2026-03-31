@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
-import { bookingsTable, listingsTable, customersTable } from "@workspace/db/schema";
+import { bookingsTable, listingsTable, customersTable, categoriesTable } from "@workspace/db/schema";
 import { count, sum, eq, and, gte, sql, isNotNull } from "drizzle-orm";
 
 const router: IRouter = Router();
@@ -289,6 +289,58 @@ router.get("/analytics/renter-locations", async (req, res) => {
   } catch (err) {
     req.log.error(err);
     res.status(500).json({ error: "Failed to fetch renter locations" });
+  }
+});
+
+// ── GET /analytics/category-breakdown ────────────────────────────────────────
+router.get("/analytics/category-breakdown", async (req, res) => {
+  try {
+    const tenantFilter = req.tenantId ? eq(categoriesTable.tenantId, req.tenantId) : undefined;
+
+    // Get all categories for this tenant
+    const cats = await db
+      .select({ id: categoriesTable.id, name: categoriesTable.name, slug: categoriesTable.slug })
+      .from(categoriesTable)
+      .where(tenantFilter)
+      .orderBy(categoriesTable.name);
+
+    // For each category, count active listings + total bookings + revenue
+    const results = await Promise.all(cats.map(async (cat) => {
+      const listingConditions = [
+        eq(listingsTable.categoryId, cat.id),
+        eq(listingsTable.status, "active"),
+      ];
+      if (req.tenantId) listingConditions.push(eq(listingsTable.tenantId, req.tenantId));
+      const [listingCount] = await db
+        .select({ count: count() })
+        .from(listingsTable)
+        .where(and(...listingConditions));
+
+      const bookingConditions = [
+        sql`${bookingsTable.status} != 'cancelled'`,
+      ];
+      if (req.tenantId) bookingConditions.push(eq(bookingsTable.tenantId, req.tenantId));
+      const [bookingStats] = await db
+        .select({ bookingCount: count(), revenue: sum(bookingsTable.totalPrice) })
+        .from(bookingsTable)
+        .innerJoin(listingsTable, eq(bookingsTable.listingId, listingsTable.id))
+        .where(and(eq(listingsTable.categoryId, cat.id), ...bookingConditions));
+
+      return {
+        name: cat.name,
+        slug: cat.slug,
+        listings: Number(listingCount?.count ?? 0),
+        bookings: Number(bookingStats?.bookingCount ?? 0),
+        revenue: parseFloat(bookingStats?.revenue ?? "0"),
+      };
+    }));
+
+    // Only return categories with activity (listings or bookings)
+    const active = results.filter(r => r.listings > 0 || r.bookings > 0);
+    res.json(active.sort((a, b) => b.bookings - a.bookings));
+  } catch (err) {
+    req.log.error(err);
+    res.status(500).json({ error: "Failed to fetch category breakdown" });
   }
 });
 

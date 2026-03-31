@@ -36,7 +36,6 @@ import AdminBookingForm from "@/pages/admin/bookings/form";
 import AdminQuotes from "@/pages/admin/quotes/index";
 import AdminQuotesNew from "@/pages/admin/quotes/new";
 import AdminAnalytics from "@/pages/admin/analytics";
-import AdminCategories from "@/pages/admin/categories";
 import AdminSettings from "@/pages/admin/settings";
 import AdminKiosk from "@/pages/admin/kiosk";
 import AdminClaims from "@/pages/admin/claims/index";
@@ -173,9 +172,6 @@ function Router() {
       </Route>
       <Route path="/:slug/admin/analytics">
         <AdminGuard><AdminLayout><AdminAnalytics /></AdminLayout></AdminGuard>
-      </Route>
-      <Route path="/:slug/admin/categories">
-        <AdminGuard><AdminLayout><AdminCategories /></AdminLayout></AdminGuard>
       </Route>
       <Route path="/:slug/admin/settings">
         <AdminGuard><AdminLayout><AdminSettings /></AdminLayout></AdminGuard>

@@ -13,7 +13,7 @@ import {
   PieChart, Pie, Cell, Legend,
   CartesianGrid
 } from "recharts";
-import { MapPin, TrendingUp, Users } from "lucide-react";
+import { MapPin, Tag, TrendingUp, Users } from "lucide-react";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
@@ -58,6 +58,19 @@ export default function AdminAnalytics() {
       .then(r => r.json())
       .then(d => { setLocationData(d); setLocationLoading(false); })
       .catch(() => setLocationLoading(false));
+  }, []);
+
+  // ── Category Breakdown (custom endpoint) ──────────────────────────────────
+  type CategoryStat = { name: string; slug: string; listings: number; bookings: number; revenue: number };
+  const [categoryData, setCategoryData] = useState<CategoryStat[]>([]);
+  const [categoryLoading, setCategoryLoading] = useState(true);
+
+  useEffect(() => {
+    setCategoryLoading(true);
+    fetch(`${BASE}/api/analytics/category-breakdown`)
+      .then(r => r.json())
+      .then(d => { setCategoryData(Array.isArray(d) ? d : []); setCategoryLoading(false); })
+      .catch(() => setCategoryLoading(false));
   }, []);
 
   const activeLocationData = (locationMode === "state" ? locationData.byState : locationData.byCity).slice(0, 10);
@@ -273,6 +286,90 @@ export default function AdminAnalytics() {
                     </Bar>
                   </BarChart>
                 </ResponsiveContainer>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Row 3: Category Breakdown */}
+      <div className="grid gap-4 lg:grid-cols-2">
+
+        {/* Category bar chart */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Tag className="w-5 h-5 text-primary" />
+              Bookings by Category
+            </CardTitle>
+            <CardDescription>Total bookings across each equipment type.</CardDescription>
+          </CardHeader>
+          <CardContent className="pl-2">
+            {categoryLoading ? (
+              <div className="h-[280px] flex items-center justify-center text-muted-foreground">Loading chart...</div>
+            ) : categoryData.length === 0 ? (
+              <div className="h-[280px] flex flex-col items-center justify-center text-muted-foreground gap-2">
+                <Tag className="w-10 h-10 opacity-20" />
+                <p>No category data yet</p>
+              </div>
+            ) : (
+              <div className="h-[280px]">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={categoryData} layout="vertical" margin={{ top: 0, right: 30, left: 0, bottom: 0 }}>
+                    <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#f0f0f0" />
+                    <XAxis type="number" stroke="#888" fontSize={11} tickLine={false} axisLine={false} allowDecimals={false} />
+                    <YAxis type="category" dataKey="name" stroke="#888" fontSize={11} tickLine={false} axisLine={false} width={100} />
+                    <Tooltip
+                      formatter={(v: number) => [v, "Bookings"]}
+                      cursor={{ fill: "rgba(15,81,50,0.06)" }}
+                    />
+                    <Bar dataKey="bookings" fill={BAR_COLOR} radius={[0, 3, 3, 0]} maxBarSize={24} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Category summary table */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Tag className="w-5 h-5 text-primary" />
+              Category Summary
+            </CardTitle>
+            <CardDescription>Listings, bookings, and revenue per category.</CardDescription>
+          </CardHeader>
+          <CardContent>
+            {categoryLoading ? (
+              <div className="h-[280px] flex items-center justify-center text-muted-foreground">Loading...</div>
+            ) : categoryData.length === 0 ? (
+              <div className="h-[280px] flex flex-col items-center justify-center text-muted-foreground gap-2">
+                <Tag className="w-10 h-10 opacity-20" />
+                <p>No category data yet</p>
+              </div>
+            ) : (
+              <div className="overflow-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b text-muted-foreground text-xs">
+                      <th className="text-left py-2 font-medium">Category</th>
+                      <th className="text-right py-2 font-medium">Listings</th>
+                      <th className="text-right py-2 font-medium">Bookings</th>
+                      <th className="text-right py-2 font-medium">Revenue</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {categoryData.map((cat) => (
+                      <tr key={cat.slug} className="border-b last:border-0 hover:bg-muted/30 transition-colors">
+                        <td className="py-2.5 font-medium">{cat.name}</td>
+                        <td className="py-2.5 text-right text-muted-foreground">{cat.listings}</td>
+                        <td className="py-2.5 text-right text-muted-foreground">{cat.bookings}</td>
+                        <td className="py-2.5 text-right font-medium">${cat.revenue.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
             )}
           </CardContent>
