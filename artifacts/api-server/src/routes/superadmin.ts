@@ -153,10 +153,12 @@ router.get("/superadmin/tenants", requireSuperAdmin, async (_req, res) => {
     const result = await Promise.all(tenants.map(async t => {
       const [listingCount] = await db
         .select({ count: sql<number>`count(*)::int` })
-        .from(listingsTable);
+        .from(listingsTable)
+        .where(eq(listingsTable.tenantId, t.id));
       const [bookingCount] = await db
         .select({ count: sql<number>`count(*)::int` })
-        .from(bookingsTable);
+        .from(bookingsTable)
+        .where(eq(bookingsTable.tenantId, t.id));
       return { ...safeTenant(t), listingCount: listingCount?.count ?? 0, bookingCount: bookingCount?.count ?? 0 };
     }));
     res.json(result);
@@ -382,8 +384,8 @@ router.get("/superadmin/tenants/:id", requireSuperAdmin, async (req, res) => {
     const id = parseInt(req.params.id);
     const [t] = await db.select().from(tenantsTable).where(eq(tenantsTable.id, id)).limit(1);
     if (!t) { res.status(404).json({ error: "Not found" }); return; }
-    const [{ listingCount }] = await db.select({ listingCount: sql<number>`count(*)::int` }).from(listingsTable);
-    const [{ bookingCount }] = await db.select({ bookingCount: sql<number>`count(*)::int` }).from(bookingsTable);
+    const [{ listingCount }] = await db.select({ listingCount: sql<number>`count(*)::int` }).from(listingsTable).where(eq(listingsTable.tenantId, id));
+    const [{ bookingCount }] = await db.select({ bookingCount: sql<number>`count(*)::int` }).from(bookingsTable).where(eq(bookingsTable.tenantId, id));
     res.json({ ...safeTenant(t), listingCount, bookingCount });
   } catch { res.status(500).json({ error: "Failed to fetch tenant" }); }
 });
