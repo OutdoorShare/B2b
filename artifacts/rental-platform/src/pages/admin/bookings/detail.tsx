@@ -16,7 +16,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { Link, useLocation } from "wouter";
-import { ArrowLeft, User, Phone, Mail, Calendar, Package, StickyNote, ShieldAlert, Pencil, FileSignature, ChevronDown, ChevronUp, Download, Camera, CheckCircle2, Loader2, ExternalLink, ImageIcon, Clock, ShieldCheck, ShieldX, Shield, AlertCircle, Copy, Send, UserCheck } from "lucide-react";
+import { ArrowLeft, User, Phone, Mail, Calendar, Package, StickyNote, ShieldAlert, Pencil, FileSignature, ChevronDown, ChevronUp, Download, Camera, CheckCircle2, Loader2, ExternalLink, ImageIcon, Clock, ShieldCheck, ShieldX, Shield, AlertCircle, Copy, Send, UserCheck, Lock, LockOpen, DollarSign } from "lucide-react";
 import { format, differenceInDays } from "date-fns";
 
 export default function AdminBookingDetail() {
@@ -38,6 +38,8 @@ export default function AdminBookingDetail() {
   const [pickupUrl, setPickupUrl] = useState<string | null>(null);
   const [hostPickupMode, setHostPickupMode] = useState(false);
   const [copySuccess, setCopySuccess] = useState(false);
+  const [depositLoading, setDepositLoading] = useState<"authorize" | "release" | "capture" | null>(null);
+  const [depositHoldStatus, setDepositHoldStatus] = useState<string | null>(null);
 
   type VerifData = {
     found: boolean;
@@ -50,6 +52,9 @@ export default function AdminBookingDetail() {
   useEffect(() => {
     if (booking?.adminNotes) {
       setAdminNotes(booking.adminNotes);
+    }
+    if ((booking as any)?.depositHoldStatus) {
+      setDepositHoldStatus((booking as any).depositHoldStatus);
     }
   }, [booking]);
 
@@ -104,6 +109,25 @@ export default function AdminBookingDetail() {
     setCopySuccess(true);
     toast({ title: "Link copied!", description: "Paste it in a text message or email to the renter." });
     setTimeout(() => setCopySuccess(false), 3000);
+  };
+
+  const handleDepositAction = async (action: "authorize" | "release" | "capture") => {
+    setDepositLoading(action);
+    try {
+      const r = await fetch(`${BASE}/api/bookings/${id}/deposit/${action}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...(getAdminSession()?.token ? { "x-admin-token": getAdminSession()!.token } : {}) },
+      });
+      const data = await r.json();
+      if (!r.ok) { toast({ title: "Error", description: data.error ?? "Action failed", variant: "destructive" }); return; }
+      setDepositHoldStatus(data.depositHoldStatus);
+      const labels = { authorize: "Deposit hold authorized", release: "Deposit hold released", capture: "Deposit captured" };
+      toast({ title: labels[action], description: action === "capture" ? "The security deposit has been charged to the renter." : action === "release" ? "The hold has been removed from the renter's card." : "The renter's card has been authorized for the security deposit." });
+    } catch {
+      toast({ title: "Connection error", variant: "destructive" });
+    } finally {
+      setDepositLoading(null);
+    }
   };
 
   const handleStatusChange = (newStatus: any) => {
@@ -607,6 +631,81 @@ export default function AdminBookingDetail() {
               </CardContent>
             </Card>
           )}
+          {/* ── Security Deposit Card ── */}
+          {(booking as any).depositPaid && parseFloat((booking as any).depositPaid) > 0 && (
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle className="flex items-center gap-2 text-base">
+                  <Lock className="w-5 h-5 text-amber-600" />
+                  Security Deposit
+                  <span className="ml-auto">
+                    {depositHoldStatus === "authorized" && <Badge className="bg-amber-100 text-amber-800 border-amber-300">Hold Active</Badge>}
+                    {depositHoldStatus === "released" && <Badge variant="outline" className="border-green-300 text-green-700">Released</Badge>}
+                    {depositHoldStatus === "captured" && <Badge variant="destructive">Captured</Badge>}
+                    {!depositHoldStatus && <Badge variant="outline" className="text-muted-foreground">Not yet authorized</Badge>}
+                  </span>
+                </CardTitle>
+                <CardDescription className="text-xs">
+                  ${parseFloat((booking as any).depositPaid).toFixed(2)} hold on renter's card — authorize at pickup, release at return.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                {!depositHoldStatus && (
+                  <Button
+                    className="w-full gap-2"
+                    onClick={() => handleDepositAction("authorize")}
+                    disabled={depositLoading !== null}
+                  >
+                    {depositLoading === "authorize" ? <Loader2 className="w-4 h-4 animate-spin" /> : <Lock className="w-4 h-4" />}
+                    Authorize Hold at Pickup
+                  </Button>
+                )}
+                {depositHoldStatus === "authorized" && (
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-2 bg-amber-50 border border-amber-200 rounded-xl p-3 text-sm text-amber-800">
+                      <Lock className="w-4 h-4 shrink-0" />
+                      <span>Hold is active on renter's card. Release at return or capture if there's damage.</span>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="gap-1.5 border-green-300 text-green-700 hover:bg-green-50"
+                        onClick={() => handleDepositAction("release")}
+                        disabled={depositLoading !== null}
+                      >
+                        {depositLoading === "release" ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <LockOpen className="w-3.5 h-3.5" />}
+                        Release at Return
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="gap-1.5 border-red-300 text-red-700 hover:bg-red-50"
+                        onClick={() => handleDepositAction("capture")}
+                        disabled={depositLoading !== null}
+                      >
+                        {depositLoading === "capture" ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <DollarSign className="w-3.5 h-3.5" />}
+                        Capture for Damage
+                      </Button>
+                    </div>
+                  </div>
+                )}
+                {depositHoldStatus === "released" && (
+                  <div className="flex items-center gap-2 bg-green-50 border border-green-200 rounded-xl p-3 text-sm text-green-800">
+                    <LockOpen className="w-4 h-4 shrink-0" />
+                    <span>Hold released — funds returned to renter's card.</span>
+                  </div>
+                )}
+                {depositHoldStatus === "captured" && (
+                  <div className="flex items-center gap-2 bg-red-50 border border-red-200 rounded-xl p-3 text-sm text-red-800">
+                    <DollarSign className="w-4 h-4 shrink-0" />
+                    <span>Deposit charged to renter for damage claim.</span>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          )}
+
           <Card>
             <CardHeader>
               <CardTitle>Payment Summary</CardTitle>
@@ -616,7 +715,7 @@ export default function AdminBookingDetail() {
                 let parsedAddons: Array<{ id?: number; name: string; price: number; subtotal?: number }> = [];
                 try { parsedAddons = (booking as any).addonsData ? JSON.parse((booking as any).addonsData) : []; } catch {}
                 const addonsTotal = parsedAddons.reduce((s, a) => s + (a.subtotal ?? a.price ?? 0), 0);
-                const rentalFee = booking.totalPrice - (booking.depositPaid || 0) - addonsTotal;
+                const rentalFee = booking.totalPrice - addonsTotal;
                 const protectionAddons = parsedAddons.filter(a => a.name.toLowerCase().includes("protection"));
                 const otherAddons = parsedAddons.filter(a => !a.name.toLowerCase().includes("protection"));
                 return (
@@ -646,8 +745,11 @@ export default function AdminBookingDetail() {
                     ))}
                     {booking.depositPaid !== null && booking.depositPaid !== undefined && booking.depositPaid > 0 && (
                       <div className="flex justify-between text-sm">
-                        <span className="text-muted-foreground">Security Deposit</span>
-                        <span className="font-medium">${booking.depositPaid.toFixed(2)}</span>
+                        <span className="flex items-center gap-1.5 text-muted-foreground">
+                          <Lock className="w-3.5 h-3.5 text-amber-500" />
+                          Security deposit (hold)
+                        </span>
+                        <span className="font-medium text-amber-700">${booking.depositPaid.toFixed(2)}</span>
                       </div>
                     )}
                     <Separator />

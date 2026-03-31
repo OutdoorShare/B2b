@@ -38,6 +38,8 @@ function formatBooking(b: typeof bookingsTable.$inferSelect, listingTitle: strin
     pickupPhotos: b.pickupPhotos ? JSON.parse(b.pickupPhotos) : [],
     pickupLinkSent: !!b.pickupToken,
     pickupCompletedAt: b.pickupCompletedAt ? b.pickupCompletedAt.toISOString() : null,
+    depositHoldIntentId: b.depositHoldIntentId ?? null,
+    depositHoldStatus: b.depositHoldStatus ?? null,
     createdAt: b.createdAt.toISOString(),
     updatedAt: b.updatedAt.toISOString(),
   };

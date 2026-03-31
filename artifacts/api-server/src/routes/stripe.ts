@@ -239,6 +239,7 @@ router.post("/stripe/payment-intent", async (req, res) => {
       amount: amountCents,
       currency: "usd",
       receipt_email: customerEmail,
+      setup_future_usage: "off_session",
       description: `Rental booking — ${tenant.name}${isTestMode ? " [TEST MODE]" : ""}`,
       metadata: {
         tenant_id: String(tenant.id),
@@ -654,6 +655,119 @@ router.get("/stripe/checkout-qr/:sessionId", async (req, res) => {
     });
   } catch (e: any) {
     console.error("[stripe/checkout-qr/status]", e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ── Security Deposit: authorize hold ─────────────────────────────────────────
+router.post("/bookings/:id/deposit/authorize", requireAdminAuth, async (req, res) => {
+  try {
+    const bookingId = Number(req.params.id);
+    const tenantId = req.tenantId!;
+
+    const [booking] = await db.select().from(bookingsTable)
+      .where(and(eq(bookingsTable.id, bookingId), eq(bookingsTable.tenantId, tenantId)));
+    if (!booking) { res.status(404).json({ error: "Booking not found" }); return; }
+    if (!booking.stripePaymentIntentId) {
+      res.status(400).json({ error: "No payment on file for this booking" }); return;
+    }
+
+    const [listing] = await db.select().from(listingsTable).where(eq(listingsTable.id, booking.listingId));
+    const depositAmountCents = listing?.depositAmount
+      ? Math.round(parseFloat(String(listing.depositAmount)) * 100) : 0;
+    if (depositAmountCents < 50) {
+      res.status(400).json({ error: "No deposit amount configured on this listing" }); return;
+    }
+
+    const [tenant] = await db.select().from(tenantsTable).where(eq(tenantsTable.id, tenantId));
+    if (!tenant) { res.status(404).json({ error: "Tenant not found" }); return; }
+    const stripeClient = getStripeForTenant(!!tenant.testMode);
+
+    const originalPi = await stripeClient.paymentIntents.retrieve(booking.stripePaymentIntentId);
+    if (!originalPi.payment_method) {
+      res.status(400).json({ error: "No saved payment method on this booking. The card was not saved for future use." }); return;
+    }
+
+    const holdPi = await stripeClient.paymentIntents.create({
+      amount: depositAmountCents,
+      currency: "usd",
+      payment_method: String(originalPi.payment_method),
+      capture_method: "manual",
+      confirm: true,
+      off_session: true,
+      description: `Security deposit hold — Booking #${bookingId} (${listing?.title ?? ""})`,
+      metadata: {
+        booking_id: String(bookingId),
+        tenant_id: String(tenantId),
+        type: "deposit_hold",
+      },
+    });
+
+    await db.update(bookingsTable)
+      .set({ depositHoldIntentId: holdPi.id, depositHoldStatus: "authorized", updatedAt: new Date() })
+      .where(eq(bookingsTable.id, bookingId));
+
+    res.json({ depositHoldIntentId: holdPi.id, depositHoldStatus: "authorized", amountCents: depositAmountCents });
+  } catch (e: any) {
+    console.error("[deposit/authorize]", e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ── Security Deposit: release hold ───────────────────────────────────────────
+router.post("/bookings/:id/deposit/release", requireAdminAuth, async (req, res) => {
+  try {
+    const bookingId = Number(req.params.id);
+    const tenantId = req.tenantId!;
+
+    const [booking] = await db.select().from(bookingsTable)
+      .where(and(eq(bookingsTable.id, bookingId), eq(bookingsTable.tenantId, tenantId)));
+    if (!booking) { res.status(404).json({ error: "Booking not found" }); return; }
+    if (!booking.depositHoldIntentId) {
+      res.status(400).json({ error: "No deposit hold on this booking" }); return;
+    }
+
+    const [tenant] = await db.select().from(tenantsTable).where(eq(tenantsTable.id, tenantId));
+    const stripeClient = getStripeForTenant(!!tenant?.testMode);
+
+    await stripeClient.paymentIntents.cancel(booking.depositHoldIntentId);
+
+    await db.update(bookingsTable)
+      .set({ depositHoldStatus: "released", updatedAt: new Date() })
+      .where(eq(bookingsTable.id, bookingId));
+
+    res.json({ depositHoldStatus: "released" });
+  } catch (e: any) {
+    console.error("[deposit/release]", e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ── Security Deposit: capture (damage claim) ─────────────────────────────────
+router.post("/bookings/:id/deposit/capture", requireAdminAuth, async (req, res) => {
+  try {
+    const bookingId = Number(req.params.id);
+    const tenantId = req.tenantId!;
+
+    const [booking] = await db.select().from(bookingsTable)
+      .where(and(eq(bookingsTable.id, bookingId), eq(bookingsTable.tenantId, tenantId)));
+    if (!booking) { res.status(404).json({ error: "Booking not found" }); return; }
+    if (!booking.depositHoldIntentId) {
+      res.status(400).json({ error: "No deposit hold on this booking" }); return;
+    }
+
+    const [tenant] = await db.select().from(tenantsTable).where(eq(tenantsTable.id, tenantId));
+    const stripeClient = getStripeForTenant(!!tenant?.testMode);
+
+    await stripeClient.paymentIntents.capture(booking.depositHoldIntentId);
+
+    await db.update(bookingsTable)
+      .set({ depositHoldStatus: "captured", updatedAt: new Date() })
+      .where(eq(bookingsTable.id, bookingId));
+
+    res.json({ depositHoldStatus: "captured" });
+  } catch (e: any) {
+    console.error("[deposit/capture]", e.message);
     res.status(500).json({ error: e.message });
   }
 });

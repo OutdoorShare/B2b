@@ -369,7 +369,8 @@ export default function StorefrontBook() {
       .filter(a => selectedAddonIds.has(a.id))
       .reduce((sum, a) => sum + (a.priceType === "per_day" ? a.price * days : a.price), 0);
   }, [availableAddons, selectedAddonIds, days]);
-  const total = subtotal + addonsSubtotal + deposit;
+  // Deposit is an authorized hold placed at pickup — NOT charged at booking time
+  const total = subtotal + addonsSubtotal;
   const promoDiscount = appliedPromo ? Math.min(appliedPromo.discountAmount, total) : 0;
   const discountedTotal = Math.max(0.50, total - promoDiscount);
 
@@ -740,6 +741,7 @@ export default function StorefrontBook() {
           stripePaymentIntentId: paymentIntentId || undefined,
           appliedPromoCode: appliedPromo?.code || undefined,
           discountAmount: promoDiscount > 0 ? promoDiscount : undefined,
+          depositPaid: deposit > 0 ? String(deposit) : undefined,
         })
       });
       const data = await res.json();
@@ -1831,12 +1833,6 @@ export default function StorefrontBook() {
                           <span>+${(a.priceType === "per_day" ? a.price * days : a.price).toFixed(2)}</span>
                         </div>
                       ))}
-                      {deposit > 0 && (
-                        <div className="flex justify-between text-muted-foreground">
-                          <span>Refundable deposit</span>
-                          <span>${deposit.toFixed(2)}</span>
-                        </div>
-                      )}
                       {appliedPromo && (
                         <div className="flex justify-between text-green-600 font-medium">
                           <span className="flex items-center gap-1">
@@ -1848,13 +1844,22 @@ export default function StorefrontBook() {
                       )}
                       <Separator />
                       <div className="flex justify-between font-bold text-base">
-                        <span>Total due</span>
+                        <span>Total due today</span>
                         <span className={appliedPromo ? "text-green-700" : ""}>${discountedTotal.toFixed(2)}</span>
                       </div>
                       {appliedPromo && (
                         <div className="flex justify-between text-xs text-muted-foreground line-through">
                           <span>Original price</span>
                           <span>${total.toFixed(2)}</span>
+                        </div>
+                      )}
+                      {deposit > 0 && (
+                        <div className="flex justify-between text-xs bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+                          <span className="flex items-center gap-1.5 text-amber-800 font-medium">
+                            <Lock className="w-3 h-3" />
+                            Security deposit (held at pickup)
+                          </span>
+                          <span className="text-amber-800 font-semibold">${deposit.toFixed(2)}</span>
                         </div>
                       )}
                       <p className="text-xs text-muted-foreground flex items-center gap-1">

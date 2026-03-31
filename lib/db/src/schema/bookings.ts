@@ -36,6 +36,9 @@ export const bookingsTable = pgTable("bookings", {
   // Payout tracking — funds held on platform until tenant connects Stripe
   stripeTransferId: text("stripe_transfer_id"),
   stripeTransferredAt: timestamp("stripe_transferred_at"),
+  // Security deposit authorized hold
+  depositHoldIntentId: text("deposit_hold_intent_id"),
+  depositHoldStatus: text("deposit_hold_status", { enum: ["authorized", "captured", "released"] }),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
