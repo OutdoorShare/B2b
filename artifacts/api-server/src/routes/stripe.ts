@@ -145,7 +145,11 @@ router.post("/stripe/payment-intent", async (req, res) => {
       return;
     }
 
-    const platformFeeAmount = Math.round(amountCents * PLATFORM_FEE_PERCENT);
+    // Use per-tenant fee if set, otherwise fall back to global constant
+    const feePercent = tenant.platformFeePercent != null
+      ? parseFloat(tenant.platformFeePercent) / 100
+      : PLATFORM_FEE_PERCENT;
+    const platformFeeAmount = Math.round(amountCents * feePercent);
     const transferAmount = amountCents - platformFeeAmount;
 
     const intent = await stripe.paymentIntents.create({

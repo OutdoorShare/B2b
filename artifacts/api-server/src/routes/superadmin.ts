@@ -196,7 +196,7 @@ router.post("/superadmin/tenants", requireSuperAdmin, async (req, res) => {
 router.put("/superadmin/tenants/:id", requireSuperAdmin, async (req, res) => {
   try {
     const id = parseInt(req.params.id);
-    const { name, slug, email, password, plan, status, maxListings, contactName, phone, notes } = req.body;
+    const { name, slug, email, password, plan, status, maxListings, contactName, phone, notes, platformFeePercent } = req.body;
     const updates: Partial<typeof tenantsTable.$inferInsert> & { updatedAt?: Date } = {
       updatedAt: new Date(),
     };
@@ -226,6 +226,14 @@ router.put("/superadmin/tenants/:id", requireSuperAdmin, async (req, res) => {
     if (phone !== undefined) updates.phone = phone;
     if (notes !== undefined) updates.notes = notes;
     if (password) updates.adminPasswordHash = await hashPassword(password);
+    if (platformFeePercent !== undefined) {
+      const pct = parseFloat(platformFeePercent);
+      if (isNaN(pct) || pct < 0 || pct > 100) {
+        res.status(400).json({ error: "Platform fee must be between 0 and 100" });
+        return;
+      }
+      updates.platformFeePercent = pct.toFixed(2);
+    }
     const [updated] = await db.update(tenantsTable).set(updates).where(eq(tenantsTable.id, id)).returning();
     if (!updated) { res.status(404).json({ error: "Tenant not found" }); return; }
 
