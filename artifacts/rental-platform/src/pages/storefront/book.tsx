@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect, useRef, useCallback } from "react";
-import { useLocation, useParams } from "wouter";
+import { useLocation, useParams, useSearch } from "wouter";
 import type { DateRange } from "react-day-picker";
 import { 
   useGetListing,
@@ -152,7 +152,8 @@ export default function StorefrontBook() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
 
-  const searchParams = new URLSearchParams(window.location.search);
+  const search = useSearch();
+  const searchParams = new URLSearchParams(search);
   const listingIdStr = searchParams.get("listingId");
   const listingId = listingIdStr ? parseInt(listingIdStr) : 0;
   const urlStart = searchParams.get("startDate");

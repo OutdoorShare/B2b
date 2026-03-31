@@ -1,6 +1,6 @@
 import { adminPath } from "@/lib/admin-nav";
 import { useState, useEffect, useCallback } from "react";
-import { Link, useLocation } from "wouter";
+import { Link, useLocation, useParams } from "wouter";
 import { QRCodeSVG } from "qrcode.react";
 import { 
   useGetBusinessProfile, 
@@ -32,6 +32,7 @@ type SelectedListing = {
 const IDLE_RESET_SECONDS = 90;
 
 export default function AdminKiosk() {
+  const { slug: urlSlug } = useParams<{ slug: string }>();
   const [, setLocation] = useLocation();
   const [search, setSearch] = useState("");
   const [activeCategory, setActiveCategory] = useState<number | null>(null);
@@ -51,8 +52,8 @@ export default function AdminKiosk() {
     { query: { queryKey: getGetListingsQueryKey({ status: "active", search: search || undefined, categoryId: activeCategory || undefined }) } }
   );
 
-  // Build the full booking URL — uses the tenant's slug so it routes correctly
-  const tenantSlug = (profile as any)?.siteSlug ?? (profile as any)?.slug ?? "";
+  // Build the full booking URL — prefer URL slug (always available), fall back to profile
+  const tenantSlug = urlSlug || (profile as any)?.siteSlug || (profile as any)?.slug || "";
   const bookingUrl = selected && tenantSlug
     ? `${window.location.origin}${BASE}/${tenantSlug}/book?listingId=${selected.id}`
     : "";
