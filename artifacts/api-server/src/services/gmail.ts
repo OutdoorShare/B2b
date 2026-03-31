@@ -51,9 +51,12 @@ async function getUncachableGmailClient() {
   return google.gmail({ version: "v1", auth: oauth2Client });
 }
 
+const PLATFORM_FROM = "OutdoorShare <contact.us@myoutdoorshare.com>";
+
 function makeRawEmail(to: string, subject: string, htmlBody: string): string {
   const boundary = "boundary_outdoorshare";
   const message = [
+    `From: ${PLATFORM_FROM}`,
     `To: ${to}`,
     `Subject: ${subject}`,
     `MIME-Version: 1.0`,
@@ -135,7 +138,7 @@ function emailShell(opts: {
                 <strong style="color:${BRAND_GREEN};">OutdoorShare</strong> &mdash; Find New Boundaries
               </p>
               <p style="margin:0;font-size:11px;color:#9ca3af;">
-                This email was sent by the OutdoorShare platform. Please do not reply to this message.
+                Questions? Contact us at <a href="mailto:contact.us@myoutdoorshare.com" style="color:#9ca3af;">contact.us@myoutdoorshare.com</a>
               </p>
             </td>
           </tr>
