@@ -1,3 +1,4 @@
+import { adminPath } from "@/lib/admin-nav";
 import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
@@ -94,7 +95,7 @@ export default function AdminClaims() {
             Manage damage, theft, and rental dispute claims.
           </p>
         </div>
-        <Button onClick={() => setLocation("/admin/claims/new")} className="gap-2">
+        <Button onClick={() => setLocation(adminPath("/claims/new"))} className="gap-2">
           <Plus className="w-4 h-4" /> New Claim
         </Button>
       </div>
@@ -182,7 +183,7 @@ export default function AdminClaims() {
               {claims.length === 0 ? "Create your first claim to get started." : "Try adjusting your filters."}
             </p>
             {claims.length === 0 && (
-              <Button variant="outline" size="sm" className="mt-4" onClick={() => setLocation("/admin/claims/new")}>
+              <Button variant="outline" size="sm" className="mt-4" onClick={() => setLocation(adminPath("/claims/new"))}>
                 <Plus className="w-3.5 h-3.5 mr-1.5" /> New Claim
               </Button>
             )}
@@ -210,7 +211,7 @@ export default function AdminClaims() {
                   return (
                     <tr
                       key={claim.id}
-                      onClick={() => setLocation(`/admin/claims/${claim.id}`)}
+                      onClick={() => setLocation(adminPath(`/claims/${claim.id}`))}
                       className="hover:bg-muted/30 transition-colors cursor-pointer group"
                     >
                       <td className="px-5 py-4 font-mono text-xs text-muted-foreground">#{claim.id}</td>

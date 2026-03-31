@@ -1,3 +1,4 @@
+import { adminPath } from "@/lib/admin-nav";
 import { useState } from "react";
 import { useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
@@ -50,7 +51,7 @@ export default function AdminClaimsNew() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
       toast({ title: "Claim created" });
-      setLocation(`/admin/claims/${data.id}`);
+      setLocation(adminPath(`/claims/${data.id}`));
     } catch (err: any) {
       toast({ title: err?.message || "Failed to create claim", variant: "destructive" });
     } finally { setSaving(false); }
@@ -63,7 +64,7 @@ export default function AdminClaimsNew() {
       <div className="flex items-center gap-3">
         <Button
           variant="ghost" size="icon"
-          onClick={() => isFromBooking ? setLocation(`/admin/bookings/${params.get("bookingId")}`) : setLocation("/admin/claims")}
+          onClick={() => isFromBooking ? setLocation(adminPath(`/bookings/${params.get("bookingId")}`)) : setLocation(adminPath("/claims"))}
           className="-ml-2"
         >
           <ArrowLeft className="w-5 h-5" />
@@ -165,7 +166,7 @@ export default function AdminClaimsNew() {
         </Card>
 
         <div className="flex justify-end gap-3">
-          <Button type="button" variant="outline" onClick={() => setLocation("/admin/claims")}>Cancel</Button>
+          <Button type="button" variant="outline" onClick={() => setLocation(adminPath("/claims"))}>Cancel</Button>
           <Button type="submit" disabled={saving}>
             {saving ? "Creating…" : "File Claim"}
           </Button>

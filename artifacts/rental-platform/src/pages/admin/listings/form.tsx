@@ -1,5 +1,6 @@
+import { adminPath } from "@/lib/admin-nav";
 import { useState, useEffect, useRef, useCallback } from "react";
-import { useLocation, useRoute } from "wouter";
+import { useLocation, useParams } from "wouter";
 import { 
   useGetListing, 
   useCreateListing, 
@@ -24,8 +25,8 @@ import { UnitIdentifiersManager } from "@/components/unit-identifiers-manager";
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
 export default function AdminListingsForm() {
-  const [match, params] = useRoute("/admin/listings/:id/edit");
-  const isEditing = match;
+  const params = useParams<{ slug: string; id?: string }>();
+  const isEditing = !!params.id;
   const id = params?.id ? parseInt(params.id) : 0;
   
   const [, setLocation] = useLocation();
@@ -200,7 +201,7 @@ export default function AdminListingsForm() {
             queryClient.setQueryData(getGetListingQueryKey(id), data);
             queryClient.invalidateQueries({ queryKey: getGetListingsQueryKey() });
             toast({ title: "Listing updated successfully" });
-            setLocation("/admin/listings");
+            setLocation(adminPath("/listings"));
           },
           onError: () => {
             toast({ title: "Failed to update listing", variant: "destructive" });
@@ -214,7 +215,7 @@ export default function AdminListingsForm() {
           onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: getGetListingsQueryKey() });
             toast({ title: "Listing created successfully" });
-            setLocation("/admin/listings");
+            setLocation(adminPath("/listings"));
           },
           onError: () => {
             toast({ title: "Failed to create listing", variant: "destructive" });
@@ -533,7 +534,7 @@ export default function AdminListingsForm() {
             );})()}
 
             <div className="flex justify-end gap-4">
-              <Button type="button" variant="outline" onClick={() => setLocation("/admin/listings")}>
+              <Button type="button" variant="outline" onClick={() => setLocation(adminPath("/listings"))}>
                 Cancel
               </Button>
               <Button type="submit" disabled={isPending || publishBlocked}>

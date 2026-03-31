@@ -1,3 +1,4 @@
+import { adminPath } from "@/lib/admin-nav";
 import { useState } from "react";
 import { useGetBookings } from "@workspace/api-client-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -103,7 +104,7 @@ export default function AdminWaivers() {
                       )}
                       <div className="text-right">
                         <div className="text-xs text-muted-foreground">Booking</div>
-                        <Link href={`/admin/bookings/${booking.id}`}>
+                        <Link href={adminPath(`/bookings/${booking.id}`)}>
                           <span className="text-sm font-medium text-primary hover:underline flex items-center gap-1 justify-end">
                             #{booking.id} <ExternalLink className="w-3 h-3" />
                           </span>

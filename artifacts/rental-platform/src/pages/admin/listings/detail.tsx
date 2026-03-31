@@ -1,5 +1,6 @@
+import { adminPath } from "@/lib/admin-nav";
 import { useState, useEffect } from "react";
-import { useRoute, useLocation, Link } from "wouter";
+import { useParams, useLocation, Link } from "wouter";
 import type { DateRange } from "react-day-picker";
 import {
   useGetListing,
@@ -48,7 +49,7 @@ const BOOKING_STATUS_COLORS: Record<string, string> = {
 
 export default function AdminListingDetail() {
   const [, setLocation] = useLocation();
-  const [, params] = useRoute("/admin/listings/:id");
+  const params = useParams<{ slug: string; id: string }>();
   const id = params?.id ? parseInt(params.id) : 0;
 
   const { toast } = useToast();
@@ -140,7 +141,7 @@ export default function AdminListingDetail() {
       <div className="p-6 max-w-6xl mx-auto py-24 text-center text-muted-foreground">
         <Package className="w-10 h-10 mx-auto mb-3 text-muted" />
         <p className="font-semibold">Listing not found</p>
-        <Button variant="outline" className="mt-4" onClick={() => setLocation("/admin/listings")}>Back to Listings</Button>
+        <Button variant="outline" className="mt-4" onClick={() => setLocation(adminPath("/listings"))}>Back to Listings</Button>
       </div>
     );
   }
@@ -158,7 +159,7 @@ export default function AdminListingDetail() {
       {/* Header */}
       <div className="flex items-start justify-between gap-4 flex-wrap">
         <div className="flex items-center gap-3">
-          <Button variant="ghost" size="icon" onClick={() => setLocation("/admin/listings")} className="-ml-2">
+          <Button variant="ghost" size="icon" onClick={() => setLocation(adminPath("/listings"))} className="-ml-2">
             <ArrowLeft className="w-5 h-5" />
           </Button>
           <div>
@@ -179,7 +180,7 @@ export default function AdminListingDetail() {
               <ExternalLink className="w-4 h-4" /> View on Storefront
             </Button>
           </Link>
-          <Link href={`/admin/listings/${listing.id}/edit`}>
+          <Link href={adminPath(`/listings/${listing.id}/edit`)}>
             <Button size="sm" className="gap-1.5">
               <Edit className="w-4 h-4" /> Edit Listing
             </Button>
@@ -356,7 +357,7 @@ export default function AdminListingDetail() {
               <h3 className="font-semibold text-sm flex items-center gap-2">
                 <Tag className="w-4 h-4 text-primary" /> Add-ons
               </h3>
-              <Link href={`/admin/listings/${listing.id}/edit`}>
+              <Link href={adminPath(`/listings/${listing.id}/edit`)}>
                 <button className="text-xs text-primary hover:underline">Manage</button>
               </Link>
             </div>
@@ -386,7 +387,7 @@ export default function AdminListingDetail() {
               <h3 className="font-semibold text-sm flex items-center gap-2">
                 <CalendarDays className="w-4 h-4 text-primary" /> Recent Bookings
               </h3>
-              <Link href={`/admin/bookings?listingId=${listing.id}`}>
+              <Link href={adminPath(`/bookings?listingId=${listing.id}`)}>
                 <button className="text-xs text-primary hover:underline">View all</button>
               </Link>
             </div>
@@ -395,7 +396,7 @@ export default function AdminListingDetail() {
             ) : (
               <div className="space-y-2">
                 {recentBookings.map(b => (
-                  <Link key={b.id} href={`/admin/bookings/${b.id}`}>
+                  <Link key={b.id} href={adminPath(`/bookings/${b.id}`)}>
                     <div className="flex items-center gap-3 p-2 rounded-lg hover:bg-muted/50 transition-colors cursor-pointer group">
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-semibold truncate">{b.customerName}</p>
@@ -585,7 +586,7 @@ export default function AdminListingDetail() {
                             <span className="font-medium">{b.customerName}</span>
                             <span className="text-muted-foreground">{b.startDate} → {b.endDate}</span>
                           </div>
-                          <Link href={`/admin/bookings/${b.id}`}>
+                          <Link href={adminPath(`/bookings/${b.id}`)}>
                             <span className="text-[10px] font-bold text-blue-600 hover:underline capitalize">{b.status}</span>
                           </Link>
                         </div>

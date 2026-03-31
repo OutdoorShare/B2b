@@ -1,5 +1,6 @@
+import { adminPath } from "@/lib/admin-nav";
 import { useState, useEffect } from "react";
-import { useLocation, useRoute } from "wouter";
+import { useLocation, useParams } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -57,7 +58,7 @@ const STATUS_FLOW: ClaimStatus[] = ["open", "reviewing", "resolved", "denied"];
 
 export default function AdminClaimDetail() {
   const [, setLocation] = useLocation();
-  const [, params] = useRoute("/admin/claims/:id");
+  const params = useParams<{ slug: string; id: string }>();
   const { toast } = useToast();
   const claimId = params?.id ? parseInt(params.id) : 0;
 
@@ -124,7 +125,7 @@ export default function AdminClaimDetail() {
     try {
       await fetch(`${BASE}/api/claims/${claimId}`, { method: "DELETE" });
       toast({ title: "Claim deleted" });
-      setLocation("/admin/claims");
+      setLocation(adminPath("/claims"));
     } catch {
       toast({ title: "Failed to delete", variant: "destructive" });
     }
@@ -151,7 +152,7 @@ export default function AdminClaimDetail() {
       <div className="p-6 max-w-5xl mx-auto text-center py-24 text-muted-foreground">
         <ShieldAlert className="w-10 h-10 mx-auto mb-3 text-muted" />
         <p className="font-semibold">Claim not found</p>
-        <Button variant="outline" className="mt-4" onClick={() => setLocation("/admin/claims")}>
+        <Button variant="outline" className="mt-4" onClick={() => setLocation(adminPath("/claims"))}>
           Back to Claims
         </Button>
       </div>
@@ -165,7 +166,7 @@ export default function AdminClaimDetail() {
       {/* Header */}
       <div className="flex items-start justify-between gap-4 flex-wrap">
         <div className="flex items-center gap-3">
-          <Button variant="ghost" size="icon" onClick={() => setLocation("/admin/claims")} className="-ml-2">
+          <Button variant="ghost" size="icon" onClick={() => setLocation(adminPath("/claims"))} className="-ml-2">
             <ArrowLeft className="w-5 h-5" />
           </Button>
           <div>

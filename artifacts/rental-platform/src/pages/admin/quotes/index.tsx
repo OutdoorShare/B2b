@@ -1,3 +1,4 @@
+import { adminPath } from "@/lib/admin-nav";
 import { Link } from "wouter";
 import { 
   useGetQuotes, 
@@ -40,7 +41,7 @@ export default function AdminQuotes() {
           <h2 className="text-3xl font-bold tracking-tight">Quotes</h2>
           <p className="text-muted-foreground mt-1">Manage custom quotes and proposals for customers</p>
         </div>
-        <Link href="/admin/quotes/new">
+        <Link href={adminPath("/quotes/new")}>
           <Button>
             <Plus className="w-4 h-4 mr-2" />
             Create Quote
@@ -93,7 +94,7 @@ export default function AdminQuotes() {
               <FileText className="w-12 h-12 text-muted mb-4" />
               <h3 className="text-lg font-medium mb-1">No quotes found</h3>
               <p className="text-muted-foreground mb-4">Create custom quotes for complex bookings or events.</p>
-              <Link href="/admin/quotes/new">
+              <Link href={adminPath("/quotes/new")}>
                 <Button variant="outline">Create your first quote</Button>
               </Link>
             </div>

@@ -1,3 +1,4 @@
+import { adminPath } from "@/lib/admin-nav";
 import { useState, useMemo } from "react";
 import { useLocation } from "wouter";
 import { 
@@ -114,7 +115,7 @@ export default function AdminQuotesNew() {
         onSuccess: () => {
           queryClient.invalidateQueries({ queryKey: getGetQuotesQueryKey() });
           toast({ title: "Quote created successfully" });
-          setLocation("/admin/quotes");
+          setLocation(adminPath("/quotes"));
         },
         onError: () => {
           toast({ title: "Failed to create quote", variant: "destructive" });

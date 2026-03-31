@@ -1,3 +1,4 @@
+import { adminPath } from "@/lib/admin-nav";
 import { useState } from "react";
 import { Link, useLocation } from "wouter";
 import {
@@ -120,7 +121,7 @@ export default function AdminBookings() {
           <p className="text-muted-foreground mt-1">Manage reservations and customer pickups</p>
         </div>
         <div className="flex items-center gap-3">
-          <Button onClick={() => setLocation("/admin/bookings/new")} className="gap-2">
+          <Button onClick={() => setLocation(adminPath("/bookings/new"))} className="gap-2">
             <Plus className="w-4 h-4" /> New Booking
           </Button>
           <Select value={statusFilter} onValueChange={setStatusFilter}>
@@ -217,7 +218,7 @@ export default function AdminBookings() {
                       {dayBookings.slice(0, 3).map(b => (
                         <button
                           key={b.id}
-                          onClick={() => setLocation(`/admin/bookings/${b.id}`)}
+                          onClick={() => setLocation(adminPath(`/bookings/${b.id}`))}
                           title={`${b.listingTitle} — ${b.customerName}`}
                           className={`w-full text-left text-[11px] font-medium px-1.5 py-0.5 rounded border truncate leading-tight transition-opacity hover:opacity-80 ${STATUS_COLORS[b.status] || "bg-gray-100 text-gray-700 border-gray-300"}`}
                         >
@@ -311,11 +312,11 @@ export default function AdminBookings() {
                             <DropdownMenuContent align="end">
                               <DropdownMenuLabel>Actions</DropdownMenuLabel>
                               <DropdownMenuItem asChild>
-                                <Link href={`/admin/bookings/${booking.id}`} className="cursor-pointer flex items-center">
+                                <Link href={adminPath(`/bookings/${booking.id}`)} className="cursor-pointer flex items-center">
                                   <Eye className="w-4 h-4 mr-2" /> View Details
                                 </Link>
                               </DropdownMenuItem>
-                              <DropdownMenuItem onClick={() => setLocation(`/admin/bookings/${booking.id}/edit`)}>
+                              <DropdownMenuItem onClick={() => setLocation(adminPath(`/bookings/${booking.id}/edit`))}>
                                 Edit Booking
                               </DropdownMenuItem>
                               <DropdownMenuSeparator />

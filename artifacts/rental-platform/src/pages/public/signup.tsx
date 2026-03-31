@@ -152,7 +152,7 @@ export default function SignupPage() {
             </div>
           </Link>
           <div className="text-sm text-muted-foreground">
-            Already have an account? <Link href="/admin" className="font-semibold hover:underline" style={{ color: OS_GREEN }}>Sign in</Link>
+            Already have an account? <Link href="/get-started" className="font-semibold hover:underline" style={{ color: OS_GREEN }}>Sign in</Link>
           </div>
         </div>
       </header>
@@ -404,12 +404,12 @@ export default function SignupPage() {
               <h3 className="font-bold text-gray-900">Ready to set up your site?</h3>
               <p className="text-sm text-muted-foreground">You can start configuring your rental site now while your trial is active.</p>
               <div className="grid grid-cols-2 gap-3">
-                <Link href="/login">
+                <Link href={`/${created.siteSlug}/admin`}>
                   <Button variant="outline" className="w-full font-semibold">
                     Sign In to Admin
                   </Button>
                 </Link>
-                <Link href="/admin/onboarding">
+                <Link href={`/${created.siteSlug}/admin/onboarding`}>
                   <Button className="w-full font-bold gap-1.5 text-white hover:opacity-90" style={{ backgroundColor: OS_GREEN }}>
                     Set Up My Site <ArrowRight className="w-4 h-4" />
                   </Button>

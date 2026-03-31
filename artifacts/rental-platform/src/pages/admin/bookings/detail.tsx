@@ -1,5 +1,6 @@
+import { adminPath } from "@/lib/admin-nav";
 import { useState, useEffect } from "react";
-import { useRoute } from "wouter";
+import { useParams } from "wouter";
 import { 
   useGetBooking, 
   useUpdateBooking,
@@ -19,7 +20,7 @@ import { ArrowLeft, User, Phone, Mail, Calendar, Package, StickyNote, ShieldAler
 import { format, differenceInDays } from "date-fns";
 
 export default function AdminBookingDetail() {
-  const [, params] = useRoute("/admin/bookings/:id");
+  const params = useParams<{ slug: string; id: string }>();
   const id = params?.id ? parseInt(params.id) : 0;
   const { toast } = useToast();
   const [, setLocation] = useLocation();
@@ -98,7 +99,7 @@ export default function AdminBookingDetail() {
       </div>
 
       <div className="flex flex-wrap gap-3 items-center">
-        <Button variant="outline" className="gap-2" onClick={() => setLocation(`/admin/bookings/${id}/edit`)}>
+        <Button variant="outline" className="gap-2" onClick={() => setLocation(adminPath(`/bookings/${id}/edit`))}>
           <Pencil className="w-4 h-4" /> Edit Booking
         </Button>
         <Button 
@@ -125,7 +126,7 @@ export default function AdminBookingDetail() {
         </Button>
 
         {booking.status === 'completed' && (
-          <Link href={`/admin/claims/new?bookingId=${booking.id}&listingId=${booking.listingId}&customerName=${encodeURIComponent(booking.customerName)}&customerEmail=${encodeURIComponent(booking.customerEmail)}`}>
+          <Link href={adminPath(`/claims/new?bookingId=${booking.id}&listingId=${booking.listingId}&customerName=${encodeURIComponent(booking.customerName)}&customerEmail=${encodeURIComponent(booking.customerEmail)}`)}>
             <Button variant="outline" className="gap-2 border-amber-300 text-amber-700 hover:bg-amber-50 hover:border-amber-400">
               <ShieldAlert className="w-4 h-4" />
               Submit Claim

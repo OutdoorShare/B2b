@@ -1,3 +1,4 @@
+import { adminPath } from "@/lib/admin-nav";
 import { useState } from "react";
 import { useLocation } from "wouter";
 import {
@@ -115,7 +116,7 @@ export default function AdminOnboarding() {
             <span className="font-bold text-lg">Setup Wizard</span>
           </div>
           <button
-            onClick={() => setLocation("/admin")}
+            onClick={() => setLocation(adminPath(""))}
             className="text-sm text-muted-foreground hover:text-foreground underline underline-offset-2"
           >
             Skip setup →
@@ -301,19 +302,19 @@ export default function AdminOnboarding() {
                 {
                   icon: Package, label: "Manage your listings",
                   desc: "Add more items, set pricing, upload photos, and configure add-ons.",
-                  action: () => setLocation("/admin/listings"),
+                  action: () => setLocation(adminPath("/listings")),
                   cta: "Go to Listings"
                 },
                 {
                   icon: Palette, label: "Finish your branding",
                   desc: "Upload a logo, set your cover image, and customize colors in Settings.",
-                  action: () => setLocation("/admin/settings"),
+                  action: () => setLocation(adminPath("/settings")),
                   cta: "Open Settings"
                 },
                 {
                   icon: ChevronRight, label: "Go to your admin dashboard",
                   desc: "View bookings, analytics, and manage your entire operation.",
-                  action: () => setLocation("/admin"),
+                  action: () => setLocation(adminPath("")),
                   cta: "Open Dashboard"
                 },
               ].map(item => (
@@ -335,7 +336,7 @@ export default function AdminOnboarding() {
             <Button
               size="lg"
               className="w-full h-13 font-bold gap-2"
-              onClick={() => setLocation("/admin")}
+              onClick={() => setLocation(adminPath(""))}
             >
               Go to My Dashboard <ArrowRight className="w-4 h-4" />
             </Button>

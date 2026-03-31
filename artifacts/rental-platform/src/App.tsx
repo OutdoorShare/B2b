@@ -1,4 +1,4 @@
-import { Switch, Route, Router as WouterRouter } from "wouter";
+import { Switch, Route, Router as WouterRouter, useParams } from "wouter";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -21,6 +21,7 @@ import GetStartedPage from "@/pages/public/get-started";
 import SignupPage from "@/pages/public/signup";
 import DemoPage from "@/pages/demo";
 import AdminOnboarding from "@/pages/admin/onboarding";
+import AdminLoginPage from "@/pages/admin/admin-login";
 import SuperAdminLogin from "@/pages/superadmin/login";
 import SuperAdminDashboard from "@/pages/superadmin/dashboard";
 import { SuperAdminLayout } from "@/components/layout/superadmin-layout";
@@ -53,7 +54,6 @@ import SuperAdminAgreement from "@/pages/superadmin/agreement";
 const queryClient = new QueryClient();
 
 // Inject tenant context headers on every generated API call.
-// Admin sessions send x-admin-token; storefront pages derive x-tenant-slug from the URL.
 setExtraHeadersGetter(() => {
   try {
     const raw = localStorage.getItem("admin_session");
@@ -65,16 +65,38 @@ setExtraHeadersGetter(() => {
     }
   } catch { /* ignore */ }
 
-  // Extract slug from pathname: first segment that isn't a reserved path
+  // Extract slug from pathname
   const base = import.meta.env.BASE_URL.replace(/\/$/, "");
   const path = window.location.pathname.replace(base, "") || "/";
-  const firstSegment = path.split("/").filter(Boolean)[0];
-  const reserved = new Set(["admin", "superadmin", "get-started", "signup", "demo"]);
+  const reserved = new Set(["superadmin", "get-started", "signup", "demo"]);
+  const segments = path.split("/").filter(Boolean);
+  const firstSegment = segments[0];
   if (firstSegment && !reserved.has(firstSegment)) {
     return { "x-tenant-slug": firstSegment };
   }
   return {};
 });
+
+// Auth guard: checks session matches the slug in the URL
+function AdminGuard({ children }: { children: React.ReactNode }) {
+  const params = useParams<{ slug: string }>();
+  const slug = params.slug ?? "";
+
+  const session = (() => {
+    try {
+      const raw = localStorage.getItem("admin_session");
+      return raw ? JSON.parse(raw) : null;
+    } catch { return null; }
+  })();
+
+  const isAuthenticated = session?.token && session?.tenantSlug === slug;
+
+  if (!isAuthenticated) {
+    return <AdminLoginPage slug={slug} />;
+  }
+
+  return <>{children}</>;
+}
 
 function Router() {
   return (
@@ -87,8 +109,8 @@ function Router() {
         <SignupPage />
       </Route>
 
-      {/* Admin Onboarding */}
-      <Route path="/admin/onboarding">
+      {/* Admin Onboarding — reached after signup; session already set */}
+      <Route path="/:slug/admin/onboarding">
         <AdminOnboarding />
       </Route>
 
@@ -115,72 +137,72 @@ function Router() {
         <SuperAdminLayout><SuperAdminAgreement /></SuperAdminLayout>
       </Route>
 
-      {/* Admin Routes */}
-      <Route path="/admin">
-        <AdminLayout><AdminDashboard /></AdminLayout>
+      {/* Tenant Admin Routes — scoped to /:slug/admin/* */}
+      <Route path="/:slug/admin">
+        <AdminGuard><AdminLayout><AdminDashboard /></AdminLayout></AdminGuard>
       </Route>
-      <Route path="/admin/listings">
-        <AdminLayout><AdminListings /></AdminLayout>
+      <Route path="/:slug/admin/listings/new">
+        <AdminGuard><AdminLayout><AdminListingsForm /></AdminLayout></AdminGuard>
       </Route>
-      <Route path="/admin/listings/new">
-        <AdminLayout><AdminListingsForm /></AdminLayout>
+      <Route path="/:slug/admin/listings/:id/edit">
+        <AdminGuard><AdminLayout><AdminListingsForm /></AdminLayout></AdminGuard>
       </Route>
-      <Route path="/admin/listings/:id/edit">
-        <AdminLayout><AdminListingsForm /></AdminLayout>
+      <Route path="/:slug/admin/listings/:id">
+        <AdminGuard><AdminLayout><AdminListingDetail /></AdminLayout></AdminGuard>
       </Route>
-      <Route path="/admin/listings/:id">
-        <AdminLayout><AdminListingDetail /></AdminLayout>
+      <Route path="/:slug/admin/listings">
+        <AdminGuard><AdminLayout><AdminListings /></AdminLayout></AdminGuard>
       </Route>
-      <Route path="/admin/bookings/new">
-        <AdminLayout><AdminBookingForm /></AdminLayout>
+      <Route path="/:slug/admin/bookings/new">
+        <AdminGuard><AdminLayout><AdminBookingForm /></AdminLayout></AdminGuard>
       </Route>
-      <Route path="/admin/bookings/:id/edit">
-        <AdminLayout><AdminBookingForm /></AdminLayout>
+      <Route path="/:slug/admin/bookings/:id/edit">
+        <AdminGuard><AdminLayout><AdminBookingForm /></AdminLayout></AdminGuard>
       </Route>
-      <Route path="/admin/bookings">
-        <AdminLayout><AdminBookings /></AdminLayout>
+      <Route path="/:slug/admin/bookings/:id">
+        <AdminGuard><AdminLayout><AdminBookingDetail /></AdminLayout></AdminGuard>
       </Route>
-      <Route path="/admin/bookings/:id">
-        <AdminLayout><AdminBookingDetail /></AdminLayout>
+      <Route path="/:slug/admin/bookings">
+        <AdminGuard><AdminLayout><AdminBookings /></AdminLayout></AdminGuard>
       </Route>
-      <Route path="/admin/quotes">
-        <AdminLayout><AdminQuotes /></AdminLayout>
+      <Route path="/:slug/admin/quotes/new">
+        <AdminGuard><AdminLayout><AdminQuotesNew /></AdminLayout></AdminGuard>
       </Route>
-      <Route path="/admin/quotes/new">
-        <AdminLayout><AdminQuotesNew /></AdminLayout>
+      <Route path="/:slug/admin/quotes">
+        <AdminGuard><AdminLayout><AdminQuotes /></AdminLayout></AdminGuard>
       </Route>
-      <Route path="/admin/analytics">
-        <AdminLayout><AdminAnalytics /></AdminLayout>
+      <Route path="/:slug/admin/analytics">
+        <AdminGuard><AdminLayout><AdminAnalytics /></AdminLayout></AdminGuard>
       </Route>
-      <Route path="/admin/categories">
-        <AdminLayout><AdminCategories /></AdminLayout>
+      <Route path="/:slug/admin/categories">
+        <AdminGuard><AdminLayout><AdminCategories /></AdminLayout></AdminGuard>
       </Route>
-      <Route path="/admin/settings">
-        <AdminLayout><AdminSettings /></AdminLayout>
+      <Route path="/:slug/admin/settings">
+        <AdminGuard><AdminLayout><AdminSettings /></AdminLayout></AdminGuard>
       </Route>
-      <Route path="/admin/kiosk">
-        <AdminKiosk /> {/* Kiosk is full screen */}
+      <Route path="/:slug/admin/kiosk">
+        <AdminGuard><AdminKiosk /></AdminGuard>
       </Route>
-      <Route path="/admin/claims">
-        <AdminLayout><AdminClaims /></AdminLayout>
+      <Route path="/:slug/admin/claims/new">
+        <AdminGuard><AdminLayout><AdminClaimsNew /></AdminLayout></AdminGuard>
       </Route>
-      <Route path="/admin/claims/new">
-        <AdminLayout><AdminClaimsNew /></AdminLayout>
+      <Route path="/:slug/admin/claims/:id">
+        <AdminGuard><AdminLayout><AdminClaimDetail /></AdminLayout></AdminGuard>
       </Route>
-      <Route path="/admin/claims/:id">
-        <AdminLayout><AdminClaimDetail /></AdminLayout>
+      <Route path="/:slug/admin/claims">
+        <AdminGuard><AdminLayout><AdminClaims /></AdminLayout></AdminGuard>
       </Route>
-      <Route path="/admin/team">
-        <AdminLayout><AdminTeam /></AdminLayout>
+      <Route path="/:slug/admin/team">
+        <AdminGuard><AdminLayout><AdminTeam /></AdminLayout></AdminGuard>
       </Route>
-      <Route path="/admin/waivers">
-        <AdminLayout><AdminWaivers /></AdminLayout>
+      <Route path="/:slug/admin/waivers">
+        <AdminGuard><AdminLayout><AdminWaivers /></AdminLayout></AdminGuard>
       </Route>
-      <Route path="/admin/wallet">
-        <AdminLayout><AdminWallet /></AdminLayout>
+      <Route path="/:slug/admin/wallet">
+        <AdminGuard><AdminLayout><AdminWallet /></AdminLayout></AdminGuard>
       </Route>
-      <Route path="/admin/communications">
-        <AdminCommunications />
+      <Route path="/:slug/admin/communications">
+        <AdminGuard><AdminCommunications /></AdminGuard>
       </Route>
 
       {/* Demo / Test page */}

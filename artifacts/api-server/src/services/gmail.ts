@@ -182,7 +182,7 @@ export async function sendWelcomeEmail(opts: {
   password: string;
 }): Promise<void> {
   const { toEmail, companyName, slug, password } = opts;
-  const loginUrl = `${APP_URL}/admin`;
+  const loginUrl = `${APP_URL}/${slug}/admin`;
   const storefrontUrl = `${APP_URL}/${slug}`;
 
   const body = `
@@ -227,7 +227,7 @@ export async function sendAccountUpdatedEmail(opts: {
   newPassword?: string;
 }): Promise<void> {
   const { toEmail, companyName, slug, passwordChanged, newPassword } = opts;
-  const loginUrl = `${APP_URL}/admin`;
+  const loginUrl = `${APP_URL}/${slug}/admin`;
   const storefrontUrl = `${APP_URL}/${slug}`;
 
   const tableRows: { label: string; value: string; mono?: boolean }[] = [

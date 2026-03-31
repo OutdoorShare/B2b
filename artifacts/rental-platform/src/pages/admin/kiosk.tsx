@@ -1,3 +1,4 @@
+import { adminPath } from "@/lib/admin-nav";
 import { useState, useEffect, useCallback } from "react";
 import { Link, useLocation } from "wouter";
 import { QRCodeSVG } from "qrcode.react";
@@ -85,7 +86,7 @@ export default function AdminKiosk() {
       {/* Top Bar */}
       <header className="h-20 border-b bg-card flex items-center px-8 justify-between shrink-0 shadow-sm">
         <div className="flex items-center gap-4">
-          <Link href="/admin">
+          <Link href={adminPath("")}>
             <Button variant="ghost" size="icon" className="w-12 h-12 rounded-full">
               <ArrowLeft className="w-6 h-6" />
             </Button>

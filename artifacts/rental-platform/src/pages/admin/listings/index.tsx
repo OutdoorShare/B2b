@@ -1,3 +1,4 @@
+import { adminPath } from "@/lib/admin-nav";
 import { useState } from "react";
 import { Link, useLocation } from "wouter";
 import { 
@@ -67,7 +68,7 @@ export default function AdminListings() {
           <h2 className="text-3xl font-bold tracking-tight">Listings</h2>
           <p className="text-muted-foreground mt-1">Manage your rental inventory</p>
         </div>
-        <Link href="/admin/listings/new">
+        <Link href={adminPath("/listings/new")}>
           <Button>
             <Plus className="w-4 h-4 mr-2" />
             Add Listing
@@ -109,7 +110,7 @@ export default function AdminListings() {
                   <TableRow
                     key={listing.id}
                     className="cursor-pointer hover:bg-muted/40 transition-colors"
-                    onClick={() => setLocation(`/admin/listings/${listing.id}`)}
+                    onClick={() => setLocation(adminPath(`/listings/${listing.id}`))}
                   >
                     <TableCell onClick={e => e.stopPropagation()}>
                       <div className="w-12 h-12 bg-muted rounded-lg overflow-hidden">
@@ -135,7 +136,7 @@ export default function AdminListings() {
                     </TableCell>
                     <TableCell className="text-right" onClick={e => e.stopPropagation()}>
                       <div className="flex justify-end gap-1 items-center">
-                        <Link href={`/admin/listings/${listing.id}/edit`}>
+                        <Link href={adminPath(`/listings/${listing.id}/edit`)}>
                           <Button variant="ghost" size="icon" title="Edit">
                             <Edit className="w-4 h-4" />
                           </Button>
@@ -176,7 +177,7 @@ export default function AdminListings() {
               <Package className="w-12 h-12 text-muted mb-4" />
               <h3 className="text-lg font-medium mb-1">No listings found</h3>
               <p className="text-muted-foreground mb-4">You haven't added any listings yet.</p>
-              <Link href="/admin/listings/new">
+              <Link href={adminPath("/listings/new")}>
                 <Button variant="outline">Create your first listing</Button>
               </Link>
             </div>

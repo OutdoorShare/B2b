@@ -1,5 +1,6 @@
+import { adminPath } from "@/lib/admin-nav";
 import { useState, useEffect, useMemo } from "react";
-import { useLocation, useRoute } from "wouter";
+import { useLocation, useParams } from "wouter";
 import {
   useGetListings, useGetBooking,
   getGetListingsQueryKey, getGetBookingQueryKey, getGetBookingsQueryKey
@@ -34,10 +35,9 @@ const defaultForm = {
 };
 
 export default function AdminBookingForm() {
-  const [matchNew] = useRoute("/admin/bookings/new");
-  const [matchEdit, editParams] = useRoute("/admin/bookings/:id/edit");
-  const isEditing = matchEdit;
-  const editId = editParams?.id ? parseInt(editParams.id) : 0;
+  const params = useParams<{ slug: string; id?: string }>();
+  const isEditing = !!params.id;
+  const editId = params?.id ? parseInt(params.id) : 0;
 
   const [, setLocation] = useLocation();
   const { toast } = useToast();
@@ -185,7 +185,7 @@ export default function AdminBookingForm() {
       if (isEditing) queryClient.setQueryData(getGetBookingQueryKey(editId), data);
 
       toast({ title: isEditing ? "Booking updated" : "Booking created", description: isEditing ? `Booking #${editId} has been updated.` : `Booking #${data.id} created for ${data.customerName}.` });
-      setLocation(isEditing ? `/admin/bookings/${editId}` : `/admin/bookings/${data.id}`);
+      setLocation(isEditing ? adminPath(`/bookings/${editId}`) : adminPath(`/bookings/${data.id}`));
     } catch {
       setError("Connection error. Please try again.");
     } finally { setSaving(false); }

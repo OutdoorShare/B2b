@@ -18,21 +18,22 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useGetBusinessProfile } from "@workspace/api-client-react";
+import { getAdminSlug } from "@/lib/admin-nav";
 
-const navigation = [
-  { name: "Dashboard", href: "/admin", icon: LayoutDashboard },
-  { name: "Listings", href: "/admin/listings", icon: Package },
-  { name: "Bookings", href: "/admin/bookings", icon: CalendarDays },
-  { name: "Quotes", href: "/admin/quotes", icon: FileText },
-  { name: "Claims", href: "/admin/claims", icon: ShieldAlert },
-  { name: "Communications", href: "/admin/communications", icon: MessageSquare },
-  { name: "Analytics", href: "/admin/analytics", icon: BarChart3 },
-  { name: "Categories", href: "/admin/categories", icon: Tags },
-  { name: "Team", href: "/admin/team", icon: Users },
-  { name: "Waivers", href: "/admin/waivers", icon: FileSignature },
-  { name: "Kiosk Mode", href: "/admin/kiosk", icon: MonitorSmartphone },
-  { name: "My Wallet", href: "/admin/wallet", icon: Wallet },
-  { name: "Settings", href: "/admin/settings", icon: Settings },
+const NAV_ITEMS = [
+  { name: "Dashboard", path: "", icon: LayoutDashboard },
+  { name: "Listings", path: "/listings", icon: Package },
+  { name: "Bookings", path: "/bookings", icon: CalendarDays },
+  { name: "Quotes", path: "/quotes", icon: FileText },
+  { name: "Claims", path: "/claims", icon: ShieldAlert },
+  { name: "Communications", path: "/communications", icon: MessageSquare },
+  { name: "Analytics", path: "/analytics", icon: BarChart3 },
+  { name: "Categories", path: "/categories", icon: Tags },
+  { name: "Team", path: "/team", icon: Users },
+  { name: "Waivers", path: "/waivers", icon: FileSignature },
+  { name: "Kiosk Mode", path: "/kiosk", icon: MonitorSmartphone },
+  { name: "My Wallet", path: "/wallet", icon: Wallet },
+  { name: "Settings", path: "/settings", icon: Settings },
 ];
 
 function TrialStatusBanner() {
@@ -90,18 +91,28 @@ function TrialStatusBanner() {
 
 export function AdminLayout({ children }: { children: React.ReactNode }) {
   const [location] = useLocation();
+  const slug = getAdminSlug();
+  const adminBase = `/${slug}/admin`;
+
   const { data: profile } = useGetBusinessProfile({
     query: { queryKey: ["/api/business", "admin-layout"] }
   });
   const siteSlug = (profile as any)?.siteSlug as string | null | undefined;
   const storefrontHref = siteSlug ? `/${siteSlug}` : "/";
 
+  const activeItem = NAV_ITEMS.find(item => {
+    const href = `${adminBase}${item.path}`;
+    return item.path === ""
+      ? location === href
+      : location === href || location.startsWith(href + "/") || location.startsWith(href + "?");
+  });
+
   return (
     <div className="min-h-[100dvh] flex flex-col md:flex-row bg-background">
       {/* Sidebar */}
       <aside className="w-full md:w-64 border-r border-border bg-sidebar flex-shrink-0 flex flex-col">
         <div className="h-16 flex items-center px-5 border-b border-border">
-          <Link href="/admin" className="flex items-center gap-2.5">
+          <Link href={adminBase} className="flex items-center gap-2.5">
             <img src="/outdoorshare-logo.png" alt="OutdoorShare" className="w-9 h-9 object-contain" />
             <div className="leading-tight">
               <p className="text-sm font-black text-foreground tracking-wide leading-none">OutdoorShare</p>
@@ -110,12 +121,15 @@ export function AdminLayout({ children }: { children: React.ReactNode }) {
           </Link>
         </div>
         <nav className="p-4 flex-1 space-y-1 overflow-y-auto">
-          {navigation.map((item) => {
-            const isActive = location === item.href || (item.href !== "/admin" && location.startsWith(item.href));
+          {NAV_ITEMS.map((item) => {
+            const href = `${adminBase}${item.path}`;
+            const isActive = item.path === ""
+              ? location === href
+              : location === href || location.startsWith(href + "/") || location.startsWith(href + "?");
             return (
               <Link 
                 key={item.name} 
-                href={item.href}
+                href={href}
                 className={cn(
                   "flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium transition-colors",
                   isActive 
@@ -133,12 +147,11 @@ export function AdminLayout({ children }: { children: React.ReactNode }) {
 
       {/* Main Content */}
       <main className="flex-1 flex flex-col min-w-0 overflow-hidden">
-        {/* Trial status banner */}
         <TrialStatusBanner />
 
         <header className="h-16 flex items-center justify-between px-8 border-b border-border bg-card">
           <h1 className="text-xl font-semibold text-foreground">
-            {navigation.find(n => location === n.href || (n.href !== "/admin" && location.startsWith(n.href)))?.name || "Dashboard"}
+            {activeItem?.name ?? "Dashboard"}
           </h1>
           <div className="flex items-center gap-4">
             <a

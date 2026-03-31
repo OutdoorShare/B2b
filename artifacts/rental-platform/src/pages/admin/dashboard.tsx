@@ -1,3 +1,4 @@
+import { adminPath } from "@/lib/admin-nav";
 import { useState, useEffect } from "react";
 import { 
   useGetAnalyticsSummary, 
@@ -79,7 +80,7 @@ export default function AdminDashboard() {
               </p>
             </div>
           </div>
-          <Link href="/admin/settings?tab=payments">
+          <Link href={adminPath("/settings?tab=payments")}>
             <Button size="sm" className="shrink-0 bg-amber-600 hover:bg-amber-700 text-white gap-1.5 whitespace-nowrap">
               Connect Stripe <ArrowRight className="w-3.5 h-3.5" />
             </Button>
@@ -177,7 +178,7 @@ export default function AdminDashboard() {
               {recentBookings?.slice(0, 5).map(booking => (
                 <div key={booking.id} className="flex items-center justify-between border-b pb-4 last:border-0 last:pb-0">
                   <div className="space-y-1">
-                    <Link href={`/admin/bookings/${booking.id}`} className="text-sm font-medium leading-none hover:underline">
+                    <Link href={adminPath(`/bookings/${booking.id}`)} className="text-sm font-medium leading-none hover:underline">
                       {booking.customerName}
                     </Link>
                     <p className="text-xs text-muted-foreground">

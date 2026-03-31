@@ -42,7 +42,7 @@ const router: IRouter = Router();
 // POST /admin/auth/owner-login — tenant owner login
 router.post("/admin/auth/owner-login", async (req, res) => {
   try {
-    const { email, password } = req.body;
+    const { email, password, slug } = req.body;
     if (!email || !password) {
       res.status(400).json({ error: "Email and password required" });
       return;
@@ -53,6 +53,11 @@ router.post("/admin/auth/owner-login", async (req, res) => {
       .from(tenantsTable)
       .where(eq(tenantsTable.email, email.toLowerCase().trim()))
       .limit(1);
+
+    if (slug && tenant && tenant.slug !== slug) {
+      res.status(401).json({ error: "These credentials are not authorized for this admin panel." });
+      return;
+    }
 
     if (!tenant || tenant.status !== "active") {
       res.status(401).json({ error: "Invalid email or password" });
@@ -86,15 +91,29 @@ router.post("/admin/auth/owner-login", async (req, res) => {
 // POST /admin/auth/login — staff member login
 router.post("/admin/auth/login", async (req, res) => {
   try {
-    const { email, password } = req.body;
+    const { email, password, slug } = req.body;
     if (!email || !password) { res.status(400).json({ error: "Email and password required" }); return; }
     const [user] = await db.select().from(adminUsersTable).where(eq(adminUsersTable.email, email.toLowerCase().trim())).limit(1);
     if (!user || user.status !== "active") { res.status(401).json({ error: "Invalid email or password" }); return; }
     const valid = await verifyPassword(password, user.passwordHash);
     if (!valid) { res.status(401).json({ error: "Invalid email or password" }); return; }
+
+    let tenantSlug: string | null = null;
+    let tenantId: number | null = user.tenantId ?? null;
+    if (user.tenantId) {
+      const [tenant] = await db.select().from(tenantsTable).where(eq(tenantsTable.id, user.tenantId)).limit(1);
+      if (tenant) {
+        tenantSlug = tenant.slug;
+        if (slug && tenant.slug !== slug) {
+          res.status(401).json({ error: "These credentials are not authorized for this admin panel." });
+          return;
+        }
+      }
+    }
+
     const token = randomBytes(32).toString("hex");
     await db.update(adminUsersTable).set({ token, updatedAt: new Date() }).where(eq(adminUsersTable.id, user.id));
-    res.json({ token, user: safeUser({ ...user, token }) });
+    res.json({ token, tenantId, tenantSlug, user: safeUser({ ...user, token }) });
   } catch {
     res.status(500).json({ error: "Login failed" });
   }
