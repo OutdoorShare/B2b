@@ -18,12 +18,23 @@ import {
   Building2,
 } from "lucide-react";
 
+function getAdminToken(): string {
+  try {
+    const raw = localStorage.getItem("admin_session");
+    if (raw) {
+      const s = JSON.parse(raw);
+      if (s?.token) return s.token;
+    }
+  } catch { /* ignore */ }
+  return "";
+}
+
 const api = (path: string, opts?: RequestInit) =>
   fetch(`/api${path}`, {
     ...opts,
     headers: {
       "Content-Type": "application/json",
-      "x-admin-token": localStorage.getItem("admin_session") ?? "",
+      "x-admin-token": getAdminToken(),
       ...(opts?.headers ?? {}),
     },
   });

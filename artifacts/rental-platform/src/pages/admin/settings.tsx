@@ -127,8 +127,15 @@ export default function AdminSettings() {
     try {
       const res = await fetch(`${BASE}/api/stripe/connect/onboard`, { method: "POST", headers: adminHeaders() });
       const data = await res.json();
+      if (res.status === 401) {
+        toast({ title: "Session expired", description: "Please log in again to continue.", variant: "destructive" });
+        return;
+      }
       if (data.url) { window.location.href = data.url; }
-      else { toast({ title: "Could not start Stripe onboarding", variant: "destructive" }); }
+      else {
+        const msg = data.error || "Could not start Stripe onboarding";
+        toast({ title: "Stripe setup failed", description: msg.length > 120 ? msg.slice(0, 120) + "…" : msg, variant: "destructive" });
+      }
     } catch {
       toast({ title: "Stripe connection error", variant: "destructive" });
     } finally {
