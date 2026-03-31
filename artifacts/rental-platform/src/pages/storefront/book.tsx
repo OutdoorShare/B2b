@@ -1022,6 +1022,67 @@ export default function StorefrontBook() {
     }
   };
 
+  // Retry: fetch a brand-new session and immediately launch the Stripe modal
+  const handleRetryVerification = async () => {
+    setIdentityStatus("idle");
+    setIdentityError(null);
+    setIdentityClientSecret(null);
+    setIdentitySessionId(null);
+    setIdentitySessionLoading(true);
+    setIdentitySessionFailed(false);
+    try {
+      const idRes = await fetch(`${BASE}/api/stripe/identity/session`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ tenantSlug: slug, customerId: session?.id ?? undefined, returnUrl: window.location.href }),
+      });
+      const idData = await idRes.json();
+      if (!idRes.ok || !idData.clientSecret) { setIdentitySessionFailed(true); return; }
+
+      // Persist fresh session
+      setIdentityClientSecret(idData.clientSecret);
+      setIdentitySessionId(idData.sessionId);
+      setIdentityIsTestMode(!!idData.testMode);
+      sessionStorage.setItem(`identity_session_${listingId}`, JSON.stringify({
+        identityClientSecret: idData.clientSecret,
+        identitySessionId: idData.sessionId,
+        identityIsTestMode: !!idData.testMode,
+      }));
+      setIdentitySessionLoading(false);
+
+      // Launch modal with fresh secret directly (don't rely on state update)
+      setIdentityStatus("pending");
+      const stripeInst = await (idData.testMode ? testStripePromise : liveStripePromise);
+      if (!stripeInst) { setIdentityStatus("failed"); setIdentityError("Stripe could not load."); return; }
+
+      const { error } = await stripeInst.verifyIdentity(idData.clientSecret);
+      if (error) { setIdentityStatus("failed"); setIdentityError(error.message ?? "Verification was not completed."); return; }
+
+      // Check result
+      if (idData.sessionId) {
+        const statusRes = await fetch(`${BASE}/api/stripe/identity/status/${idData.sessionId}?tenantSlug=${encodeURIComponent(slug ?? "")}`);
+        const statusData = await statusRes.json();
+        if (statusData.verified) {
+          setIdentityStatus("verified");
+          sessionStorage.removeItem(`identity_session_${listingId}`);
+          setTimeout(() => { setStep("confirmation"); window.scrollTo(0, 0); }, 1200);
+        } else {
+          setIdentityStatus("failed");
+          setIdentityError("Identity could not be verified. Please try again or contact support.");
+        }
+      } else {
+        setIdentityStatus("verified");
+        sessionStorage.removeItem(`identity_session_${listingId}`);
+        setTimeout(() => { setStep("confirmation"); window.scrollTo(0, 0); }, 1200);
+      }
+    } catch {
+      setIdentityStatus("failed");
+      setIdentityError("Verification failed. Please try again.");
+    } finally {
+      setIdentitySessionLoading(false);
+    }
+  };
+
   const stepIndex = STEPS.indexOf(step);
 
   return (
@@ -1904,6 +1965,14 @@ export default function StorefrontBook() {
                           Retry
                         </Button>
                       </div>
+                    ) : identityStatus === "failed" ? (
+                      <Button
+                        size="lg"
+                        className="w-full h-13 text-base font-bold rounded-xl gap-2"
+                        onClick={handleRetryVerification}
+                      >
+                        <RefreshCw className="w-4 h-4" />Try Again
+                      </Button>
                     ) : (
                       <Button
                         size="lg"
@@ -1911,11 +1980,7 @@ export default function StorefrontBook() {
                         onClick={handleStartVerification}
                         disabled={!identityClientSecret}
                       >
-                        {identityStatus === "failed" ? (
-                          <><RefreshCw className="w-4 h-4" />Try Again</>
-                        ) : (
-                          <><ScanFace className="w-4 h-4" />Start Identity Verification</>
-                        )}
+                        <ScanFace className="w-4 h-4" />Start Identity Verification
                       </Button>
                     )}
                   </>
