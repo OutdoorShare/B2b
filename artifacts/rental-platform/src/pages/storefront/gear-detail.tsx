@@ -28,6 +28,13 @@ type Addon = {
   isRequired: boolean;
 };
 
+type ListingRule = {
+  id: number;
+  title: string;
+  description: string | null;
+  fee: number;
+};
+
 const CONDITION_LABEL: Record<string, string> = {
   excellent: "Excellent",
   good: "Good / Used",
@@ -42,6 +49,7 @@ export default function StorefrontGearDetail() {
 
   const [activeImage, setActiveImage] = useState(0);
   const [addons, setAddons] = useState<Addon[]>([]);
+  const [listingRules, setListingRules] = useState<ListingRule[]>([]);
   const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined);
   const [bookedRanges, setBookedRanges] = useState<{ start: Date; end: Date }[]>([]);
   const [calendarMonths, setCalendarMonths] = useState(() => window.innerWidth >= 640 ? 2 : 1);
@@ -67,6 +75,10 @@ export default function StorefrontGearDetail() {
       .then((data: Addon[]) => {
         if (Array.isArray(data)) setAddons(data.filter(a => (a as any).isActive !== false));
       })
+      .catch(() => {});
+    fetch(`${BASE}/api/listings/${id}/rules`)
+      .then(r => r.json())
+      .then((data: ListingRule[]) => { if (Array.isArray(data)) setListingRules(data); })
       .catch(() => {});
   }, [id]);
 

@@ -21,6 +21,7 @@ import {
 } from "lucide-react";
 import { format, addDays, startOfDay, isAfter } from "date-fns";
 import { UnitIdentifiersManager } from "@/components/unit-identifiers-manager";
+import { ListingRulesManager } from "@/components/listing-rules-manager";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
@@ -343,6 +344,9 @@ export default function AdminListingDetail() {
               <p className="text-sm text-muted-foreground">{listing.requirements}</p>
             )}
           </div>
+
+          {/* Rules & Violations */}
+          <ListingRulesManager listingId={listing.id} />
 
           {/* Unit Identifiers */}
           <UnitIdentifiersManager listingId={listing.id} quantity={listing.quantity} />
