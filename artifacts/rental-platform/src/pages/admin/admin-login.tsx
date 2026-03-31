@@ -1,5 +1,4 @@
 import { useState } from "react";
-import { useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -13,7 +12,6 @@ interface Props {
 }
 
 export default function AdminLoginPage({ slug }: Props) {
-  const [, setLocation] = useLocation();
   const { toast } = useToast();
 
   const [tab, setTab] = useState<"owner" | "team">("owner");
@@ -48,7 +46,7 @@ export default function AdminLoginPage({ slug }: Props) {
         email: data.email,
       }));
       toast({ title: "Welcome back!", description: `Signed in as owner of ${data.tenantName}` });
-      setLocation(`/${slug}/admin`);
+      window.location.href = `${BASE}/${slug}/admin`;
     } catch {
       setError("Connection error. Please try again.");
     } finally { setLoading(false); }
@@ -77,7 +75,7 @@ export default function AdminLoginPage({ slug }: Props) {
         role: data.user.role,
       }));
       toast({ title: `Welcome, ${data.user.name}!`, description: `Logged in as ${data.user.role}` });
-      setLocation(`/${slug}/admin`);
+      window.location.href = `${BASE}/${slug}/admin`;
     } catch {
       setError("Connection error. Please try again.");
     } finally { setLoading(false); }
