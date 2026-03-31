@@ -1,10 +1,10 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { useLocation } from "wouter";
 import {
   Building2, Users, BarChart3, Package,
   Plus, Edit, Trash2, CheckCircle2, XCircle,
   AlertTriangle, RefreshCcw, Eye, EyeOff,
-  Search, ExternalLink
+  Search, ExternalLink, Link2, Pencil, AlertCircle
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -76,6 +76,7 @@ export default function SuperAdminDashboard() {
   const [formError, setFormError] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const [customizeSlug, setCustomizeSlug] = useState(false);
 
   const loadData = useCallback(async () => {
     const token = getToken();
@@ -94,11 +95,16 @@ export default function SuperAdminDashboard() {
 
   useEffect(() => { loadData(); }, [loadData]);
 
+  // Derive a slug-preview from a company name (mirrors backend logic)
+  const nameToSlugPreview = (name: string) =>
+    name.toLowerCase().trim().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+
   const openCreate = () => {
     setEditTenant(null);
     setForm({ ...defaultForm });
     setFormError("");
     setShowPassword(false);
+    setCustomizeSlug(false);
     setShowForm(true);
   };
 
@@ -111,30 +117,38 @@ export default function SuperAdminDashboard() {
     });
     setFormError("");
     setShowPassword(false);
+    setCustomizeSlug(false);
     setShowForm(true);
   };
 
+  // Derived slug preview (auto or custom)
+  const slugPreview = useMemo(() => {
+    if (customizeSlug && form.slug) return form.slug;
+    return nameToSlugPreview(form.name);
+  }, [form.name, form.slug, customizeSlug]);
+
   const updateField = (field: string, value: string) => {
     setForm(f => ({ ...f, [field]: value }));
-    // Auto-set maxListings when plan changes
     if (field === "plan") setForm(f => ({ ...f, plan: value, maxListings: String(PLAN_LIMITS[value] ?? 10) }));
-    // Auto-generate slug from name (both create and edit)
-    if (field === "name") {
-      const slug = value.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
-      setForm(f => ({ ...f, name: value, slug }));
+    // If not customizing, keep slug in sync with name
+    if (field === "name" && !customizeSlug) {
+      setForm(f => ({ ...f, name: value, slug: "" })); // let backend generate
     }
   };
 
   const handleSubmit = async () => {
     setFormError("");
-    if (!form.name || !form.slug || !form.email) { setFormError("Name, slug and email are required."); return; }
+    if (!form.name || !form.email) { setFormError("Company name and email are required."); return; }
     if (!editTenant && !form.password) { setFormError("Password is required."); return; }
     if (form.password && form.password !== form.confirmPassword) { setFormError("Passwords don't match."); return; }
     if (form.password && form.password.length < 6) { setFormError("Password must be at least 6 characters."); return; }
     setSubmitting(true);
     try {
       const body = {
-        name: form.name, slug: form.slug, email: form.email,
+        name: form.name,
+        // Only send slug if the user explicitly customized it
+        ...(customizeSlug && form.slug ? { slug: form.slug } : {}),
+        email: form.email,
         plan: form.plan, status: form.status, maxListings: parseInt(form.maxListings),
         contactName: form.contactName || undefined, phone: form.phone || undefined, notes: form.notes || undefined,
         ...(form.password ? { password: form.password } : {}),
@@ -252,7 +266,14 @@ export default function SuperAdminDashboard() {
                   <tr key={t.id} onClick={() => setLocation(`/superadmin/companies/${t.id}`)} className="border-b border-slate-800/50 hover:bg-slate-800/30 transition-colors group cursor-pointer">
                     <td className="px-4 py-3.5">
                       <p className="font-semibold text-white">{t.name}</p>
-                      <p className="text-xs text-slate-500 font-mono">{t.slug}</p>
+                      <div className="flex items-center gap-1">
+                        <p className="text-xs text-slate-500 font-mono">/{t.slug}</p>
+                        {nameToSlugPreview(t.name) !== t.slug && (
+                          <span title="Slug doesn't match company name" className="text-amber-400">
+                            <AlertCircle className="w-3 h-3" />
+                          </span>
+                        )}
+                      </div>
                     </td>
                     <td className="px-4 py-3.5">
                       <p className="text-slate-300">{t.email}</p>
@@ -326,11 +347,49 @@ export default function SuperAdminDashboard() {
                 <Label className="text-slate-300 text-xs">Company Name *</Label>
                 <Input value={form.name} onChange={e => updateField("name", e.target.value)} placeholder="Adventure Rentals Co."
                   className="bg-slate-800 border-slate-600 text-white placeholder:text-slate-500 focus:border-emerald-500" />
-              </div>
-              <div className="space-y-1.5">
-                <Label className="text-slate-300 text-xs">Slug * <span className="text-slate-500 font-normal">(URL identifier)</span></Label>
-                <Input value={form.slug} onChange={e => updateField("slug", e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ""))} placeholder="adventure-rentals"
-                  className="bg-slate-800 border-slate-600 text-white placeholder:text-slate-500 font-mono focus:border-emerald-500" />
+                {/* Slug preview */}
+                <div className="flex items-center gap-2 mt-1">
+                  <div className="flex items-center gap-1.5 flex-1 bg-slate-800/60 border border-slate-700 rounded px-2.5 py-1.5">
+                    <Link2 className="w-3 h-3 text-emerald-400 shrink-0" />
+                    <span className="text-slate-500 text-xs font-mono">yoursite.com/</span>
+                    {customizeSlug ? (
+                      <input
+                        type="text"
+                        value={form.slug}
+                        onChange={e => setForm(f => ({ ...f, slug: e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, "") }))}
+                        className="bg-transparent text-emerald-300 font-mono text-xs focus:outline-none flex-1 min-w-0"
+                        placeholder="custom-slug"
+                        autoFocus
+                      />
+                    ) : (
+                      <span className="text-emerald-300 font-mono text-xs truncate">
+                        {slugPreview || <span className="text-slate-600 italic">enter company name…</span>}
+                      </span>
+                    )}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (!customizeSlug) {
+                        setForm(f => ({ ...f, slug: slugPreview }));
+                        setCustomizeSlug(true);
+                      } else {
+                        setCustomizeSlug(false);
+                        setForm(f => ({ ...f, slug: "" }));
+                      }
+                    }}
+                    className="text-xs text-slate-400 hover:text-emerald-400 transition-colors flex items-center gap-1 shrink-0"
+                  >
+                    <Pencil className="w-3 h-3" />
+                    {customizeSlug ? "Auto" : "Customize"}
+                  </button>
+                </div>
+                {customizeSlug && (
+                  <p className="text-xs text-amber-400/80 flex items-center gap-1">
+                    <AlertCircle className="w-3 h-3" />
+                    Custom slug — make sure it's unique and URL-safe
+                  </p>
+                )}
               </div>
               <div className="space-y-1.5">
                 <Label className="text-slate-300 text-xs">Plan</Label>

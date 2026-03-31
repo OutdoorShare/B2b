@@ -9,6 +9,29 @@ import { stripe } from "../services/stripe";
 
 const scryptAsync = promisify(scrypt);
 
+// ── Slug helpers ───────────────────────────────────────────────────────────────
+function nameToSlug(name: string): string {
+  return name
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
+
+async function generateUniqueSlug(name: string, excludeId?: number): Promise<string> {
+  const base = nameToSlug(name);
+  let candidate = base;
+  let attempt = 2;
+  while (true) {
+    const conditions: any[] = [eq(tenantsTable.slug, candidate)];
+    if (excludeId) conditions.push(ne(tenantsTable.id, excludeId));
+    const existing = await db.select({ id: tenantsTable.id }).from(tenantsTable)
+      .where(conditions.length === 2 ? and(...conditions as [any, any]) : conditions[0]);
+    if (existing.length === 0) return candidate;
+    candidate = `${base}-${attempt++}`;
+  }
+}
+
 // ── Default categories seeded for every new tenant ────────────────────────────
 const DEFAULT_CATEGORIES = [
   { name: "ATV",             slug: "atv",            description: "All-terrain vehicles" },
@@ -145,20 +168,15 @@ router.get("/superadmin/tenants", requireSuperAdmin, async (_req, res) => {
 // ── POST /superadmin/tenants ───────────────────────────────────────────────────
 router.post("/superadmin/tenants", requireSuperAdmin, async (req, res) => {
   try {
-    const { name, slug, email, password, plan, status, maxListings, contactName, phone, notes } = req.body;
-    if (!name || !slug || !email || !password) {
-      res.status(400).json({ error: "name, slug, email and password are required" });
+    const { name, slug: rawSlug, email, password, plan, status, maxListings, contactName, phone, notes } = req.body;
+    if (!name || !email || !password) {
+      res.status(400).json({ error: "name, email and password are required" });
       return;
     }
-    // Check uniqueness
+    // Check email uniqueness
     const existing = await db.select().from(tenantsTable).where(eq(tenantsTable.email, email));
     if (existing.length > 0) {
       res.status(409).json({ error: "A tenant with this email already exists" });
-      return;
-    }
-    const slugExists = await db.select().from(tenantsTable).where(eq(tenantsTable.slug, slug));
-    if (slugExists.length > 0) {
-      res.status(409).json({ error: "A tenant with this slug already exists" });
       return;
     }
     const nameExists = await db.select().from(tenantsTable)
@@ -167,6 +185,9 @@ router.post("/superadmin/tenants", requireSuperAdmin, async (req, res) => {
       res.status(409).json({ error: "A company with this name already exists" });
       return;
     }
+    // Auto-generate slug from name if not provided, then ensure uniqueness
+    const slugBase = rawSlug ? nameToSlug(rawSlug) : nameToSlug(name);
+    const slug = await generateUniqueSlug(slugBase);
     const adminPasswordHash = await hashPassword(password);
     const [tenant] = await db.insert(tenantsTable).values({
       name, slug, email, adminPasswordHash,
@@ -209,14 +230,19 @@ router.put("/superadmin/tenants/:id", requireSuperAdmin, async (req, res) => {
       }
       updates.name = name;
     }
+    // Slug: if explicitly provided, validate and use; if name changed and no explicit slug, auto-generate
     if (slug !== undefined) {
+      const normalized = nameToSlug(slug);
       const slugConflict = await db.select().from(tenantsTable)
-        .where(and(eq(tenantsTable.slug, slug), ne(tenantsTable.id, id)));
+        .where(and(eq(tenantsTable.slug, normalized), ne(tenantsTable.id, id)));
       if (slugConflict.length > 0) {
         res.status(409).json({ error: "A tenant with this slug already exists" });
         return;
       }
-      updates.slug = slug;
+      updates.slug = normalized;
+    } else if (name !== undefined) {
+      // Name changed without an explicit slug — auto-derive from new name
+      updates.slug = await generateUniqueSlug(name, id);
     }
     if (email !== undefined) updates.email = email;
     if (plan !== undefined) updates.plan = plan;
