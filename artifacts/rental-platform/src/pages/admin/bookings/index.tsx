@@ -1,5 +1,5 @@
 import { adminPath } from "@/lib/admin-nav";
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { Link, useLocation } from "wouter";
 import {
   useGetBookings,
@@ -13,11 +13,10 @@ import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import {
   CalendarDays, Eye, MoreHorizontal, CheckCircle,
-  List, ChevronLeft, ChevronRight, Plus
+  List, ChevronLeft, ChevronRight, Plus, Search, X
 } from "lucide-react";
 import {
   format, startOfMonth, endOfMonth, startOfWeek, endOfWeek,
@@ -30,6 +29,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 
 type ViewMode = "list" | "calendar";
+type TabKey = "recent" | "upcoming" | "cancelled" | "all";
 
 const STATUS_COLORS: Record<string, string> = {
   pending:   "bg-amber-100  text-amber-900  border-amber-300",
@@ -59,16 +59,18 @@ function getStatusBadge(status: string) {
 }
 
 export default function AdminBookings() {
-  const [statusFilter, setStatusFilter] = useState<string>("all");
-  const [view, setView] = useState<ViewMode>("calendar");
+  const [tab, setTab] = useState<TabKey>("recent");
+  const [search, setSearch] = useState("");
+  const [view, setView] = useState<ViewMode>("list");
   const [calendarMonth, setCalendarMonth] = useState(new Date());
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [, setLocation] = useLocation();
 
-  const { data: bookings, isLoading } = useGetBookings(
-    statusFilter !== "all" ? { status: statusFilter as any } : {},
-    { query: { queryKey: getGetBookingsQueryKey(statusFilter !== "all" ? { status: statusFilter as any } : {}) } }
+  // Always fetch all bookings — filter client-side
+  const { data: allBookings = [], isLoading } = useGetBookings(
+    {},
+    { query: { queryKey: getGetBookingsQueryKey({}) } }
   );
 
   const updateBooking = useUpdateBooking();
@@ -88,7 +90,51 @@ export default function AdminBookings() {
     );
   };
 
-  // ── Build calendar grid ──────────────────────────────────────────────
+  // ── Client-side filtering ─────────────────────────────────────────────
+  const today = startOfDay(new Date());
+
+  const tabCounts = useMemo(() => ({
+    recent:    allBookings.filter(b => b.status !== "cancelled").length,
+    upcoming:  allBookings.filter(b => b.status !== "cancelled" && startOfDay(parseISO(b.startDate)) >= today).length,
+    cancelled: allBookings.filter(b => b.status === "cancelled").length,
+    all:       allBookings.length,
+  }), [allBookings]);
+
+  const tabFiltered = useMemo(() => {
+    const all = [...allBookings];
+    switch (tab) {
+      case "upcoming":
+        return all
+          .filter(b => b.status !== "cancelled" && startOfDay(parseISO(b.startDate)) >= today)
+          .sort((a, b) => parseISO(a.startDate).getTime() - parseISO(b.startDate).getTime());
+      case "cancelled":
+        return all
+          .filter(b => b.status === "cancelled")
+          .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+      case "all":
+        return all.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+      default: // recent
+        return all
+          .filter(b => b.status !== "cancelled")
+          .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    }
+  }, [allBookings, tab]);
+
+  const displayed = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return tabFiltered;
+    return tabFiltered.filter(b =>
+      (b.customerName ?? "").toLowerCase().includes(q) ||
+      (b.customerEmail ?? "").toLowerCase().includes(q) ||
+      (b.listingTitle ?? "").toLowerCase().includes(q) ||
+      (b.status ?? "").toLowerCase().includes(q) ||
+      String(b.id).includes(q) ||
+      (b.startDate ?? "").includes(q) ||
+      (b.endDate ?? "").includes(q)
+    );
+  }, [tabFiltered, search]);
+
+  // ── Calendar helpers ──────────────────────────────────────────────────
   const calendarDays = (() => {
     const start = startOfWeek(startOfMonth(calendarMonth));
     const end   = endOfWeek(endOfMonth(calendarMonth));
@@ -99,7 +145,7 @@ export default function AdminBookings() {
   })();
 
   const bookingsForDay = (day: Date) =>
-    (bookings || []).filter(b => {
+    allBookings.filter(b => {
       try {
         const s = startOfDay(parseISO(b.startDate));
         const e = endOfDay(parseISO(b.endDate));
@@ -107,15 +153,21 @@ export default function AdminBookings() {
       } catch { return false; }
     });
 
-  // Whether this booking STARTS on this day (for label rendering)
   const isStart = (b: any, day: Date) => {
     try { return isSameDay(parseISO(b.startDate), day); } catch { return false; }
   };
 
+  const TABS: { key: TabKey; label: string }[] = [
+    { key: "recent",    label: "Recent" },
+    { key: "upcoming",  label: "Upcoming" },
+    { key: "cancelled", label: "Cancelled" },
+    { key: "all",       label: "All" },
+  ];
+
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex justify-between items-end">
+      <div className="flex justify-between items-end flex-wrap gap-3">
         <div>
           <h2 className="text-3xl font-bold tracking-tight">Bookings</h2>
           <p className="text-muted-foreground mt-1">Manage reservations and customer pickups</p>
@@ -124,20 +176,6 @@ export default function AdminBookings() {
           <Button onClick={() => setLocation(adminPath("/bookings/new"))} className="gap-2">
             <Plus className="w-4 h-4" /> New Booking
           </Button>
-          <Select value={statusFilter} onValueChange={setStatusFilter}>
-            <SelectTrigger className="w-[180px]">
-              <SelectValue placeholder="Filter by status" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Bookings</SelectItem>
-              <SelectItem value="pending">Pending</SelectItem>
-              <SelectItem value="confirmed">Confirmed</SelectItem>
-              <SelectItem value="active">Active</SelectItem>
-              <SelectItem value="completed">Completed</SelectItem>
-              <SelectItem value="cancelled">Cancelled</SelectItem>
-            </SelectContent>
-          </Select>
-
           {/* View toggle */}
           <div className="flex rounded-lg border bg-card overflow-hidden">
             <button
@@ -159,6 +197,153 @@ export default function AdminBookings() {
           </div>
         </div>
       </div>
+
+      {/* ── LIST VIEW ── */}
+      {view === "list" && (
+        <Card className="overflow-hidden">
+          {/* Tabs + Search bar */}
+          <div className="px-4 py-3 border-b bg-muted/20 flex flex-col sm:flex-row sm:items-center gap-3">
+            {/* Tabs */}
+            <div className="flex items-center gap-1 flex-wrap">
+              {TABS.map(t => (
+                <button
+                  key={t.key}
+                  onClick={() => setTab(t.key)}
+                  className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-colors flex items-center gap-1.5 ${
+                    tab === t.key
+                      ? "bg-primary text-primary-foreground"
+                      : "bg-muted text-muted-foreground hover:bg-muted/80"
+                  }`}
+                >
+                  {t.label}
+                  <span className={`text-[10px] px-1.5 py-px rounded-full ${tab === t.key ? "bg-primary-foreground/20 text-primary-foreground" : "bg-background text-muted-foreground"}`}>
+                    {tabCounts[t.key]}
+                  </span>
+                </button>
+              ))}
+            </div>
+
+            {/* Search */}
+            <div className="relative sm:ml-auto w-full sm:w-72">
+              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
+              <input
+                value={search}
+                onChange={e => setSearch(e.target.value)}
+                placeholder="Search name, listing, date, status…"
+                className="w-full h-9 pl-8 pr-8 rounded-lg border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+              />
+              {search && (
+                <button
+                  onClick={() => setSearch("")}
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              )}
+            </div>
+          </div>
+
+          <CardContent className="p-0">
+            {isLoading ? (
+              <div className="py-12 text-center text-muted-foreground">Loading bookings…</div>
+            ) : displayed.length > 0 ? (
+              <>
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>ID</TableHead>
+                      <TableHead>Customer</TableHead>
+                      <TableHead>Listing</TableHead>
+                      <TableHead>Dates</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead>Total</TableHead>
+                      <TableHead className="text-right">Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {displayed.map(booking => (
+                      <TableRow key={booking.id}>
+                        <TableCell className="font-mono text-xs text-muted-foreground">#{booking.id}</TableCell>
+                        <TableCell>
+                          <div className="font-medium">{booking.customerName}</div>
+                          <div className="text-xs text-muted-foreground">{booking.customerEmail}</div>
+                        </TableCell>
+                        <TableCell className="font-medium">{booking.listingTitle}</TableCell>
+                        <TableCell>
+                          <div className="text-sm">
+                            {format(new Date(booking.startDate), "MMM d, yyyy")} –<br />
+                            {format(new Date(booking.endDate), "MMM d, yyyy")}
+                          </div>
+                        </TableCell>
+                        <TableCell>{getStatusBadge(booking.status)}</TableCell>
+                        <TableCell className="font-medium">${booking.totalPrice.toFixed(2)}</TableCell>
+                        <TableCell className="text-right">
+                          <div className="flex justify-end gap-2">
+                            {booking.status === "pending" && (
+                              <Button
+                                size="sm" variant="outline"
+                                className="text-green-600 border-green-200 hover:bg-green-50"
+                                onClick={() => handleStatusChange(booking.id, "confirmed")}
+                              >
+                                <CheckCircle className="w-4 h-4 mr-1" /> Confirm
+                              </Button>
+                            )}
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button variant="ghost" size="icon">
+                                  <MoreHorizontal className="w-4 h-4" />
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end">
+                                <DropdownMenuLabel>Actions</DropdownMenuLabel>
+                                <DropdownMenuItem asChild>
+                                  <Link href={adminPath(`/bookings/${booking.id}`)} className="cursor-pointer flex items-center">
+                                    <Eye className="w-4 h-4 mr-2" /> View Details
+                                  </Link>
+                                </DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => setLocation(adminPath(`/bookings/${booking.id}/edit`))}>
+                                  Edit Booking
+                                </DropdownMenuItem>
+                                <DropdownMenuSeparator />
+                                <DropdownMenuLabel>Update Status</DropdownMenuLabel>
+                                <DropdownMenuItem onClick={() => handleStatusChange(booking.id, "pending")}>Mark Pending</DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => handleStatusChange(booking.id, "confirmed")}>Mark Confirmed</DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => handleStatusChange(booking.id, "active")}>Mark Active (Picked Up)</DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => handleStatusChange(booking.id, "completed")}>Mark Completed (Returned)</DropdownMenuItem>
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem
+                                  onClick={() => handleStatusChange(booking.id, "cancelled")}
+                                  className="text-destructive"
+                                >
+                                  Cancel Booking
+                                </DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+                {/* Footer count */}
+                <div className="px-4 py-2.5 border-t bg-muted/10 text-xs text-muted-foreground text-right">
+                  {displayed.length} booking{displayed.length !== 1 ? "s" : ""}{search ? ` matching "${search}"` : ""}
+                </div>
+              </>
+            ) : (
+              <div className="py-24 text-center flex flex-col items-center">
+                <CalendarDays className="w-12 h-12 text-muted mb-4" />
+                <h3 className="text-lg font-medium mb-1">
+                  {search ? "No bookings match your search" : "No bookings in this view"}
+                </h3>
+                <p className="text-muted-foreground text-sm">
+                  {search ? `Try a different keyword or clear the search.` : "Try a different tab or create a new booking."}
+                </p>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
 
       {/* ── CALENDAR VIEW ── */}
       {view === "calendar" && (
@@ -204,7 +389,6 @@ export default function AdminBookings() {
                     key={i}
                     className={`min-h-[110px] p-1.5 flex flex-col ${inMonth ? "bg-background" : "bg-muted/30"}`}
                   >
-                    {/* Date number */}
                     <span className={`self-end w-7 h-7 flex items-center justify-center rounded-full text-sm mb-1 font-medium ${
                       isToday
                         ? "bg-primary text-primary-foreground"
@@ -213,7 +397,6 @@ export default function AdminBookings() {
                       {format(day, "d")}
                     </span>
 
-                    {/* Booking pills */}
                     <div className="space-y-0.5 flex-1 overflow-hidden">
                       {dayBookings.slice(0, 3).map(b => (
                         <button
@@ -253,101 +436,6 @@ export default function AdminBookings() {
               </div>
             ))}
           </div>
-        </Card>
-      )}
-
-      {/* ── LIST VIEW ── */}
-      {view === "list" && (
-        <Card>
-          <CardContent className="p-0">
-            {isLoading ? (
-              <div className="py-12 text-center text-muted-foreground">Loading bookings...</div>
-            ) : bookings && bookings.length > 0 ? (
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>ID</TableHead>
-                    <TableHead>Customer</TableHead>
-                    <TableHead>Listing</TableHead>
-                    <TableHead>Dates</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead>Total</TableHead>
-                    <TableHead className="text-right">Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {bookings.map(booking => (
-                    <TableRow key={booking.id}>
-                      <TableCell className="font-mono text-xs text-muted-foreground">#{booking.id}</TableCell>
-                      <TableCell>
-                        <div className="font-medium">{booking.customerName}</div>
-                        <div className="text-xs text-muted-foreground">{booking.customerEmail}</div>
-                      </TableCell>
-                      <TableCell className="font-medium">{booking.listingTitle}</TableCell>
-                      <TableCell>
-                        <div className="text-sm">
-                          {format(new Date(booking.startDate), "MMM d, yyyy")} –<br />
-                          {format(new Date(booking.endDate), "MMM d, yyyy")}
-                        </div>
-                      </TableCell>
-                      <TableCell>{getStatusBadge(booking.status)}</TableCell>
-                      <TableCell className="font-medium">${booking.totalPrice.toFixed(2)}</TableCell>
-                      <TableCell className="text-right">
-                        <div className="flex justify-end gap-2">
-                          {booking.status === "pending" && (
-                            <Button
-                              size="sm" variant="outline"
-                              className="text-green-600 border-green-200 hover:bg-green-50"
-                              onClick={() => handleStatusChange(booking.id, "confirmed")}
-                            >
-                              <CheckCircle className="w-4 h-4 mr-1" /> Confirm
-                            </Button>
-                          )}
-                          <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                              <Button variant="ghost" size="icon">
-                                <MoreHorizontal className="w-4 h-4" />
-                              </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end">
-                              <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                              <DropdownMenuItem asChild>
-                                <Link href={adminPath(`/bookings/${booking.id}`)} className="cursor-pointer flex items-center">
-                                  <Eye className="w-4 h-4 mr-2" /> View Details
-                                </Link>
-                              </DropdownMenuItem>
-                              <DropdownMenuItem onClick={() => setLocation(adminPath(`/bookings/${booking.id}/edit`))}>
-                                Edit Booking
-                              </DropdownMenuItem>
-                              <DropdownMenuSeparator />
-                              <DropdownMenuLabel>Update Status</DropdownMenuLabel>
-                              <DropdownMenuItem onClick={() => handleStatusChange(booking.id, "pending")}>Mark Pending</DropdownMenuItem>
-                              <DropdownMenuItem onClick={() => handleStatusChange(booking.id, "confirmed")}>Mark Confirmed</DropdownMenuItem>
-                              <DropdownMenuItem onClick={() => handleStatusChange(booking.id, "active")}>Mark Active (Picked Up)</DropdownMenuItem>
-                              <DropdownMenuItem onClick={() => handleStatusChange(booking.id, "completed")}>Mark Completed (Returned)</DropdownMenuItem>
-                              <DropdownMenuSeparator />
-                              <DropdownMenuItem
-                                onClick={() => handleStatusChange(booking.id, "cancelled")}
-                                className="text-destructive"
-                              >
-                                Cancel Booking
-                              </DropdownMenuItem>
-                            </DropdownMenuContent>
-                          </DropdownMenu>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            ) : (
-              <div className="py-24 text-center flex flex-col items-center">
-                <CalendarDays className="w-12 h-12 text-muted mb-4" />
-                <h3 className="text-lg font-medium mb-1">No bookings found</h3>
-                <p className="text-muted-foreground">You don't have any bookings matching these filters.</p>
-              </div>
-            )}
-          </CardContent>
         </Card>
       )}
     </div>
