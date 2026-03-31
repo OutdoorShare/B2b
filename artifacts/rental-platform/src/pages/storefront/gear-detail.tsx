@@ -362,17 +362,21 @@ export default function StorefrontGearDetail() {
               <div className="space-y-3">
                 {/* Protection Plan — required card */}
                 {addons.filter(a => a.name.toLowerCase().includes("protection")).map(addon => (
-                  <div key={addon.id} className="rounded-2xl border-2 border-emerald-500 overflow-hidden shadow-md">
-                    <div className="bg-emerald-600 px-4 py-2.5 flex items-center justify-between">
+                  <div key={addon.id} className="rounded-2xl overflow-hidden shadow-md" style={{ border: "2px solid #3ab549" }}>
+                    {/* Header — OutdoorShare brand */}
+                    <div className="px-4 py-2.5 flex items-center justify-between" style={{ background: "#1a2332" }}>
                       <div className="flex items-center gap-2">
-                        <ShieldCheck className="w-4 h-4 text-white" />
-                        <span className="font-black text-white text-xs tracking-widest uppercase">Damage Protection Plan</span>
+                        <ShieldCheck className="w-4 h-4" style={{ color: "#3ab549" }} />
+                        <div className="flex flex-col leading-tight">
+                          <span className="font-black text-white text-xs tracking-wide">Protection Plan</span>
+                          <span className="text-[9px] font-bold tracking-widest uppercase" style={{ color: "#3ab549" }}>by OutdoorShare</span>
+                        </div>
                       </div>
-                      <span className="bg-white/20 text-white text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1 border border-white/30">
+                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1 border" style={{ background: "rgba(58,181,73,0.15)", borderColor: "#3ab549", color: "#3ab549" }}>
                         <Lock className="w-2.5 h-2.5" /> Required
                       </span>
                     </div>
-                    <div className="bg-emerald-50 px-4 py-3 flex items-start justify-between gap-4">
+                    <div className="px-4 py-3 flex items-start justify-between gap-4" style={{ background: "#f0faf1" }}>
                       <div className="flex-1">
                         <p className="text-xs text-gray-700 mb-2">Included with every rental. Covers accidents, weather events, and disasters so you can adventure with confidence.</p>
                         <div className="grid grid-cols-2 gap-x-3 gap-y-1">
@@ -383,16 +387,16 @@ export default function StorefrontGearDetail() {
                             { icon: ShieldCheck, text: "Disaster & fire" },
                           ].map(({ icon: Icon, text }) => (
                             <div key={text} className="flex items-center gap-1">
-                              <Icon className="w-3 h-3 text-emerald-600 shrink-0" />
+                              <Icon className="w-3 h-3 shrink-0" style={{ color: "#3ab549" }} />
                               <span className="text-[11px] text-gray-600">{text}</span>
                             </div>
                           ))}
                         </div>
                       </div>
                       <div className="text-right shrink-0">
-                        <p className="text-2xl font-black text-emerald-700">${addon.price.toFixed(0)}</p>
+                        <p className="text-2xl font-black" style={{ color: "#1a2332" }}>${addon.price.toFixed(0)}</p>
                         <p className="text-[10px] text-gray-500">flat fee</p>
-                        <p className="text-[10px] text-emerald-600 font-semibold mt-1">Included at checkout</p>
+                        <p className="text-[10px] font-semibold mt-1" style={{ color: "#3ab549" }}>Included at checkout</p>
                       </div>
                     </div>
                   </div>
