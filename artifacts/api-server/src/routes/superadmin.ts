@@ -14,14 +14,16 @@ const DEFAULT_CATEGORIES = [
   { name: "UTV",             slug: "utv",            description: "Utility task vehicles / side-by-sides" },
   { name: "Boat",            slug: "boat",           description: "Boats and watercraft" },
   { name: "Jet Ski",         slug: "jet-ski",        description: "Personal watercraft" },
-  { name: "Kayak / Canoe",   slug: "kayak-canoe",    description: "Kayaks and canoes" },
+  { name: "Kayak",           slug: "kayak",          description: "Kayaks" },
+  { name: "Canoe",           slug: "canoe",          description: "Canoes" },
   { name: "RV",              slug: "rv",             description: "Recreational vehicles and campers" },
+  { name: "Camper",          slug: "camper",         description: "Camper trailers and popup campers" },
+  { name: "Tent",            slug: "tent",           description: "Tents and camping shelters" },
   { name: "Dirt Bike",       slug: "dirt-bike",      description: "Off-road motorcycles" },
   { name: "Ebike",           slug: "ebike",          description: "Electric bicycles" },
   { name: "Snowmobile",      slug: "snowmobile",     description: "Snowmobiles" },
   { name: "Towing Vehicle",  slug: "towing-vehicle", description: "Trucks and towing vehicles" },
   { name: "Utility Trailer", slug: "utility-trailer",description: "Trailers and cargo haulers" },
-  { name: "Camper / Tent",   slug: "camper-tent",    description: "Camping gear and tents" },
 ];
 
 async function seedDefaultCategories(tenantId: number) {
