@@ -491,20 +491,16 @@ export default function StorefrontGearDetail() {
             )}
 
             {/* Requirements */}
-            {(listing.requirements || listing.ageRestriction) && (
-              <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 space-y-1.5">
-                <div className="flex items-center gap-2">
-                  <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
-                  <span className="font-semibold text-sm text-amber-800">Requirements</span>
-                </div>
-                {listing.ageRestriction && (
-                  <p className="text-sm text-amber-700">Must be <strong>{listing.ageRestriction}+</strong> years old to rent.</p>
-                )}
-                {listing.requirements && (
-                  <p className="text-sm text-amber-700/90">{listing.requirements}</p>
-                )}
+            <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 space-y-1.5">
+              <div className="flex items-center gap-2">
+                <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
+                <span className="font-semibold text-sm text-amber-800">Requirements</span>
               </div>
-            )}
+              <p className="text-sm text-amber-700">Must be <strong>21+</strong> years old to rent.</p>
+              {listing.requirements && (
+                <p className="text-sm text-amber-700/90">{listing.requirements}</p>
+              )}
+            </div>
           </div>
         </div>
       </div>

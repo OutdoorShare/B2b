@@ -331,22 +331,18 @@ export default function AdminListingDetail() {
           </div>
 
           {/* Requirements */}
-          {(listing.requirements || listing.ageRestriction) && (
-            <div className="bg-background rounded-2xl border p-5 space-y-3">
-              <h3 className="font-semibold text-sm flex items-center gap-2">
-                <ShieldCheck className="w-4 h-4 text-primary" /> Requirements
-              </h3>
-              {listing.ageRestriction && (
-                <div className="flex items-center gap-2 text-sm">
-                  <Users className="w-4 h-4 text-amber-600 shrink-0" />
-                  <span>Minimum age: <strong>{listing.ageRestriction}+</strong></span>
-                </div>
-              )}
-              {listing.requirements && (
-                <p className="text-sm text-muted-foreground">{listing.requirements}</p>
-              )}
+          <div className="bg-background rounded-2xl border p-5 space-y-3">
+            <h3 className="font-semibold text-sm flex items-center gap-2">
+              <ShieldCheck className="w-4 h-4 text-primary" /> Requirements
+            </h3>
+            <div className="flex items-center gap-2 text-sm">
+              <Users className="w-4 h-4 text-amber-600 shrink-0" />
+              <span>Minimum age: <strong>21+</strong> <span className="text-xs text-muted-foreground ml-1">(Platform Policy)</span></span>
             </div>
-          )}
+            {listing.requirements && (
+              <p className="text-sm text-muted-foreground">{listing.requirements}</p>
+            )}
+          </div>
 
           {/* Unit Identifiers */}
           <UnitIdentifiersManager listingId={listing.id} quantity={listing.quantity} />
