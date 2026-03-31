@@ -144,6 +144,39 @@ router.get("/customers/:id", async (req, res) => {
   }
 });
 
+// ── Admin: lookup customer identity verification by email ──────────────────────
+router.get("/customers/lookup-by-email", async (req, res) => {
+  try {
+    const email = (req.query.email as string ?? "").toLowerCase().trim();
+    if (!email) { res.status(400).json({ error: "email required" }); return; }
+
+    const conditions = [eq(customersTable.email, email)];
+    if (req.tenantId) conditions.push(eq(customersTable.tenantId, req.tenantId));
+
+    const [customer] = await db
+      .select({
+        id: customersTable.id,
+        name: customersTable.name,
+        email: customersTable.email,
+        identityVerificationStatus: customersTable.identityVerificationStatus,
+        identityVerificationSessionId: customersTable.identityVerificationSessionId,
+        identityVerifiedAt: customersTable.identityVerifiedAt,
+      })
+      .from(customersTable)
+      .where(and(...conditions))
+      .limit(1);
+
+    if (!customer) { res.json({ found: false }); return; }
+    res.json({
+      found: true,
+      ...customer,
+      identityVerifiedAt: customer.identityVerifiedAt?.toISOString() ?? null,
+    });
+  } catch (err) {
+    res.status(500).json({ error: "Failed to lookup customer" });
+  }
+});
+
 router.put("/customers/:id", async (req, res) => {
   try {
     const { name, phone, billingAddress, billingCity, billingState, billingZip, cardLastFour, cardBrand } = req.body;

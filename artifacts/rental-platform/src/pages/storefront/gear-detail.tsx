@@ -13,7 +13,7 @@ import { Calendar } from "@/components/ui/calendar";
 import {
   ArrowLeft, Check, Shield, MapPin, AlertTriangle,
   Tag, ChevronRight, Package, ShieldCheck, Umbrella, Zap, Lock,
-  CalendarDays, ChevronRight as ArrowRight
+  CalendarDays, ChevronRight as ArrowRight, ClipboardList
 } from "lucide-react";
 import { differenceInDays, format, isWithinInterval, startOfDay, addDays, isBefore, isAfter, isSameDay } from "date-fns";
 
@@ -499,6 +499,30 @@ export default function StorefrontGearDetail() {
                     </li>
                   ))}
                 </ul>
+              </div>
+            )}
+
+            {/* Listing Rules */}
+            {listingRules.length > 0 && (
+              <div className="space-y-3">
+                <h3 className="font-semibold border-b pb-2 flex items-center gap-2">
+                  <ClipboardList className="w-4 h-4 text-primary" />
+                  Rental Rules
+                </h3>
+                <ul className="space-y-2.5">
+                  {listingRules.map((rule) => (
+                    <li key={rule.id} className="flex items-start gap-3 bg-muted/30 rounded-xl border px-4 py-3">
+                      <span className="w-5 h-5 rounded-full bg-primary/10 text-primary flex items-center justify-center shrink-0 mt-0.5 text-[10px] font-black">!</span>
+                      <div>
+                        <p className="text-sm font-semibold leading-snug">{rule.title}</p>
+                        {rule.description && (
+                          <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed">{rule.description}</p>
+                        )}
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+                <p className="text-xs text-muted-foreground">You'll be asked to initial each rule during checkout.</p>
               </div>
             )}
 

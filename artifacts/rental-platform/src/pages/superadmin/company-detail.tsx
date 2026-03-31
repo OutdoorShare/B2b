@@ -444,6 +444,8 @@ function BookingsTab({ tenantId }: { tenantId: number }) {
   const [newStatus, setNewStatus] = useState("");
   const [adminNotes, setAdminNotes] = useState("");
   const [saving, setSaving] = useState(false);
+  type SAVerifData = { found: boolean; identityVerificationStatus?: string; identityVerificationSessionId?: string | null; identityVerifiedAt?: string | null };
+  const [verifData, setVerifData] = useState<SAVerifData | null>(null);
 
   const load = useCallback(async () => {
     const r = await sa(`/superadmin/tenants/${tenantId}/bookings?limit=100`);
@@ -453,7 +455,16 @@ function BookingsTab({ tenantId }: { tenantId: number }) {
 
   useEffect(() => { load(); }, [load]);
 
-  const openBooking = (b: Booking) => { setSelectedBooking(b); setNewStatus(b.status); setAdminNotes(b.adminNotes ?? ""); };
+  const openBooking = (b: Booking) => {
+    setSelectedBooking(b);
+    setNewStatus(b.status);
+    setAdminNotes(b.adminNotes ?? "");
+    setVerifData(null);
+    sa(`/superadmin/customers/lookup?email=${encodeURIComponent(b.customerEmail)}`)
+      .then(r => r.json())
+      .then(d => setVerifData(d))
+      .catch(() => {});
+  };
 
   const saveBooking = async () => {
     if (!selectedBooking) return;
@@ -518,6 +529,42 @@ function BookingsTab({ tenantId }: { tenantId: number }) {
                 <p className="text-slate-400">{selectedBooking.startDate} → {selectedBooking.endDate}</p>
                 <p className="text-white font-semibold">${selectedBooking.totalPrice.toFixed(2)}</p>
               </div>
+
+              {/* Identity Verification */}
+              {(() => {
+                const status = verifData?.identityVerificationStatus ?? "unverified";
+                const sessionId = verifData?.identityVerificationSessionId;
+                const verifiedAt = verifData?.identityVerifiedAt;
+
+                const styles: Record<string, { bg: string; border: string; label: string; dot: string }> = {
+                  verified:   { bg: "bg-green-900/40",  border: "border-green-700",  label: "✓ Identity Verified",         dot: "bg-green-400" },
+                  pending:    { bg: "bg-amber-900/40",  border: "border-amber-700",  label: "⏳ Verification Pending",      dot: "bg-amber-400" },
+                  failed:     { bg: "bg-red-900/40",    border: "border-red-700",    label: "✗ Verification Failed",        dot: "bg-red-400" },
+                  unverified: { bg: "bg-slate-800",     border: "border-slate-700",  label: "○ Not Verified",              dot: "bg-slate-500" },
+                };
+                const s = styles[status] ?? styles.unverified;
+
+                return (
+                  <div className={`rounded-lg border p-3 text-sm ${s.bg} ${s.border}`}>
+                    <p className="text-xs font-semibold uppercase tracking-wider text-slate-400 mb-2">Identity Verification</p>
+                    <div className="flex items-center gap-2">
+                      <span className={`w-2 h-2 rounded-full shrink-0 ${s.dot}`} />
+                      <span className="text-white font-medium">{s.label}</span>
+                    </div>
+                    {verifiedAt && (
+                      <p className="text-xs text-green-400 mt-1 ml-4">
+                        Verified {new Date(verifiedAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
+                      </p>
+                    )}
+                    {sessionId && (
+                      <p className="text-xs text-slate-500 font-mono mt-1 ml-4 break-all">ID: {sessionId}</p>
+                    )}
+                    {verifData && !verifData.found && (
+                      <p className="text-xs text-slate-500 mt-1 ml-4 italic">No customer account on file.</p>
+                    )}
+                  </div>
+                );
+              })()}
               <div className="space-y-1.5">
                 <Label className="text-slate-300 text-xs">Status</Label>
                 <Select value={newStatus} onValueChange={setNewStatus}>

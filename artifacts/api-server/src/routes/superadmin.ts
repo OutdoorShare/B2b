@@ -1,6 +1,6 @@
 import { Router, type IRouter, type Request, type Response, type NextFunction } from "express";
 import { db } from "@workspace/db";
-import { tenantsTable, listingsTable, bookingsTable, superadminUsersTable, businessProfileTable, platformSettingsTable, categoriesTable, claimsTable } from "@workspace/db/schema";
+import { tenantsTable, listingsTable, bookingsTable, superadminUsersTable, businessProfileTable, platformSettingsTable, categoriesTable, claimsTable, customersTable } from "@workspace/db/schema";
 import { eq, sql, desc, and, ne } from "drizzle-orm";
 import { scrypt, randomBytes, timingSafeEqual } from "crypto";
 import { promisify } from "util";
@@ -946,6 +946,36 @@ router.post("/superadmin/claims/:id/charge", requireSuperAdmin, async (req, res)
   } catch (err: any) {
     req.log.error(err);
     res.status(500).json({ error: err.message ?? "Failed to process charge" });
+  }
+});
+
+// ── GET /superadmin/customers/lookup — identity verification by email ──────────
+router.get("/superadmin/customers/lookup", requireSuperAdmin, async (req, res) => {
+  try {
+    const email = (req.query.email as string ?? "").toLowerCase().trim();
+    if (!email) { res.status(400).json({ error: "email required" }); return; }
+
+    const [customer] = await db
+      .select({
+        id: customersTable.id,
+        name: customersTable.name,
+        email: customersTable.email,
+        identityVerificationStatus: customersTable.identityVerificationStatus,
+        identityVerificationSessionId: customersTable.identityVerificationSessionId,
+        identityVerifiedAt: customersTable.identityVerifiedAt,
+      })
+      .from(customersTable)
+      .where(eq(customersTable.email, email))
+      .limit(1);
+
+    if (!customer) { res.json({ found: false }); return; }
+    res.json({
+      found: true,
+      ...customer,
+      identityVerifiedAt: customer.identityVerifiedAt?.toISOString() ?? null,
+    });
+  } catch (err) {
+    res.status(500).json({ error: "Failed to lookup customer" });
   }
 });
 

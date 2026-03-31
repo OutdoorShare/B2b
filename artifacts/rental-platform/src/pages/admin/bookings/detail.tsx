@@ -16,7 +16,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { Link, useLocation } from "wouter";
-import { ArrowLeft, User, Phone, Mail, Calendar, Package, StickyNote, ShieldAlert, Pencil, FileSignature, ChevronDown, ChevronUp, Download, Camera, CheckCircle2, Loader2, ExternalLink, ImageIcon, Clock } from "lucide-react";
+import { ArrowLeft, User, Phone, Mail, Calendar, Package, StickyNote, ShieldAlert, Pencil, FileSignature, ChevronDown, ChevronUp, Download, Camera, CheckCircle2, Loader2, ExternalLink, ImageIcon, Clock, ShieldCheck, ShieldX, Shield, AlertCircle } from "lucide-react";
 import { format, differenceInDays } from "date-fns";
 
 export default function AdminBookingDetail() {
@@ -36,11 +36,29 @@ export default function AdminBookingDetail() {
   const [sendingPickupLink, setSendingPickupLink] = useState(false);
   const [pickupLinkSent, setPickupLinkSent] = useState(false);
 
+  type VerifData = {
+    found: boolean;
+    identityVerificationStatus?: string;
+    identityVerificationSessionId?: string | null;
+    identityVerifiedAt?: string | null;
+  };
+  const [verifData, setVerifData] = useState<VerifData | null>(null);
+
   useEffect(() => {
     if (booking?.adminNotes) {
       setAdminNotes(booking.adminNotes);
     }
   }, [booking]);
+
+  const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
+
+  useEffect(() => {
+    if (!booking?.customerEmail) return;
+    fetch(`${BASE}/api/customers/lookup-by-email?email=${encodeURIComponent(booking.customerEmail)}`)
+      .then(r => r.json())
+      .then(data => setVerifData(data))
+      .catch(() => {});
+  }, [booking?.customerEmail]);
 
   if (isLoading) return <div className="p-8">Loading booking details...</div>;
   if (!booking) return <div className="p-8">Booking not found</div>;
@@ -211,14 +229,71 @@ export default function AdminBookingDetail() {
                 </div>
               </div>
 
-              {booking.notes && (
-                <div className="mt-6 p-4 bg-muted/50 rounded-lg">
-                  <div className="text-sm font-semibold flex items-center gap-2 mb-2">
-                    <StickyNote className="w-4 h-4" /> Customer Notes
-                  </div>
-                  <p className="text-sm text-muted-foreground">{booking.notes}</p>
+              {/* Identity Verification */}
+              <div className="col-span-2">
+                {(() => {
+                  const status = verifData?.identityVerificationStatus ?? "unverified";
+                  const sessionId = verifData?.identityVerificationSessionId;
+                  const verifiedAt = verifData?.identityVerifiedAt;
+
+                  const statusConfig: Record<string, { label: string; icon: React.ReactNode; bg: string; text: string; border: string }> = {
+                    verified: {
+                      label: "Identity Verified",
+                      icon: <ShieldCheck className="w-4 h-4 text-green-600" />,
+                      bg: "bg-green-50", text: "text-green-800", border: "border-green-200"
+                    },
+                    pending: {
+                      label: "Verification Pending",
+                      icon: <Shield className="w-4 h-4 text-amber-600" />,
+                      bg: "bg-amber-50", text: "text-amber-800", border: "border-amber-200"
+                    },
+                    failed: {
+                      label: "Verification Failed",
+                      icon: <ShieldX className="w-4 h-4 text-red-600" />,
+                      bg: "bg-red-50", text: "text-red-800", border: "border-red-200"
+                    },
+                    unverified: {
+                      label: "Not Verified",
+                      icon: <AlertCircle className="w-4 h-4 text-muted-foreground" />,
+                      bg: "bg-muted/40", text: "text-muted-foreground", border: "border-border"
+                    },
+                  };
+
+                  const cfg = statusConfig[status] ?? statusConfig.unverified;
+
+                  return (
+                    <div className={`rounded-xl border p-4 ${cfg.bg} ${cfg.border}`}>
+                      <div className="text-xs text-muted-foreground mb-2 font-medium uppercase tracking-wide">Identity Verification</div>
+                      <div className="flex items-center gap-2 mb-2">
+                        {cfg.icon}
+                        <span className={`font-semibold text-sm ${cfg.text}`}>{cfg.label}</span>
+                      </div>
+                      {verifiedAt && (
+                        <p className="text-xs text-green-700 mb-1">
+                          Verified {format(new Date(verifiedAt), "MMM d, yyyy 'at' h:mm a")}
+                        </p>
+                      )}
+                      {sessionId && (
+                        <p className="text-xs text-muted-foreground font-mono mt-1 break-all">
+                          Session: {sessionId}
+                        </p>
+                      )}
+                      {!verifData && (
+                        <p className="text-xs text-muted-foreground italic">No customer account found for this email.</p>
+                      )}
+                    </div>
+                  );
+                })()}
+              </div>
+
+            {booking.notes && (
+              <div className="mt-6 p-4 bg-muted/50 rounded-lg">
+                <div className="text-sm font-semibold flex items-center gap-2 mb-2">
+                  <StickyNote className="w-4 h-4" /> Customer Notes
                 </div>
-              )}
+                <p className="text-sm text-muted-foreground">{booking.notes}</p>
+              </div>
+            )}
             </CardContent>
           </Card>
 
