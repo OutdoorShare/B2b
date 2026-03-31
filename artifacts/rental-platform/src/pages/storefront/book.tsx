@@ -611,6 +611,7 @@ export default function StorefrontBook() {
     if (isKiosk) {
       setStep("payment");
       setShowStripeForm(false);
+      window.scrollTo({ top: 0, behavior: "smooth" });
       return;
     }
 
@@ -618,6 +619,7 @@ export default function StorefrontBook() {
     if (session) {
       setStep("payment");
       setShowStripeForm(false);
+      window.scrollTo({ top: 0, behavior: "smooth" });
       return;
     }
 
@@ -636,6 +638,7 @@ export default function StorefrontBook() {
       saveSession(data); setSession(data);
       setStep("payment");
       setShowStripeForm(false);
+      window.scrollTo({ top: 0, behavior: "smooth" });
     } catch {
       setAuthError("Connection error, please try again");
     } finally { setIsSubmitting(false); }
@@ -680,6 +683,7 @@ export default function StorefrontBook() {
       return;
     }
     setStep("agreement");
+    window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
   // ── Final booking submission ──────────────────────────────────────────────
@@ -838,7 +842,10 @@ export default function StorefrontBook() {
 
       <div className="max-w-5xl mx-auto px-4 py-8">
         {step !== "verification" && (
-          <Button variant="ghost" className="mb-6 pl-0 hover:bg-transparent text-muted-foreground" onClick={() => step === "dates" ? window.history.back() : setStep(STEPS[stepIndex - 1])}>
+          <Button variant="ghost" className="mb-6 pl-0 hover:bg-transparent text-muted-foreground" onClick={() => {
+            if (step === "dates") { window.history.back(); }
+            else { setStep(STEPS[stepIndex - 1]); window.scrollTo({ top: 0, behavior: "smooth" }); }
+          }}>
             <ArrowLeft className="w-4 h-4 mr-2" />
             {step === "dates" ? "Back to listing" : "Back"}
           </Button>
