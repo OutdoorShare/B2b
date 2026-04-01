@@ -1,4 +1,5 @@
 import { Link, useLocation } from "wouter";
+import { useEffect } from "react";
 import { 
   LayoutDashboard, 
   Package, 
@@ -10,7 +11,6 @@ import {
   ShieldAlert,
   Users,
   MessageSquare,
-  Clock,
   AlertTriangle,
   FileSignature,
   Wallet,
@@ -106,6 +106,37 @@ export function AdminLayout({ children }: { children: React.ReactNode }) {
   const slugFromPath = strippedPath.split("/")[0] || slug;
   const storefrontHref = slugFromPath ? `${base}/${slugFromPath}` : base || "/";
 
+  // Fetch the tenant's business profile so we can use their logo as the favicon
+  const { data: profile } = useGetBusinessProfile({
+    query: { queryKey: ["/api/business", "admin-layout"] }
+  });
+  const companyLogoUrl = (profile as any)?.logoUrl as string | undefined;
+  const companyName = (profile as any)?.name as string | undefined;
+
+  // Swap the browser-tab favicon to the tenant's logo while in their admin.
+  // Restore the OutdoorShare logo on unmount (navigating away from admin).
+  useEffect(() => {
+    const setFavicon = (href: string) => {
+      let link = document.querySelector<HTMLLinkElement>("link#favicon");
+      if (!link) {
+        link = document.createElement("link");
+        link.id = "favicon";
+        link.rel = "icon";
+        document.head.appendChild(link);
+      }
+      link.type = href.endsWith(".svg") ? "image/svg+xml" : "image/png";
+      link.href = href;
+    };
+
+    if (companyLogoUrl) {
+      setFavicon(companyLogoUrl);
+    }
+
+    return () => {
+      setFavicon("/outdoorshare-logo.png");
+    };
+  }, [companyLogoUrl]);
+
   const activeItem = NAV_ITEMS.find(item => {
     const href = `${adminBase}${item.path}`;
     return item.path === ""
@@ -118,10 +149,16 @@ export function AdminLayout({ children }: { children: React.ReactNode }) {
       {/* Sidebar */}
       <aside className="w-full md:w-64 border-r border-border bg-sidebar flex-shrink-0 flex flex-col">
         <div className="h-16 flex items-center px-5 border-b border-border">
-          <Link href={adminBase} className="flex items-center gap-2.5">
-            <img src="/outdoorshare-logo.png" alt="OutdoorShare" className="w-9 h-9 object-contain" />
-            <div className="leading-tight">
-              <p className="text-sm font-black text-foreground tracking-wide leading-none">OutdoorShare</p>
+          <Link href={adminBase} className="flex items-center gap-2.5 min-w-0">
+            <img
+              src={companyLogoUrl || "/outdoorshare-logo.png"}
+              alt={companyName || "OutdoorShare"}
+              className="w-9 h-9 object-contain rounded shrink-0"
+            />
+            <div className="leading-tight min-w-0">
+              <p className="text-sm font-black text-foreground tracking-wide leading-none truncate">
+                {companyName || "OutdoorShare"}
+              </p>
               <p className="text-[10px] text-muted-foreground mt-0.5">Admin Dashboard</p>
             </div>
           </Link>
