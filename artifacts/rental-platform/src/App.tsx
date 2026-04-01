@@ -106,6 +106,24 @@ function AdminDashboardOrLaunchpad() {
   return <AdminDashboard />;
 }
 
+// Guards the /demo route — only accessible when a superadmin session is active
+function SuperAdminDemoGuard() {
+  const [, navigate] = useLocation();
+  const isSuperAdmin = (() => {
+    try {
+      const raw = localStorage.getItem("superadmin_session");
+      return raw ? JSON.parse(raw)?.token : null;
+    } catch { return null; }
+  })();
+
+  useEffect(() => {
+    if (!isSuperAdmin) navigate("/superadmin");
+  }, [isSuperAdmin]);
+
+  if (!isSuperAdmin) return null;
+  return <DemoPage />;
+}
+
 // Auth guard: checks session matches the slug in the URL
 function AdminGuard({ children }: { children: React.ReactNode }) {
   const params = useParams<{ slug: string }>();
@@ -252,9 +270,9 @@ function Router() {
         <AdminGuard><AdminCommunications /></AdminGuard>
       </Route>
 
-      {/* Demo / Test page */}
+      {/* Demo — superadmin only, not publicly accessible */}
       <Route path="/demo">
-        <DemoPage />
+        <SuperAdminDemoGuard />
       </Route>
 
       {/* Pickup Photo Route — public, no layout wrapper */}

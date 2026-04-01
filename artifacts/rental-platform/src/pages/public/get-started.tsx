@@ -30,10 +30,77 @@ const testimonials = [
   { name: "Derek Park", company: "Trail Wheels MTB", text: "Finally a platform built for rental companies, not adapted from something else.", stars: 5 },
 ];
 
+function HeroSignIn() {
+  const [showSlugInput, setShowSlugInput] = useState(false);
+  const [slug, setSlug] = useState("");
+  const [error, setError] = useState("");
+  const [, navigate] = useLocation();
+
+  function handleSignIn(e: React.FormEvent) {
+    e.preventDefault();
+    const s = slug.trim().toLowerCase().replace(/\s+/g, "-");
+    if (!s) { setError("Enter your company's website name."); return; }
+    navigate(`/${s}/admin`);
+  }
+
+  return (
+    <div className="flex flex-col items-center gap-4">
+      {!showSlugInput ? (
+        <div className="flex flex-col sm:flex-row gap-4 justify-center">
+          <Link href="/signup">
+            <Button
+              size="lg"
+              className="h-13 px-8 text-base font-bold gap-2 text-white hover:opacity-90"
+              style={{ backgroundColor: OS_GREEN }}
+            >
+              Start Free Trial <ArrowRight className="w-4 h-4" />
+            </Button>
+          </Link>
+          <Button
+            size="lg"
+            variant="outline"
+            className="h-13 px-8 text-base"
+            onClick={() => setShowSlugInput(true)}
+          >
+            Sign into my account
+          </Button>
+        </div>
+      ) : (
+        <form onSubmit={handleSignIn} className="flex flex-col items-center gap-3 w-full max-w-sm">
+          <p className="text-sm text-muted-foreground font-medium">Enter your company's website name</p>
+          <div className="flex gap-2 w-full">
+            <Input
+              autoFocus
+              value={slug}
+              onChange={e => { setSlug(e.target.value); setError(""); }}
+              placeholder="e.g. summit-gear-rentals"
+              className="h-11 text-sm flex-1"
+            />
+            <Button type="submit" size="lg" className="h-11 px-5 font-bold text-white hover:opacity-90" style={{ backgroundColor: OS_GREEN }}>
+              Go
+            </Button>
+          </div>
+          {error && <p className="text-xs text-destructive">{error}</p>}
+          <button
+            type="button"
+            className="text-xs text-muted-foreground hover:text-foreground underline"
+            onClick={() => { setShowSlugInput(false); setSlug(""); setError(""); }}
+          >
+            Cancel
+          </button>
+        </form>
+      )}
+      <p className="text-sm text-muted-foreground">No credit card required for trial · Cancel anytime</p>
+    </div>
+  );
+}
+
 function SignInDropdown() {
   const [open, setOpen] = useState(false);
+  const [adminSlug, setAdminSlug] = useState("");
+  const [adminError, setAdminError] = useState("");
   const [renterSlug, setRenterSlug] = useState("");
-  const [slugError, setSlugError] = useState("");
+  const [renterError, setRenterError] = useState("");
   const [, navigate] = useLocation();
   const ref = useRef<HTMLDivElement>(null);
 
@@ -45,10 +112,18 @@ function SignInDropdown() {
     return () => document.removeEventListener("mousedown", onClickOutside);
   }, []);
 
+  function goToAdmin(e: React.FormEvent) {
+    e.preventDefault();
+    const slug = adminSlug.trim().toLowerCase().replace(/\s+/g, "-");
+    if (!slug) { setAdminError("Enter your company's website name."); return; }
+    setOpen(false);
+    navigate(`/${slug}/admin`);
+  }
+
   function goToRenterPortal(e: React.FormEvent) {
     e.preventDefault();
     const slug = renterSlug.trim().toLowerCase().replace(/\s+/g, "-");
-    if (!slug) { setSlugError("Please enter your rental company's website name."); return; }
+    if (!slug) { setRenterError("Please enter your rental company's website name."); return; }
     setOpen(false);
     navigate(`/${slug}/login`);
   }
@@ -66,24 +141,42 @@ function SignInDropdown() {
 
       {open && (
         <div className="absolute right-0 top-full mt-2 w-72 bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden z-50">
-          {/* Admin option */}
-          <Link href="/admin" onClick={() => setOpen(false)}>
-            <div className="flex items-start gap-3.5 px-5 py-4 hover:bg-gray-50 transition-colors cursor-pointer border-b">
+          {/* Business Admin */}
+          <div className="px-5 py-4 border-b">
+            <div className="flex items-start gap-3.5 mb-3">
               <div className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0 mt-0.5" style={{ backgroundColor: `${OS_GREEN}18` }}>
-                <ShieldCheck className="w-4.5 h-4.5" style={{ color: OS_GREEN }} />
+                <ShieldCheck className="w-4 h-4" style={{ color: OS_GREEN }} />
               </div>
               <div>
                 <div className="font-bold text-sm text-gray-900">Business Admin</div>
                 <div className="text-xs text-muted-foreground mt-0.5">Manage your rental company, bookings &amp; listings</div>
               </div>
             </div>
-          </Link>
+            <form onSubmit={goToAdmin} className="space-y-2">
+              <Input
+                value={adminSlug}
+                onChange={e => { setAdminSlug(e.target.value); setAdminError(""); }}
+                placeholder="e.g. summit-gear-rentals"
+                className="h-9 text-sm"
+              />
+              {adminError && <p className="text-xs text-destructive">{adminError}</p>}
+              <p className="text-[11px] text-muted-foreground">Enter your company's website name</p>
+              <Button
+                type="submit"
+                size="sm"
+                className="w-full font-bold text-white hover:opacity-90"
+                style={{ backgroundColor: OS_GREEN }}
+              >
+                Go to Admin
+              </Button>
+            </form>
+          </div>
 
           {/* Renter option */}
           <div className="px-5 py-4">
             <div className="flex items-start gap-3.5 mb-3">
               <div className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0 mt-0.5" style={{ backgroundColor: `${OS_BLUE}18` }}>
-                <User className="w-4.5 h-4.5" style={{ color: OS_BLUE }} />
+                <User className="w-4 h-4" style={{ color: OS_BLUE }} />
               </div>
               <div>
                 <div className="font-bold text-sm text-gray-900">Renter Portal</div>
@@ -93,11 +186,11 @@ function SignInDropdown() {
             <form onSubmit={goToRenterPortal} className="space-y-2">
               <Input
                 value={renterSlug}
-                onChange={e => { setRenterSlug(e.target.value); setSlugError(""); }}
+                onChange={e => { setRenterSlug(e.target.value); setRenterError(""); }}
                 placeholder="e.g. summit-gear-rentals"
                 className="h-9 text-sm"
               />
-              {slugError && <p className="text-xs text-destructive">{slugError}</p>}
+              {renterError && <p className="text-xs text-destructive">{renterError}</p>}
               <p className="text-[11px] text-muted-foreground">Enter your rental company's website name</p>
               <Button
                 type="submit"
@@ -259,23 +352,7 @@ export default function GetStartedPage() {
         <p className="text-xl text-muted-foreground max-w-2xl mx-auto mb-10">
           OutdoorShare gives you a complete booking platform — branded storefront, admin dashboard, calendar, analytics, and more — without hiring developers.
         </p>
-        <div className="flex flex-col sm:flex-row gap-4 justify-center">
-          <Link href="/signup">
-            <Button
-              size="lg"
-              className="h-13 px-8 text-base font-bold gap-2 text-white hover:opacity-90"
-              style={{ backgroundColor: OS_GREEN }}
-            >
-              Start Free Trial <ArrowRight className="w-4 h-4" />
-            </Button>
-          </Link>
-          <Link href="/admin">
-            <Button size="lg" variant="outline" className="h-13 px-8 text-base">
-              Sign into my account
-            </Button>
-          </Link>
-        </div>
-        <p className="text-sm text-muted-foreground mt-5">No credit card required for trial · Cancel anytime</p>
+        <HeroSignIn />
       </section>
 
       {/* Stats bar */}
