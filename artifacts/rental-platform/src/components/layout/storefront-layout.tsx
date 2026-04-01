@@ -114,6 +114,8 @@ export function StorefrontLayout({ children }: { children: React.ReactNode }) {
   const trialExpired = (profile as any)?.trialExpired as boolean | undefined;
   const isBlocked = (profile as any)?.isBlocked as boolean | undefined;
   const trialEndsAt = (profile as any)?.trialEndsAt as string | null | undefined;
+  const plan = (profile as any)?.plan as string | undefined;
+  const isPaid = plan && plan !== "starter";
 
   // Brand colors from admin settings
   const primaryColor = profile?.primaryColor || "#1b4332";
