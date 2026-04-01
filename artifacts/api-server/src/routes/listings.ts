@@ -124,6 +124,110 @@ router.post("/listings", async (req, res) => {
   }
 });
 
+// Bulk import: POST /api/listings/bulk
+// Accepts an array of listing objects; returns created count + any per-row errors.
+router.post("/listings/bulk", async (req, res) => {
+  try {
+    const rows: any[] = Array.isArray(req.body) ? req.body : [];
+    if (rows.length === 0) {
+      res.status(400).json({ error: "No rows provided" });
+      return;
+    }
+    if (rows.length > 500) {
+      res.status(400).json({ error: "Maximum 500 rows per import" });
+      return;
+    }
+
+    // Build category name → id map scoped to this tenant
+    const catConditions = req.tenantId ? [eq(categoriesTable.tenantId, req.tenantId)] : [];
+    const cats = await db
+      .select()
+      .from(categoriesTable)
+      .where(catConditions.length > 0 ? and(...catConditions) : undefined);
+    const catByName: Record<string, number> = {};
+    const catBySlug: Record<string, number> = {};
+    for (const c of cats) {
+      catByName[c.name.toLowerCase()] = c.id;
+      catBySlug[c.slug.toLowerCase()] = c.id;
+    }
+
+    const created: any[] = [];
+    const errors: { row: number; error: string }[] = [];
+
+    for (let i = 0; i < rows.length; i++) {
+      const row = rows[i];
+      const rowNum = i + 1;
+
+      if (!row.title?.trim()) {
+        errors.push({ row: rowNum, error: "Title is required" });
+        continue;
+      }
+      if (!row.description?.trim()) {
+        errors.push({ row: rowNum, error: "Description is required" });
+        continue;
+      }
+      const price = parseFloat(row.pricePerDay);
+      if (isNaN(price) || price < 0) {
+        errors.push({ row: rowNum, error: "price_per_day must be a valid number" });
+        continue;
+      }
+
+      // Resolve category: accept name or slug
+      let categoryId: number | null = null;
+      if (row.category) {
+        const key = String(row.category).toLowerCase().trim();
+        categoryId = catByName[key] ?? catBySlug[key] ?? null;
+      }
+
+      // Validate enum fields
+      const validStatus = ["active", "inactive", "draft"];
+      const status = validStatus.includes(row.status) ? row.status : "active";
+
+      const validCondition = ["excellent", "good", "fair"];
+      const condition = validCondition.includes(row.condition) ? row.condition : "good";
+
+      try {
+        const [newListing] = await db.insert(listingsTable).values({
+          tenantId: req.tenantId ?? null,
+          title: row.title.trim(),
+          description: row.description.trim(),
+          categoryId,
+          status,
+          pricePerDay: String(price),
+          pricePerWeek: row.pricePerWeek != null && row.pricePerWeek !== "" ? String(parseFloat(row.pricePerWeek)) : null,
+          pricePerHour: row.pricePerHour != null && row.pricePerHour !== "" ? String(parseFloat(row.pricePerHour)) : null,
+          depositAmount: row.depositAmount != null && row.depositAmount !== "" ? String(parseFloat(row.depositAmount)) : null,
+          quantity: row.quantity != null ? parseInt(row.quantity) || 1 : 1,
+          location: row.location?.trim() || null,
+          weight: row.weight?.trim() || null,
+          dimensions: row.dimensions?.trim() || null,
+          brand: row.brand?.trim() || null,
+          model: row.model?.trim() || null,
+          condition,
+          requirements: row.requirements?.trim() || null,
+          ageRestriction: row.ageRestriction != null && row.ageRestriction !== "" ? parseInt(row.ageRestriction) || null : null,
+          imageUrls: [],
+          includedItems: row.includedItems
+            ? String(row.includedItems).split(",").map((s: string) => s.trim()).filter(Boolean)
+            : [],
+        }).returning();
+        created.push(formatListing(newListing));
+      } catch (rowErr: any) {
+        errors.push({ row: rowNum, error: rowErr?.message ?? "Insert failed" });
+      }
+    }
+
+    res.status(207).json({
+      created: created.length,
+      errors,
+      total: rows.length,
+    });
+  } catch (err) {
+    req.log.error(err);
+    res.status(500).json({ error: "Bulk import failed" });
+  }
+});
+
 router.get("/listings/:id", async (req, res) => {
   try {
     const conditions = [eq(listingsTable.id, Number(req.params.id))];

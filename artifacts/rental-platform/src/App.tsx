@@ -34,6 +34,7 @@ import AdminDashboard from "@/pages/admin/dashboard";
 import AdminListings from "@/pages/admin/listings/index";
 import AdminListingsForm from "@/pages/admin/listings/form";
 import AdminListingDetail from "@/pages/admin/listings/detail";
+import AdminListingsImport from "@/pages/admin/listings/import";
 import AdminBookings from "@/pages/admin/bookings/index";
 import AdminBookingDetail from "@/pages/admin/bookings/detail";
 import AdminBookingForm from "@/pages/admin/bookings/form";
@@ -203,6 +204,9 @@ function Router() {
       {/* Tenant Admin Routes — scoped to /:slug/admin/* */}
       <Route path="/:slug/admin">
         <AdminGuard><AdminLayout><AdminDashboardOrLaunchpad /></AdminLayout></AdminGuard>
+      </Route>
+      <Route path="/:slug/admin/listings/import">
+        <AdminGuard><AdminLayout><AdminListingsImport /></AdminLayout></AdminGuard>
       </Route>
       <Route path="/:slug/admin/listings/new">
         <AdminGuard><AdminLayout><AdminListingsForm /></AdminLayout></AdminGuard>

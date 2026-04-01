@@ -20,7 +20,7 @@ import {
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, Search, Edit, Trash2, Package, ChevronRight } from "lucide-react";
+import { Plus, Search, Edit, Trash2, Package, ChevronRight, Upload } from "lucide-react";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -68,12 +68,20 @@ export default function AdminListings() {
           <h2 className="text-3xl font-bold tracking-tight">Listings</h2>
           <p className="text-muted-foreground mt-1">Manage your rental inventory</p>
         </div>
-        <Link href={adminPath("/listings/new")}>
-          <Button>
-            <Plus className="w-4 h-4 mr-2" />
-            Add Listing
-          </Button>
-        </Link>
+        <div className="flex items-center gap-2">
+          <Link href={adminPath("/listings/import")}>
+            <Button variant="outline">
+              <Upload className="w-4 h-4 mr-2" />
+              Import
+            </Button>
+          </Link>
+          <Link href={adminPath("/listings/new")}>
+            <Button>
+              <Plus className="w-4 h-4 mr-2" />
+              Add Listing
+            </Button>
+          </Link>
+        </div>
       </div>
 
       <Card>
