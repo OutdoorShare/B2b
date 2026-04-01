@@ -22,6 +22,7 @@ import PickupPage from "@/pages/storefront/pickup";
 
 import GetStartedPage from "@/pages/public/get-started";
 import SignupPage from "@/pages/public/signup";
+import AuditPage from "@/pages/public/audit";
 import DemoPage from "@/pages/demo";
 import AdminOnboarding from "@/pages/admin/onboarding";
 import AdminLoginPage from "@/pages/admin/admin-login";
@@ -76,7 +77,7 @@ setExtraHeadersGetter(() => {
   // Extract slug from pathname
   const base = import.meta.env.BASE_URL.replace(/\/$/, "");
   const path = window.location.pathname.replace(base, "") || "/";
-  const reserved = new Set(["superadmin", "get-started", "signup", "demo"]);
+  const reserved = new Set(["superadmin", "get-started", "signup", "demo", "audit"]);
   const segments = path.split("/").filter(Boolean);
   const firstSegment = segments[0];
   if (firstSegment && !reserved.has(firstSegment)) {
@@ -135,6 +136,9 @@ function Router() {
       </Route>
       <Route path="/signup">
         <SignupPage />
+      </Route>
+      <Route path="/audit">
+        <AuditPage />
       </Route>
 
       {/* Admin Onboarding — reached after signup; session already set */}

@@ -2,9 +2,9 @@ import { useState, useRef, useEffect } from "react";
 import { Link, useLocation } from "wouter";
 import {
   CalendarDays, BarChart3, Users, Package, Shield, Zap,
-  CheckCircle2, ArrowRight, Star, Star as StarFull, TrendingDown,
+  CheckCircle2, ArrowRight, Star, Star as StarFull, TrendingDown, TrendingUp,
   ShieldCheck, User, ChevronDown, ChevronUp,
-  Umbrella, Car, Phone,
+  Umbrella, Car, Phone, ClipboardList,
   Waves, Truck, Anchor, Bike, Bus, Snowflake,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -231,6 +231,7 @@ export default function GetStartedPage() {
           <nav className="hidden md:flex items-center gap-8 text-sm font-medium text-muted-foreground">
             <a href="#features" className="hover:text-foreground transition-colors">Features</a>
             <a href="#pricing" className="hover:text-foreground transition-colors">Pricing</a>
+            <Link href="/audit" className="hover:text-foreground transition-colors font-semibold" style={{ color: OS_GREEN }}>Free Audit</Link>
           </nav>
           <div className="flex items-center gap-3">
             <SignInDropdown />
@@ -620,6 +621,74 @@ export default function GetStartedPage() {
             {FAQ_ITEMS.map(item => (
               <FAQItem key={item.q} q={item.q} a={item.a} />
             ))}
+          </div>
+        </div>
+      </section>
+
+      {/* ── FREE AUDIT ────────────────────────────────────────── */}
+      <section className="py-20 bg-gray-50 border-t border-gray-100">
+        <div className="max-w-5xl mx-auto px-6">
+          <div className="rounded-2xl overflow-hidden grid md:grid-cols-2" style={{ backgroundColor: "#1a2332" }}>
+            {/* Left — copy */}
+            <div className="p-10 md:p-12 flex flex-col justify-center">
+              <Badge className="mb-5 border-0 w-fit px-4 py-1.5 text-xs font-bold" style={{ backgroundColor: `${OS_GREEN}25`, color: OS_GREEN }}>
+                100% Free — No Obligation
+              </Badge>
+              <h2 className="text-3xl md:text-4xl font-black text-white tracking-tight mb-4">
+                Free rental business audit
+              </h2>
+              <p className="text-white/60 text-base leading-relaxed mb-6">
+                Not sure if OutdoorShare is the right fit? Let us review your current operation and show you exactly what's possible — bookings, revenue, and fleet management.
+              </p>
+              <ul className="space-y-3 mb-8">
+                {[
+                  "We review your current bookings & operations",
+                  "Identify revenue gaps and growth opportunities",
+                  "Recommend the right plan for your business size",
+                  "Response within 1 business day",
+                ].map(item => (
+                  <li key={item} className="flex items-center gap-2.5 text-sm text-white/80">
+                    <CheckCircle2 className="w-4 h-4 shrink-0" style={{ color: OS_GREEN }} />
+                    {item}
+                  </li>
+                ))}
+              </ul>
+              <div className="flex flex-wrap gap-3">
+                <Link href="/audit">
+                  <Button
+                    size="lg"
+                    className="rounded-full px-8 font-bold text-white hover:opacity-90"
+                    style={{ backgroundColor: OS_GREEN }}
+                  >
+                    Get My Free Audit <ArrowRight className="w-4 h-4 ml-2" />
+                  </Button>
+                </Link>
+              </div>
+              <p className="text-white/40 text-xs mt-4 flex items-center gap-1.5">
+                <Phone className="w-3.5 h-3.5" />
+                Or call us: 801-653-0765
+              </p>
+            </div>
+
+            {/* Right — visual */}
+            <div className="hidden md:flex flex-col items-center justify-center p-10 gap-6" style={{ backgroundColor: "rgba(255,255,255,0.03)", borderLeft: "1px solid rgba(255,255,255,0.08)" }}>
+              {[
+                { icon: ClipboardList, label: "Business review" },
+                { icon: TrendingUp, label: "Growth plan" },
+                { icon: ShieldCheck, label: "Protection fit" },
+              ].map(({ icon: Icon, label }) => (
+                <div key={label} className="flex items-center gap-3 w-full max-w-xs px-5 py-4 rounded-xl" style={{ backgroundColor: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.08)" }}>
+                  <div className="w-10 h-10 rounded-lg flex items-center justify-center shrink-0" style={{ backgroundColor: `${OS_GREEN}20` }}>
+                    <Icon className="w-5 h-5" style={{ color: OS_GREEN }} />
+                  </div>
+                  <span className="text-sm font-semibold text-white">{label}</span>
+                  <CheckCircle2 className="w-4 h-4 ml-auto shrink-0" style={{ color: OS_GREEN }} />
+                </div>
+              ))}
+              <p className="text-white/30 text-xs text-center mt-2">
+                Free. Personalized. No commitment.
+              </p>
+            </div>
           </div>
         </div>
       </section>

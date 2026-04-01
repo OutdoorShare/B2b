@@ -14,9 +14,11 @@ import unitsRouter from "./units";
 import adminTeamRouter from "./admin-team";
 import signupRouter from "./signup";
 import communicationsRouter from "./communications";
+import auditRouter from "./audit";
 
 const router: IRouter = Router();
 
+router.use(auditRouter);
 router.use(healthRouter);
 router.use(businessRouter);
 router.use(categoriesRouter);

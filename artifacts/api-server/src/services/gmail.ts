@@ -749,3 +749,106 @@ export async function sendReadyToAdventureEmail(opts: {
     requestBody: { raw: makeRawEmail(customerEmail, `[${companyName}] You're all set — enjoy your adventure! 🏔️`, html, fromHeader, adminEmail) },
   });
 }
+
+export async function sendAuditRequestEmail(opts: {
+  name: string;
+  email: string;
+  phone?: string;
+  businessName: string;
+  website?: string;
+  equipmentTypes?: string[];
+  monthlyBookings?: string;
+  annualRevenue?: string;
+  painPoints?: string[];
+  currentSoftware?: string;
+  message?: string;
+}): Promise<void> {
+  const { name, email, phone, businessName, website, equipmentTypes, monthlyBookings, annualRevenue, painPoints, currentSoftware, message } = opts;
+
+  const equipmentList = (equipmentTypes ?? []).join(", ") || "Not specified";
+  const painList = (painPoints ?? []).join(", ") || "Not specified";
+
+  const adminBody = `
+    <p style="margin:0 0 20px;font-size:18px;font-weight:700;color:${BRAND_DARK};">New Audit Request — ${businessName}</p>
+    <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;font-size:14px;">
+      ${[
+        ["Business", businessName],
+        ["Contact", name],
+        ["Email", email],
+        ["Phone", phone || "—"],
+        ["Website", website || "—"],
+        ["Equipment Types", equipmentList],
+        ["Monthly Bookings", monthlyBookings || "—"],
+        ["Annual Revenue", annualRevenue || "—"],
+        ["Current Software", currentSoftware || "—"],
+        ["Pain Points", painList],
+      ].map(([label, value]) => `
+        <tr>
+          <td style="padding:8px 12px;background:#f8faf8;border-bottom:1px solid #e5e7eb;font-weight:600;color:#374151;width:40%;">${label}</td>
+          <td style="padding:8px 12px;border-bottom:1px solid #e5e7eb;color:#6b7280;">${value}</td>
+        </tr>
+      `).join("")}
+    </table>
+    ${message ? `<div style="margin-top:20px;padding:16px;background:#f8faf8;border-radius:8px;font-size:13px;color:#374151;"><strong>Additional notes:</strong><br/>${message}</div>` : ""}
+  `;
+
+  const adminHtml = emailShell({
+    preheader: `New audit request from ${businessName} — ${name} (${email})`,
+    badgeLabel: "Audit Request",
+    badgeColor: "#f59e0b",
+    body: adminBody,
+  });
+
+  const confirmBody = `
+    <p style="margin:0 0 12px;font-size:18px;font-weight:700;color:${BRAND_DARK};">Thanks, ${name}!</p>
+    <p style="margin:0 0 16px;font-size:15px;color:#374151;line-height:1.6;">
+      We received your free rental business audit request for <strong>${businessName}</strong>.
+      Our team will review your submission and reach out within <strong>1 business day</strong>.
+    </p>
+    <p style="margin:0 0 24px;font-size:15px;color:#374151;line-height:1.6;">
+      In the meantime, feel free to explore the platform or start your free trial — no credit card required.
+    </p>
+    <div style="text-align:center;margin:0 0 24px;">
+      <a href="${APP_URL}/signup" style="display:inline-block;background:${BRAND_GREEN};color:#ffffff;font-weight:700;font-size:15px;padding:14px 32px;border-radius:999px;text-decoration:none;">
+        Start Free Trial
+      </a>
+    </div>
+    <p style="margin:0;font-size:13px;color:#9ca3af;">
+      Have an urgent question? Call us at <a href="tel:8016530765" style="color:${BRAND_GREEN};">801-653-0765</a>
+    </p>
+  `;
+
+  const confirmHtml = emailShell({
+    preheader: "We received your audit request and will be in touch within 1 business day.",
+    badgeLabel: "Request Received",
+    badgeColor: BRAND_GREEN,
+    body: confirmBody,
+  });
+
+  const gmail = await getUncachableGmailClient();
+
+  await gmail.users.messages.send({
+    userId: "me",
+    requestBody: {
+      raw: makeRawEmail(
+        "contact.us@myoutdoorshare.com",
+        `Audit Request — ${businessName}`,
+        adminHtml,
+        PLATFORM_FROM,
+        email,
+      ),
+    },
+  });
+
+  await gmail.users.messages.send({
+    userId: "me",
+    requestBody: {
+      raw: makeRawEmail(
+        email,
+        "Your free rental business audit request — OutdoorShare",
+        confirmHtml,
+        PLATFORM_FROM,
+      ),
+    },
+  });
+}
