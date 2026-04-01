@@ -56,6 +56,7 @@ import AdminPromoCodes from "@/pages/admin/promo-codes";
 import SuperAdminTeam from "@/pages/superadmin/team";
 import SuperAdminListings from "@/pages/superadmin/listings";
 import CompanyDetailPage from "@/pages/superadmin/company-detail";
+import SuperAdminTenants from "@/pages/superadmin/tenants";
 import SuperAdminAgreement from "@/pages/superadmin/agreement";
 import SuperAdminClaims from "@/pages/superadmin/claims";
 import DemoSitePage from "@/pages/superadmin/demo-site";
@@ -174,7 +175,7 @@ function Router() {
         <SuperAdminLayout><SuperAdminDashboard /></SuperAdminLayout>
       </Route>
       <Route path="/superadmin/tenants">
-        <SuperAdminLayout><SuperAdminDashboard /></SuperAdminLayout>
+        <SuperAdminLayout><SuperAdminTenants /></SuperAdminLayout>
       </Route>
       <Route path="/superadmin/team">
         <SuperAdminLayout><SuperAdminTeam /></SuperAdminLayout>

@@ -1122,7 +1122,7 @@ export default function CompanyDetailPage() {
       {/* Header */}
       <div className="flex items-start justify-between flex-wrap gap-4">
         <div className="flex items-center gap-3">
-          <button onClick={() => setLocation("/superadmin/dashboard")} className="p-2 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors">
+          <button onClick={() => setLocation("/superadmin/tenants")} className="p-2 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors">
             <ArrowLeft className="w-5 h-5" />
           </button>
           <div className="w-10 h-10 rounded-xl bg-slate-800 border border-slate-700 flex items-center justify-center">
