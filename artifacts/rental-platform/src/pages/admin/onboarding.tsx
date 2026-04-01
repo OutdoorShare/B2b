@@ -1,6 +1,6 @@
 import { adminPath } from "@/lib/admin-nav";
-import { useState } from "react";
-import { useLocation } from "wouter";
+import { useState, useEffect } from "react";
+import { useLocation, useParams } from "wouter";
 import {
   CheckCircle2, ArrowRight, Package, Palette, Plus,
   Rocket, ChevronRight, Building2, MapPin, Mail, Phone
@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
+import { useGetBusinessProfile } from "@workspace/api-client-react";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
@@ -23,9 +24,11 @@ type StepId = "branding" | "listing" | "launch";
 
 export default function AdminOnboarding() {
   const [, setLocation] = useLocation();
+  const { slug } = useParams<{ slug: string }>();
   const { toast } = useToast();
   const [step, setStep] = useState<StepId>("branding");
   const [saving, setSaving] = useState(false);
+  const [prefilled, setPrefilled] = useState(false);
 
   const [branding, setBranding] = useState({
     name: "",
@@ -36,6 +39,26 @@ export default function AdminOnboarding() {
     primaryColor: "#2d6a4f",
     description: "",
   });
+
+  const { data: profile } = useGetBusinessProfile({
+    query: { queryKey: ["/api/business", slug] }
+  });
+
+  // Pre-fill branding from what was already saved at signup (runs once when profile loads)
+  useEffect(() => {
+    if (!profile || prefilled) return;
+    setBranding(prev => ({
+      ...prev,
+      name:         (profile.name        ?? prev.name),
+      email:        (profile.email       ?? prev.email),
+      phone:        ((profile as any).phone       ?? prev.phone),
+      location:     ((profile as any).location    ?? prev.location),
+      tagline:      ((profile as any).tagline     ?? prev.tagline),
+      description:  (profile.description ?? prev.description),
+      primaryColor: (profile.primaryColor ?? prev.primaryColor),
+    }));
+    setPrefilled(true);
+  }, [profile, prefilled]);
 
   const [listing, setListing] = useState({
     title: "",
