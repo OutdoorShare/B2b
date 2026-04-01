@@ -131,6 +131,31 @@ export function StorefrontLayout({ children }: { children: React.ReactNode }) {
     };
   }, [primaryColor, accentColor]);
 
+  // Dynamic favicon: swap to the tenant's logo while on their storefront,
+  // restore to the OutdoorShare logo when navigating away.
+  const logoUrl = (profile as any)?.logoUrl as string | undefined;
+  useEffect(() => {
+    const setFavicon = (href: string) => {
+      let link = document.querySelector<HTMLLinkElement>("link#favicon");
+      if (!link) {
+        link = document.createElement("link");
+        link.id = "favicon";
+        link.rel = "icon";
+        link.type = "image/png";
+        document.head.appendChild(link);
+      }
+      link.href = href;
+    };
+
+    if (logoUrl) {
+      setFavicon(logoUrl);
+    }
+
+    return () => {
+      setFavicon("/outdoorshare-logo.png");
+    };
+  }, [logoUrl]);
+
   // Auto-contrast text colors
   const headerText     = isLight(primaryColor) ? "#111111" : "#ffffff";
   const headerTextMuted = isLight(primaryColor) ? "rgba(0,0,0,0.55)" : "rgba(255,255,255,0.65)";
