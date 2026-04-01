@@ -1,0 +1,22 @@
+User-agent: *
+Allow: /
+
+# Block admin and API paths from indexing
+Disallow: /api/
+Disallow: /*/admin/
+Disallow: /*/admin
+Disallow: /superadmin/
+Disallow: /superadmin
+Disallow: /*/login
+Disallow: /*/kiosk
+Disallow: /*/pickup/
+
+# Allow main marketing + storefront pages
+Allow: /
+Allow: /get-started
+Allow: /signup
+Allow: /audit
+
+Sitemap: https://myoutdoorshare.com/sitemap.xml
+
+Crawl-delay: 1

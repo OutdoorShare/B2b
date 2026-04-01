@@ -2,12 +2,245 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1" />
-    <title>Rental Platform</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5" />
+
+    <!-- ── Primary SEO ─────────────────────────────────────────────────────── -->
+    <title>OutdoorShare — Rental Management Software for Outdoor Equipment Businesses</title>
+    <meta name="description" content="Launch your outdoor rental business online in minutes. OutdoorShare gives you a white-label branded storefront, online booking engine, analytics dashboard, and more. Start your free 14-day trial — no credit card required." />
+    <meta name="keywords" content="rental management software, outdoor equipment rental software, ATV rental software, jet ski rental management, RV rental software, boat rental platform, white label rental software, rental booking system, outdoor rental platform, equipment rental business software, rental management platform, online rental booking" />
+    <meta name="author" content="OutdoorShare" />
+    <meta name="robots" content="index, follow, max-snippet:-1, max-image-preview:large, max-video-preview:-1" />
+    <meta name="googlebot" content="index, follow" />
+    <link rel="canonical" href="https://myoutdoorshare.com/" />
+
+    <!-- ── Favicon & App Icons ─────────────────────────────────────────────── -->
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="icon" type="image/png" sizes="32x32" href="/outdoorshare-logo.png" />
+    <link rel="icon" type="image/png" sizes="16x16" href="/outdoorshare-logo.png" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/outdoorshare-logo.png" />
+    <link rel="mask-icon" href="/favicon.svg" color="#3ab549" />
+    <link rel="manifest" href="/site.webmanifest" />
+    <meta name="theme-color" content="#3ab549" />
+    <meta name="msapplication-TileColor" content="#1a2332" />
+    <meta name="msapplication-TileImage" content="/outdoorshare-logo.png" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <meta name="apple-mobile-web-app-title" content="OutdoorShare" />
+
+    <!-- ── Open Graph (Facebook, LinkedIn, iMessage, etc.) ───────────────── -->
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://myoutdoorshare.com/" />
+    <meta property="og:site_name" content="OutdoorShare" />
+    <meta property="og:locale" content="en_US" />
+    <meta property="og:title" content="OutdoorShare — Rental Management Software for Outdoor Equipment Businesses" />
+    <meta property="og:description" content="Launch your outdoor rental business online in minutes. White-label branded storefront, booking engine, analytics, and admin dashboard. Free 14-day trial." />
+    <meta property="og:image" content="https://myoutdoorshare.com/opengraph.jpg" />
+    <meta property="og:image:secure_url" content="https://myoutdoorshare.com/opengraph.jpg" />
+    <meta property="og:image:width" content="1280" />
+    <meta property="og:image:height" content="720" />
+    <meta property="og:image:alt" content="OutdoorShare rental management platform — branded storefront and booking engine" />
+    <meta property="og:image:type" content="image/jpeg" />
+
+    <!-- ── Twitter / X Card ──────────────────────────────────────────────── -->
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:site" content="@OutdoorShare" />
+    <meta name="twitter:creator" content="@OutdoorShare" />
+    <meta name="twitter:title" content="OutdoorShare — Rental Management Software for Outdoor Equipment Businesses" />
+    <meta name="twitter:description" content="Launch your outdoor rental business online in minutes. White-label storefront, booking engine, analytics & admin dashboard. Free 14-day trial." />
+    <meta name="twitter:image" content="https://myoutdoorshare.com/opengraph.jpg" />
+    <meta name="twitter:image:alt" content="OutdoorShare rental management platform" />
+
+    <!-- ── Geo & Business ─────────────────────────────────────────────────── -->
+    <meta name="geo.region" content="US-UT" />
+    <meta name="geo.placename" content="Utah, United States" />
+    <meta name="contact" content="contact.us@myoutdoorshare.com" />
+
+    <!-- ── Performance: DNS Prefetch & Preconnect ─────────────────────────── -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link rel="dns-prefetch" href="https://js.stripe.com" />
+    <link rel="dns-prefetch" href="https://api.stripe.com" />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet" />
+
+    <!-- ── Structured Data: Organization ─────────────────────────────────── -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "Organization",
+      "name": "OutdoorShare",
+      "url": "https://myoutdoorshare.com",
+      "logo": {
+        "@type": "ImageObject",
+        "url": "https://myoutdoorshare.com/outdoorshare-logo.png",
+        "width": 512,
+        "height": 512
+      },
+      "description": "White-label rental management software for outdoor equipment businesses. Branded storefronts, online booking, analytics, and admin dashboard.",
+      "foundingDate": "2024",
+      "contactPoint": [
+        {
+          "@type": "ContactPoint",
+          "telephone": "+1-801-653-0765",
+          "contactType": "customer support",
+          "email": "contact.us@myoutdoorshare.com",
+          "availableLanguage": "English"
+        }
+      ],
+      "address": {
+        "@type": "PostalAddress",
+        "addressRegion": "UT",
+        "addressCountry": "US"
+      },
+      "areaServed": "US",
+      "sameAs": [
+        "https://myoutdoorshare.com"
+      ]
+    }
+    </script>
+
+    <!-- ── Structured Data: SoftwareApplication ──────────────────────────── -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "SoftwareApplication",
+      "name": "OutdoorShare",
+      "applicationCategory": "BusinessApplication",
+      "operatingSystem": "Web, iOS, Android",
+      "url": "https://myoutdoorshare.com",
+      "description": "Complete rental management platform for outdoor equipment businesses. Launch a white-label branded storefront, manage bookings, track analytics, run kiosk mode, and process payments — all in one dashboard.",
+      "offers": [
+        {
+          "@type": "Offer",
+          "name": "Half Throttle",
+          "price": "25.00",
+          "priceCurrency": "USD",
+          "priceSpecification": {
+            "@type": "UnitPriceSpecification",
+            "price": "25.00",
+            "priceCurrency": "USD",
+            "billingDuration": "P1M"
+          },
+          "description": "Booking software, protection plans on every booking, priority listings, and tiered revenue share as low as 7%."
+        },
+        {
+          "@type": "Offer",
+          "name": "Full Throttle",
+          "price": "895.00",
+          "priceCurrency": "USD",
+          "priceSpecification": {
+            "@type": "UnitPriceSpecification",
+            "price": "895.00",
+            "priceCurrency": "USD",
+            "billingDuration": "P1Y"
+          },
+          "description": "Everything in Half Throttle plus white-labeled website, AI assistants, and in-person setup support."
+        }
+      ],
+      "featureList": [
+        "White-label branded storefront",
+        "Online booking engine with real-time availability",
+        "Admin dashboard and analytics",
+        "Stripe payments and Connect payouts",
+        "Kiosk mode for in-person rentals",
+        "Protection plan on every booking",
+        "Digital waivers and agreements",
+        "Promo codes and discounts",
+        "Customer identity verification",
+        "Email notifications via Gmail",
+        "Multi-listing management",
+        "Team management"
+      ],
+      "screenshot": "https://myoutdoorshare.com/opengraph.jpg",
+      "aggregateRating": {
+        "@type": "AggregateRating",
+        "ratingValue": "4.9",
+        "ratingCount": "47",
+        "bestRating": "5",
+        "worstRating": "1"
+      }
+    }
+    </script>
+
+    <!-- ── Structured Data: WebSite with Sitelinks Search ────────────────── -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "WebSite",
+      "name": "OutdoorShare",
+      "url": "https://myoutdoorshare.com",
+      "description": "White-label rental management software for outdoor equipment businesses",
+      "publisher": {
+        "@type": "Organization",
+        "name": "OutdoorShare"
+      },
+      "potentialAction": {
+        "@type": "SearchAction",
+        "target": {
+          "@type": "EntryPoint",
+          "urlTemplate": "https://myoutdoorshare.com/?q={search_term_string}"
+        },
+        "query-input": "required name=search_term_string"
+      }
+    }
+    </script>
+
+    <!-- ── Structured Data: FAQPage ──────────────────────────────────────── -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "FAQPage",
+      "mainEntity": [
+        {
+          "@type": "Question",
+          "name": "What is OutdoorShare?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "OutdoorShare is a white-label rental management platform built for outdoor equipment businesses — ATV, jet ski, RV, boat, dirt bike, and more. It gives you a fully branded storefront, online booking engine, admin dashboard, analytics, and payment processing without hiring developers."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "How much does OutdoorShare cost?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "OutdoorShare offers a Half Throttle plan at $25/month and a Full Throttle plan at $895/year. All plans include a free 14-day trial with no credit card required. Enterprise pricing is available for large fleets."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "Can I use my own domain name with OutdoorShare?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Yes. OutdoorShare is fully white-labeled. Your customers see your brand name, your colors, and your domain — no OutdoorShare branding visible to renters on paid plans."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "Does OutdoorShare handle payments?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Yes. OutdoorShare uses Stripe to process rental payments securely. Funds are deposited directly into your connected bank account via Stripe Connect, with a small platform fee deducted automatically."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "How long does setup take?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Most rental businesses are fully set up and taking bookings within 2 minutes. Our onboarding checklist walks you through every step — adding listings, connecting payments, and customizing your storefront."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "What types of equipment can I rent with OutdoorShare?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "OutdoorShare supports any type of outdoor rental equipment including ATVs, jet skis, RVs, boats, dirt bikes, snowmobiles, e-bikes, utility trailers, towing vehicles, and more."
+          }
+        }
+      ]
+    }
+    </script>
   </head>
   <body>
     <div id="root"></div>

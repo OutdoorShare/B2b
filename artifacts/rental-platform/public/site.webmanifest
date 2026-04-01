@@ -1,0 +1,27 @@
+{
+  "name": "OutdoorShare — Rental Management Platform",
+  "short_name": "OutdoorShare",
+  "description": "White-label rental management software for outdoor equipment businesses. Branded storefront, booking engine, analytics, and admin dashboard.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#1a2332",
+  "theme_color": "#3ab549",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "/outdoorshare-logo.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/outdoorshare-logo.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ],
+  "categories": ["business", "productivity", "utilities"],
+  "lang": "en-US",
+  "dir": "ltr"
+}
