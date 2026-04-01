@@ -3,7 +3,9 @@ import { Link, useLocation } from "wouter";
 import {
   CalendarDays, BarChart3, Users, Package, Shield, Zap,
   CheckCircle2, ArrowRight, Star, Star as StarFull, TrendingDown,
-  ShieldCheck, User, ChevronDown
+  ShieldCheck, User, ChevronDown, ChevronUp,
+  Umbrella, Car, Phone,
+  Waves, Truck, Anchor, Bike, Bus, Snowflake,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -120,6 +122,102 @@ const revenueTiers = [
   { rate: "7%", threshold: "$150K+ /year", label: "Best rate", best: true },
 ];
 
+const HOW_IT_WORKS_STEPS = [
+  {
+    step: "01",
+    title: "Search for adventures near you",
+    description: "Your customers browse your branded storefront — filtering by date, category, and price to find exactly what they need.",
+    bullets: [
+      "Search by vehicle type or category",
+      "See real photos from real listings",
+      "Check availability instantly",
+      "Full mobile support on every device",
+    ],
+  },
+  {
+    step: "02",
+    title: "Pick dates and book instantly",
+    description: "Renters select dates, review pricing and the protection plan, then confirm their booking — no waiting, no back-and-forth.",
+    bullets: [
+      "Real-time availability calendar",
+      "Transparent pricing — no surprises",
+      "Protection plan included automatically",
+      "Instant booking confirmation",
+    ],
+  },
+  {
+    step: "03",
+    title: "Pick up, go, and return",
+    description: "Customers show up at the scheduled time. Every booking is backed by a 3rd-party protection plan covering the vehicle, the renter, and 3rd-party liability.",
+    bullets: [
+      "Digital agreement & signature at pickup",
+      "ID verification built in",
+      "Full 3rd-party protection included",
+      "Return and review when done",
+    ],
+  },
+];
+
+const EQUIPMENT_CATEGORIES = [
+  { icon: Truck, label: "ATVs & UTVs", sub: "Trails, dunes, desert" },
+  { icon: Waves, label: "Boats & Jet Skis", sub: "Lakes, rivers, reservoirs" },
+  { icon: Bike, label: "E-Bikes", sub: "Scenic paths, mountain rides" },
+  { icon: Snowflake, label: "Snowmobiles", sub: "Mountain snow, backcountry" },
+  { icon: Bus, label: "Campers & RVs", sub: "Road trips, national parks" },
+  { icon: Anchor, label: "Trailers", sub: "Tow anything, anywhere" },
+];
+
+const PROTECTION_PILLARS = [
+  { icon: Car, title: "The Equipment", description: "Damage to the rental product during the booking period is covered by our 3rd-party protection plan." },
+  { icon: Users, title: "The Renter", description: "Your customer is covered in the event of an injury or incident that occurs during the rental." },
+  { icon: Umbrella, title: "3rd-Party Liability", description: "Any 3rd-party damage or incidents that occur during the rental period are handled by the provider." },
+];
+
+const FAQ_ITEMS = [
+  {
+    q: "What kinds of vehicles can I list on OutdoorShare?",
+    a: "You can list ATVs, UTVs, jet skis, boats, e-bikes, snowmobiles, campers, RVs, trailers, and virtually any outdoor rental equipment. Categories are fully customizable.",
+  },
+  {
+    q: "How does the protection plan work?",
+    a: "Every booking on OutdoorShare includes a protection plan fee, paid by the renter at checkout. It covers damage to the rental equipment, injury to the renter, and 3rd-party liability — all managed by a 3rd-party insurance provider. As an operator, you don't handle any claims paperwork.",
+  },
+  {
+    q: "Is booking really instant, or do I need to wait for approval?",
+    a: "Both options are available. You can enable instant booking for automatic confirmation, or require manual approval for each reservation — it's your choice per listing.",
+  },
+  {
+    q: "How does the in-person setup work for businesses?",
+    a: "Full Throttle and Growth & Scale plans include in-person setup support. We'll walk you through getting your listings live, configuring your storefront, and launching your first bookings.",
+  },
+  {
+    q: "I run an outdoor rental business. How is this different from FareHarbor or Peek Pro?",
+    a: "OutdoorShare is built specifically for equipment rental operators — not tours or activities. It includes built-in identity verification, digital agreements with custom fields, damage protection plans, kiosk mode for self-service pickup, and a branded storefront that's yours from day one.",
+  },
+  {
+    q: "How do I contact the team?",
+    a: "Call us at 801-653-0765 or reach out through the sign-up flow. We're happy to walk you through everything before you commit.",
+  },
+];
+
+function FAQItem({ q, a }: { q: string; a: string }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="border-b border-gray-200 last:border-0">
+      <button
+        className="w-full flex items-center justify-between gap-4 py-5 text-left hover:text-green-700 transition-colors"
+        onClick={() => setOpen(v => !v)}
+      >
+        <span className="font-semibold text-sm md:text-base text-gray-900">{q}</span>
+        {open
+          ? <ChevronUp className="w-4 h-4 shrink-0 text-green-600" />
+          : <ChevronDown className="w-4 h-4 shrink-0 text-gray-400" />}
+      </button>
+      {open && <p className="pb-5 text-sm text-gray-600 leading-relaxed pr-8">{a}</p>}
+    </div>
+  );
+}
+
 export default function GetStartedPage() {
   return (
     <div className="min-h-screen bg-white">
@@ -186,6 +284,56 @@ export default function GetStartedPage() {
             <div key={label}>
               <div className="text-3xl font-black text-white">{val}</div>
               <div className="text-sm mt-1" style={{ color: `${OS_GREEN}cc` }}>{label}</div>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {/* ── HOW IT WORKS ──────────────────────────────────────── */}
+      <section className="max-w-6xl mx-auto px-6 py-24">
+        <div className="text-center mb-16">
+          <p className="text-xs font-bold uppercase tracking-widest mb-2" style={{ color: OS_GREEN }}>Simple for your customers</p>
+          <h2 className="text-4xl font-black text-gray-900 mb-4">How renters book on your platform</h2>
+          <p className="text-lg text-muted-foreground max-w-xl mx-auto">
+            From finding the right equipment to heading out — the whole process takes minutes. Here's what your customers experience.
+          </p>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mb-16">
+          {HOW_IT_WORKS_STEPS.map((item, i) => (
+            <div key={i} className="relative bg-gray-50 rounded-2xl border border-gray-100 p-7">
+              <div className="text-5xl font-black leading-none mb-4" style={{ color: `${OS_GREEN}20` }}>{item.step}</div>
+              <h3 className="font-bold text-gray-900 text-lg mb-2 leading-snug">{item.title}</h3>
+              <p className="text-sm text-muted-foreground leading-relaxed mb-4">{item.description}</p>
+              <ul className="space-y-1.5">
+                {item.bullets.map(b => (
+                  <li key={b} className="flex items-center gap-2 text-xs text-gray-600">
+                    <CheckCircle2 className="w-3.5 h-3.5 shrink-0" style={{ color: OS_GREEN }} />
+                    {b}
+                  </li>
+                ))}
+              </ul>
+              {i < HOW_IT_WORKS_STEPS.length - 1 && (
+                <div className="hidden md:flex absolute -right-4 top-1/2 -translate-y-1/2 z-10 w-8 h-8 rounded-full bg-white border border-gray-200 items-center justify-center shadow-sm">
+                  <ArrowRight className="w-4 h-4" style={{ color: OS_GREEN }} />
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+
+        {/* Equipment categories */}
+        <div className="text-center mb-8">
+          <p className="text-sm font-semibold text-muted-foreground">What your customers can rent on your storefront</p>
+        </div>
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-4">
+          {EQUIPMENT_CATEGORIES.map(({ icon: Icon, label, sub }) => (
+            <div key={label} className="flex flex-col items-center text-center p-4 rounded-2xl bg-gray-50 border border-gray-100 hover:border-green-200 transition-colors group">
+              <div className="w-12 h-12 rounded-xl flex items-center justify-center mb-3 group-hover:scale-110 transition-transform" style={{ backgroundColor: `${OS_GREEN}15` }}>
+                <Icon className="w-6 h-6" style={{ color: OS_GREEN }} />
+              </div>
+              <p className="font-semibold text-xs text-gray-900 leading-tight">{label}</p>
+              <p className="text-[11px] text-muted-foreground mt-0.5 leading-tight">{sub}</p>
             </div>
           ))}
         </div>
@@ -404,6 +552,75 @@ export default function GetStartedPage() {
               </div>
             </div>
           ))}
+        </div>
+      </section>
+
+      {/* ── PROTECTION PLAN ───────────────────────────────────── */}
+      <section style={{ backgroundColor: "#1a2332" }} className="py-24">
+        <div className="max-w-5xl mx-auto px-6">
+          <div className="text-center mb-12">
+            <div className="flex items-center justify-center gap-2 mb-4">
+              <ShieldCheck className="w-6 h-6" style={{ color: OS_GREEN }} />
+              <span className="font-bold text-sm uppercase tracking-widest" style={{ color: OS_GREEN }}>Every booking protected</span>
+            </div>
+            <h2 className="text-3xl md:text-4xl font-black text-white tracking-tight mb-3">
+              3rd-party protection, built into every booking.
+            </h2>
+            <p className="text-white/60 max-w-xl mx-auto text-base leading-relaxed">
+              Every booking includes a protection plan fee paid at checkout by the renter. Full coverage managed by a 3rd-party provider. No claims paperwork for you as the operator.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-10">
+            {PROTECTION_PILLARS.map(({ icon: Icon, title, description }) => (
+              <div key={title} className="rounded-2xl p-6 text-center space-y-3" style={{ backgroundColor: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.08)" }}>
+                <div className="w-12 h-12 rounded-full mx-auto flex items-center justify-center" style={{ backgroundColor: `${OS_GREEN}20`, border: `1px solid ${OS_GREEN}40` }}>
+                  <Icon className="w-6 h-6" style={{ color: OS_GREEN }} />
+                </div>
+                <h3 className="font-bold text-white">{title}</h3>
+                <p className="text-sm text-white/60 leading-relaxed">{description}</p>
+              </div>
+            ))}
+          </div>
+
+          <div className="rounded-2xl p-6 md:p-8" style={{ backgroundColor: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)" }}>
+            <h3 className="font-bold text-white text-center mb-6">How it works for operators</h3>
+            <div className="grid sm:grid-cols-2 gap-4">
+              {[
+                "Renter books equipment — protection plan fee is collected automatically at checkout",
+                "Booking confirmed — both renter and operator are covered from pickup to return",
+                "If an incident happens, the 3rd-party provider handles the claim end-to-end",
+                "No paperwork, no stress — you get back to running your business",
+              ].map((text, i) => (
+                <div key={i} className="flex items-start gap-3">
+                  <div className="w-6 h-6 rounded-full text-white text-xs font-black flex items-center justify-center shrink-0 mt-0.5" style={{ backgroundColor: OS_GREEN }}>{i + 1}</div>
+                  <p className="text-sm text-white/70 leading-snug">{text}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* ── FAQ ───────────────────────────────────────────────── */}
+      <section className="py-24 bg-white border-t border-gray-100">
+        <div className="max-w-2xl mx-auto px-6">
+          <div className="text-center mb-12">
+            <p className="text-xs font-bold uppercase tracking-widest mb-2" style={{ color: OS_GREEN }}>Questions answered</p>
+            <h2 className="text-4xl font-black text-gray-900 mb-3">Frequently asked</h2>
+            <p className="text-muted-foreground text-sm">
+              Still have questions?{" "}
+              <a href="tel:8016530765" className="font-semibold hover:underline" style={{ color: OS_GREEN }}>
+                <Phone className="w-3.5 h-3.5 inline-block mr-0.5 -mt-0.5" />
+                801-653-0765
+              </a>
+            </p>
+          </div>
+          <div className="bg-white rounded-2xl border border-gray-200 shadow-sm px-6">
+            {FAQ_ITEMS.map(item => (
+              <FAQItem key={item.q} q={item.q} a={item.a} />
+            ))}
+          </div>
         </div>
       </section>
 
