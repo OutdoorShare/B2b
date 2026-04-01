@@ -1,0 +1,72 @@
+:::writing{variant=“standard” id=“73925”}
+We need to fix how new companies are created, especially during trials. The current behavior is incorrect and causing shared/demo data to appear for new users.
+
+Expected Behavior (Required)
+
+Every time a user creates an account (trial or paid), the system must:
+	1.	Create a brand new, fully isolated company instance
+	2.	Generate a unique slug:
+	•	domain.com/{company-slug}
+	3.	Automatically create:
+	•	Public storefront: /{company-slug}
+	•	Private admin: /{company-slug}/admin
+	4.	Create a corresponding company record in the super admin backend
+	5.	Ensure all data is completely isolated per company, including:
+	•	Listings
+	•	Logos
+	•	Company details
+
+⸻
+
+Critical Fix
+
+Right now, new users are being placed into a shared demo company.
+
+This should NEVER happen.
+	•	The demo company must be internal-only
+	•	It should not be used, copied, or visible when a new user signs up
+	•	No demo data should appear in any new company
+
+⸻
+
+Trial Requirements
+
+Trial users must get the exact same setup as paid users, including:
+	•	Their own unique slug
+	•	Their own storefront
+	•	Their own admin dashboard
+	•	Their own isolated data
+
+The ONLY difference for trials:
+	•	A 2-week access timer
+	•	After 2 weeks, access is restricted unless they upgrade
+
+⸻
+
+Data Isolation Rules (Strict)
+	•	No shared data between companies
+	•	No preloaded/demo listings
+	•	No shared logos or assets
+	•	Each company starts completely empty and independent
+
+⸻
+
+Access Rules
+	•	Public:
+	•	/{company-slug} → storefront (visible to customers)
+	•	Private:
+	•	/{company-slug}/admin → admin dashboard
+	•	Only accessible to:
+	•	Account owner
+	•	Team members added by that owner
+
+⸻
+
+Summary
+	•	Remove demo company usage from signup flow
+	•	Always create a new, isolated company + slug for every signup (trial or paid)
+	•	Ensure complete separation of all company data
+	•	Trials should behave exactly like paid accounts, except for time-limited access
+
+If anything in the current system prevents this, please identify what needs to change to enforce full isolation per company.
+:::

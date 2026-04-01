@@ -110,16 +110,16 @@ router.post("/public/signup", async (req, res) => {
       trialEndsAt,
     }).returning();
 
-    // Seed business profile with signup info so new owners see their real data immediately
+    // Seed business profile with ONLY what the user actually provided — no placeholder text
     await db.insert(businessProfileTable).values({
       tenantId: tenant.id,
       name: companyName.trim(),
       email: email.toLowerCase().trim(),
-      phone: phone?.trim() || "(555) 000-0000",
+      phone: phone?.trim() || null,
       logoUrl: logoUrl?.trim() || null,
-      tagline: "Quality gear for your next adventure",
-      description: `Welcome to ${companyName.trim()}! We provide top-quality rental gear for your next adventure.`,
-      location: "Your City, State",
+      tagline: null,
+      description: null,
+      location: null,
       updatedAt: new Date(),
     });
 
@@ -128,10 +128,18 @@ router.post("/public/signup", async (req, res) => {
       DEFAULT_CATEGORIES.map(c => ({ ...c, tenantId: tenant.id }))
     );
 
+    // Generate an auth token so the user is auto-logged in immediately after signup —
+    // no separate login step required, and the session is correctly scoped to this tenant.
+    const adminToken = randomBytes(32).toString("hex");
+    await db.update(tenantsTable)
+      .set({ adminToken, updatedAt: new Date() })
+      .where(eq(tenantsTable.id, tenant.id));
+
     res.status(201).json({
       tenant: safeTenant(tenant),
       adminEmail: email.toLowerCase().trim(),
       siteSlug: slug,
+      adminToken,
       message: "Account created successfully",
     });
   } catch (err: any) {

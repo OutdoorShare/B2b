@@ -122,6 +122,20 @@ export default function SignupPage() {
       });
       const data = await res.json();
       if (!res.ok) { setError(data.error || "Signup failed. Please try again."); return; }
+
+      // Auto-login: store the session so the user is already authenticated
+      // when they navigate to their admin dashboard or onboarding — no separate login required.
+      if (data.adminToken && data.siteSlug) {
+        localStorage.setItem("admin_session", JSON.stringify({
+          type: "owner",
+          token: data.adminToken,
+          tenantId: data.tenant?.id,
+          tenantName: data.tenant?.name,
+          tenantSlug: data.siteSlug,
+          email: data.adminEmail,
+        }));
+      }
+
       setCreated(data);
       setStep("payment");
     } catch {

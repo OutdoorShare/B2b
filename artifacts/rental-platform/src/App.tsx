@@ -160,9 +160,9 @@ function Router() {
         <AuditPage />
       </Route>
 
-      {/* Admin Onboarding — reached after signup; session already set */}
+      {/* Admin Onboarding — guarded so only the authenticated owner can access it */}
       <Route path="/:slug/admin/onboarding">
-        <AdminOnboarding />
+        <AdminGuard><AdminOnboarding /></AdminGuard>
       </Route>
 
       {/* Super Admin Routes */}
