@@ -86,14 +86,24 @@ router.post("/public/signup", async (req, res) => {
       return;
     }
 
+    const planMap: Record<string, "starter" | "professional" | "enterprise"> = {
+      half_throttle: "starter",
+      full_throttle: "professional",
+      growth_scale: "enterprise",
+      starter: "starter",
+      professional: "professional",
+      enterprise: "enterprise",
+    };
+    const normalizedPlan = planMap[plan] ?? "starter";
+
     const adminPasswordHash = await hashPassword(password);
-    const trialEndsAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
+    const trialEndsAt = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000);
     const [tenant] = await db.insert(tenantsTable).values({
       name: companyName.trim(),
       slug,
       email: email.toLowerCase().trim(),
       adminPasswordHash,
-      plan: plan ?? "starter",
+      plan: normalizedPlan,
       status: "active",
       contactName: contactName.trim(),
       phone: phone ?? null,

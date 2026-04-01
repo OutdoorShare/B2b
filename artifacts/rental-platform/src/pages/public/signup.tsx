@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { Link, useLocation } from "wouter";
-import { CheckCircle2, ArrowRight, Eye, EyeOff, ExternalLink, Building2, Upload, X, ImageIcon } from "lucide-react";
+import { CheckCircle2, ArrowRight, Eye, EyeOff, CreditCard, Building2, X, ImageIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -129,9 +129,27 @@ export default function SignupPage() {
     } finally { setSubmitting(false); }
   };
 
+  const [checkoutLoading, setCheckoutLoading] = useState(false);
+  const [checkoutError, setCheckoutError] = useState("");
+
   const selectedPlan = PLANS.find(p => p.id === form.plan)!;
 
-  const STRIPE_PAYMENT_LINK = (window as any).__STRIPE_LINK__ ?? "#";
+  const handleCheckout = async () => {
+    if (!created) return;
+    setCheckoutLoading(true);
+    setCheckoutError("");
+    try {
+      const res = await fetch(`${BASE}/api/billing/checkout-session`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "x-tenant-slug": created.siteSlug },
+        body: JSON.stringify({}),
+      });
+      const data = await res.json();
+      if (!res.ok) { setCheckoutError(data.error ?? "Failed to start checkout."); return; }
+      window.location.href = data.url;
+    } catch { setCheckoutError("Connection error. Please try again."); }
+    finally { setCheckoutLoading(false); }
+  };
 
   const steps: { key: Step; label: string }[] = [
     { key: "info", label: "Company Details" },
@@ -379,25 +397,36 @@ export default function SignupPage() {
               </div>
             </div>
 
-            <div className="bg-amber-50 border border-amber-200 rounded-2xl p-6 space-y-4">
+            <div className="bg-white border rounded-2xl p-6 space-y-4">
               <div>
-                <h3 className="font-bold text-amber-900">Complete your payment</h3>
-                <p className="text-sm text-amber-700 mt-1">
-                  Your account is ready but your plan requires payment to stay active after your 14-day trial.
+                <h3 className="font-bold text-gray-900">Add a payment method</h3>
+                <p className="text-sm text-muted-foreground mt-1">
+                  Your 14-day free trial is running. No charge until your trial ends — add a card now to ensure no disruption.
                 </p>
               </div>
-              <a
-                href={STRIPE_PAYMENT_LINK}
-                target="_blank"
-                rel="noopener noreferrer"
-              >
-                <Button className="w-full bg-amber-600 hover:bg-amber-700 text-white font-bold gap-2">
-                  Complete Payment <ExternalLink className="w-4 h-4" />
-                </Button>
-              </a>
-              <p className="text-xs text-amber-600 text-center">
-                You'll be redirected to our secure payment page. Return here after completing payment.
-              </p>
+              {selectedPlan?.id === "growth_scale" ? (
+                <a href="mailto:contact.us@myoutdoorshare.com" className="block">
+                  <Button className="w-full font-bold gap-2 text-white hover:opacity-90" style={{ backgroundColor: OS_GREEN }}>
+                    Contact Us to Set Up Billing
+                  </Button>
+                </a>
+              ) : (
+                <>
+                  {checkoutError && <p className="text-sm text-destructive font-medium">{checkoutError}</p>}
+                  <Button
+                    className="w-full font-bold gap-2 text-white hover:opacity-90"
+                    style={{ backgroundColor: OS_GREEN }}
+                    onClick={handleCheckout}
+                    disabled={checkoutLoading}
+                  >
+                    <CreditCard className="w-4 h-4" />
+                    {checkoutLoading ? "Redirecting to checkout…" : "Set Up Payment — Secure Checkout"}
+                  </Button>
+                  <p className="text-xs text-muted-foreground text-center">
+                    You won't be charged until your 14-day trial ends. Cancel anytime.
+                  </p>
+                </>
+              )}
             </div>
 
             <div className="bg-white rounded-2xl border shadow-sm p-6 space-y-4">

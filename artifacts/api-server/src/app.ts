@@ -5,6 +5,7 @@ import path from "path";
 import router from "./routes";
 import uploadRouter from "./routes/upload";
 import stripeRouter from "./routes/stripe";
+import billingRouter from "./routes/billing";
 import promoCodesRouter from "./routes/promo-codes";
 import listingRulesRouter from "./routes/listing-rules";
 import protectionPlansRouter from "./routes/superadmin-protection";
@@ -34,8 +35,9 @@ app.use(
 );
 app.use(cors());
 
-// Stripe webhook needs raw body for signature verification — must be before express.json()
+// Stripe + billing webhooks need raw body for signature verification — must be before express.json()
 app.use("/api/stripe/webhook", express.raw({ type: "application/json" }));
+app.use("/api/billing/webhook", express.raw({ type: "application/json" }));
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
@@ -47,6 +49,7 @@ app.use("/api/uploads", express.static(uploadsDir));
 app.use("/api", resolveTenant as any);
 app.use("/api", uploadRouter);
 app.use("/api", stripeRouter);
+app.use("/api", billingRouter);
 app.use("/api", promoCodesRouter);
 app.use("/api", listingRulesRouter);
 app.use("/api", protectionPlansRouter);

@@ -27,24 +27,29 @@ async function uniqueSlug(base: string, excludeTenantId: number): Promise<string
 const router: IRouter = Router();
 
 async function getTenantTrialInfo(tenantId: number | undefined) {
-  if (!tenantId) return { plan: "starter" as const, trialEndsAt: null, trialActive: false, trialExpired: false, siteSlug: null as string | null, testMode: false };
+  const fallback = { plan: "starter" as const, trialEndsAt: null, trialActive: false, trialExpired: false, isBlocked: false, siteSlug: null as string | null, testMode: false };
+  if (!tenantId) return fallback;
   const [tenant] = await db.select({
     plan: tenantsTable.plan,
     slug: tenantsTable.slug,
     trialEndsAt: tenantsTable.trialEndsAt,
     testMode: tenantsTable.testMode,
+    subscriptionStatus: tenantsTable.subscriptionStatus,
   }).from(tenantsTable).where(eq(tenantsTable.id, tenantId)).limit(1);
-  if (!tenant) return { plan: "starter" as const, trialEndsAt: null, trialActive: false, trialExpired: false, siteSlug: null as string | null, testMode: false };
+  if (!tenant) return fallback;
   const now = Date.now();
   const trialMs = tenant.trialEndsAt ? tenant.trialEndsAt.getTime() : null;
-  const trialActive = tenant.plan === "starter" && trialMs !== null && trialMs > now;
-  const trialExpired = tenant.plan === "starter" && trialMs !== null && trialMs <= now;
+  const subscriptionActive = ["active", "trialing"].includes(tenant.subscriptionStatus ?? "");
+  const trialActive = trialMs !== null && trialMs > now && !subscriptionActive;
+  const trialExpired = trialMs !== null && trialMs <= now && !subscriptionActive;
+  const isBlocked = trialExpired;
   return {
     plan: tenant.plan,
     siteSlug: tenant.slug,
     trialEndsAt: tenant.trialEndsAt ? tenant.trialEndsAt.toISOString() : null,
     trialActive,
     trialExpired,
+    isBlocked,
     testMode: !!tenant.testMode,
   };
 }

@@ -17,6 +17,7 @@ import {
   Tag,
   Plus,
   Rocket,
+  CreditCard,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useGetBusinessProfile } from "@workspace/api-client-react";
@@ -36,10 +37,12 @@ const NAV_ITEMS = [
   { name: "Kiosk Mode", path: "/kiosk", icon: MonitorSmartphone },
   { name: "Promo Codes", path: "/promo-codes", icon: Tag },
   { name: "My Wallet", path: "/wallet", icon: Wallet },
+  { name: "Billing", path: "/billing", icon: CreditCard },
   { name: "Settings", path: "/settings", icon: Settings },
 ];
 
 function TrialStatusBanner() {
+  const slug = getAdminSlug();
   const { data: profile } = useGetBusinessProfile({
     query: { queryKey: ["/api/business", "admin"] }
   });
@@ -47,44 +50,44 @@ function TrialStatusBanner() {
   const trialActive = (profile as any)?.trialActive as boolean | undefined;
   const trialExpired = (profile as any)?.trialExpired as boolean | undefined;
   const trialEndsAt = (profile as any)?.trialEndsAt as string | null | undefined;
-  const plan = (profile as any)?.plan as string | undefined;
 
   if (!trialActive && !trialExpired) return null;
-  if (plan && plan !== "starter") return null;
+
+  const billingHref = `/${slug}/admin/billing`;
 
   if (trialExpired) {
     return (
       <div className="w-full bg-red-600 text-white text-xs font-semibold px-4 py-2 flex items-center justify-between gap-4">
         <span className="flex items-center gap-1.5">
           <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
-          Your free trial has expired. Upgrade to keep your storefront running.
+          Your free trial has expired — your storefront is paused until you subscribe.
         </span>
-        <a
-          href="/get-started"
+        <Link
+          href={billingHref}
           className="shrink-0 bg-white text-red-600 rounded px-2.5 py-0.5 text-xs font-bold hover:bg-red-50 transition-colors"
         >
-          Upgrade Now
-        </a>
+          Subscribe Now
+        </Link>
       </div>
     );
   }
 
   if (trialActive && trialEndsAt) {
     const endsAt = new Date(trialEndsAt);
-    const hoursLeft = Math.max(0, Math.ceil((endsAt.getTime() - Date.now()) / (1000 * 60 * 60)));
-    const label = hoursLeft <= 1 ? "less than 1 hour" : `${hoursLeft} hours`;
+    const daysLeft = Math.max(0, Math.ceil((endsAt.getTime() - Date.now()) / (1000 * 60 * 60 * 24)));
+    const label = daysLeft === 0 ? "less than 1 day" : daysLeft === 1 ? "1 day" : `${daysLeft} days`;
     return (
       <div className="w-full bg-amber-500 text-white text-xs font-semibold px-4 py-2 flex items-center justify-between gap-4">
         <span className="flex items-center gap-1.5">
           <Clock className="w-3.5 h-3.5 shrink-0" />
-          Free trial: {label} remaining. Upgrade to remove OutdoorShare branding and avoid disruption.
+          Free trial: {label} remaining. Add a payment method to avoid any disruption.
         </span>
-        <a
-          href="/get-started"
+        <Link
+          href={billingHref}
           className="shrink-0 bg-white text-amber-600 rounded px-2.5 py-0.5 text-xs font-bold hover:bg-amber-50 transition-colors"
         >
-          Upgrade
-        </a>
+          Add Payment Method
+        </Link>
       </div>
     );
   }

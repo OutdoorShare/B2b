@@ -112,9 +112,8 @@ export function StorefrontLayout({ children }: { children: React.ReactNode }) {
 
   const trialActive = (profile as any)?.trialActive as boolean | undefined;
   const trialExpired = (profile as any)?.trialExpired as boolean | undefined;
+  const isBlocked = (profile as any)?.isBlocked as boolean | undefined;
   const trialEndsAt = (profile as any)?.trialEndsAt as string | null | undefined;
-  const plan = (profile as any)?.plan as string | undefined;
-  const isPaid = plan && plan !== "starter";
 
   // Brand colors from admin settings
   const primaryColor = profile?.primaryColor || "#1b4332";
@@ -139,8 +138,8 @@ export function StorefrontLayout({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="min-h-[100dvh] flex flex-col bg-background">
-      {/* Trial expired paywall */}
-      {trialExpired && (
+      {/* Blocked paywall: trial expired with no active subscription */}
+      {(isBlocked || trialExpired) && (
         <TrialExpiredPaywall companyName={profile?.name || "This company"} />
       )}
 

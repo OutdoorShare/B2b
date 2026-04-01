@@ -50,6 +50,7 @@ import AdminTeam from "@/pages/admin/team";
 import AdminCommunications from "@/pages/admin/communications";
 import AdminWaivers from "@/pages/admin/waivers";
 import AdminWallet from "@/pages/admin/wallet";
+import AdminBilling from "@/pages/admin/billing";
 import AdminPromoCodes from "@/pages/admin/promo-codes";
 import SuperAdminTeam from "@/pages/superadmin/team";
 import SuperAdminListings from "@/pages/superadmin/listings";
@@ -241,6 +242,9 @@ function Router() {
       </Route>
       <Route path="/:slug/admin/settings">
         <AdminGuard><AdminLayout><AdminSettings /></AdminLayout></AdminGuard>
+      </Route>
+      <Route path="/:slug/admin/billing">
+        <AdminGuard><AdminBilling /></AdminGuard>
       </Route>
       <Route path="/:slug/admin/kiosk">
         <AdminGuard><AdminKiosk /></AdminGuard>

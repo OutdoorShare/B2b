@@ -22,6 +22,10 @@ export const tenantsTable = pgTable("tenants", {
   stripePayoutsEnabled: boolean("stripe_payouts_enabled").default(false),
   platformFeePercent: numeric("platform_fee_percent", { precision: 5, scale: 2 }).default("5.00"),
   testMode: boolean("test_mode").default(false),
+  stripeCustomerId: text("stripe_customer_id"),
+  subscriptionId: text("subscription_id"),
+  subscriptionStatus: text("subscription_status"),
+  currentPeriodEnd: timestamp("current_period_end"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
