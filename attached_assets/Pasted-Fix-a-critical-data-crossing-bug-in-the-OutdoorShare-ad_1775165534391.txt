@@ -1,0 +1,25 @@
+Fix a critical data-crossing bug in the OutdoorShare admin customization and storefront display.
+Bug Description: When a business admin uploads a logo photo and/or sets brand colors on the business admin customization page, the changes partially apply (colors shift and a logo appears), but:
+•  The wrong logo shows up (it pulls a completely different logo that was uploaded earlier, possibly for another company or on a different site).
+•  The colors that appear are not the exact colors the admin just selected.
+This is causing data to cross between different companies/tenants. The storefront is not displaying the exact logo and colors that were uploaded/selected for that specific company in the admin.
+What we need:
+1.  Investigate & Debug the root cause first — check how logo uploads and color settings are being saved and retrieved. Look for missing company_id / tenant scoping on the upload endpoints, database records, or frontend queries.
+2.  Fix the data isolation so every company’s customization (logo image + brand colors) is strictly scoped to that company only. No more cross-company data leakage.
+3.  Ensure correct flow:
+	•  When an admin uploads a logo or saves colors in the business admin customization page, those exact files and color values must be saved under the current company’s record.
+	•  The storefront (public rental pages) must immediately pull and display the correct company-specific logo and colors.
+	•  If the admin re-uploads a new logo or changes colors, the storefront must update to show the newest version for that company only.
+Technical Requirements:
+•  Add or enforce company_id (or equivalent tenant ID) on all customization upload/save queries, both on the backend and frontend.
+•  Make sure image upload storage (whatever service you’re using) correctly tags and retrieves files by company.
+•  Update the storefront components to query customization data using the correct company context (do not fall back to global/default or cached wrong data).
+•  Add a safety check / console log (temporarily) that confirms the company_id being used on both the admin save and storefront load.
+•  After saving in admin, the storefront should reflect the exact uploaded logo and chosen colors with no delay or mixing.
+Design & UX Note: Keep the admin customization page looking modern and clean (use the same light cool gray background #F4F6F9 and white cards we applied earlier). No visual changes needed — just fix the functionality so what the admin sets is exactly what the customer sees on the storefront.
+Please:
+•  First diagnose the exact spot where the data is crossing.
+•  Then apply the fix.
+•  Show the updated code/files.
+•  Suggest a quick test flow (e.g., “Upload logo X and color Y for Company A → verify storefront shows only X and Y, not old data”).
+This must be 100% company-isolated so each business sees only their own logo and colors.

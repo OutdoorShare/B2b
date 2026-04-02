@@ -591,138 +591,138 @@ export default function AdminListingDetail() {
               </div>
             </div>
 
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-0 divide-y lg:divide-y-0 lg:divide-x">
+            {/* Full-width calendar */}
+            <div className="p-5 space-y-5">
+              <p className="text-sm text-muted-foreground">
+                Select a date range below to block it. Blocked dates will appear as unavailable to renters.
+              </p>
 
-              {/* Left: Calendar overview + selector */}
-              <div className="p-5 space-y-4">
-                <p className="text-sm text-muted-foreground">
-                  Select a date range below to block it. Blocked dates will appear as unavailable to renters.
-                </p>
-                <div className="flex justify-center">
-                  <Calendar
-                    mode="range"
-                    selected={blockRange}
-                    onSelect={setBlockRange}
-                    numberOfMonths={2}
-                    disabled={[{ before: new Date() }]}
-                    modifiers={{
-                      booked: bookedDays,
-                      blocked: blockedDays,
-                      selecting: blockDays,
-                    }}
-                    modifiersClassNames={{
-                      booked: "!bg-blue-100 !text-blue-700 rounded",
-                      blocked: "!bg-red-100 !text-red-600 !line-through rounded",
-                      selecting: "!bg-amber-100 !text-amber-800 rounded",
-                    }}
-                    className="rounded-xl"
-                  />
-                </div>
+              <Calendar
+                mode="range"
+                selected={blockRange}
+                onSelect={setBlockRange}
+                numberOfMonths={2}
+                disabled={[{ before: new Date() }]}
+                modifiers={{
+                  booked: bookedDays,
+                  blocked: blockedDays,
+                  selecting: blockDays,
+                }}
+                modifiersClassNames={{
+                  booked: "!bg-blue-100 !text-blue-700 rounded",
+                  blocked: "!bg-red-100 !text-red-600 !line-through rounded",
+                  selecting: "!bg-amber-100 !text-amber-800 rounded",
+                }}
+                className="rounded-xl [--cell-size:2.75rem] w-full"
+                classNames={{ root: "w-full" }}
+              />
 
-                {/* Block form */}
-                {blockRange?.from && (
-                  <div className="border rounded-xl p-4 space-y-3 bg-muted/20">
-                    <div className="flex items-center gap-2 font-semibold text-sm">
-                      <Ban className="w-4 h-4 text-red-500" />
-                      Block {blockRange.to
-                        ? `${format(blockRange.from, "MMM d")} – ${format(blockRange.to, "MMM d, yyyy")}`
-                        : format(blockRange.from, "MMM d, yyyy")}
-                    </div>
-                    <div className="space-y-1.5">
-                      <Label htmlFor="block-reason" className="text-xs">Reason (optional)</Label>
-                      <Input
-                        id="block-reason"
-                        value={blockReason}
-                        onChange={e => setBlockReason(e.target.value)}
-                        placeholder="e.g. Maintenance, personal use…"
-                        className="h-8 text-sm"
-                      />
-                    </div>
-                    <div className="flex gap-2">
-                      <Button
-                        size="sm"
-                        variant="destructive"
-                        className="gap-1.5"
-                        disabled={!blockRange?.to || blockSaving}
-                        onClick={handleBlockSave}
-                      >
-                        <Ban className="w-3.5 h-3.5" /> {blockSaving ? "Saving…" : "Block These Dates"}
-                      </Button>
-                      <Button size="sm" variant="outline" onClick={() => { setBlockRange(undefined); setBlockReason(""); }}>
-                        Cancel
-                      </Button>
-                    </div>
+              {/* Block form — shown when a range is selected */}
+              {blockRange?.from && (
+                <div className="border rounded-xl p-4 space-y-3 bg-muted/20">
+                  <div className="flex items-center gap-2 font-semibold text-sm">
+                    <Ban className="w-4 h-4 text-red-500" />
+                    Block {blockRange.to
+                      ? `${format(blockRange.from, "MMM d")} – ${format(blockRange.to, "MMM d, yyyy")}`
+                      : format(blockRange.from, "MMM d, yyyy")}
                   </div>
-                )}
-              </div>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="block-reason" className="text-xs">Reason (optional)</Label>
+                    <Input
+                      id="block-reason"
+                      value={blockReason}
+                      onChange={e => setBlockReason(e.target.value)}
+                      placeholder="e.g. Maintenance, personal use…"
+                      className="h-8 text-sm"
+                    />
+                  </div>
+                  <div className="flex gap-2">
+                    <Button
+                      size="sm"
+                      variant="destructive"
+                      className="gap-1.5"
+                      disabled={!blockRange?.to || blockSaving}
+                      onClick={handleBlockSave}
+                    >
+                      <Ban className="w-3.5 h-3.5" /> {blockSaving ? "Saving…" : "Block These Dates"}
+                    </Button>
+                    <Button size="sm" variant="outline" onClick={() => { setBlockRange(undefined); setBlockReason(""); }}>
+                      Cancel
+                    </Button>
+                  </div>
+                </div>
+              )}
 
-              {/* Right: Current blocked dates list */}
-              <div className="p-5 space-y-4">
-                <div className="flex items-center justify-between">
+              {/* Bottom row: blocked dates + bookings */}
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 pt-2 border-t">
+                {/* Blocked periods */}
+                <div className="space-y-3">
                   <h4 className="font-semibold text-sm flex items-center gap-2">
                     <Ban className="w-4 h-4 text-red-500" /> Blocked Periods
                     {blockedDates.length > 0 && (
                       <span className="bg-red-100 text-red-700 text-[10px] font-bold px-1.5 py-0.5 rounded-full">{blockedDates.length}</span>
                     )}
                   </h4>
-                </div>
-
-                {blockedDates.length === 0 ? (
-                  <div className="text-center py-10 text-muted-foreground space-y-2">
-                    <CalendarDays className="w-8 h-8 mx-auto text-muted" />
-                    <p className="text-sm">No dates blocked.</p>
-                    <p className="text-xs">Select a range on the calendar to block dates for this listing.</p>
-                  </div>
-                ) : (
-                  <div className="space-y-2">
-                    {[...blockedDates].sort((a, b) => a.startDate.localeCompare(b.startDate)).map(block => (
-                      <div key={block.id} className="flex items-start justify-between gap-3 bg-red-50 border border-red-100 rounded-xl px-4 py-3">
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-1.5">
-                            <Ban className="w-3.5 h-3.5 text-red-500 shrink-0" />
-                            <p className="font-semibold text-sm">
-                              {format(new Date(block.startDate), "MMM d, yyyy")}
-                              {block.startDate !== block.endDate && (
-                                <> → {format(new Date(block.endDate), "MMM d, yyyy")}</>
-                              )}
-                            </p>
+                  {blockedDates.length === 0 ? (
+                    <div className="text-center py-8 text-muted-foreground space-y-1">
+                      <CalendarDays className="w-7 h-7 mx-auto text-muted" />
+                      <p className="text-sm">No dates blocked.</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      {[...blockedDates].sort((a, b) => a.startDate.localeCompare(b.startDate)).map(block => (
+                        <div key={block.id} className="flex items-start justify-between gap-3 bg-red-50 border border-red-100 rounded-xl px-4 py-3">
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-1.5">
+                              <Ban className="w-3.5 h-3.5 text-red-500 shrink-0" />
+                              <p className="font-semibold text-sm">
+                                {format(new Date(block.startDate), "MMM d, yyyy")}
+                                {block.startDate !== block.endDate && (
+                                  <> → {format(new Date(block.endDate), "MMM d, yyyy")}</>
+                                )}
+                              </p>
+                            </div>
+                            {block.reason && (
+                              <p className="text-xs text-muted-foreground mt-0.5 pl-5">{block.reason}</p>
+                            )}
                           </div>
-                          {block.reason && (
-                            <p className="text-xs text-muted-foreground mt-0.5 pl-5">{block.reason}</p>
-                          )}
-                        </div>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-7 w-7 text-red-400 hover:text-red-600 hover:bg-red-100 shrink-0"
-                          onClick={() => handleBlockDelete(block.id)}
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </Button>
-                      </div>
-                    ))}
-                  </div>
-                )}
-
-                {/* Upcoming confirmed bookings summary */}
-                {allBookings2.filter(b => b.status === "confirmed" || b.status === "pending").length > 0 && (
-                  <div className="mt-4 pt-4 border-t space-y-2">
-                    <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Active Bookings on Calendar</h4>
-                    {allBookings2
-                      .filter(b => b.status === "confirmed" || b.status === "pending" || b.status === "active")
-                      .slice(0, 4)
-                      .map(b => (
-                        <div key={b.id} className="flex items-center justify-between bg-blue-50 border border-blue-100 rounded-xl px-3 py-2">
-                          <div className="flex items-center gap-2 text-xs">
-                            <CalendarDays className="w-3.5 h-3.5 text-blue-500" />
-                            <span className="font-medium">{b.customerName}</span>
-                            <span className="text-muted-foreground">{b.startDate} → {b.endDate}</span>
-                          </div>
-                          <Link href={adminPath(`/bookings/${b.id}`)}>
-                            <span className="text-[10px] font-bold text-blue-600 hover:underline capitalize">{b.status}</span>
-                          </Link>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-7 w-7 text-red-400 hover:text-red-600 hover:bg-red-100 shrink-0"
+                            onClick={() => handleBlockDelete(block.id)}
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </Button>
                         </div>
                       ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* Active bookings */}
+                {allBookings2.filter(b => b.status === "confirmed" || b.status === "pending" || b.status === "active").length > 0 && (
+                  <div className="space-y-3">
+                    <h4 className="text-sm font-semibold flex items-center gap-2">
+                      <CalendarDays className="w-4 h-4 text-blue-500" /> Active Bookings
+                    </h4>
+                    <div className="space-y-2">
+                      {allBookings2
+                        .filter(b => b.status === "confirmed" || b.status === "pending" || b.status === "active")
+                        .slice(0, 6)
+                        .map(b => (
+                          <div key={b.id} className="flex items-center justify-between bg-blue-50 border border-blue-100 rounded-xl px-3 py-2">
+                            <div className="flex items-center gap-2 text-xs">
+                              <CalendarDays className="w-3.5 h-3.5 text-blue-500" />
+                              <span className="font-medium">{b.customerName}</span>
+                              <span className="text-muted-foreground">{b.startDate} → {b.endDate}</span>
+                            </div>
+                            <Link href={adminPath(`/bookings/${b.id}`)}>
+                              <span className="text-[10px] font-bold text-blue-600 hover:underline capitalize">{b.status}</span>
+                            </Link>
+                          </div>
+                        ))}
+                    </div>
                   </div>
                 )}
               </div>
