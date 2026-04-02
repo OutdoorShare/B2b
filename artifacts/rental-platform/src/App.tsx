@@ -62,6 +62,8 @@ import SuperAdminClaims from "@/pages/superadmin/claims";
 import DemoSitePage from "@/pages/superadmin/demo-site";
 import ProtectionPlansPage from "@/pages/superadmin/protection-plans";
 import SuperAdminAnalytics from "@/pages/superadmin/analytics";
+import SuperAdminFeedback from "@/pages/superadmin/feedback";
+import AdminFeedback from "@/pages/admin/feedback";
 
 const queryClient = new QueryClient();
 
@@ -201,6 +203,9 @@ function Router() {
       <Route path="/superadmin/analytics">
         <SuperAdminLayout><SuperAdminAnalytics /></SuperAdminLayout>
       </Route>
+      <Route path="/superadmin/feedback">
+        <SuperAdminLayout><SuperAdminFeedback /></SuperAdminLayout>
+      </Route>
 
       {/* Tenant Admin Routes — scoped to /:slug/admin/* */}
       <Route path="/:slug/admin">
@@ -244,6 +249,9 @@ function Router() {
       </Route>
       <Route path="/:slug/admin/launchpad">
         <AdminGuard><AdminLayout><AdminLaunchpad /></AdminLayout></AdminGuard>
+      </Route>
+      <Route path="/:slug/admin/feedback">
+        <AdminGuard><AdminLayout><AdminFeedback /></AdminLayout></AdminGuard>
       </Route>
       <Route path="/:slug/admin/settings">
         <AdminGuard><AdminLayout><AdminSettings /></AdminLayout></AdminGuard>

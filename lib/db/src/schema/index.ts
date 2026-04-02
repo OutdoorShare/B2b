@@ -16,3 +16,4 @@ export * from "./blocked-dates";
 export * from "./promo-codes";
 export * from "./listing-rules";
 export * from "./platform-protection-plans";
+export * from "./feedback";

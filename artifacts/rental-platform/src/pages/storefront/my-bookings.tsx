@@ -3,9 +3,12 @@ import { useLocation, useParams, Link } from "wouter";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
+import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@/components/ui/label";
 import {
   Calendar, ChevronRight, Package, Clock, CheckCircle2,
-  XCircle, AlertCircle, User, LogOut, ArrowRight, RotateCcw
+  XCircle, AlertCircle, User, LogOut, ArrowRight, RotateCcw,
+  MessageSquarePlus, Star
 } from "lucide-react";
 import { format, differenceInDays, startOfDay } from "date-fns";
 
@@ -182,6 +185,14 @@ export default function MyBookings() {
           ))}
         </section>
       )}
+
+      {/* Feedback */}
+      {!isLoading && session && (
+        <>
+          <Separator />
+          <RenterFeedbackForm session={session} slug={slug ?? ""} />
+        </>
+      )}
     </div>
   );
 }
@@ -286,5 +297,127 @@ function BookingCard({ booking, base, showRebook }: { booking: any; base: string
         )}
       </div>
     </Link>
+  );
+}
+
+function RenterFeedbackForm({ session, slug }: { session: { name: string; email: string }; slug: string }) {
+  const [open, setOpen] = useState(false);
+  const [rating, setRating] = useState<number | null>(null);
+  const [hoverRating, setHoverRating] = useState<number | null>(null);
+  const [subject, setSubject] = useState("");
+  const [message, setMessage] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [submitted, setSubmitted] = useState(false);
+  const [error, setError] = useState("");
+
+  const handleSubmit = async () => {
+    if (!message.trim()) { setError("Please enter a message."); return; }
+    setError("");
+    setSubmitting(true);
+    try {
+      const res = await fetch(`${BASE}/api/feedback`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "x-tenant-slug": slug },
+        body: JSON.stringify({
+          submitterType: "renter",
+          submitterName: session.name,
+          submitterEmail: session.email,
+          subject: subject.trim() || undefined,
+          message: message.trim(),
+          rating: rating ?? undefined,
+          tenantSlug: slug,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) { setError(data.error ?? "Failed to submit."); return; }
+      setSubmitted(true);
+    } catch {
+      setError("Something went wrong. Please try again.");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  if (submitted) {
+    return (
+      <div className="rounded-2xl border bg-green-50 dark:bg-green-950/20 border-green-200 dark:border-green-800 p-6 text-center space-y-2">
+        <CheckCircle2 className="w-8 h-8 text-green-600 mx-auto" />
+        <p className="font-semibold text-green-800 dark:text-green-300">Thanks for your feedback!</p>
+        <p className="text-sm text-green-700 dark:text-green-400">We appreciate you taking the time to share your thoughts.</p>
+      </div>
+    );
+  }
+
+  if (!open) {
+    return (
+      <button
+        onClick={() => setOpen(true)}
+        className="w-full rounded-2xl border border-dashed border-muted-foreground/25 p-5 text-center hover:border-primary/40 hover:bg-primary/5 transition-all group"
+      >
+        <MessageSquarePlus className="w-5 h-5 text-muted-foreground/50 group-hover:text-primary mx-auto mb-1.5 transition-colors" />
+        <p className="text-sm font-medium text-muted-foreground group-hover:text-foreground transition-colors">Share feedback about your experience</p>
+      </button>
+    );
+  }
+
+  return (
+    <div className="rounded-2xl border bg-background shadow-sm p-5 space-y-4">
+      <div className="flex items-center justify-between">
+        <h3 className="font-semibold flex items-center gap-2">
+          <MessageSquarePlus className="w-4 h-4 text-primary" />
+          Share Feedback
+        </h3>
+        <button onClick={() => setOpen(false)} className="text-xs text-muted-foreground hover:text-foreground">Cancel</button>
+      </div>
+
+      {/* Star rating */}
+      <div className="space-y-1.5">
+        <Label className="text-xs">Overall Experience <span className="text-muted-foreground font-normal">(optional)</span></Label>
+        <div className="flex items-center gap-1">
+          {[1, 2, 3, 4, 5].map(i => (
+            <button
+              key={i}
+              type="button"
+              onClick={() => setRating(i === rating ? null : i)}
+              onMouseEnter={() => setHoverRating(i)}
+              onMouseLeave={() => setHoverRating(null)}
+              className="p-0.5 transition-transform hover:scale-110"
+            >
+              <Star className={`w-6 h-6 transition-colors ${
+                i <= (hoverRating ?? rating ?? 0) ? "fill-yellow-400 text-yellow-400" : "text-muted-foreground/30"
+              }`} />
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className="space-y-1.5">
+        <Label className="text-xs" htmlFor="rf-subject">Subject <span className="text-muted-foreground font-normal">(optional)</span></Label>
+        <input
+          id="rf-subject"
+          value={subject}
+          onChange={e => setSubject(e.target.value)}
+          placeholder="e.g. Great experience, Suggestion…"
+          className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        />
+      </div>
+
+      <div className="space-y-1.5">
+        <Label className="text-xs" htmlFor="rf-message">Message</Label>
+        <Textarea
+          id="rf-message"
+          value={message}
+          onChange={e => setMessage(e.target.value)}
+          placeholder="Tell us about your rental experience…"
+          rows={3}
+        />
+      </div>
+
+      {error && <p className="text-destructive text-xs">{error}</p>}
+
+      <Button className="w-full h-10" onClick={handleSubmit} disabled={submitting}>
+        {submitting ? "Sending…" : "Send Feedback"}
+      </Button>
+    </div>
   );
 }

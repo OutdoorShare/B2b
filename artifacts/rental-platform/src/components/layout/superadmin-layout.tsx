@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Link, useLocation } from "wouter";
 import {
   LayoutDashboard, Building2, LogOut, ChevronRight,
-  Menu, X, Users, Package, FileText, ShieldAlert, Monitor, Shield, BarChart3
+  Menu, X, Users, Package, FileText, ShieldAlert, Monitor, Shield, BarChart3, MessageSquarePlus
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -18,6 +18,7 @@ const navigation = [
   { name: "Team", href: "/superadmin/team", icon: Users },
   { name: "Agreement", href: "/superadmin/agreement", icon: FileText },
   { name: "Demo Site", href: "/superadmin/demo", icon: Monitor },
+  { name: "Feedback", href: "/superadmin/feedback", icon: MessageSquarePlus },
 ];
 
 function logout(setLocation: (to: string) => void) {

@@ -15,6 +15,7 @@ import adminTeamRouter from "./admin-team";
 import signupRouter from "./signup";
 import communicationsRouter from "./communications";
 import auditRouter from "./audit";
+import feedbackRouter from "./feedback";
 
 const router: IRouter = Router();
 
@@ -34,5 +35,6 @@ router.use(unitsRouter);
 router.use(adminTeamRouter);
 router.use(signupRouter);
 router.use(communicationsRouter);
+router.use(feedbackRouter);
 
 export default router;
