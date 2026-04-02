@@ -1903,29 +1903,46 @@ export default function StorefrontBook() {
                       <>
                         <div className="bg-background rounded-2xl border shadow-sm overflow-hidden">
                           <div className="bg-gradient-to-br from-primary/8 via-[#635BFF]/6 to-primary/5 px-6 py-6 border-b">
-                            <div className="flex items-center justify-center gap-3 mb-4">
-                              <div className="flex items-center gap-2">
-                                <div className="w-9 h-9 bg-primary rounded-xl flex items-center justify-center shadow-sm">
-                                  <Mountain className="w-5 h-5 text-white" />
+                            {/* 3-party trust chain: OutdoorShare + Rental Co + Stripe */}
+                            <div className="flex flex-wrap items-center justify-center gap-2 mb-5">
+                              {/* OutdoorShare */}
+                              <div className="flex items-center gap-1.5 bg-white/80 rounded-xl px-3 py-2 shadow-sm border border-primary/15">
+                                <div className="w-7 h-7 bg-primary rounded-lg flex items-center justify-center shrink-0">
+                                  <Mountain className="w-4 h-4 text-white" />
                                 </div>
-                                <span className="font-bold text-sm text-foreground">{(businessProfile as any)?.name || "OutdoorShare"}</span>
+                                <span className="font-bold text-xs text-foreground whitespace-nowrap">OutdoorShare</span>
                               </div>
-                              <div className="flex items-center justify-center w-7 h-7 rounded-full bg-muted border text-muted-foreground text-xs font-bold shrink-0">×</div>
-                              <div className="flex items-center gap-1.5">
-                                <div className="flex items-center gap-1">
-                                  <svg width="22" height="22" viewBox="0 0 22 22" fill="none" xmlns="http://www.w3.org/2000/svg" className="shrink-0">
-                                    <rect width="22" height="22" rx="5" fill="#635BFF"/>
-                                    <path d="M11.08 8.22c0-.6.5-.84 1.32-.84.94 0 2.12.28 3.06.78V5.44a8.13 8.13 0 0 0-3.06-.56c-2.5 0-4.16 1.3-4.16 3.48 0 3.38 4.66 2.84 4.66 4.3 0 .7-.62.92-1.48.92-1.28 0-2.9-.52-4.18-1.24v2.76c1.42.62 2.86.88 4.18.88 2.56 0 4.32-1.26 4.32-3.48-.02-3.66-4.66-3-4.66-4.28z" fill="white"/>
-                                  </svg>
-                                  <span className="font-bold text-sm" style={{ color: "#635BFF" }}>Stripe</span>
-                                </div>
+                              <span className="text-muted-foreground text-sm font-bold">+</span>
+                              {/* Rental company */}
+                              <div className="flex items-center gap-1.5 bg-white/80 rounded-xl px-3 py-2 shadow-sm border border-border">
+                                {(businessProfile as any)?.logoUrl ? (
+                                  <img
+                                    src={`/api${(businessProfile as any).logoUrl}`}
+                                    alt=""
+                                    className="w-7 h-7 rounded-lg object-cover shrink-0"
+                                  />
+                                ) : (
+                                  <div className="w-7 h-7 bg-muted rounded-lg flex items-center justify-center shrink-0">
+                                    <Building2 className="w-4 h-4 text-muted-foreground" />
+                                  </div>
+                                )}
+                                <span className="font-bold text-xs text-foreground whitespace-nowrap">{(businessProfile as any)?.name || "Your Rental Company"}</span>
+                              </div>
+                              <span className="text-muted-foreground text-sm font-bold">+</span>
+                              {/* Stripe Identity */}
+                              <div className="flex items-center gap-1.5 bg-white/80 rounded-xl px-3 py-2 shadow-sm border border-[#635BFF]/20">
+                                <svg width="20" height="20" viewBox="0 0 22 22" fill="none" xmlns="http://www.w3.org/2000/svg" className="shrink-0">
+                                  <rect width="22" height="22" rx="5" fill="#635BFF"/>
+                                  <path d="M11.08 8.22c0-.6.5-.84 1.32-.84.94 0 2.12.28 3.06.78V5.44a8.13 8.13 0 0 0-3.06-.56c-2.5 0-4.16 1.3-4.16 3.48 0 3.38 4.66 2.84 4.66 4.3 0 .7-.62.92-1.48.92-1.28 0-2.9-.52-4.18-1.24v2.76c1.42.62 2.86.88 4.18.88 2.56 0 4.32-1.26 4.32-3.48-.02-3.66-4.66-3-4.66-4.28z" fill="white"/>
+                                </svg>
+                                <span className="font-bold text-xs" style={{ color: "#635BFF" }}>Stripe</span>
                                 <span className="text-xs font-semibold px-1.5 py-0.5 rounded-md" style={{ background: "#635BFF18", color: "#635BFF" }}>Identity</span>
                               </div>
                             </div>
                             <div className="text-center">
                               <h2 className="font-bold text-base text-foreground">Secure Identity Verification</h2>
                               <p className="text-sm text-muted-foreground mt-1 leading-relaxed">
-                                {(businessProfile as any)?.name || "OutdoorShare"} has partnered with <span className="font-semibold" style={{ color: "#635BFF" }}>Stripe Identity</span> to verify renters securely — protecting both you and our equipment.
+                                OutdoorShare and <span className="font-semibold text-foreground">{(businessProfile as any)?.name || "your rental company"}</span> have teamed up with <span className="font-semibold" style={{ color: "#635BFF" }}>Stripe Identity</span> to verify renters before every rental — keeping equipment, owners, and renters protected.
                               </p>
                             </div>
                           </div>
@@ -1945,7 +1962,7 @@ export default function StorefrontBook() {
                               ))}
                             </div>
                             <p className="text-xs text-center text-muted-foreground leading-relaxed">
-                              Your documents are processed directly by Stripe — we only receive a verified/not verified result.
+                              Your documents are processed directly by Stripe — neither OutdoorShare nor {(businessProfile as any)?.name || "your rental company"} ever sees or stores them. We only receive a verified / not verified result.
                             </p>
                           </div>
                         </div>
