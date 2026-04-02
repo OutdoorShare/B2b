@@ -18,13 +18,28 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { ArrowLeft, Upload, X, CheckCircle2, AlertCircle, CircleDashed, ImagePlus, Loader2 } from "lucide-react";
+import { ArrowLeft, Upload, X, CheckCircle2, AlertCircle, CircleDashed, ImagePlus, Loader2, IdCard } from "lucide-react";
 import { AddonManager } from "@/components/addon-manager";
 import { UnitIdentifiersManager } from "@/components/unit-identifiers-manager";
+import { getAdminSession } from "@/lib/admin-nav";
+
+interface ContactCard { id: number; name: string; address?: string | null; phone?: string | null; email?: string | null; }
+
+function useContactCards() {
+  const [cards, setCards] = useState<ContactCard[]>([]);
+  useEffect(() => {
+    const s = getAdminSession();
+    const headers: Record<string, string> = {};
+    if (s?.token) headers["x-admin-token"] = s.token;
+    fetch(`${BASE}/api/contact-cards`, { headers }).then(r => r.ok ? r.json() : []).then(setCards).catch(() => {});
+  }, []);
+  return cards;
+}
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
 export default function AdminListingsForm() {
+  const contactCards = useContactCards();
   const params = useParams<{ slug: string; id?: string }>();
   const isEditing = !!params.id;
   const id = params?.id ? parseInt(params.id) : 0;
@@ -63,7 +78,8 @@ export default function AdminListingsForm() {
     condition: 'good' as any,
     includedItems: [] as string[],
     requirements: '',
-    ageRestriction: 21 as number | null
+    ageRestriction: 21 as number | null,
+    contactCardId: null as number | null,
   });
 
   const [includedItemInput, setIncludedItemInput] = useState('');
@@ -90,7 +106,8 @@ export default function AdminListingsForm() {
         condition: listing.condition || 'good',
         includedItems: listing.includedItems || [],
         requirements: listing.requirements || '',
-        ageRestriction: 21
+        ageRestriction: 21,
+        contactCardId: (listing as any).contactCardId ?? null,
       });
     }
   }, [isEditing, listing]);
@@ -533,6 +550,61 @@ export default function AdminListingsForm() {
               </CardContent>
             </Card>
             );})()}
+
+            {/* Contact Card */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2 text-lg">
+                  <IdCard className="w-5 h-5 text-primary" />
+                  Contact Card
+                </CardTitle>
+                <CardDescription>
+                  When a booking for this listing is confirmed, the assigned contact card is automatically emailed to the renter with your pickup address, phone, and special instructions.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {contactCards.length === 0 ? (
+                  <div className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground text-center">
+                    No contact cards yet.{" "}
+                    <a href={adminPath("/contact-cards")} className="text-primary underline underline-offset-2">Create one</a>{" "}
+                    to auto-send pickup details when bookings are confirmed.
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    <Label>Assign contact card</Label>
+                    <Select
+                      value={formData.contactCardId?.toString() ?? "none"}
+                      onValueChange={v => setFormData(prev => ({ ...prev, contactCardId: v === "none" ? null : Number(v) }))}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="No contact card assigned" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="none">— None —</SelectItem>
+                        {contactCards.map(c => (
+                          <SelectItem key={c.id} value={c.id.toString()}>
+                            {c.name}
+                            {c.address ? ` · ${c.address.split(",")[0]}` : ""}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    {formData.contactCardId && (() => {
+                      const selected = contactCards.find(c => c.id === formData.contactCardId);
+                      if (!selected) return null;
+                      return (
+                        <div className="rounded-lg bg-muted/50 p-3 text-sm space-y-1 border">
+                          <p className="font-semibold text-foreground">{selected.name}</p>
+                          {selected.address && <p className="text-muted-foreground text-xs">{selected.address}</p>}
+                          {selected.phone && <p className="text-muted-foreground text-xs">{selected.phone}</p>}
+                          {selected.email && <p className="text-muted-foreground text-xs">{selected.email}</p>}
+                        </div>
+                      );
+                    })()}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
 
             <div className="flex justify-end gap-4">
               <Button type="button" variant="outline" onClick={() => setLocation(adminPath("/listings"))}>

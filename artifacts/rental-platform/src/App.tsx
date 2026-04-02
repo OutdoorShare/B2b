@@ -64,6 +64,7 @@ import ProtectionPlansPage from "@/pages/superadmin/protection-plans";
 import SuperAdminAnalytics from "@/pages/superadmin/analytics";
 import SuperAdminFeedback from "@/pages/superadmin/feedback";
 import AdminFeedback from "@/pages/admin/feedback";
+import AdminContactCards from "@/pages/admin/contact-cards";
 
 const queryClient = new QueryClient();
 
@@ -252,6 +253,9 @@ function Router() {
       </Route>
       <Route path="/:slug/admin/feedback">
         <AdminGuard><AdminLayout><AdminFeedback /></AdminLayout></AdminGuard>
+      </Route>
+      <Route path="/:slug/admin/contact-cards">
+        <AdminGuard><AdminLayout><AdminContactCards /></AdminLayout></AdminGuard>
       </Route>
       <Route path="/:slug/admin/settings">
         <AdminGuard><AdminLayout><AdminSettings /></AdminLayout></AdminGuard>

@@ -4,7 +4,7 @@ import path from "path";
 import multer from "multer";
 import { randomBytes } from "crypto";
 import { db } from "@workspace/db";
-import { bookingsTable, listingsTable, businessProfileTable, tenantsTable } from "@workspace/db/schema";
+import { bookingsTable, listingsTable, businessProfileTable, tenantsTable, contactCardsTable } from "@workspace/db/schema";
 import { eq, and, gte, lte, isNull, or } from "drizzle-orm";
 import { generateAgreementPdf } from "../lib/generate-agreement-pdf";
 import {
@@ -13,6 +13,8 @@ import {
   sendBookingPickupReminderEmail,
   sendAdminPickupReminderEmail,
   sendReadyToAdventureEmail,
+  sendContactCardEmail,
+  sendAdminBookingContactEmail,
 } from "../services/gmail";
 
 const UPLOADS_DIR_BOOKINGS = path.resolve(process.cwd(), "uploads");
@@ -294,8 +296,19 @@ router.get("/bookings/:id", async (req, res) => {
 
     if (!booking) { res.status(404).json({ error: "Not found" }); return; }
 
-    const [listing] = await db.select({ title: listingsTable.title }).from(listingsTable).where(eq(listingsTable.id, booking.listingId));
-    res.json(formatBooking(booking, listing?.title ?? "Unknown"));
+    const [listing] = await db
+      .select({ title: listingsTable.title, contactCardId: listingsTable.contactCardId })
+      .from(listingsTable)
+      .where(eq(listingsTable.id, booking.listingId));
+
+    let contactCard: typeof contactCardsTable.$inferSelect | null = null;
+    const showCard = ["confirmed", "active", "completed"].includes(booking.status ?? "");
+    if (showCard && listing?.contactCardId) {
+      const [cc] = await db.select().from(contactCardsTable).where(eq(contactCardsTable.id, listing.contactCardId));
+      contactCard = cc ?? null;
+    }
+
+    res.json({ ...formatBooking(booking, listing?.title ?? "Unknown"), contactCard });
   } catch (err) {
     req.log.error(err);
     res.status(500).json({ error: "Failed to fetch booking" });
@@ -402,6 +415,71 @@ router.put("/bookings/:id", async (req, res) => {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ trigger, bookingId: updated.id, tenantId: req.tenantId ?? null }),
         }).catch(() => {});
+      }
+
+      // On confirmation: send contact card email to renter + notify admin
+      if (body.status === "confirmed") {
+        (async () => {
+          try {
+            const [listingRow] = await db
+              .select({ title: listingsTable.title, contactCardId: listingsTable.contactCardId })
+              .from(listingsTable)
+              .where(eq(listingsTable.id, updated.listingId));
+
+            const [profileRow] = await db
+              .select({ name: businessProfileTable.name, email: businessProfileTable.email })
+              .from(businessProfileTable)
+              .where(eq(businessProfileTable.tenantId, updated.tenantId!));
+
+            const [tenantRow] = await db
+              .select({ slug: tenantsTable.slug, email: tenantsTable.email })
+              .from(tenantsTable)
+              .where(eq(tenantsTable.id, updated.tenantId!));
+
+            const companyName = profileRow?.name ?? tenantRow?.slug ?? "Your Rental Company";
+            const companyEmail = profileRow?.email ?? tenantRow?.email ?? undefined;
+
+            // Send contact card to renter if card is assigned
+            if (listingRow?.contactCardId) {
+              const [card] = await db
+                .select()
+                .from(contactCardsTable)
+                .where(eq(contactCardsTable.id, listingRow.contactCardId));
+
+              if (card) {
+                await sendContactCardEmail({
+                  toEmail: updated.customerEmail,
+                  customerName: updated.customerName,
+                  listingTitle: listingRow.title,
+                  startDate: updated.startDate,
+                  endDate: updated.endDate,
+                  companyName,
+                  companyEmail,
+                  contactCard: card,
+                });
+              }
+            }
+
+            // Notify admin/host with renter's contact info
+            const adminEmail = companyEmail ?? tenantRow?.email;
+            if (adminEmail) {
+              await sendAdminBookingContactEmail({
+                toEmail: adminEmail,
+                companyName,
+                customerName: updated.customerName,
+                customerEmail: updated.customerEmail,
+                customerPhone: updated.customerPhone,
+                listingTitle: listingRow?.title ?? "Rental",
+                startDate: updated.startDate,
+                endDate: updated.endDate,
+                bookingId: updated.id,
+                slug: tenantRow?.slug ?? "",
+              });
+            }
+          } catch (e) {
+            console.error("[bookings] contact card email error:", e);
+          }
+        })();
       }
     }
 

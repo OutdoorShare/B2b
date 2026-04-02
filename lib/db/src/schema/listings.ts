@@ -24,6 +24,7 @@ export const listingsTable = pgTable("listings", {
   includedItems: json("included_items").$type<string[]>().notNull().default([]),
   requirements: text("requirements"),
   ageRestriction: integer("age_restriction"),
+  contactCardId: integer("contact_card_id"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });

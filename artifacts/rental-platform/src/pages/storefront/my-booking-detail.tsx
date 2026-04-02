@@ -7,7 +7,8 @@ import {
   Clock, CheckCircle2, XCircle, AlertCircle, FileSignature, FileText, ExternalLink,
   StickyNote, ShieldCheck, MessageSquare, CreditCard,
   MapPin, Monitor, Smartphone, Phone as PhoneIcon, Users,
-  Receipt, Tag, Camera, ImagePlus, Upload, X as XIcon, Loader2, RotateCcw
+  Receipt, Tag, Camera, ImagePlus, Upload, X as XIcon, Loader2, RotateCcw,
+  IdCard
 } from "lucide-react";
 import { format, differenceInDays, startOfDay, parseISO, subHours } from "date-fns";
 
@@ -491,6 +492,51 @@ export default function MyBookingDetail() {
           </div>
         </div>
       )}
+
+      {/* Contact Card — shown for confirmed/active/completed bookings with a card */}
+      {booking.contactCard && ["confirmed", "active", "completed"].includes(booking.status) && (() => {
+        const card = booking.contactCard as { name?: string; address?: string; phone?: string; email?: string; instructions?: string };
+        return (
+          <div className="rounded-2xl border-2 border-primary/20 bg-primary/5 overflow-hidden">
+            <div className="px-5 py-4 border-b border-primary/15 flex items-center gap-3 bg-primary/10">
+              <div className="w-9 h-9 rounded-full bg-primary/20 flex items-center justify-center shrink-0">
+                <IdCard className="w-5 h-5 text-primary" />
+              </div>
+              <div>
+                <p className="font-semibold text-sm text-foreground">Pickup Contact</p>
+                <p className="text-xs text-muted-foreground mt-0.5">Contact your host using the details below</p>
+              </div>
+            </div>
+            <div className="px-5 py-4 space-y-3">
+              {card.name && <p className="font-semibold text-base">{card.name}</p>}
+              {card.address && (
+                <div className="flex items-start gap-2 text-sm">
+                  <MapPin className="w-4 h-4 text-primary shrink-0 mt-0.5" />
+                  <span className="text-foreground">{card.address}</span>
+                </div>
+              )}
+              {card.phone && (
+                <div className="flex items-center gap-2 text-sm">
+                  <Phone className="w-4 h-4 text-primary shrink-0" />
+                  <a href={`tel:${card.phone}`} className="text-foreground hover:text-primary transition-colors font-medium">{card.phone}</a>
+                </div>
+              )}
+              {card.email && (
+                <div className="flex items-center gap-2 text-sm">
+                  <Mail className="w-4 h-4 text-primary shrink-0" />
+                  <a href={`mailto:${card.email}`} className="text-foreground hover:text-primary transition-colors font-medium">{card.email}</a>
+                </div>
+              )}
+              {card.instructions && (
+                <div className="rounded-xl bg-background border border-primary/15 p-3 text-sm text-muted-foreground">
+                  <p className="font-semibold text-foreground text-xs uppercase tracking-wide mb-1">Special Instructions</p>
+                  <p className="whitespace-pre-wrap">{card.instructions}</p>
+                </div>
+              )}
+            </div>
+          </div>
+        );
+      })()}
 
       {/* Dates & Times card */}
       <div className="rounded-2xl border bg-background p-5 space-y-4">

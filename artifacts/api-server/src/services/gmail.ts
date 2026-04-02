@@ -852,3 +852,134 @@ export async function sendAuditRequestEmail(opts: {
     },
   });
 }
+
+// ── Contact Card email (to renter) ────────────────────────────────────────────
+export async function sendContactCardEmail(opts: {
+  toEmail: string;
+  customerName: string;
+  listingTitle: string;
+  startDate: string;
+  endDate: string;
+  companyName: string;
+  companyEmail?: string;
+  contactCard: {
+    name: string;
+    address?: string | null;
+    phone?: string | null;
+    email?: string | null;
+    specialInstructions?: string | null;
+  };
+}): Promise<void> {
+  const { toEmail, customerName, listingTitle, startDate, endDate, companyName, companyEmail, contactCard } = opts;
+
+  const rows: { label: string; value: string }[] = [
+    { label: "Equipment", value: listingTitle },
+    { label: "Pickup Date", value: startDate },
+    { label: "Return Date", value: endDate },
+  ];
+  if (contactCard.address) rows.push({ label: "Pickup Address", value: contactCard.address });
+  if (contactCard.phone) rows.push({ label: "Phone", value: `<a href="tel:${contactCard.phone}" style="color:${BRAND_GREEN};text-decoration:none;">${contactCard.phone}</a>` });
+  if (contactCard.email) rows.push({ label: "Email", value: `<a href="mailto:${contactCard.email}" style="color:${BRAND_GREEN};text-decoration:none;">${contactCard.email}</a>` });
+
+  const instructionsBlock = contactCard.specialInstructions
+    ? `<div style="margin:24px 0;padding:16px 20px;background:#f0faf0;border-left:4px solid ${BRAND_GREEN};border-radius:0 8px 8px 0;">
+        <p style="margin:0 0 6px;font-size:12px;font-weight:700;color:${BRAND_GREEN};text-transform:uppercase;letter-spacing:1px;">Special Instructions</p>
+        <p style="margin:0;font-size:14px;color:#1a2332;line-height:1.7;">${contactCard.specialInstructions.replace(/\n/g, "<br/>")}</p>
+      </div>`
+    : "";
+
+  const body = `
+    <p style="margin:0 0 8px;font-size:18px;font-weight:700;color:${BRAND_DARK};">Your rental is confirmed! 🎉</p>
+    <p style="margin:0 0 20px;font-size:15px;color:#374151;line-height:1.6;">
+      Hi ${customerName}, your booking with <strong>${companyName}</strong> has been approved. Here's everything you need to know to prepare for your rental.
+    </p>
+
+    ${infoTable(rows)}
+
+    ${instructionsBlock}
+
+    <p style="margin:24px 0 0;font-size:13px;color:#6b7280;text-align:center;">
+      Questions? Reach out to ${companyName} directly using the contact details above.
+    </p>
+  `;
+
+  const html = emailShell({
+    preheader: `Your ${listingTitle} rental with ${companyName} is confirmed — here's what you need to know.`,
+    badgeLabel: "Booking Confirmed",
+    badgeColor: BRAND_GREEN,
+    body,
+  });
+
+  const gmail = await getUncachableGmailClient();
+  const fromHeader = companyEmail ? `${companyName} <${companyEmail}>` : undefined;
+  await gmail.users.messages.send({
+    userId: "me",
+    requestBody: {
+      raw: makeRawEmail(
+        toEmail,
+        `Your ${listingTitle} rental is confirmed — pickup details inside`,
+        html,
+        fromHeader ?? PLATFORM_FROM,
+        fromHeader ? undefined : companyEmail,
+      ),
+    },
+  });
+}
+
+// ── Admin booking notification (renter contact, no address) ──────────────────
+export async function sendAdminBookingContactEmail(opts: {
+  toEmail: string;
+  companyName: string;
+  customerName: string;
+  customerEmail: string;
+  customerPhone?: string | null;
+  listingTitle: string;
+  startDate: string;
+  endDate: string;
+  bookingId: number;
+  slug: string;
+}): Promise<void> {
+  const { toEmail, companyName, customerName, customerEmail, customerPhone, listingTitle, startDate, endDate, bookingId, slug } = opts;
+
+  const rows: { label: string; value: string }[] = [
+    { label: "Guest", value: customerName },
+    { label: "Email", value: `<a href="mailto:${customerEmail}" style="color:${BRAND_GREEN};text-decoration:none;">${customerEmail}</a>` },
+  ];
+  if (customerPhone) rows.push({ label: "Phone", value: `<a href="tel:${customerPhone}" style="color:${BRAND_GREEN};text-decoration:none;">${customerPhone}</a>` });
+  rows.push({ label: "Equipment", value: listingTitle });
+  rows.push({ label: "Pickup Date", value: startDate });
+  rows.push({ label: "Return Date", value: endDate });
+
+  const bookingUrl = `${APP_URL}/${slug}/admin/bookings/${bookingId}`;
+
+  const body = `
+    <p style="margin:0 0 8px;font-size:18px;font-weight:700;color:${BRAND_DARK};">New booking confirmed</p>
+    <p style="margin:0 0 20px;font-size:15px;color:#374151;line-height:1.6;">
+      A booking has been confirmed for <strong>${companyName}</strong>. Here is the renter's contact information so you can coordinate the pickup.
+    </p>
+
+    ${infoTable(rows)}
+
+    ${ctaButton("View Booking", bookingUrl)}
+  `;
+
+  const html = emailShell({
+    preheader: `${customerName} is confirmed for ${listingTitle} — ${startDate} to ${endDate}.`,
+    badgeLabel: "Booking Confirmed",
+    badgeColor: BRAND_DARK,
+    body,
+  });
+
+  const gmail = await getUncachableGmailClient();
+  await gmail.users.messages.send({
+    userId: "me",
+    requestBody: {
+      raw: makeRawEmail(
+        toEmail,
+        `Booking confirmed — ${customerName} for ${listingTitle}`,
+        html,
+        PLATFORM_FROM,
+      ),
+    },
+  });
+}

@@ -21,6 +21,7 @@ import {
   Rocket,
   CreditCard,
   MessageSquarePlus,
+  IdCard,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useGetBusinessProfile } from "@workspace/api-client-react";
@@ -41,6 +42,7 @@ const NAV_ITEMS = [
   { name: "Promo Codes", path: "/promo-codes", icon: Tag },
   { name: "My Wallet", path: "/wallet", icon: Wallet },
   { name: "Billing", path: "/billing", icon: CreditCard },
+  { name: "Contact Cards", path: "/contact-cards", icon: IdCard },
   { name: "Feedback", path: "/feedback", icon: MessageSquarePlus },
   { name: "Settings", path: "/settings", icon: Settings },
 ];

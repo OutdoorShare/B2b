@@ -17,6 +17,7 @@ import communicationsRouter from "./communications";
 import auditRouter from "./audit";
 import feedbackRouter from "./feedback";
 import aiRouter from "./ai";
+import contactCardsRouter from "./contact-cards";
 
 const router: IRouter = Router();
 
@@ -38,5 +39,6 @@ router.use(signupRouter);
 router.use(communicationsRouter);
 router.use(feedbackRouter);
 router.use(aiRouter);
+router.use(contactCardsRouter);
 
 export default router;
