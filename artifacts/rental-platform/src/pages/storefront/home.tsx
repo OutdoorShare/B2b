@@ -155,7 +155,10 @@ export default function StorefrontHome() {
   });
 
   const { data: categories } = useGetCategories({
-    query: { queryKey: getGetCategoriesQueryKey() }
+    query: {
+      queryKey: [...getGetCategoriesQueryKey(), slug],
+      enabled: !!slug,
+    }
   });
 
   const { data: listings, isLoading } = useGetListings(
