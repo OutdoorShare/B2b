@@ -1,7 +1,7 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useReducer } from "react";
 import { AIAssistant } from "@/components/ai-assistant";
 import { Link, useParams, useLocation } from "wouter";
-import { Tent, Clock, Lock, User, LogOut, BookOpen, UserCircle } from "lucide-react";
+import { Tent, Clock, Lock, User, LogOut, BookOpen, UserCircle, Eye, EyeOff } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -12,6 +12,133 @@ import {
 import { useGetBusinessProfile } from "@workspace/api-client-react";
 import { PoweredByBadge } from "@/components/powered-by-badge";
 import { applyBrandColors } from "@/lib/theme";
+
+// ── Demo Gate ────────────────────────────────────────────────────────────────
+// Slugs whose storefronts require the same credentials as their admin panel.
+const PROTECTED_DEMO_SLUGS = new Set(["demo-outdoorshare"]);
+const BASE_URL = import.meta.env.BASE_URL.replace(/\/$/, "");
+
+function hasDemoSession(slug: string): boolean {
+  try {
+    const raw = localStorage.getItem("admin_session");
+    if (!raw) return false;
+    const s = JSON.parse(raw);
+    return !!(s?.token && s?.tenantSlug === slug);
+  } catch { return false; }
+}
+
+function DemoLoginOverlay({ slug, onAuth }: { slug: string; onAuth: () => void }) {
+  const [email, setEmail]         = useState("");
+  const [password, setPassword]   = useState("");
+  const [showPw, setShowPw]       = useState(false);
+  const [loading, setLoading]     = useState(false);
+  const [error, setError]         = useState("");
+
+  const handleLogin = async () => {
+    setError("");
+    if (!email || !password) { setError("Email and password are required."); return; }
+    setLoading(true);
+    try {
+      const res = await fetch(`${BASE_URL}/api/admin/auth/owner-login`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, password, slug }),
+      });
+      const data = await res.json();
+      if (!res.ok || data.tenantSlug !== slug) {
+        setError(data.error || "Invalid credentials for this demo site.");
+        return;
+      }
+      localStorage.setItem("admin_session", JSON.stringify({
+        type: "owner",
+        token: data.token,
+        tenantId: data.tenantId,
+        tenantName: data.tenantName,
+        tenantSlug: data.tenantSlug,
+        email: data.email,
+      }));
+      onAuth();
+    } catch {
+      setError("Connection error — please try again.");
+    } finally { setLoading(false); }
+  };
+
+  return (
+    <div className="fixed inset-0 z-[200] flex items-center justify-center bg-[#0f1923]">
+      <div className="w-full max-w-sm px-4">
+        {/* Logo */}
+        <div className="flex flex-col items-center mb-8">
+          <div className="w-14 h-14 rounded-2xl bg-[#3ab549]/10 border border-[#3ab549]/30 flex items-center justify-center mb-4">
+            <Lock className="w-7 h-7 text-[#3ab549]" />
+          </div>
+          <h1 className="text-white text-xl font-bold">Demo Access Required</h1>
+          <p className="text-white/50 text-sm mt-1 text-center">
+            This is a private demo. Enter your credentials to continue.
+          </p>
+        </div>
+
+        {/* Form */}
+        <div className="bg-white/5 border border-white/10 rounded-2xl p-6 space-y-4">
+          <div className="space-y-1.5">
+            <label className="text-white/60 text-xs font-medium uppercase tracking-wide">Email</label>
+            <input
+              type="email"
+              value={email}
+              onChange={e => setEmail(e.target.value)}
+              onKeyDown={e => e.key === "Enter" && handleLogin()}
+              placeholder="demo@example.com"
+              autoFocus
+              className="w-full bg-white/5 border border-white/10 rounded-lg px-3.5 py-2.5 text-white text-sm placeholder:text-white/25 focus:outline-none focus:border-[#3ab549]/60 focus:ring-1 focus:ring-[#3ab549]/40 transition-colors"
+            />
+          </div>
+          <div className="space-y-1.5">
+            <label className="text-white/60 text-xs font-medium uppercase tracking-wide">Password</label>
+            <div className="relative">
+              <input
+                type={showPw ? "text" : "password"}
+                value={password}
+                onChange={e => setPassword(e.target.value)}
+                onKeyDown={e => e.key === "Enter" && handleLogin()}
+                placeholder="••••••••"
+                className="w-full bg-white/5 border border-white/10 rounded-lg px-3.5 py-2.5 pr-10 text-white text-sm placeholder:text-white/25 focus:outline-none focus:border-[#3ab549]/60 focus:ring-1 focus:ring-[#3ab549]/40 transition-colors"
+              />
+              <button
+                type="button"
+                onClick={() => setShowPw(v => !v)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-white/30 hover:text-white/60 transition-colors"
+              >
+                {showPw ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+              </button>
+            </div>
+          </div>
+
+          {error && (
+            <p className="text-red-400 text-xs bg-red-400/10 border border-red-400/20 rounded-lg px-3 py-2">{error}</p>
+          )}
+
+          <button
+            onClick={handleLogin}
+            disabled={loading}
+            className="w-full py-2.5 rounded-lg text-white text-sm font-semibold bg-[#3ab549] hover:bg-[#2ea040] disabled:opacity-50 disabled:cursor-not-allowed transition-colors mt-1"
+          >
+            {loading ? "Signing in…" : "Sign In"}
+          </button>
+        </div>
+
+        <p className="text-center text-white/20 text-xs mt-6">
+          Powered by OutdoorShare
+        </p>
+      </div>
+    </div>
+  );
+}
+
+function DemoGate({ slug, children }: { slug: string; children: React.ReactNode }) {
+  const [, bump] = useReducer((n: number) => n + 1, 0);
+  if (!PROTECTED_DEMO_SLUGS.has(slug)) return <>{children}</>;
+  if (hasDemoSession(slug)) return <>{children}</>;
+  return <DemoLoginOverlay slug={slug} onAuth={bump} />;
+}
 
 const OS_GREEN = "#3ab549";
 
@@ -250,6 +377,7 @@ export function StorefrontLayout({ children }: { children: React.ReactNode }) {
   const btnHoverBg     = darken(accentColor, 18);
 
   return (
+    <DemoGate slug={slug ?? ""}>
     <div className="min-h-[100dvh] flex flex-col bg-background">
       {/* Blocked paywall: trial expired AND 3-day grace period has passed */}
       {isBlocked && (
@@ -409,5 +537,6 @@ export function StorefrontLayout({ children }: { children: React.ReactNode }) {
         />
       )}
     </div>
+    </DemoGate>
   );
 }
