@@ -426,7 +426,7 @@ export default function StorefrontGearDetail() {
                     </div>
                     <div className="px-4 py-3 flex items-start justify-between gap-4" style={{ background: "#f0faf1" }}>
                       <div className="flex-1">
-                        <p className="text-xs text-gray-700 mb-2">Included with every rental. Covers accidents, weather events, and disasters so you can adventure with confidence.</p>
+                        <p className="text-xs text-gray-700 mb-2">Included with every rental. A contractual protection offering (not insurance) covering accidental equipment damage — accidents, weather events, and mechanical breakdown. Renters are responsible for deductibles.{" "}<a href="https://myoutdoorshare.com/protection-plan" target="_blank" rel="noopener noreferrer" className="font-semibold underline" style={{ color: "#3ab549" }}>Learn more →</a></p>
                         <div className="grid grid-cols-2 gap-x-3 gap-y-1">
                           {[
                             { icon: AlertTriangle, text: "Accident & collision" },

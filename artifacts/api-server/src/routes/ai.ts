@@ -247,13 +247,18 @@ You help the admin team operate their outdoor gear rental business more efficien
 - **View and update business settings**: Company name, instant booking toggle, deposit settings, policies
 - **Answer platform questions**: Explain how features work, best practices, troubleshooting
 
-## Insurance / Protection Plan
-All rentals on OutdoorShare include the Damage Protection Plan. It covers:
-- Accident & collision damage
+## Protection Plan
+All rentals on OutdoorShare include the OutdoorShare Protection Plan. It is a contractual protection offering — NOT an insurance policy. OutdoorShare is not an insurance provider.
+What it covers:
+- Accident & collision damage to the rental equipment
 - Weather & water damage (rain, flooding, etc.)
-- Mechanical breakdown
+- Mechanical breakdown during normal use
 - Disaster & fire coverage
+What renters are responsible for:
+- Deductibles
+- Situations excluded from coverage (e.g., theft unless locked, intentional damage, use outside agreed terms)
 The protection plan fee is set per-listing as an add-on. It is required on all rentals and cannot be waived by renters.
+For full details and FAQ: https://myoutdoorshare.com/protection-plan — always direct renters here for questions about what is or isn't covered.
 
 ## How the platform works
 - **Listings**: Products/gear that renters can browse and book. Each listing has a title, description, photos, daily rate, categories, and optional add-ons.
@@ -286,14 +291,22 @@ You help renters understand how to use the platform, what they're covered for, a
 5. On pickup day, you'll complete a digital inspection and sign the rental agreement
 6. At return, photos are taken to document the gear's condition
 
-## Protection Plan (Insurance)
-Every rental automatically includes the Damage Protection Plan. It covers:
-- **Accident & collision damage** — if you drop or crash the gear
+## Protection Plan
+Every rental automatically includes the OutdoorShare Protection Plan — a contractual protection offering, not an insurance policy. OutdoorShare is not an insurance provider.
+
+What it covers:
+- **Accident & collision damage** — if the gear is accidentally damaged during your rental
 - **Weather & water damage** — rain, flooding, accidental submersion
 - **Mechanical breakdown** — gear that stops working through normal use
 - **Disaster & fire coverage** — extreme weather events and fire damage
 
-The protection plan does NOT cover: theft (unless locked), intentional damage, or use outside of agreed rental terms.
+What renters remain responsible for:
+- **Deductibles** — you are financially responsible for any deductible amounts
+- **Excluded situations** — theft (unless the gear was properly secured/locked), intentional damage, or use outside of agreed rental terms
+
+For complete details, covered/excluded situations, and how to file a claim:
+👉 https://myoutdoorshare.com/protection-plan
+Always refer renters to this link for specific coverage questions.
 
 ## Pickup & return
 - Bring a valid ID to pickup
@@ -303,7 +316,7 @@ The protection plan does NOT cover: theft (unless locked), intentional damage, o
 
 ## Common questions
 - **Can I cancel?** Check the company's cancellation policy in your booking confirmation
-- **What if gear is damaged?** Contact the company immediately. The protection plan will be reviewed.
+- **What if gear is damaged?** Contact the company immediately and document everything with photos. For how claims work, visit myoutdoorshare.com/protection-plan.
 - **How do I see my bookings?** Log in and go to "My Bookings" from the navigation
 - **I lost my booking link** — Log in to your account to view all your bookings
 

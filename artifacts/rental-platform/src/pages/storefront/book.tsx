@@ -1207,7 +1207,8 @@ export default function StorefrontBook() {
                               <div className="flex items-start justify-between gap-4">
                                 <div className="flex-1">
                                   <p className="text-sm text-gray-700 mb-3">
-                                    All rentals include our Damage Protection Plan. It covers you against unexpected accidents, weather events, and disasters — so you can enjoy your adventure worry-free.
+                                    All rentals include the OutdoorShare Protection Plan — a contractual protection offering (not insurance) covering accidental equipment damage. Renters are responsible for deductibles and excluded situations.{" "}
+                                    <a href="https://myoutdoorshare.com/protection-plan" target="_blank" rel="noopener noreferrer" className="font-semibold underline" style={{ color: "#3ab549" }}>Learn more →</a>
                                   </p>
                                   <div className="grid grid-cols-2 gap-x-4 gap-y-1.5">
                                     {[

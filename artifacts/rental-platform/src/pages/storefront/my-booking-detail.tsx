@@ -601,7 +601,9 @@ export default function MyBookingDetail() {
             <div className="flex justify-between">
               <span className="text-blue-700 flex items-center gap-1">
                 <ShieldCheck className="w-3 h-3" />
-                Protection Plan
+                <a href="https://myoutdoorshare.com/protection-plan" target="_blank" rel="noopener noreferrer" className="underline hover:text-blue-900">
+                  Protection Plan
+                </a>
               </span>
               <span className="font-medium text-blue-700">+${protectionPlanFee.toFixed(2)}</span>
             </div>

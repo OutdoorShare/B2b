@@ -17,7 +17,7 @@ import {
   Waves, Bus, Truck, Anchor, Bike, Zap,
   Package, Snowflake, CarFront, Gauge, SlidersHorizontal, ShieldCheck,
   Phone, Mail, ChevronDown, ChevronUp,
-  CheckCircle2, Umbrella, Users,
+  CheckCircle2, Umbrella, Users, AlertTriangle,
 } from "lucide-react";
 
 const CATEGORY_ICONS: Record<string, React.ElementType> = {
@@ -63,11 +63,11 @@ const HOW_IT_WORKS = [
   {
     step: "03",
     title: "Pick up and head out",
-    description: "Show up at the scheduled time, complete a quick check-in, and you're on your way. Every booking is backed by a 3rd-party protection plan.",
+    description: "Show up at the scheduled time, complete a quick check-in, and you're on your way. Every booking includes the OutdoorShare Protection Plan.",
     bullets: [
       "Easy check-in at pickup",
-      "Full 3rd-party protection included",
-      "Ride, drive, or float — you're covered",
+      "OutdoorShare Protection Plan included",
+      "Ride, drive, or float",
       "Return and you're done",
     ],
   },
@@ -76,18 +76,18 @@ const HOW_IT_WORKS = [
 const PROTECTION_PILLARS = [
   {
     icon: Car,
-    title: "The Equipment",
-    description: "Damage to the rental product during your booking period is covered by our 3rd-party protection plan.",
+    title: "Equipment Damage",
+    description: "Accidental damage to the rental equipment during your booking period — accidents, weather events, mechanical breakdown, and more.",
   },
   {
-    icon: Users,
-    title: "The Renter",
-    description: "You are covered in the event of an injury or incident that occurs during your rental.",
+    icon: ShieldCheck,
+    title: "Contractual Protection",
+    description: "The OutdoorShare Protection Plan is a contractual protection offering — not an insurance policy. OutdoorShare is not an insurance provider.",
   },
   {
-    icon: Umbrella,
-    title: "3rd-Party Liability",
-    description: "Any 3rd-party damage or incidents that occur during the rental period are handled by our provider.",
+    icon: AlertTriangle,
+    title: "Renter Responsibility",
+    description: "Renters remain responsible for deductibles and situations excluded from coverage. Use equipment responsibly and document its condition.",
   },
 ];
 
@@ -98,7 +98,7 @@ const FAQ_ITEMS = [
   },
   {
     question: "How does the protection plan work?",
-    answer: "Every booking includes a protection plan fee paid at checkout. It covers damage to the equipment, injury to the renter, and 3rd-party liability — all managed by a 3rd-party insurance provider. There is no fine print.",
+    answer: "Every booking includes an OutdoorShare Protection Plan fee paid at checkout. It is a contractual protection offering — not an insurance policy — that covers accidental damage to rental equipment from accidents, weather events, and mechanical breakdown. Renters remain responsible for deductibles and excluded situations. Learn more at myoutdoorshare.com/protection-plan.",
   },
   {
     question: "Is booking really instant, or do I need to wait for approval?",
@@ -438,10 +438,11 @@ export default function StorefrontHome() {
               <span className="text-[#3ab549] font-bold text-sm uppercase tracking-widest">Every booking protected</span>
             </div>
             <h2 className="text-3xl md:text-4xl font-black text-white tracking-tight">
-              The protection plan — simple, clear, included.
+              The OutdoorShare Protection Plan — included with every booking.
             </h2>
             <p className="text-white/60 mt-3 text-base max-w-xl mx-auto leading-relaxed">
-              Every booking includes a protection plan fee, paid by the renter at checkout. Clear coverage managed by a 3rd-party insurance provider. No fine print.
+              Every booking includes a Protection Plan fee paid at checkout. A contractual protection offering — not insurance — designed to make rentals safer for everyone.{" "}
+              <a href="https://myoutdoorshare.com/protection-plan" target="_blank" rel="noopener noreferrer" className="underline text-[#3ab549] hover:text-[#3ab549]/80">Learn more →</a>
             </p>
           </div>
 
@@ -462,10 +463,10 @@ export default function StorefrontHome() {
             <h3 className="font-bold text-white text-center mb-6">How it works</h3>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               {[
-                "Renter books equipment — protection fee is included automatically",
-                "Booking confirmed — both renter and owner are covered from the moment of pickup",
-                "If something happens, the 3rd-party provider handles the claim",
-                "No paperwork for the operator — claims are handled entirely for you",
+                "Renter books equipment — Protection Plan fee is included automatically at checkout",
+                "Booking confirmed — equipment damage coverage is active from pickup to return",
+                "If an incident occurs, report it promptly and file a claim through OutdoorShare",
+                "Renters remain responsible for deductibles and any excluded situations",
               ].map((text, i) => (
                 <div key={i} className="flex items-start gap-3">
                   <div className="w-6 h-6 rounded-full bg-[#3ab549] text-white text-xs font-black flex items-center justify-center shrink-0 mt-0.5">{i + 1}</div>
