@@ -5,10 +5,8 @@ import {
   useGetListing, 
   useCreateListing, 
   useUpdateListing,
-  useGetCategories,
   getGetListingQueryKey,
   getGetListingsQueryKey,
-  getGetCategoriesQueryKey
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -24,6 +22,7 @@ import { UnitIdentifiersManager } from "@/components/unit-identifiers-manager";
 import { getAdminSession } from "@/lib/admin-nav";
 
 interface ContactCard { id: number; name: string; address?: string | null; phone?: string | null; email?: string | null; }
+interface Category { id: number; name: string; slug: string; icon?: string | null; }
 
 function useContactCards() {
   const [cards, setCards] = useState<ContactCard[]>([]);
@@ -36,10 +35,22 @@ function useContactCards() {
   return cards;
 }
 
+function useCategories() {
+  const [categories, setCategories] = useState<Category[]>([]);
+  useEffect(() => {
+    const s = getAdminSession();
+    const headers: Record<string, string> = {};
+    if (s?.token) headers["x-admin-token"] = s.token;
+    fetch(`${BASE}/api/categories`, { headers }).then(r => r.ok ? r.json() : []).then(setCategories).catch(() => {});
+  }, []);
+  return categories;
+}
+
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
 export default function AdminListingsForm() {
   const contactCards = useContactCards();
+  const categories = useCategories();
   const params = useParams<{ slug: string; id?: string }>();
   const isEditing = !!params.id;
   const id = params?.id ? parseInt(params.id) : 0;
@@ -47,10 +58,6 @@ export default function AdminListingsForm() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
   const queryClient = useQueryClient();
-
-  const { data: categories } = useGetCategories({
-    query: { queryKey: getGetCategoriesQueryKey() }
-  });
 
   const { data: listing, isLoading: isLoadingListing } = useGetListing(id, {
     query: { enabled: isEditing && !!id, queryKey: getGetListingQueryKey(id) }
