@@ -1,6 +1,6 @@
-import { adminPath } from "@/lib/admin-nav";
+import { adminPath, getAdminSession } from "@/lib/admin-nav";
 import { useState, useEffect, useCallback } from "react";
-import { Link, useLocation, useParams } from "wouter";
+import { useLocation, useParams } from "wouter";
 import { QRCodeSVG } from "qrcode.react";
 import { 
   useGetBusinessProfile, 
@@ -14,7 +14,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { 
   ArrowLeft, Search, Car, Smartphone, Monitor, X, 
-  Clock, ChevronRight
+  Clock, ChevronRight, Delete, Lock, ShieldAlert
 } from "lucide-react";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
@@ -31,6 +31,10 @@ type SelectedListing = {
 
 const IDLE_RESET_SECONDS = 90;
 
+function getExitPin(slug: string): string {
+  return localStorage.getItem(`kiosk_exit_pin_${slug}`) || "1234";
+}
+
 export default function AdminKiosk() {
   const { slug: urlSlug } = useParams<{ slug: string }>();
   const [, setLocation] = useLocation();
@@ -38,6 +42,12 @@ export default function AdminKiosk() {
   const [activeCategory, setActiveCategory] = useState<number | null>(null);
   const [selected, setSelected] = useState<SelectedListing | null>(null);
   const [idleSeconds, setIdleSeconds] = useState(IDLE_RESET_SECONDS);
+
+  // PIN exit state
+  const [showExitPad, setShowExitPad] = useState(false);
+  const [enteredPin, setEnteredPin] = useState("");
+  const [pinError, setPinError] = useState(false);
+  const [shaking, setShaking] = useState(false);
 
   const { data: profile } = useGetBusinessProfile({
     query: { queryKey: getGetBusinessProfileQueryKey() }
@@ -52,13 +62,11 @@ export default function AdminKiosk() {
     { query: { queryKey: getGetListingsQueryKey({ status: "active", search: search || undefined, categoryId: activeCategory || undefined }) } }
   );
 
-  // Build the full booking URL — prefer URL slug (always available), fall back to profile
   const tenantSlug = urlSlug || (profile as any)?.siteSlug || (profile as any)?.slug || "";
   const bookingUrl = selected && tenantSlug
     ? `${window.location.origin}${BASE}/${tenantSlug}/book?listingId=${selected.id}`
     : "";
 
-  // Idle countdown — resets on any interaction
   const resetIdle = useCallback(() => setIdleSeconds(IDLE_RESET_SECONDS), []);
 
   useEffect(() => {
@@ -82,16 +90,53 @@ export default function AdminKiosk() {
     };
   }, [selected, resetIdle]);
 
+  // PIN entry helpers
+  function handlePinDigit(digit: string) {
+    if (enteredPin.length >= 8) return;
+    const next = enteredPin + digit;
+    setEnteredPin(next);
+    setPinError(false);
+  }
+
+  function handlePinBackspace() {
+    setEnteredPin(p => p.slice(0, -1));
+    setPinError(false);
+  }
+
+  function handlePinSubmit() {
+    const correctPin = getExitPin(tenantSlug);
+    if (enteredPin === correctPin) {
+      setShowExitPad(false);
+      setEnteredPin("");
+      setPinError(false);
+      setLocation(adminPath(""));
+    } else {
+      setPinError(true);
+      setShaking(true);
+      setEnteredPin("");
+      setTimeout(() => setShaking(false), 600);
+    }
+  }
+
+  function cancelExitPad() {
+    setShowExitPad(false);
+    setEnteredPin("");
+    setPinError(false);
+  }
+
   return (
     <div className="min-h-screen bg-background flex flex-col font-sans">
       {/* Top Bar */}
       <header className="h-20 border-b bg-card flex items-center px-8 justify-between shrink-0 shadow-sm">
         <div className="flex items-center gap-4">
-          <Link href={adminPath("")}>
-            <Button variant="ghost" size="icon" className="w-12 h-12 rounded-full">
-              <ArrowLeft className="w-6 h-6" />
-            </Button>
-          </Link>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="w-12 h-12 rounded-full"
+            onClick={() => setShowExitPad(true)}
+          >
+            <ArrowLeft className="w-6 h-6" />
+          </Button>
           <div className="flex items-center gap-3">
             {profile?.logoUrl ? (
               <img src={profile.logoUrl} alt={profile.name} className="h-10 object-contain" />
@@ -233,7 +278,6 @@ export default function AdminKiosk() {
 
             {/* Right: QR + options */}
             <div className="md:w-3/5 p-8 flex flex-col items-center justify-center gap-6 relative">
-              {/* Close + idle timer */}
               <div className="absolute top-4 right-4 flex items-center gap-3">
                 <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
                   <Clock className="w-4 h-4" />
@@ -247,7 +291,6 @@ export default function AdminKiosk() {
                 </button>
               </div>
 
-              {/* QR Code section */}
               <div className="text-center space-y-3">
                 <div className="flex items-center justify-center gap-2 text-muted-foreground text-sm font-medium mb-4">
                   <Smartphone className="w-4 h-4" />
@@ -272,7 +315,6 @@ export default function AdminKiosk() {
                 <div className="flex-1 h-px bg-border" />
               </div>
 
-              {/* Book on kiosk */}
               <div className="text-center space-y-3 w-full">
                 <div className="flex items-center justify-center gap-2 text-muted-foreground text-sm font-medium">
                   <Monitor className="w-4 h-4" />
@@ -303,6 +345,100 @@ export default function AdminKiosk() {
           </div>
         </div>
       )}
+
+      {/* ── Exit PIN Overlay ── */}
+      {showExitPad && (
+        <div className="fixed inset-0 z-[100] bg-black/80 backdrop-blur-md flex items-center justify-center">
+          <div className="bg-background rounded-3xl shadow-2xl w-full max-w-sm mx-4 overflow-hidden">
+            {/* Header */}
+            <div className="bg-primary/5 border-b px-8 py-6 text-center">
+              <div className="w-14 h-14 bg-primary/10 rounded-full flex items-center justify-center mx-auto mb-3">
+                <Lock className="w-7 h-7 text-primary" />
+              </div>
+              <h2 className="text-xl font-bold">Admin Access Required</h2>
+              <p className="text-sm text-muted-foreground mt-1">Enter your kiosk exit code to leave</p>
+            </div>
+
+            <div className="p-8 space-y-6">
+              {/* PIN dots */}
+              <div
+                className={`flex items-center justify-center gap-3 transition-transform ${shaking ? "animate-[wiggle_0.5s_ease-in-out]" : ""}`}
+                style={shaking ? { animation: "wiggle 0.5s ease-in-out" } : {}}
+              >
+                {Array.from({ length: Math.max(4, enteredPin.length) }).map((_, i) => (
+                  <div
+                    key={i}
+                    className={`w-4 h-4 rounded-full border-2 transition-all ${
+                      i < enteredPin.length
+                        ? pinError
+                          ? "bg-red-500 border-red-500"
+                          : "bg-primary border-primary scale-110"
+                        : "border-muted-foreground/30"
+                    }`}
+                  />
+                ))}
+              </div>
+
+              {pinError && (
+                <div className="flex items-center justify-center gap-2 text-red-500 text-sm font-medium">
+                  <ShieldAlert className="w-4 h-4" />
+                  Incorrect code. Try again.
+                </div>
+              )}
+
+              {/* Numpad */}
+              <div className="grid grid-cols-3 gap-3">
+                {["1","2","3","4","5","6","7","8","9"].map(digit => (
+                  <button
+                    key={digit}
+                    onClick={() => handlePinDigit(digit)}
+                    className="h-16 rounded-2xl bg-muted hover:bg-muted/70 active:scale-95 text-2xl font-bold transition-all border border-border hover:border-primary/30"
+                  >
+                    {digit}
+                  </button>
+                ))}
+                <button
+                  onClick={handlePinBackspace}
+                  className="h-16 rounded-2xl bg-muted hover:bg-muted/70 active:scale-95 transition-all border border-border flex items-center justify-center"
+                >
+                  <Delete className="w-5 h-5 text-muted-foreground" />
+                </button>
+                <button
+                  onClick={() => handlePinDigit("0")}
+                  className="h-16 rounded-2xl bg-muted hover:bg-muted/70 active:scale-95 text-2xl font-bold transition-all border border-border hover:border-primary/30"
+                >
+                  0
+                </button>
+                <button
+                  onClick={handlePinSubmit}
+                  disabled={enteredPin.length === 0}
+                  className="h-16 rounded-2xl bg-primary hover:bg-primary/90 active:scale-95 text-primary-foreground text-sm font-bold transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  Enter
+                </button>
+              </div>
+
+              <Button
+                variant="ghost"
+                className="w-full text-muted-foreground"
+                onClick={cancelExitPad}
+              >
+                Cancel — Stay in Kiosk Mode
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <style>{`
+        @keyframes wiggle {
+          0%, 100% { transform: translateX(0); }
+          20% { transform: translateX(-8px); }
+          40% { transform: translateX(8px); }
+          60% { transform: translateX(-8px); }
+          80% { transform: translateX(8px); }
+        }
+      `}</style>
     </div>
   );
 }

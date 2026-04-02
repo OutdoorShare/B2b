@@ -14,7 +14,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
-import { Copy, CheckCircle2, Paintbrush, RefreshCw, Upload, Eye, ImageIcon, X } from "lucide-react";
+import { Copy, CheckCircle2, Paintbrush, RefreshCw, Upload, Eye, EyeOff, ImageIcon, X, KeyRound } from "lucide-react";
 import { applyBrandColors, PRESET_THEMES, isLight } from "@/lib/theme";
 
 function slugifyPreview(name: string): string {
@@ -26,6 +26,25 @@ export default function AdminSettings() {
   const queryClient = useQueryClient();
   const [copied, setCopied] = useState(false);
   const { slug: urlSlug } = useParams<{ slug: string }>();
+
+  // Kiosk exit PIN — stored in localStorage, never sent to server
+  const pinKey = `kiosk_exit_pin_${urlSlug}`;
+  const [kioskPin, setKioskPin] = useState(() => localStorage.getItem(`kiosk_exit_pin_${urlSlug}`) || "1234");
+  const [showPin, setShowPin] = useState(false);
+  const [pinSaved, setPinSaved] = useState(false);
+
+  function saveKioskPin() {
+    const clean = kioskPin.replace(/\D/g, "").slice(0, 8);
+    if (clean.length < 4) {
+      toast({ title: "PIN too short", description: "Your exit code must be at least 4 digits.", variant: "destructive" });
+      return;
+    }
+    localStorage.setItem(pinKey, clean);
+    setKioskPin(clean);
+    setPinSaved(true);
+    setTimeout(() => setPinSaved(false), 2000);
+    toast({ title: "Kiosk exit code saved", description: `Code set to ${clean.replace(/./g, "●")}` });
+  }
 
   // Use the slug-scoped query key so this cache entry is shared with the
   // storefront layout (which also uses ["/api/business", slug]). This ensures
@@ -549,16 +568,61 @@ export default function AdminSettings() {
 
             {/* Kiosk */}
             <Card>
-              <CardContent className="pt-6">
+              <CardHeader>
+                <CardTitle>Kiosk Mode</CardTitle>
+                <CardDescription>Configure the self-service kiosk for in-store tablets.</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
                 <div className="flex items-center justify-between border rounded-lg p-4">
                   <div className="space-y-0.5">
-                    <Label className="text-base">Kiosk Mode</Label>
-                    <p className="text-sm text-muted-foreground">Enable simplified fullscreen view for in-store tablets.</p>
+                    <Label className="text-base">Enable Kiosk Mode</Label>
+                    <p className="text-sm text-muted-foreground">Simplified fullscreen view customers can browse without admin access.</p>
                   </div>
                   <Switch
                     checked={formData.kioskModeEnabled || false}
                     onCheckedChange={checked => handleSwitchChange("kioskModeEnabled", checked)}
                   />
+                </div>
+
+                {/* Exit PIN */}
+                <div className="border rounded-lg p-4 space-y-3">
+                  <div className="flex items-center gap-2">
+                    <KeyRound className="w-4 h-4 text-primary" />
+                    <Label className="text-base">Kiosk Exit Code</Label>
+                  </div>
+                  <p className="text-sm text-muted-foreground">
+                    Customers must enter this code to leave kiosk mode. Keep this private — only share with staff.
+                  </p>
+                  <div className="flex items-center gap-3">
+                    <div className="relative flex-1 max-w-[200px]">
+                      <Input
+                        type={showPin ? "text" : "password"}
+                        inputMode="numeric"
+                        pattern="[0-9]*"
+                        maxLength={8}
+                        value={kioskPin}
+                        onChange={e => setKioskPin(e.target.value.replace(/\D/g, "").slice(0, 8))}
+                        className="pr-10 font-mono text-lg tracking-widest"
+                        placeholder="1234"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowPin(v => !v)}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                      >
+                        {showPin ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                      </button>
+                    </div>
+                    <Button
+                      type="button"
+                      variant={pinSaved ? "outline" : "secondary"}
+                      onClick={saveKioskPin}
+                      className="shrink-0"
+                    >
+                      {pinSaved ? <><CheckCircle2 className="w-4 h-4 mr-1.5 text-green-600" />Saved</> : "Save Code"}
+                    </Button>
+                  </div>
+                  <p className="text-xs text-muted-foreground">4–8 digits. Default is <span className="font-mono font-semibold">1234</span> — change it before going live.</p>
                 </div>
               </CardContent>
             </Card>
