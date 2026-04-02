@@ -25,6 +25,7 @@ export const listingsTable = pgTable("listings", {
   requirements: text("requirements"),
   ageRestriction: integer("age_restriction"),
   contactCardId: integer("contact_card_id"),
+  productId: integer("product_id"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
