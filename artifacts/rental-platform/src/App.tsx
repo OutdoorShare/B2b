@@ -64,6 +64,7 @@ import DemoSitePage from "@/pages/superadmin/demo-site";
 import ProtectionPlansPage from "@/pages/superadmin/protection-plans";
 import SuperAdminAnalytics from "@/pages/superadmin/analytics";
 import SuperAdminFeedback from "@/pages/superadmin/feedback";
+import SuperAdminDeveloper from "@/pages/superadmin/developer";
 import AdminFeedback from "@/pages/admin/feedback";
 import AdminContactCards from "@/pages/admin/contact-cards";
 import AdminInventory from "@/pages/admin/inventory/index";
@@ -225,6 +226,9 @@ function Router() {
       </Route>
       <Route path="/superadmin/feedback">
         <SuperAdminLayout><SuperAdminFeedback /></SuperAdminLayout>
+      </Route>
+      <Route path="/superadmin/developer">
+        <SuperAdminLayout><SuperAdminDeveloper /></SuperAdminLayout>
       </Route>
 
       {/* Tenant Admin Routes — scoped to /:slug/admin/* */}

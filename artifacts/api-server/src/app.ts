@@ -11,8 +11,10 @@ import listingRulesRouter from "./routes/listing-rules";
 import protectionPlansRouter from "./routes/superadmin-protection";
 import productsRouter from "./routes/products";
 import docsRouter from "./routes/docs";
+import developerRouter from "./routes/superadmin-developer";
 import { logger } from "./lib/logger";
 import { resolveTenant } from "./middleware/admin-auth";
+import { errorLoggerMiddleware, captureUnhandledErrors } from "./middleware/error-logger";
 
 const app: Express = express();
 
@@ -48,7 +50,11 @@ const uploadsDir = path.resolve(process.cwd(), "uploads");
 app.use("/uploads", express.static(uploadsDir));
 app.use("/api/uploads", express.static(uploadsDir));
 
+captureUnhandledErrors();
+
 app.use("/api", resolveTenant as any);
+app.use("/api", errorLoggerMiddleware);
+app.use("/api", developerRouter);
 app.use("/api", uploadRouter);
 app.use("/api", stripeRouter);
 app.use("/api", billingRouter);

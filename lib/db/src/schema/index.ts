@@ -21,3 +21,4 @@ export * from "./contact-cards";
 export * from "./products";
 export * from "./maintenance-logs";
 export * from "./docs";
+export * from "./platform-error-logs";
