@@ -19,7 +19,7 @@ import {
   Lock, User, CreditCard, FileText, Eye, EyeOff, ShieldCheck,
   Zap, AlertTriangle, Umbrella, Star, Loader2, BadgeCheck,
   ScanFace, RefreshCw, XCircle, Clock, Tag, Monitor, QrCode, Smartphone,
-  ScanLine, X, Copy, Check, Upload, ImagePlus, Car, Mountain
+  ScanLine, X, Copy, Check, Upload, ImagePlus, Car, Mountain, BookOpen
 } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { differenceInDays, format, addDays } from "date-fns";
@@ -1166,6 +1166,42 @@ export default function StorefrontBook() {
                   <Label htmlFor="notes">Notes (optional)</Label>
                   <Textarea id="notes" value={notes} onChange={e => setNotes(e.target.value)} placeholder="Any special requests?" rows={2} />
                 </div>
+
+                {/* ── Rental Guidelines (informational, no action required) ── */}
+                {listingRules.length > 0 && (
+                  <div className="rounded-2xl border border-blue-100 bg-blue-50/60 p-5 space-y-3">
+                    <div className="flex items-center gap-2.5">
+                      <div className="w-7 h-7 rounded-full bg-blue-100 flex items-center justify-center shrink-0">
+                        <BookOpen className="w-3.5 h-3.5 text-blue-600" />
+                      </div>
+                      <div>
+                        <p className="font-semibold text-sm text-blue-900">Rental Guidelines</p>
+                        <p className="text-xs text-blue-600">Good to know before you confirm your booking</p>
+                      </div>
+                    </div>
+                    <ul className="space-y-2.5">
+                      {listingRules.map(rule => (
+                        <li key={rule.id} className="flex items-start gap-2.5">
+                          <CheckCircle2 className="w-4 h-4 text-blue-400 shrink-0 mt-0.5" />
+                          <div className="min-w-0">
+                            <p className="text-sm font-medium text-blue-900">{rule.title}</p>
+                            {rule.description && (
+                              <p className="text-xs text-blue-700/80 mt-0.5 leading-relaxed">{rule.description}</p>
+                            )}
+                            {rule.fee > 0 && (
+                              <p className="text-xs text-amber-700 mt-1 font-medium">
+                                Violation fee: ${rule.fee.toFixed(2)}
+                              </p>
+                            )}
+                          </div>
+                        </li>
+                      ))}
+                    </ul>
+                    <p className="text-[11px] text-blue-500 pt-1">
+                      You'll be asked to initial each guideline when you sign the rental agreement below.
+                    </p>
+                  </div>
+                )}
 
                 {/* ── Protection Plan + Regular Add-ons ── */}
                 {(() => {
