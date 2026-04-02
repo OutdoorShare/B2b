@@ -580,7 +580,8 @@ export default function StorefrontBook() {
       .filter(a => selectedAddonIds.has(a.id))
       .reduce((sum, a) => sum + (a.priceType === "per_day" ? a.price * days : a.price), 0);
   }, [availableAddons, selectedAddonIds, days]);
-  const platformProtectionFee = platformProtectionPlan?.enabled ? parseFloat(platformProtectionPlan.feeAmount || "0") : 0;
+  const platformProtectionRate = platformProtectionPlan?.enabled ? parseFloat(platformProtectionPlan.feeAmount || "0") : 0;
+  const platformProtectionFee = platformProtectionRate * days;
   const total = subtotal + addonsSubtotal + platformProtectionFee;
   const promoDiscount = appliedPromo ? Math.min(appliedPromo.discountAmount, total) : 0;
   const discountedTotal = Math.max(0.50, total - promoDiscount);
@@ -1265,7 +1266,11 @@ export default function StorefrontBook() {
                                   <p className="text-3xl font-black" style={{ color: "#1a2332" }}>
                                     ${addonPrice.toFixed(0)}
                                   </p>
-                                  <p className="text-xs text-gray-500">flat fee</p>
+                                  {addon.priceType === "per_day" ? (
+                                    <p className="text-xs text-gray-500">${addon.price}/day × {days} day{days !== 1 ? "s" : ""}</p>
+                                  ) : (
+                                    <p className="text-xs text-gray-500">flat fee</p>
+                                  )}
                                   <div className="mt-3 flex items-center justify-center gap-1.5 rounded-lg px-4 py-2 font-bold text-sm text-white cursor-default" style={{ background: "#3ab549" }}>
                                     <CheckCircle2 className="w-4 h-4" /> Included
                                   </div>
@@ -2384,7 +2389,7 @@ export default function StorefrontBook() {
                         <div className="flex justify-between text-blue-700 font-medium">
                           <span className="flex items-center gap-1">
                             <ShieldCheck className="w-3 h-3" />
-                            Protection Plan
+                            Protection Plan (${platformProtectionRate.toFixed(0)}/day × {days} day{days !== 1 ? "s" : ""})
                           </span>
                           <span>+${platformProtectionFee.toFixed(2)}</span>
                         </div>
