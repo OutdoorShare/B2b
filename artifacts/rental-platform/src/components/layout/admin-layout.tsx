@@ -55,6 +55,7 @@ const NAV_GROUPS: NavGroup[] = [
     items: [
       { name: "Communications", path: "/communications", icon: MessageSquare },
       { name: "Contact Cards", path: "/contact-cards", icon: IdCard },
+      { name: "Waivers", path: "/waivers", icon: FileSignature },
     ],
   },
   {
@@ -62,7 +63,6 @@ const NAV_GROUPS: NavGroup[] = [
     items: [
       { name: "Analytics", path: "/analytics", icon: BarChart3 },
       { name: "Promo Codes", path: "/promo-codes", icon: Tag },
-      { name: "Waivers", path: "/waivers", icon: FileSignature },
       { name: "Kiosk Mode", path: "/kiosk", icon: MonitorSmartphone },
     ],
   },
