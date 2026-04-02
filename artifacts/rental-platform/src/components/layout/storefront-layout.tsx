@@ -323,7 +323,7 @@ export function StorefrontLayout({ children }: { children: React.ReactNode }) {
       {slug && (
         <AIAssistant
           role="renter"
-          tenantSlug={slug}
+          tenantSlug={(profile as any)?.siteSlug ?? slug}
           companyName={profile?.name ?? undefined}
         />
       )}

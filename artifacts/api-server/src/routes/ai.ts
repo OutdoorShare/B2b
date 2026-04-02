@@ -348,6 +348,16 @@ router.post("/ai/chat", async (req: Request, res: Response) => {
     isAdmin = true;
   } else {
     tenantId = await resolveTenantId(tenantSlug);
+    // Fallback: if slug doesn't match a tenant (e.g. preview URL slug differs from DB slug),
+    // use the first active tenant — mirrors the same graceful fallback in the business API.
+    if (!tenantId) {
+      const [firstTenant] = await db
+        .select({ id: tenantsTable.id })
+        .from(tenantsTable)
+        .where(eq(tenantsTable.status, "active"))
+        .limit(1);
+      tenantId = firstTenant?.id ?? null;
+    }
   }
 
   if (!tenantId) return res.status(404).json({ error: "Tenant not found" });
