@@ -49,6 +49,7 @@ export default function StorefrontGearDetail() {
 
   const [activeImage, setActiveImage] = useState(0);
   const [addons, setAddons] = useState<Addon[]>([]);
+  const [selectedAddonIds, setSelectedAddonIds] = useState<Set<number>>(new Set());
   const [listingRules, setListingRules] = useState<ListingRule[]>([]);
   const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined);
   const [bookedRanges, setBookedRanges] = useState<{ start: Date; end: Date }[]>([]);
@@ -73,7 +74,12 @@ export default function StorefrontGearDetail() {
     fetch(`${BASE}/api/listings/${id}/addons`)
       .then(r => r.json())
       .then((data: Addon[]) => {
-        if (Array.isArray(data)) setAddons(data.filter(a => (a as any).isActive !== false));
+        if (Array.isArray(data)) {
+          const active = data.filter(a => (a as any).isActive !== false);
+          setAddons(active);
+          // Auto-select required add-ons
+          setSelectedAddonIds(new Set(active.filter(a => a.isRequired).map(a => a.id)));
+        }
       })
       .catch(() => {});
     fetch(`${BASE}/api/listings/${id}/rules`)
@@ -126,6 +132,21 @@ export default function StorefrontGearDetail() {
   const protectionPrice = protectionAddon
     ? (protectionAddon.priceType === "per_day" ? protectionAddon.price * days : protectionAddon.price)
     : 0;
+
+  const toggleAddon = (addon: Addon) => {
+    if (addon.isRequired || addon.name.toLowerCase().includes("protection")) return;
+    setSelectedAddonIds(prev => {
+      const next = new Set(prev);
+      if (next.has(addon.id)) next.delete(addon.id); else next.add(addon.id);
+      return next;
+    });
+  };
+
+  const selectedAddonsSubtotal = useMemo(() => {
+    return addons
+      .filter(a => !a.name.toLowerCase().includes("protection") && selectedAddonIds.has(a.id))
+      .reduce((sum, a) => sum + (a.priceType === "per_day" ? a.price * days : a.price), 0);
+  }, [addons, selectedAddonIds, days]);
 
   if (isLoading) {
     return (
@@ -330,9 +351,15 @@ export default function StorefrontGearDetail() {
                           <span>${parseFloat(String(listing.depositAmount)).toFixed(0)}</span>
                         </div>
                       )}
+                      {selectedAddonsSubtotal > 0 && (
+                        <div className="flex justify-between text-muted-foreground">
+                          <span>Add-ons</span>
+                          <span>+${selectedAddonsSubtotal.toFixed(2)}</span>
+                        </div>
+                      )}
                       <div className="flex justify-between font-bold text-base pt-1 border-t mt-1">
                         <span>Estimated Total</span>
-                        <span>${(subtotal + protectionPrice).toFixed(2)}</span>
+                        <span>${(subtotal + protectionPrice + selectedAddonsSubtotal).toFixed(2)}</span>
                       </div>
                       <p className="text-[10px] text-muted-foreground text-center pt-0.5">Deposit collected separately at pickup</p>
                     </div>
@@ -359,7 +386,8 @@ export default function StorefrontGearDetail() {
                     if (!dateRange?.from || !dateRange?.to) return;
                     const start = format(dateRange.from, "yyyy-MM-dd");
                     const end = format(dateRange.to, "yyyy-MM-dd");
-                    setLocation(`${sfBase}/book?listingId=${listing.id}&startDate=${start}&endDate=${end}`);
+                    const addonParam = selectedAddonIds.size > 0 ? `&addons=${[...selectedAddonIds].join(",")}` : "";
+                    setLocation(`${sfBase}/book?listingId=${listing.id}&startDate=${start}&endDate=${end}${addonParam}`);
                   }}
                 >
                   {!isAvailable ? "Currently Unavailable"
@@ -422,37 +450,54 @@ export default function StorefrontGearDetail() {
                   </div>
                 ))}
 
-                {/* Regular add-ons */}
+                {/* Regular add-ons — selectable */}
                 {addons.filter(a => !a.name.toLowerCase().includes("protection")).length > 0 && (
                   <>
                     <div className="flex items-center gap-2">
                       <Tag className="w-4 h-4 text-primary" />
-                      <h3 className="font-semibold">Available Add-ons</h3>
+                      <h3 className="font-semibold">Add-ons</h3>
                     </div>
                     <div className="space-y-2">
                       {addons.filter(a => !a.name.toLowerCase().includes("protection")).map(addon => {
                         const unitLabel = addon.priceType === "per_day" ? "/day" : "flat";
+                        const selected = selectedAddonIds.has(addon.id);
+                        const isClickable = !addon.isRequired;
                         return (
-                          <div key={addon.id} className="flex items-start justify-between gap-3 bg-muted/30 rounded-xl border px-4 py-3">
-                            <div>
+                          <button
+                            key={addon.id}
+                            type="button"
+                            onClick={() => toggleAddon(addon)}
+                            disabled={!isClickable}
+                            className={`w-full text-left flex items-center gap-3 rounded-xl border px-4 py-3 transition-all ${
+                              selected
+                                ? "border-primary bg-primary/5 shadow-sm"
+                                : "border-border bg-muted/30 hover:border-primary/40 hover:bg-muted/50"
+                            } ${!isClickable ? "cursor-default" : "cursor-pointer"}`}
+                          >
+                            {/* Checkbox indicator */}
+                            <div className={`shrink-0 w-5 h-5 rounded-full border-2 flex items-center justify-center transition-colors ${
+                              selected ? "border-primary bg-primary" : "border-muted-foreground/40"
+                            }`}>
+                              {selected && <Check className="w-3 h-3 text-white" />}
+                            </div>
+                            <div className="flex-1 min-w-0">
                               <div className="flex items-center gap-1.5">
                                 <span className="font-semibold text-sm">{addon.name}</span>
                                 {addon.isRequired && <span className="text-[10px] font-bold bg-amber-100 text-amber-800 px-1.5 py-0.5 rounded-full">Required</span>}
                               </div>
-                              {addon.description && <p className="text-xs text-muted-foreground mt-0.5">{addon.description}</p>}
+                              {addon.description && <p className="text-xs text-muted-foreground mt-0.5 leading-snug">{addon.description}</p>}
                             </div>
                             <div className="text-right shrink-0">
                               <p className="font-bold text-sm text-primary">+${addon.price.toFixed(2)}</p>
                               <p className="text-xs text-muted-foreground">{unitLabel}</p>
                             </div>
-                          </div>
+                          </button>
                         );
                       })}
                     </div>
                   </>
                 )}
 
-                <p className="text-xs text-muted-foreground">Select add-ons during checkout.</p>
               </div>
             )}
 

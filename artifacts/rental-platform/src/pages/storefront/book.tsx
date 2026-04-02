@@ -446,14 +446,22 @@ export default function StorefrontBook() {
   // Fetch addons
   useEffect(() => {
     if (!listingId) return;
+    // Parse any pre-selected add-on IDs from the URL (passed from the listing page)
+    const urlAddonIds = new Set(
+      (searchParams.get("addons") ?? "").split(",").map(s => parseInt(s)).filter(n => !isNaN(n) && n > 0)
+    );
     fetch(`${BASE}/api/listings/${listingId}/addons`)
       .then(r => r.json())
       .then((data: Addon[]) => {
         if (!Array.isArray(data)) return;
         const active = data.filter(a => a.isActive);
         setAvailableAddons(active);
-        const required = new Set(active.filter(a => a.isRequired || a.name.toLowerCase().includes("protection")).map(a => a.id));
-        setSelectedAddonIds(required);
+        const preSelected = new Set(
+          active
+            .filter(a => a.isRequired || a.name.toLowerCase().includes("protection") || urlAddonIds.has(a.id))
+            .map(a => a.id)
+        );
+        setSelectedAddonIds(preSelected);
       })
       .catch(() => {});
   }, [listingId]);
