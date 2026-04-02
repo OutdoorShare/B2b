@@ -5,6 +5,7 @@ import {
   getGetRevenueAnalyticsQueryKey,
   getGetBookingStatusBreakdownQueryKey
 } from "@workspace/api-client-react";
+import { getAdminSession } from "@/lib/admin-nav";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
@@ -16,6 +17,11 @@ import {
 import { MapPin, Tag, TrendingUp, Users, Smartphone, Globe, Phone, UserCheck } from "lucide-react";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
+
+function adminHeaders(): HeadersInit {
+  const s = getAdminSession();
+  return s?.token ? { "x-admin-token": s.token } : {};
+}
 
 const PIE_COLORS  = ["#0f5132", "#3b82f6", "#f59e0b", "#ef4444", "#64748b"];
 const BAR_COLOR   = "#0f5132";
@@ -42,7 +48,7 @@ export default function AdminAnalytics() {
 
   useEffect(() => {
     setVolumeLoading(true);
-    fetch(`${BASE}/api/analytics/booking-volume?period=${period}`)
+    fetch(`${BASE}/api/analytics/booking-volume?period=${period}`, { headers: adminHeaders() })
       .then(r => r.json())
       .then(d => { setVolumeData(d); setVolumeLoading(false); })
       .catch(() => setVolumeLoading(false));
@@ -54,7 +60,7 @@ export default function AdminAnalytics() {
 
   useEffect(() => {
     setLocationLoading(true);
-    fetch(`${BASE}/api/analytics/renter-locations`)
+    fetch(`${BASE}/api/analytics/renter-locations`, { headers: adminHeaders() })
       .then(r => r.json())
       .then(d => { setLocationData(d); setLocationLoading(false); })
       .catch(() => setLocationLoading(false));
@@ -67,7 +73,7 @@ export default function AdminAnalytics() {
 
   useEffect(() => {
     setCategoryLoading(true);
-    fetch(`${BASE}/api/analytics/category-breakdown`)
+    fetch(`${BASE}/api/analytics/category-breakdown`, { headers: adminHeaders() })
       .then(r => r.json())
       .then(d => { setCategoryData(Array.isArray(d) ? d : []); setCategoryLoading(false); })
       .catch(() => setCategoryLoading(false));
@@ -80,7 +86,7 @@ export default function AdminAnalytics() {
 
   useEffect(() => {
     setSourceLoading(true);
-    fetch(`${BASE}/api/analytics/booking-source`)
+    fetch(`${BASE}/api/analytics/booking-source`, { headers: adminHeaders() })
       .then(r => r.json())
       .then(d => { setSourceData(Array.isArray(d) ? d : []); setSourceLoading(false); })
       .catch(() => setSourceLoading(false));
