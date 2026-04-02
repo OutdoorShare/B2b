@@ -27,8 +27,12 @@ export default function AdminSettings() {
   const [copied, setCopied] = useState(false);
   const { slug: urlSlug } = useParams<{ slug: string }>();
 
+  // Use the slug-scoped query key so this cache entry is shared with the
+  // storefront layout (which also uses ["/api/business", slug]). This ensures
+  // that when the admin saves settings, the storefront immediately reflects
+  // the new logo and colors without a stale-cache lag.
   const { data: profile, isLoading } = useGetBusinessProfile({
-    query: { queryKey: getGetBusinessProfileQueryKey() }
+    query: { queryKey: ["/api/business", urlSlug] }
   });
 
   const updateProfile = useUpdateBusinessProfile();
@@ -73,6 +77,10 @@ export default function AdminSettings() {
       { data: formData },
       {
         onSuccess: (data) => {
+          // Update the slug-scoped cache key (shared with the storefront layout)
+          // so the storefront immediately reflects the new logo and colors.
+          queryClient.setQueryData(["/api/business", urlSlug], data);
+          // Also update the generic key in case anything still uses it.
           queryClient.setQueryData(getGetBusinessProfileQueryKey(), data);
           applyBrandColors(data.primaryColor, data.accentColor);
           toast({ title: "Settings saved successfully" });

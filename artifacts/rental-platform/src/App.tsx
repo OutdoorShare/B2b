@@ -70,20 +70,35 @@ import AdminContactCards from "@/pages/admin/contact-cards";
 const queryClient = new QueryClient();
 
 // Inject tenant context headers on every generated API call.
+//
+// IMPORTANT: Admin token must ONLY be sent on admin routes.
+// If we sent it on storefront routes, any logged-in admin viewing
+// a different company's storefront would receive THEIR company's
+// logo/colors instead of the storefront's — causing cross-tenant
+// data contamination.
 setExtraHeadersGetter(() => {
-  try {
-    const raw = localStorage.getItem("admin_session");
-    if (raw) {
-      const session = JSON.parse(raw);
-      if (session?.token) {
-        return { "x-admin-token": session.token };
-      }
-    }
-  } catch { /* ignore */ }
-
-  // Extract slug from pathname
   const base = import.meta.env.BASE_URL.replace(/\/$/, "");
   const path = window.location.pathname.replace(base, "") || "/";
+
+  // Only inject the admin token when the URL is actually an admin route
+  // (contains /admin/ or ends with /admin).
+  const isAdminRoute = /\/admin(\/|$)/.test(path);
+
+  if (isAdminRoute) {
+    try {
+      const raw = localStorage.getItem("admin_session");
+      if (raw) {
+        const session = JSON.parse(raw);
+        if (session?.token) {
+          return { "x-admin-token": session.token };
+        }
+      }
+    } catch { /* ignore */ }
+  }
+
+  // For storefront routes (and any non-admin route that has a slug),
+  // always use the tenant slug so the correct company data is fetched,
+  // regardless of whether an admin session exists in localStorage.
   const reserved = new Set(["superadmin", "get-started", "signup", "demo", "audit"]);
   const segments = path.split("/").filter(Boolean);
   const firstSegment = segments[0];

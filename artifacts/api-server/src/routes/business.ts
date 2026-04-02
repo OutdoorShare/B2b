@@ -2,6 +2,7 @@ import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
 import { businessProfileTable, tenantsTable } from "@workspace/db/schema";
 import { eq, ne, and } from "drizzle-orm";
+import { requireTenant } from "../middleware/admin-auth";
 
 const RESERVED_SLUGS = new Set(["admin", "superadmin", "get-started", "signup", "demo", "api"]);
 
@@ -86,7 +87,7 @@ router.get("/business", async (req, res) => {
   }
 });
 
-router.put("/business", async (req, res) => {
+router.put("/business", requireTenant as any, async (req, res) => {
   try {
     const profiles = req.tenantId
       ? await db.select().from(businessProfileTable).where(eq(businessProfileTable.tenantId, req.tenantId)).limit(1)
