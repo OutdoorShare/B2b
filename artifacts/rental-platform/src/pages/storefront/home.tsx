@@ -214,16 +214,18 @@ export default function StorefrontHome() {
 
           {/* Category pills */}
           <div className="flex flex-wrap justify-center gap-3 mb-10">
-            <button
-              data-testid="category-all"
-              onClick={() => handleCategoryClick(null, null)}
-              className="flex flex-col items-center gap-1.5 group transition-all"
-            >
-              <div className={`w-14 h-14 rounded-full flex items-center justify-center transition-all ${activeCategory === null ? "bg-primary shadow-lg shadow-primary/40 scale-110" : "bg-black/60 backdrop-blur border border-white/10 hover:bg-black/80 hover:scale-105"}`}>
-                <Gauge className="w-6 h-6 text-white" />
-              </div>
-              <span className="text-white text-xs font-semibold drop-shadow">All</span>
-            </button>
+            {(categories?.length ?? 0) >= 2 && (
+              <button
+                data-testid="category-all"
+                onClick={() => handleCategoryClick(null, null)}
+                className="flex flex-col items-center gap-1.5 group transition-all"
+              >
+                <div className={`w-14 h-14 rounded-full flex items-center justify-center transition-all ${activeCategory === null ? "bg-primary shadow-lg shadow-primary/40 scale-110" : "bg-black/60 backdrop-blur border border-white/10 hover:bg-black/80 hover:scale-105"}`}>
+                  <Gauge className="w-6 h-6 text-white" />
+                </div>
+                <span className="text-white text-xs font-semibold drop-shadow">All</span>
+              </button>
+            )}
 
             {categories?.filter((cat, idx, arr) => arr.findIndex(c => c.slug === cat.slug) === idx).map(cat => {
               const Icon = getCategoryIcon(cat.slug);
