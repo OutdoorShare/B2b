@@ -739,12 +739,12 @@ export default function StorefrontBook() {
     return () => clearInterval(interval);
   }, [qrPolling, qrSessionId, slug, toast]);
 
-  // Auto-advance from QR payment on kiosk
+  // Auto-advance to agreement as soon as payment is confirmed (all methods)
   useEffect(() => {
-    if (!paymentConfirmed || kioskPayMode !== "qr" || step !== "book") return;
-    const timer = setTimeout(() => advanceToComplete(), 3000);
+    if (!paymentConfirmed || step !== "book") return;
+    const timer = setTimeout(() => advanceToComplete(), 1500);
     return () => clearTimeout(timer);
-  }, [paymentConfirmed, kioskPayMode, step]);
+  }, [paymentConfirmed, step]);
 
   const createPaymentIntent = useCallback(async (totalCents: number) => {
     if (!slug) return;
@@ -788,20 +788,6 @@ export default function StorefrontBook() {
   if (!listing) return <div className="container mx-auto px-4 py-16 text-center">Listing not found</div>;
 
   // ── Validate + register/login then go to screen 2 ──
-  const handleBookNext = async () => {
-    setAuthError("");
-    if (!dateRange?.from || !dateRange?.to) {
-      toast({ title: "Please select pickup and return dates", variant: "destructive" }); return;
-    }
-    if (!name || !email || !phone) {
-      toast({ title: "Please fill in your name, email, and phone", variant: "destructive" }); return;
-    }
-    if (!paymentConfirmed) {
-      toast({ title: "Please complete payment before continuing", variant: "destructive" }); return;
-    }
-    advanceToComplete();
-  };
-
   const advanceToComplete = () => {
     setStep("complete");
     setCompletePhase("agreement");
@@ -1614,6 +1600,10 @@ export default function StorefrontBook() {
                           <div>
                             <p className="font-semibold text-green-800">Payment authorized</p>
                             <p className="text-sm text-green-700">{isTestMode ? "Test payment recorded — no real charge." : "Your card has been charged successfully."}</p>
+                            <p className="text-xs text-green-600 mt-1 flex items-center gap-1.5">
+                              <Loader2 className="w-3 h-3 animate-spin" />
+                              Taking you to the rental agreement…
+                            </p>
                           </div>
                         </div>
                       ) : !showStripeForm ? (
@@ -1671,13 +1661,7 @@ export default function StorefrontBook() {
                   </p>
                 </div>
 
-                {/* CTA — advance to agreement */}
-                {paymentConfirmed && (
-                  <Button size="lg" className="w-full h-13 text-base font-bold rounded-xl" onClick={handleBookNext}>
-                    Continue to Agreement
-                    <ArrowRight className="w-4 h-4 ml-2" />
-                  </Button>
-                )}
+                {/* Auto-advances to agreement after payment — no button needed */}
               </div>
             )}
 
