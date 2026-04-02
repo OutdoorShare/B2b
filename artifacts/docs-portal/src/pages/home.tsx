@@ -30,25 +30,52 @@ export default function Home() {
         
         {/* Hero Section */}
         <div className="text-center max-w-3xl mx-auto mb-16">
-          <h1 className="text-4xl md:text-5xl font-extrabold tracking-tight text-foreground mb-6">
-            How can we help you today?
+          {/* Logo lockup */}
+          <div className="flex items-center justify-center gap-3 mb-8">
+            <img
+              src="/outdoorshare-logo.png"
+              alt="OutdoorShare"
+              className="h-12 w-auto object-contain"
+            />
+            <div className="text-left leading-none">
+              <div className="text-2xl font-extrabold tracking-tight" style={{ color: "hsl(var(--foreground))" }}>OutdoorShare</div>
+              <div className="text-sm font-medium text-muted-foreground">Help Center &amp; Documentation</div>
+            </div>
+          </div>
+
+          <h1 className="text-4xl md:text-5xl font-extrabold tracking-tight mb-4" style={{ color: "hsl(218 32% 12%)" }}>
+            How can we help you?
           </h1>
           <p className="text-lg text-muted-foreground mb-8">
-            Search our knowledge base for guides, API references, troubleshooting, and more.
+            Search our guides, API references, and tutorials for OutdoorShare — the outdoor rental management platform built for adventure.
           </p>
-          
+
           <form onSubmit={handleSearch} className="relative max-w-2xl mx-auto">
             <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground w-5 h-5" />
-            <Input 
-              className="h-14 pl-12 pr-4 rounded-full text-lg shadow-sm border-muted-foreground/20 focus-visible:ring-primary"
+            <Input
+              className="h-14 pl-12 pr-4 rounded-full text-lg shadow-sm focus-visible:ring-primary"
+              style={{ borderColor: "hsl(var(--border))" }}
               placeholder="Search documentation..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
             />
-            <Button type="submit" className="absolute right-2 top-1/2 -translate-y-1/2 rounded-full">
+            <Button type="submit" className="absolute right-2 top-1/2 -translate-y-1/2 rounded-full" style={{ background: "hsl(var(--primary))", color: "#fff" }}>
               Search
             </Button>
           </form>
+
+          {/* Brand pill tags */}
+          <div className="flex flex-wrap justify-center gap-2 mt-6">
+            {["Rental Management", "Stripe Connect", "Storefront Builder", "OutdoorBot AI", "Booking System"].map((tag) => (
+              <span
+                key={tag}
+                className="text-xs font-medium px-3 py-1 rounded-full"
+                style={{ background: "hsl(var(--primary) / 0.1)", color: "hsl(var(--primary))", border: "1px solid hsl(var(--primary) / 0.25)" }}
+              >
+                {tag}
+              </span>
+            ))}
+          </div>
         </div>
 
         {/* Quick Links / Stats */}
