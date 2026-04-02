@@ -1,10 +1,33 @@
 import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
-import { listingsTable, categoriesTable, bookingsTable, blockedDatesTable, listingAddonsTable } from "@workspace/db/schema";
+import { listingsTable, categoriesTable, bookingsTable, blockedDatesTable, listingAddonsTable, productsTable } from "@workspace/db/schema";
 import { eq, and, gte, lte, ilike, or, count, sum, inArray } from "drizzle-orm";
 import { sql } from "drizzle-orm";
 
 const router: IRouter = Router();
+
+// ── Auto-create a linked product for a new listing ───────────────────────────
+async function autoCreateProduct(listing: typeof listingsTable.$inferSelect) {
+  if (!listing.tenantId) return;
+  try {
+    const [product] = await db.insert(productsTable).values({
+      tenantId: listing.tenantId,
+      name: listing.title,
+      description: listing.description || null,
+      categoryId: listing.categoryId || null,
+      quantity: listing.quantity ?? 1,
+      imageUrls: Array.isArray(listing.imageUrls) ? listing.imageUrls : [],
+      status: "available",
+      updatedAt: new Date(),
+    }).returning();
+    // Link the listing back to the new product
+    await db.update(listingsTable)
+      .set({ productId: product.id, updatedAt: new Date() })
+      .where(eq(listingsTable.id, listing.id));
+  } catch {
+    // Non-fatal — product auto-creation failure should not break listing creation
+  }
+}
 
 function formatListing(l: typeof listingsTable.$inferSelect, categoryName?: string | null, categorySlug?: string | null) {
   return {
@@ -117,6 +140,9 @@ router.post("/listings", async (req, res) => {
       includedItems: body.includedItems ?? [],
     }).returning();
 
+    // Auto-create an inventory product for this listing (fire-and-forget, non-fatal)
+    autoCreateProduct(created);
+
     res.status(201).json(formatListing(created));
   } catch (err) {
     req.log.error(err);
@@ -211,6 +237,8 @@ router.post("/listings/bulk", async (req, res) => {
             ? String(row.includedItems).split(",").map((s: string) => s.trim()).filter(Boolean)
             : [],
         }).returning();
+        // Auto-create inventory product for bulk-imported listings too
+        autoCreateProduct(newListing);
         created.push(formatListing(newListing));
       } catch (rowErr: any) {
         errors.push({ row: rowNum, error: rowErr?.message ?? "Insert failed" });
@@ -378,6 +406,21 @@ router.put("/listings/:id", async (req, res) => {
       .returning();
 
     if (!updated) { res.status(404).json({ error: "Not found" }); return; }
+
+    // Sync linked product fields — if no product linked yet, auto-create one
+    if (updated.productId) {
+      db.update(productsTable).set({
+        ...(body.title !== undefined && { name: body.title }),
+        ...(body.quantity !== undefined && { quantity: body.quantity }),
+        ...(body.imageUrls !== undefined && { imageUrls: body.imageUrls }),
+        ...(body.categoryId !== undefined && { categoryId: body.categoryId }),
+        ...(body.description !== undefined && { description: body.description }),
+        updatedAt: new Date(),
+      }).where(eq(productsTable.id, updated.productId)).execute().catch(() => {});
+    } else if (updated.tenantId) {
+      autoCreateProduct(updated);
+    }
+
     res.json(formatListing(updated));
   } catch (err) {
     req.log.error(err);
