@@ -269,7 +269,7 @@ export function AdminLayout({ children }: { children: React.ReactNode }) {
       </main>
       <AIAssistant
         role="admin"
-        tenantSlug={slugFromPath}
+        tenantSlug={slug}
         companyName={companyName}
         adminToken={getAdminSession()?.token}
       />

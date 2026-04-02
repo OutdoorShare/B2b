@@ -26,14 +26,14 @@ async function requireAdminOrSuperAdmin(req: Request): Promise<{ tenantId: numbe
     if (u?.status === "active") return { tenantId: null, isSuperAdmin: true };
   }
   if (adminToken) {
-    // Check team members first (adminUsersTable)
+    // Check team members first (adminUsersTable) — no status filter, matches resolveTenant middleware
     const [teamUser] = await db.select().from(adminUsersTable).where(eq(adminUsersTable.token, adminToken)).limit(1);
-    if (teamUser?.status === "active") return { tenantId: teamUser.tenantId, isSuperAdmin: false };
+    if (teamUser) return { tenantId: teamUser.tenantId, isSuperAdmin: false };
 
     // Also check company owners — their token is stored in tenantsTable.adminToken
-    const [tenant] = await db.select({ id: tenantsTable.id, status: tenantsTable.status })
+    const [tenant] = await db.select({ id: tenantsTable.id })
       .from(tenantsTable).where(eq(tenantsTable.adminToken, adminToken)).limit(1);
-    if (tenant?.status === "active") return { tenantId: tenant.id, isSuperAdmin: false };
+    if (tenant) return { tenantId: tenant.id, isSuperAdmin: false };
   }
   return null;
 }
