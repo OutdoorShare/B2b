@@ -66,6 +66,29 @@ export default function AdminListingsForm() {
   const createListing = useCreateListing();
   const updateListing = useUpdateListing();
 
+  type InlineUnit = { identifier: string; label: string; type: 'serial' | 'vin' | 'hin' };
+  const [inlineUnits, setInlineUnits] = useState<InlineUnit[]>([
+    { identifier: '', label: '', type: 'serial' },
+  ]);
+
+  const updateInlineUnit = (index: number, field: keyof InlineUnit, value: string) => {
+    setInlineUnits(prev => prev.map((u, i) => i === index ? { ...u, [field]: value } : u));
+  };
+
+  const saveInlineUnits = async (listingId: number) => {
+    const s = getAdminSession();
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    if (s?.token) headers['x-admin-token'] = s.token;
+    const toCreate = inlineUnits.filter(u => u.identifier.trim());
+    await Promise.all(toCreate.map(unit =>
+      fetch(`${BASE}/api/listings/${listingId}/units`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ unitIdentifier: unit.identifier.trim(), identifierType: unit.type, label: unit.label.trim() || null }),
+      })
+    ));
+  };
+
   const [formData, setFormData] = useState({
     title: '',
     description: '',
@@ -118,6 +141,19 @@ export default function AdminListingsForm() {
       });
     }
   }, [isEditing, listing]);
+
+  // Resize inline unit rows when quantity changes (only when creating)
+  useEffect(() => {
+    if (isEditing) return;
+    setInlineUnits(prev => {
+      const qty = Math.max(1, Math.min(Number(formData.quantity) || 1, 50));
+      if (prev.length === qty) return prev;
+      if (qty > prev.length) {
+        return [...prev, ...Array(qty - prev.length).fill(null).map(() => ({ identifier: '', label: '', type: 'serial' as const }))];
+      }
+      return prev.slice(0, qty);
+    });
+  }, [formData.quantity, isEditing]);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value, type } = e.target;
@@ -242,7 +278,8 @@ export default function AdminListingsForm() {
       createListing.mutate(
         { data: payload },
         {
-          onSuccess: () => {
+          onSuccess: async (data) => {
+            if (data?.id) await saveInlineUnits(data.id);
             queryClient.invalidateQueries({ queryKey: getGetListingsQueryKey() });
             toast({ title: statusToSave === "active" ? "Listing published!" : "Listing saved as draft" });
             setLocation(adminPath("/listings"));
@@ -353,6 +390,45 @@ export default function AdminListingsForm() {
                     <Input id="quantity" name="quantity" type="number" min="1" value={formData.quantity} onChange={handleChange} required />
                   </div>
                 </div>
+
+                {/* Inline unit identifiers — one row per unit, only when creating */}
+                {!isEditing && (
+                  <div className="space-y-2 pt-1">
+                    <div className="flex items-center gap-2">
+                      <Label className="text-sm">Unit Identifiers</Label>
+                      <span className="text-xs text-muted-foreground">(optional — VIN, HIN, or serial numbers)</span>
+                    </div>
+                    <div className="space-y-2">
+                      {inlineUnits.map((unit, i) => (
+                        <div key={i} className="flex items-center gap-2">
+                          <span className="text-xs text-muted-foreground w-12 shrink-0 text-right">Unit {i + 1}</span>
+                          <Select value={unit.type} onValueChange={v => updateInlineUnit(i, 'type', v as InlineUnit['type'])}>
+                            <SelectTrigger className="w-28 h-8 text-xs">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="serial">Serial #</SelectItem>
+                              <SelectItem value="vin">VIN</SelectItem>
+                              <SelectItem value="hin">HIN</SelectItem>
+                            </SelectContent>
+                          </Select>
+                          <Input
+                            className="h-8 text-xs font-mono flex-1"
+                            placeholder={unit.type === 'vin' ? '1HGBH41JXMN109186' : unit.type === 'hin' ? 'ABC12345D202' : 'SN-00001'}
+                            value={unit.identifier}
+                            onChange={e => updateInlineUnit(i, 'identifier', e.target.value)}
+                          />
+                          <Input
+                            className="h-8 text-xs w-36"
+                            placeholder="Nickname (optional)"
+                            value={unit.label}
+                            onChange={e => updateInlineUnit(i, 'label', e.target.value)}
+                          />
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </CardContent>
             </Card>
 
