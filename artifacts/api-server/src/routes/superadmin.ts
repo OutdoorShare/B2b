@@ -219,7 +219,8 @@ router.post("/superadmin/tenants", requireSuperAdmin, async (req, res) => {
 router.put("/superadmin/tenants/:id", requireSuperAdmin, async (req, res) => {
   try {
     const id = parseInt(req.params.id);
-    const { name, slug, email, password, plan, status, maxListings, contactName, phone, notes, platformFeePercent, testMode } = req.body;
+    // Note: slug is intentionally excluded — it is permanent once set at creation.
+    const { name, email, password, plan, status, maxListings, contactName, phone, notes, platformFeePercent, testMode } = req.body;
     const updates: Partial<typeof tenantsTable.$inferInsert> & { updatedAt?: Date } = {
       updatedAt: new Date(),
     };
@@ -232,20 +233,7 @@ router.put("/superadmin/tenants/:id", requireSuperAdmin, async (req, res) => {
       }
       updates.name = name;
     }
-    // Slug: if explicitly provided, validate and use; if name changed and no explicit slug, auto-generate
-    if (slug !== undefined) {
-      const normalized = nameToSlug(slug);
-      const slugConflict = await db.select().from(tenantsTable)
-        .where(and(eq(tenantsTable.slug, normalized), ne(tenantsTable.id, id)));
-      if (slugConflict.length > 0) {
-        res.status(409).json({ error: "A tenant with this slug already exists" });
-        return;
-      }
-      updates.slug = normalized;
-    } else if (name !== undefined) {
-      // Name changed without an explicit slug — auto-derive from new name
-      updates.slug = await generateUniqueSlug(name, id);
-    }
+    // Slug is never updated — it is a permanent identifier for this account.
     if (email !== undefined) updates.email = email;
     if (plan !== undefined) updates.plan = plan;
     if (status !== undefined) updates.status = status;
@@ -268,12 +256,11 @@ router.put("/superadmin/tenants/:id", requireSuperAdmin, async (req, res) => {
 
     // Send account-updated email (non-blocking)
     const recipientEmail = email ?? updated.email;
-    const recipientSlug = slug ?? updated.slug;
     const recipientName = name ?? updated.name;
     sendAccountUpdatedEmail({
       toEmail: recipientEmail,
       companyName: recipientName,
-      slug: recipientSlug,
+      slug: updated.slug,
       passwordChanged: !!password,
       newPassword: password || undefined,
     }).catch((err) => console.error("[email] Failed to send update email:", err?.message));

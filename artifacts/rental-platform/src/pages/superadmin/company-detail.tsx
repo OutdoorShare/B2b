@@ -50,7 +50,7 @@ function AccountTab({ tenant, tenantId, onSaved }: { tenant: Tenant; tenantId: n
   const { toast } = useToast();
   const [saving, setSaving] = useState(false);
   const [showPw, setShowPw] = useState(false);
-  const [form, setForm] = useState({ name: tenant.name, slug: tenant.slug, email: tenant.email, plan: tenant.plan, status: tenant.status, maxListings: String(tenant.maxListings), contactName: tenant.contactName ?? "", phone: tenant.phone ?? "", notes: tenant.notes ?? "", password: "", platformFeePercent: tenant.platformFeePercent != null ? String(tenant.platformFeePercent) : "5.00", testMode: !!tenant.testMode });
+  const [form, setForm] = useState({ name: tenant.name, email: tenant.email, plan: tenant.plan, status: tenant.status, maxListings: String(tenant.maxListings), contactName: tenant.contactName ?? "", phone: tenant.phone ?? "", notes: tenant.notes ?? "", password: "", platformFeePercent: tenant.platformFeePercent != null ? String(tenant.platformFeePercent) : "5.00", testMode: !!tenant.testMode });
   const set = (k: string, v: string) => setForm(f => ({ ...f, [k]: v }));
 
   const save = async () => {
@@ -62,7 +62,7 @@ function AccountTab({ tenant, tenantId, onSaved }: { tenant: Tenant; tenantId: n
         setSaving(false);
         return;
       }
-      const body: any = { name: form.name, slug: form.slug, email: form.email, plan: form.plan, status: form.status, maxListings: parseInt(form.maxListings), contactName: form.contactName || null, phone: form.phone || null, notes: form.notes || null, platformFeePercent: form.platformFeePercent, testMode: form.testMode };
+      const body: any = { name: form.name, email: form.email, plan: form.plan, status: form.status, maxListings: parseInt(form.maxListings), contactName: form.contactName || null, phone: form.phone || null, notes: form.notes || null, platformFeePercent: form.platformFeePercent, testMode: form.testMode };
       if (form.password) body.password = form.password;
       const res = await sa(`/superadmin/tenants/${tenantId}`, { method: "PUT", body: JSON.stringify(body) });
       if (!res.ok) { const d = await res.json(); toast({ title: d.error ?? "Save failed", variant: "destructive" }); return; }
@@ -80,8 +80,11 @@ function AccountTab({ tenant, tenantId, onSaved }: { tenant: Tenant; tenantId: n
           <Input value={form.name} onChange={e => set("name", e.target.value)} className="bg-slate-800 border-slate-600 text-white" />
         </div>
         <div className="space-y-1.5">
-          <Label className="text-slate-300 text-xs">URL Slug</Label>
-          <Input value={form.slug} onChange={e => set("slug", e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ""))} className="bg-slate-800 border-slate-600 text-white font-mono" />
+          <Label className="text-slate-300 text-xs">URL Slug <span className="text-slate-500 font-normal">(permanent)</span></Label>
+          <div className="flex items-center gap-2 px-3 py-2 rounded-md bg-slate-900 border border-slate-700 font-mono text-sm text-slate-400 select-all cursor-default">
+            <span className="text-slate-600">/</span>{tenant.slug}
+            <span className="ml-auto text-xs text-slate-600 font-sans">locked</span>
+          </div>
         </div>
         <div className="space-y-1.5">
           <Label className="text-slate-300 text-xs">Plan</Label>
