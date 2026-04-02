@@ -90,25 +90,38 @@ export default function AdminSettings() {
     applyBrandColors(preset.primary, preset.accent);
   };
 
-  const handleSave = (e: React.FormEvent) => {
-    e.preventDefault();
+  const doSave = (retrying = false) => {
     updateProfile.mutate(
       { data: formData },
       {
         onSuccess: (data) => {
-          // Update the slug-scoped cache key (shared with the storefront layout)
-          // so the storefront immediately reflects the new logo and colors.
           queryClient.setQueryData(["/api/business", urlSlug], data);
-          // Also update the generic key in case anything still uses it.
           queryClient.setQueryData(getGetBusinessProfileQueryKey(), data);
           applyBrandColors(data.primaryColor, data.accentColor);
-          toast({ title: "Settings saved successfully" });
+          toast({ title: "Settings saved" });
         },
-        onError: () => {
-          toast({ title: "Failed to save settings", variant: "destructive" });
+        onError: (err: any) => {
+          const status: number = err?.status ?? 0;
+          // Network failure (e.g. API rebuilding) — retry once automatically
+          if (!retrying && (status === 0 || !status)) {
+            setTimeout(() => doSave(true), 1500);
+            toast({ title: "Saving…", description: "Connection blip — retrying in a moment." });
+            return;
+          }
+          const msg =
+            status === 401 ? "Session expired — please log in again." :
+            status === 403 ? "You don't have permission to save settings." :
+            status >= 500 ? "Server error — please try again." :
+            err?.message || "Could not save settings.";
+          toast({ title: "Save failed", description: msg, variant: "destructive" });
         }
       }
     );
+  };
+
+  const handleSave = (e: React.FormEvent) => {
+    e.preventDefault();
+    doSave();
   };
 
   const getStorefrontUrl = () => {
