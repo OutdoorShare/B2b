@@ -22,8 +22,9 @@ White-label rental management platform — a B2B SaaS product for branded rental
 ```text
 artifacts-monorepo/
 ├── artifacts/              # Deployable applications
-│   ├── api-server/         # Express API server
-│   └── rental-platform/    # React/Vite frontend (customer + admin)
+│   ├── api-server/         # Express API server (port 8080)
+│   ├── rental-platform/    # React/Vite frontend (customer + admin)
+│   └── docs-portal/        # Documentation Portal at /docs/
 ├── lib/                    # Shared libraries
 │   ├── api-spec/           # OpenAPI spec + Orval codegen config
 │   ├── api-client-react/   # Generated React Query hooks
@@ -198,9 +199,39 @@ Every package extends `tsconfig.base.json` which sets `composite: true`.
 - After OpenAPI spec changes: run `pnpm --filter @workspace/api-spec run codegen`
 - DB schema changes: run `pnpm --filter @workspace/db run push`
 
+## Documentation Portal (/docs/)
+
+A separate product artifact at `/docs/` — a knowledge base for OutdoorShare admins and renters.
+
+### DB Tables
+- `doc_categories` — 8 categories (Getting Started, Rental Management, Payments & Billing, Admin Dashboard, Renter Experience, Troubleshooting, FAQs, Release Notes)
+- `doc_projects` — 5 projects (Rental Platform, Admin Dashboard, OutdoorBot AI, Stripe Integration, Super Admin)
+- `doc_features` — 15 features (Stripe Connect, Stripe Identity, Protection Plans, Renter Profiles, Contact Cards, etc.)
+- `doc_articles` — 16 articles (guides, FAQs, troubleshooting, release notes)
+- `doc_article_relations` — many-to-many related articles
+
+### API Routes (`/api/docs/*`)
+- `GET /api/docs/stats` — article/category/project/feature counts
+- `GET /api/docs/trending` — top 8 articles by view count
+- `GET /api/docs/search?q=` — full-text search across title/excerpt/content
+- Full CRUD for categories, articles, projects, features
+
+### Frontend Pages (artifacts/docs-portal/src/pages/)
+- `/docs/` — Home with search hero, stats, trending articles
+- `/docs/search` — Search with URL param support (`?q=query`)
+- `/docs/categories` — All categories with article counts
+- `/docs/categories/:slug` — Category detail with articles
+- `/docs/articles/:slug` — Article page with markdown rendering + view tracking
+- `/docs/projects` — All projects
+- `/docs/projects/:slug` — Project detail
+- `/docs/features` — Features directory with filter
+- `/docs/features/:slug` — Feature detail
+- `/docs/admin/*` — Admin CRUD for all content types
+
 ## Key Commands
 
 - `pnpm --filter @workspace/api-server run dev` — Start API server
 - `pnpm --filter @workspace/rental-platform run dev` — Start frontend
+- `pnpm --filter @workspace/docs-portal run dev` — Start docs portal
 - `pnpm --filter @workspace/api-spec run codegen` — Regenerate client hooks
 - `pnpm --filter @workspace/db run push` — Push DB schema changes

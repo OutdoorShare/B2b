@@ -56,6 +56,7 @@ app.use("/api", promoCodesRouter);
 app.use("/api", listingRulesRouter);
 app.use("/api", protectionPlansRouter);
 app.use("/api", productsRouter);
+app.use("/api", docsRouter);
 app.use("/api", router);
 
 export default app;

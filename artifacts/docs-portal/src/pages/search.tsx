@@ -10,7 +10,9 @@ import { ArticleTypeBadge } from "@/components/status-badge";
 
 export default function Search() {
   const [location] = useLocation();
-  const searchParams = new URLSearchParams(location.split('?')[1]);
+  const searchParams = new URLSearchParams(
+    typeof window !== "undefined" ? window.location.search : ""
+  );
   const initialQuery = searchParams.get("q") || "";
   
   const [query, setQuery] = useState(initialQuery);
