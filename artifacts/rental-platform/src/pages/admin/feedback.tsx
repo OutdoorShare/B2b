@@ -1,10 +1,9 @@
-import { useState } from "react";
-import { MessageSquarePlus, Star, CheckCircle2 } from "lucide-react";
+import { useState, useEffect } from "react";
+import { MessageSquarePlus, Star, CheckCircle2, User } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { useParams } from "wouter";
 import { getAdminSlug } from "@/lib/admin-nav";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
@@ -17,31 +16,30 @@ function getAdminInfo() {
   return null;
 }
 
-function getTenantInfo(slug: string) {
-  try {
-    const raw = localStorage.getItem(`business_profile_${slug}`);
-    if (raw) return JSON.parse(raw);
-  } catch {}
-  return null;
-}
-
 export default function AdminFeedback() {
   const slug = getAdminSlug();
+  const adminInfo = getAdminInfo();
+
+  // Derive submitter identity from session — no input fields needed
+  const submitterEmail: string = adminInfo?.email ?? "";
+  const submitterName: string =
+    adminInfo?.name ||
+    (adminInfo?.tenantName ? `${adminInfo.tenantName} (Owner)` : submitterEmail);
+  const submitterRole: string =
+    adminInfo?.type === "owner" ? "Company Owner" :
+    adminInfo?.role ? (adminInfo.role.charAt(0).toUpperCase() + adminInfo.role.slice(1)) :
+    "Team Member";
 
   const [rating, setRating] = useState<number | null>(null);
   const [hoverRating, setHoverRating] = useState<number | null>(null);
   const [subject, setSubject] = useState("");
   const [message, setMessage] = useState("");
-  const [name, setName] = useState("");
-  const [email, setEmail] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [error, setError] = useState("");
 
   const handleSubmit = async () => {
     if (!message.trim()) { setError("Please enter your feedback message."); return; }
-    if (!name.trim()) { setError("Please enter your name."); return; }
-    if (!email.trim()) { setError("Please enter your email."); return; }
 
     setError("");
     setSubmitting(true);
@@ -51,12 +49,14 @@ export default function AdminFeedback() {
         headers: { "Content-Type": "application/json", "x-tenant-slug": slug ?? "" },
         body: JSON.stringify({
           submitterType: "admin",
-          submitterName: name.trim(),
-          submitterEmail: email.trim(),
+          submitterName,
+          submitterEmail,
           subject: subject.trim() || undefined,
           message: message.trim(),
           rating: rating ?? undefined,
           tenantSlug: slug,
+          tenantName: adminInfo?.tenantName || undefined,
+          tenantId: adminInfo?.tenantId || undefined,
         }),
       });
       const data = await res.json();
@@ -97,6 +97,17 @@ export default function AdminFeedback() {
       </div>
 
       <div className="bg-background rounded-2xl border shadow-sm p-6 space-y-5">
+        {/* Identity chip — no input required */}
+        <div className="flex items-center gap-2.5 rounded-xl bg-muted/60 border px-3 py-2.5">
+          <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
+            <User className="w-4 h-4 text-primary" />
+          </div>
+          <div className="min-w-0">
+            <p className="text-sm font-medium truncate">{submitterName}</p>
+            <p className="text-xs text-muted-foreground truncate">{submitterEmail} · {submitterRole}</p>
+          </div>
+        </div>
+
         {/* Rating */}
         <div className="space-y-2">
           <Label>Overall Rating <span className="text-muted-foreground font-normal">(optional)</span></Label>
@@ -121,29 +132,6 @@ export default function AdminFeedback() {
               <span className="text-sm text-muted-foreground ml-2">{rating} / 5</span>
             )}
           </div>
-        </div>
-
-        {/* Name */}
-        <div className="space-y-1.5">
-          <Label htmlFor="fb-name">Your Name</Label>
-          <Input
-            id="fb-name"
-            value={name}
-            onChange={e => setName(e.target.value)}
-            placeholder="Jane Smith"
-          />
-        </div>
-
-        {/* Email */}
-        <div className="space-y-1.5">
-          <Label htmlFor="fb-email">Your Email</Label>
-          <Input
-            id="fb-email"
-            type="email"
-            value={email}
-            onChange={e => setEmail(e.target.value)}
-            placeholder="jane@company.com"
-          />
         </div>
 
         {/* Subject */}
