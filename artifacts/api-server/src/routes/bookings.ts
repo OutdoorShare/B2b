@@ -43,6 +43,7 @@ function formatBooking(b: typeof bookingsTable.$inferSelect, listingTitle: strin
     listingTitle,
     totalPrice: parseFloat(b.totalPrice ?? "0"),
     depositPaid: b.depositPaid ? parseFloat(b.depositPaid) : null,
+    protectionPlanFee: b.protectionPlanFee ? parseFloat(b.protectionPlanFee) : null,
     pickupPhotos: b.pickupPhotos ? JSON.parse(b.pickupPhotos) : [],
     pickupLinkSent: !!b.pickupToken,
     pickupCompletedAt: b.pickupCompletedAt ? b.pickupCompletedAt.toISOString() : null,
@@ -116,10 +117,13 @@ router.post("/bookings", async (req, res) => {
       return sum + subtotal;
     }, 0);
 
-    const totalPrice = basePrice + addonsTotal;
+    // Platform protection plan fee (passed from frontend, already validated against the category)
+    const protectionPlanFee = body.protectionPlanFee ? parseFloat(body.protectionPlanFee) : 0;
+
+    const totalPrice = basePrice + addonsTotal + protectionPlanFee;
     const addonsData = addons.length > 0 ? JSON.stringify(addons) : null;
 
-    const { addons: _addons, assignedUnitIds: rawUnitIds, agreementSignedAt: _ignoredTs, agreementSignatureDataUrl, ruleInitials: ruleInitialsJson, ...restBody } = body;
+    const { addons: _addons, assignedUnitIds: rawUnitIds, agreementSignedAt: _ignoredTs, agreementSignatureDataUrl, ruleInitials: ruleInitialsJson, protectionPlanFee: _ppf, ...restBody } = body;
     const assignedUnitIds = Array.isArray(rawUnitIds) && rawUnitIds.length > 0 ? JSON.stringify(rawUnitIds) : null;
     // Set agreementSignedAt server-side when the customer provides their signature
     const agreementSignedAt = restBody.agreementSignerName ? new Date() : null;
@@ -142,6 +146,7 @@ router.post("/bookings", async (req, res) => {
       agreementSignedAt,
       agreementSignature: agreementSignatureDataUrl ?? null,
       ruleInitials: ruleInitialsJson ?? null,
+      protectionPlanFee: protectionPlanFee > 0 ? String(protectionPlanFee) : null,
       ...(autoConfirm ? { status: "confirmed" } : {}),
     }).returning();
 

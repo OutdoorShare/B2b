@@ -83,4 +83,23 @@ router.put("/superadmin/protection-plans/:slug", async (req, res) => {
   }
 });
 
+// ── PUBLIC: GET /protection-plan/:categorySlug ─────────────────────────────────
+// Used by the renter booking flow to look up the platform fee for a category.
+router.get("/protection-plan/:categorySlug", async (req, res) => {
+  try {
+    await seedIfNeeded();
+    const [plan] = await db
+      .select()
+      .from(platformProtectionPlansTable)
+      .where(eq(platformProtectionPlansTable.categorySlug, req.params.categorySlug));
+    if (!plan || !plan.enabled || parseFloat(plan.feeAmount) <= 0) {
+      res.json({ enabled: false, feeAmount: "0", categorySlug: req.params.categorySlug });
+      return;
+    }
+    res.json({ enabled: true, feeAmount: plan.feeAmount, categoryName: plan.categoryName, categorySlug: plan.categorySlug });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 export default router;

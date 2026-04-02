@@ -421,6 +421,11 @@ export default function StorefrontBook() {
   const [availableAddons, setAvailableAddons] = useState<Addon[]>([]);
   const [selectedAddonIds, setSelectedAddonIds] = useState<Set<number>>(new Set());
 
+  // Platform protection plan (auto-applied based on listing category)
+  const [platformProtectionPlan, setPlatformProtectionPlan] = useState<{
+    enabled: boolean; feeAmount: string; categoryName?: string; categorySlug?: string;
+  } | null>(null);
+
   // Kiosk pickup photos (only used in kiosk mode)
   const beforePhotoInputRef = useRef<HTMLInputElement>(null);
   const [beforePhotos, setBeforePhotos] = useState<File[]>([]);
@@ -441,6 +446,16 @@ export default function StorefrontBook() {
       if (d.value) setAgreementText(d.value);
       if (f.fields) setContractFields(f.fields);
     }).catch(() => {});
+  }, [(listing as any)?.categorySlug]);
+
+  // Fetch platform protection plan for this listing's category
+  useEffect(() => {
+    const catSlug = (listing as any)?.categorySlug;
+    if (!catSlug) return;
+    fetch(`${BASE}/api/protection-plan/${encodeURIComponent(catSlug)}`)
+      .then(r => r.json())
+      .then(d => setPlatformProtectionPlan(d))
+      .catch(() => {});
   }, [(listing as any)?.categorySlug]);
 
   // Fetch addons
@@ -564,7 +579,8 @@ export default function StorefrontBook() {
       .filter(a => selectedAddonIds.has(a.id))
       .reduce((sum, a) => sum + (a.priceType === "per_day" ? a.price * days : a.price), 0);
   }, [availableAddons, selectedAddonIds, days]);
-  const total = subtotal + addonsSubtotal;
+  const platformProtectionFee = platformProtectionPlan?.enabled ? parseFloat(platformProtectionPlan.feeAmount || "0") : 0;
+  const total = subtotal + addonsSubtotal + platformProtectionFee;
   const promoDiscount = appliedPromo ? Math.min(appliedPromo.discountAmount, total) : 0;
   const discountedTotal = Math.max(0.50, total - promoDiscount);
 
@@ -948,6 +964,7 @@ export default function StorefrontBook() {
           appliedPromoCode: appliedPromo?.code || undefined,
           discountAmount: promoDiscount > 0 ? promoDiscount : undefined,
           depositPaid: deposit > 0 ? String(deposit) : undefined,
+          protectionPlanFee: platformProtectionFee > 0 ? String(platformProtectionFee) : undefined,
           ruleInitials: listingRules.length > 0
             ? JSON.stringify(listingRules.map(r => ({
                 ruleId: r.id,
@@ -2308,6 +2325,15 @@ export default function StorefrontBook() {
                           <span>+${(a.priceType === "per_day" ? a.price * days : a.price).toFixed(2)}</span>
                         </div>
                       ))}
+                      {platformProtectionFee > 0 && (
+                        <div className="flex justify-between text-blue-700 font-medium">
+                          <span className="flex items-center gap-1">
+                            <ShieldCheck className="w-3 h-3" />
+                            Protection Plan
+                          </span>
+                          <span>+${platformProtectionFee.toFixed(2)}</span>
+                        </div>
+                      )}
                       {appliedPromo && (
                         <div className="flex justify-between text-green-600 font-medium">
                           <span className="flex items-center gap-1">

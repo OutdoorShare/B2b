@@ -223,7 +223,8 @@ export default function MyBookingDetail() {
   } catch { addons = []; }
 
   const addonsTotal = addons.reduce((s: number, a: any) => s + Number(a.subtotal ?? 0), 0);
-  const basePrice   = Number(booking.totalPrice ?? 0) - addonsTotal;
+  const protectionPlanFee = Number((booking as any).protectionPlanFee ?? 0);
+  const basePrice   = Number(booking.totalPrice ?? 0) - addonsTotal - protectionPlanFee;
   const totalPrice  = Number(booking.totalPrice ?? 0);
 
   const hasPayment = booking.stripePaymentIntentId || booking.stripePaymentStatus;
@@ -596,6 +597,15 @@ export default function MyBookingDetail() {
               <span className="font-medium text-green-700">+${Number(a.subtotal ?? 0).toFixed(2)}</span>
             </div>
           ))}
+          {protectionPlanFee > 0 && (
+            <div className="flex justify-between">
+              <span className="text-blue-700 flex items-center gap-1">
+                <ShieldCheck className="w-3 h-3" />
+                Protection Plan
+              </span>
+              <span className="font-medium text-blue-700">+${protectionPlanFee.toFixed(2)}</span>
+            </div>
+          )}
         </div>
         <Separator />
         <div className="flex justify-between font-bold text-base">

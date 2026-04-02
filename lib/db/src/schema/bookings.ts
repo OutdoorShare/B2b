@@ -39,6 +39,8 @@ export const bookingsTable = pgTable("bookings", {
   // Security deposit authorized hold
   depositHoldIntentId: text("deposit_hold_intent_id"),
   depositHoldStatus: text("deposit_hold_status", { enum: ["authorized", "captured", "released"] }),
+  // Platform protection plan fee applied at booking time (from platformProtectionPlansTable)
+  protectionPlanFee: decimal("protection_plan_fee", { precision: 10, scale: 2 }),
   // Per-rule initials: JSON array of {ruleId, title, initials, initialedAt}
   ruleInitials: text("rule_initials"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
