@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { Link } from "wouter";
 import { AdminLayout } from "@/components/layout/admin-layout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -8,8 +9,10 @@ import { useToast } from "@/hooks/use-toast";
 import {
   Mail, MessageSquare, Users, Send, Clock, CheckCircle2,
   Zap, ChevronDown, ChevronUp, History, Settings2, Filter,
-  MailOpen, Phone, ToggleLeft, ToggleRight, Edit2, Check, X
+  MailOpen, Phone, ToggleLeft, ToggleRight, Edit2, Check, X,
+  ExternalLink,
 } from "lucide-react";
+import { adminPath } from "@/lib/admin-nav";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 const OS_GREEN = "#3ab549";
@@ -132,7 +135,14 @@ export default function CommunicationsPage() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
-      toast({ title: `Sent to ${data.sent} renter${data.sent !== 1 ? "s" : ""}!`, description: "Messages queued successfully." });
+      const sentMsg = data.sent > 0 ? `${data.sent} delivered` : "";
+      const failMsg = data.failed > 0 ? `${data.failed} failed` : "";
+      const summary = [sentMsg, failMsg].filter(Boolean).join(", ");
+      toast({
+        title: data.sent > 0 ? `Emails sent!` : "Delivery issue",
+        description: summary || `${data.total} message${data.total !== 1 ? "s" : ""} processed.`,
+        variant: data.sent === 0 && data.failed > 0 ? "destructive" : "default",
+      });
       setBody("");
       setSubject("");
     } catch (e: any) {
@@ -350,8 +360,17 @@ export default function CommunicationsPage() {
                   </Button>
                 </div>
 
-                <div className="rounded-xl bg-amber-50 border border-amber-200 px-4 py-3 text-xs text-amber-700">
-                  <strong>Note:</strong> Connect an email provider (e.g. SendGrid) or SMS provider (e.g. Twilio) in Settings to enable real delivery. Messages are logged regardless.
+                <div className="rounded-xl bg-blue-50 border border-blue-200 px-4 py-3 text-xs text-blue-800 space-y-1.5">
+                  <div className="flex items-center gap-1.5 font-semibold">
+                    <Mail className="w-3.5 h-3.5 shrink-0" />
+                    Emails are delivered via the OutdoorShare platform on your behalf.
+                  </div>
+                  <p className="leading-relaxed">
+                    Replies go to your <strong>Public Email</strong> set in Settings.{" "}
+                    <Link href={adminPath("/settings")} className="underline underline-offset-2 font-semibold hover:text-blue-600 inline-flex items-center gap-0.5">
+                      Update your email in Settings <ExternalLink className="w-3 h-3" />
+                    </Link>
+                  </p>
                 </div>
               </div>
             </div>

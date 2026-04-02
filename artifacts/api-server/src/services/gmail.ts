@@ -185,6 +185,48 @@ function infoTable(rows: { label: string; value: string; mono?: boolean }[]): st
   </table>`;
 }
 
+// ── Blast / manual message email ──────────────────────────────────────────────
+export async function sendBlastEmail(opts: {
+  toEmail: string;
+  customerName: string;
+  subject: string;
+  bodyText: string;
+  companyName: string;
+  companyEmail?: string | null;
+}): Promise<void> {
+  const { toEmail, customerName, subject, bodyText, companyName, companyEmail } = opts;
+  const fromHeader = `${companyName} via OutdoorShare <contact.us@myoutdoorshare.com>`;
+  const replyTo = companyEmail || undefined;
+
+  // Convert plain-text line breaks to HTML paragraphs
+  const bodyHtml = bodyText
+    .split(/\n\n+/)
+    .map(para => `<p style="margin:0 0 16px;font-size:15px;color:#374151;line-height:1.6;">${para.replace(/\n/g, "<br />")}</p>`)
+    .join("");
+
+  const body = `
+    <p style="margin:0 0 4px;font-size:16px;font-weight:700;color:${BRAND_DARK};">Hi ${customerName},</p>
+    ${bodyHtml}
+    <p style="margin:24px 0 0;font-size:14px;color:#6b7280;border-top:1px solid #e5e7eb;padding-top:16px;">
+      &mdash; The team at <strong>${companyName}</strong>
+      ${companyEmail ? `&nbsp;·&nbsp;<a href="mailto:${companyEmail}" style="color:${BRAND_GREEN};">${companyEmail}</a>` : ""}
+    </p>
+  `;
+
+  const html = emailShell({
+    preheader: subject,
+    badgeLabel: `Message from ${companyName}`,
+    badgeColor: BRAND_DARK,
+    body,
+  });
+
+  const gmail = await getUncachableGmailClient();
+  await gmail.users.messages.send({
+    userId: "me",
+    requestBody: { raw: makeRawEmail(toEmail, subject, html, fromHeader, replyTo) },
+  });
+}
+
 // ── Welcome email ──────────────────────────────────────────────────────────────
 export async function sendWelcomeEmail(opts: {
   toEmail: string;

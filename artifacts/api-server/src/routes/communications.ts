@@ -1,7 +1,8 @@
 import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
-import { bookingsTable, messageLogs, automationSettings } from "@workspace/db/schema";
+import { bookingsTable, messageLogs, automationSettings, businessProfileTable } from "@workspace/db/schema";
 import { eq, and, gt, desc } from "drizzle-orm";
+import { sendBlastEmail } from "../services/gmail";
 
 const router: IRouter = Router();
 
@@ -126,8 +127,43 @@ router.post("/communications/send", async (req, res) => {
       return;
     }
 
+    // Look up business profile for sender identity
+    let companyName = "Your Rental Company";
+    let companyEmail: string | null = null;
+    if (req.tenantId) {
+      const [biz] = await db.select().from(businessProfileTable).where(eq(businessProfileTable.tenantId, req.tenantId)).limit(1);
+      if (biz) {
+        companyName = biz.name ?? companyName;
+        companyEmail = biz.email ?? null;
+      }
+    }
+
     const logs = [];
+    const emailChannel = channel === "email" || channel === "both" || !channel;
+
     for (const r of recipients) {
+      let status: "sent" | "failed" | "simulated" = "simulated";
+      let errorMsg: string | undefined;
+
+      // Attempt real email delivery
+      if (emailChannel && r.email) {
+        try {
+          await sendBlastEmail({
+            toEmail: r.email,
+            customerName: r.name || "there",
+            subject: subject || `Message from ${companyName}`,
+            bodyText: body,
+            companyName,
+            companyEmail,
+          });
+          status = "sent";
+        } catch (emailErr: any) {
+          req.log.warn({ emailErr }, "Failed to send blast email (logging anyway)");
+          status = "failed";
+          errorMsg = emailErr?.message;
+        }
+      }
+
       const [log] = await db
         .insert(messageLogs)
         .values({
@@ -140,13 +176,15 @@ router.post("/communications/send", async (req, res) => {
           subject: subject || null,
           body,
           trigger: "manual",
-          status: "simulated",
+          status,
         })
         .returning();
-      logs.push(log);
+      logs.push({ ...log, errorMsg });
     }
 
-    res.json({ sent: logs.length, logs });
+    const sentCount = logs.filter(l => l.status === "sent").length;
+    const failedCount = logs.filter(l => l.status === "failed").length;
+    res.json({ sent: sentCount, failed: failedCount, total: logs.length, logs });
   } catch (err) {
     req.log.error(err);
     res.status(500).json({ error: "Failed to send messages" });
@@ -186,18 +224,48 @@ router.post("/communications/send-automation", async (req, res) => {
       return;
     }
 
+    // Look up business profile for sender identity
+    let companyName = "Your Rental Company";
+    let companyEmail: string | null = null;
+    if (effectiveTenantId) {
+      const [biz] = await db.select().from(businessProfileTable).where(eq(businessProfileTable.tenantId, effectiveTenantId)).limit(1);
+      if (biz) {
+        companyName = biz.name ?? companyName;
+        companyEmail = biz.email ?? null;
+      }
+    }
+
     const body = automation.bodyTemplate
       .replace(/{{customerName}}/g, booking.customerName)
       .replace(/{{startDate}}/g, booking.startDate)
       .replace(/{{endDate}}/g, booking.endDate)
       .replace(/{{totalPrice}}/g, booking.totalPrice?.toString() ?? "")
-      .replace(/{{businessName}}/g, "Your Rental Company");
+      .replace(/{{businessName}}/g, companyName);
 
     const channel = automation.emailEnabled && automation.smsEnabled
       ? "both"
       : automation.emailEnabled
       ? "email"
       : "sms";
+
+    // Attempt real email delivery for email channel
+    let status: "sent" | "failed" | "simulated" = "simulated";
+    if (automation.emailEnabled && booking.customerEmail) {
+      try {
+        await sendBlastEmail({
+          toEmail: booking.customerEmail,
+          customerName: booking.customerName,
+          subject: automation.subject || `Message from ${companyName}`,
+          bodyText: body,
+          companyName,
+          companyEmail,
+        });
+        status = "sent";
+      } catch (emailErr) {
+        req.log.warn({ emailErr }, "Failed to send automation email (logging anyway)");
+        status = "failed";
+      }
+    }
 
     const [log] = await db
       .insert(messageLogs)
@@ -211,7 +279,7 @@ router.post("/communications/send-automation", async (req, res) => {
         subject: automation.subject || null,
         body,
         trigger,
-        status: "simulated",
+        status,
       })
       .returning();
 
