@@ -154,30 +154,93 @@ export function StorefrontLayout({ children }: { children: React.ReactNode }) {
     };
   }, [primaryColor, accentColor]);
 
-  // Dynamic favicon: swap to the tenant's logo while on their storefront,
-  // restore to the OutdoorShare logo when navigating away.
-  const logoUrl = (profile as any)?.logoUrl as string | undefined;
+  // Dynamic meta: swap favicon, title, og:*, twitter:*, apple-touch-icon, and theme-color
+  // to the tenant's branding while on their storefront. Restore OutdoorShare defaults on unmount.
+  const logoUrl   = (profile as any)?.logoUrl   as string | undefined;
+  const tagline   = (profile as any)?.tagline   as string | undefined;
+  const desc      = (profile as any)?.description as string | undefined;
+  const companyName = profile?.name;
+
   useEffect(() => {
+    if (!companyName) return;
+
+    const title       = `${companyName} — Rental Booking`;
+    const description = desc || tagline || `Book rentals from ${companyName} online.`;
+    const toAbsolute  = (u: string) => u.startsWith("http") ? u : `${window.location.origin}${u.startsWith("/") ? "" : "/"}${u}`;
+    const image       = toAbsolute(logoUrl || "/outdoorshare-logo.png");
+    const url         = window.location.href;
+
+    // ── helpers ───────────────────────────────────────────────────────
+    const setMeta = (selector: string, attr: string, value: string) => {
+      const el = document.querySelector<HTMLMetaElement>(selector);
+      if (el) (el as any)[attr] = value;
+    };
+    const setLink = (selector: string, href: string) => {
+      const el = document.querySelector<HTMLLinkElement>(selector);
+      if (el) el.href = href;
+    };
     const setFavicon = (href: string) => {
       let link = document.querySelector<HTMLLinkElement>("link#favicon");
       if (!link) {
         link = document.createElement("link");
-        link.id = "favicon";
-        link.rel = "icon";
-        link.type = "image/png";
+        link.id = "favicon"; link.rel = "icon"; link.type = "image/png";
         document.head.appendChild(link);
       }
       link.href = href;
     };
 
-    if (logoUrl) {
-      setFavicon(logoUrl);
-    }
+    // ── save originals for cleanup ────────────────────────────────────
+    const origTitle = document.title;
 
+    // ── apply tenant branding ─────────────────────────────────────────
+    document.title = title;
+    setFavicon(image);
+    setLink('link[rel="apple-touch-icon"]', image);
+
+    setMeta('meta[name="theme-color"]',                  "content", primaryColor);
+    setMeta('meta[name="apple-mobile-web-app-title"]',   "content", companyName);
+
+    setMeta('meta[property="og:title"]',                 "content", title);
+    setMeta('meta[property="og:description"]',           "content", description);
+    setMeta('meta[property="og:url"]',                   "content", url);
+    setMeta('meta[property="og:image"]',                 "content", image);
+    setMeta('meta[property="og:image:secure_url"]',      "content", image);
+    setMeta('meta[property="og:site_name"]',             "content", companyName);
+    setMeta('meta[property="og:image:alt"]',             "content", `${companyName} logo`);
+
+    setMeta('meta[name="twitter:title"]',                "content", title);
+    setMeta('meta[name="twitter:description"]',          "content", description);
+    setMeta('meta[name="twitter:image"]',                "content", image);
+    setMeta('meta[name="twitter:image:alt"]',            "content", `${companyName} logo`);
+
+    // ── restore OutdoorShare defaults on unmount ──────────────────────
     return () => {
+      document.title = origTitle;
       setFavicon("/outdoorshare-logo.png");
+      setLink('link[rel="apple-touch-icon"]', "/outdoorshare-logo.png");
+
+      setMeta('meta[name="theme-color"]',                "content", "#3ab549");
+      setMeta('meta[name="apple-mobile-web-app-title"]', "content", "OutdoorShare");
+
+      const OS_TITLE = "OutdoorShare — Rental Management Software for Outdoor Equipment Businesses";
+      const OS_DESC  = "Launch your outdoor rental business online in minutes. White-label branded storefront, booking engine, analytics & admin dashboard. Free 14-day trial.";
+      const OS_IMG   = "https://myoutdoorshare.com/opengraph.jpg";
+      const OS_URL   = "https://myoutdoorshare.com/";
+
+      setMeta('meta[property="og:title"]',               "content", OS_TITLE);
+      setMeta('meta[property="og:description"]',         "content", OS_DESC);
+      setMeta('meta[property="og:url"]',                 "content", OS_URL);
+      setMeta('meta[property="og:image"]',               "content", OS_IMG);
+      setMeta('meta[property="og:image:secure_url"]',    "content", OS_IMG);
+      setMeta('meta[property="og:site_name"]',           "content", "OutdoorShare");
+      setMeta('meta[property="og:image:alt"]',           "content", "OutdoorShare rental management platform");
+
+      setMeta('meta[name="twitter:title"]',              "content", OS_TITLE);
+      setMeta('meta[name="twitter:description"]',        "content", OS_DESC);
+      setMeta('meta[name="twitter:image"]',              "content", OS_IMG);
+      setMeta('meta[name="twitter:image:alt"]',          "content", "OutdoorShare rental management platform");
     };
-  }, [logoUrl]);
+  }, [companyName, tagline, desc, logoUrl, primaryColor]);
 
   // Auto-contrast text colors
   const headerText     = isLight(primaryColor) ? "#111111" : "#ffffff";
