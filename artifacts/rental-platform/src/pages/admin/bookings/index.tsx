@@ -98,7 +98,7 @@ function getStatusBadge(status: string) {
 export default function AdminBookings() {
   const [tab, setTab] = useState<TabKey>("recent");
   const [search, setSearch] = useState("");
-  const [view, setView] = useState<ViewMode>("list");
+  const [view, setView] = useState<ViewMode>("calendar");
   const [calendarMonth, setCalendarMonth] = useState(new Date());
   const { toast } = useToast();
   const queryClient = useQueryClient();
