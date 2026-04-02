@@ -73,46 +73,46 @@
   --elevate-1: rgba(0,0,0, .03);
   --elevate-2: rgba(0,0,0, .08);
 
-  /* Warm, earthy off-white */
-  --background: 40 33% 98%;
-  --foreground: 155 40% 10%;
+  /* Cool light gray — modern admin background */
+  --background: 216 29% 97%;
+  --foreground: 220 25% 15%;
 
-  --border: 40 20% 88%;
+  --border: 216 14% 89%;
   --card: 0 0% 100%;
-  --card-foreground: 155 40% 10%;
-  --card-border: 40 20% 88%;
+  --card-foreground: 220 25% 15%;
+  --card-border: 216 14% 89%;
 
-  --sidebar: 40 33% 96%;
-  --sidebar-foreground: 155 40% 15%;
-  --sidebar-border: 40 20% 88%;
+  --sidebar: 0 0% 100%;
+  --sidebar-foreground: 220 20% 20%;
+  --sidebar-border: 216 14% 89%;
   --sidebar-primary: 155 42% 18%;
   --sidebar-primary-foreground: 0 0% 100%;
-  --sidebar-accent: 40 20% 90%;
-  --sidebar-accent-foreground: 155 40% 10%;
+  --sidebar-accent: 216 20% 95%;
+  --sidebar-accent-foreground: 220 25% 15%;
   --sidebar-ring: 155 42% 18%;
 
   --popover: 0 0% 100%;
-  --popover-foreground: 155 40% 10%;
-  --popover-border: 40 20% 88%;
+  --popover-foreground: 220 25% 15%;
+  --popover-border: 216 14% 89%;
 
   /* Deep Forest Green */
   --primary: 155 42% 18%;
   --primary-foreground: 0 0% 100%;
 
-  /* Earthy beige */
-  --secondary: 40 20% 90%;
-  --secondary-foreground: 155 40% 15%;
+  /* Cool neutral secondary */
+  --secondary: 216 14% 92%;
+  --secondary-foreground: 220 20% 20%;
 
-  --muted: 40 20% 94%;
-  --muted-foreground: 155 20% 40%;
+  --muted: 216 14% 94%;
+  --muted-foreground: 220 14% 45%;
 
-  --accent: 40 20% 90%;
-  --accent-foreground: 155 40% 15%;
+  --accent: 216 14% 92%;
+  --accent-foreground: 220 20% 20%;
 
   --destructive: 0 84% 60%;
   --destructive-foreground: 0 0% 100%;
 
-  --input: 40 20% 84%;
+  --input: 216 14% 87%;
   --ring: 155 42% 18%;
 
   /* Earthy chart colors */
