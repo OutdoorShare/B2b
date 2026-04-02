@@ -201,8 +201,8 @@ router.post("/superadmin/tenants", requireSuperAdmin, async (req, res) => {
       notes: notes ?? null,
     }).returning();
 
-    // Seed default categories for the new tenant (non-blocking)
-    seedDefaultCategories(tenant.id).catch(() => {});
+    // Seed default categories (await so they exist before the response)
+    await seedDefaultCategories(tenant.id);
 
     // Send welcome email (non-blocking — don't fail the request if email fails)
     sendWelcomeEmail({ toEmail: email, companyName: name, slug, password }).catch((err) =>
