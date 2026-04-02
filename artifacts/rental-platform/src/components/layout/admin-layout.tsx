@@ -1,5 +1,7 @@
 import { Link, useLocation } from "wouter";
 import { useEffect } from "react";
+import { AIAssistant } from "@/components/ai-assistant";
+import { getAdminSession } from "@/lib/admin-nav";
 import { 
   LayoutDashboard, 
   Package, 
@@ -222,6 +224,12 @@ export function AdminLayout({ children }: { children: React.ReactNode }) {
           </div>
         </div>
       </main>
+      <AIAssistant
+        role="admin"
+        tenantSlug={slugFromPath}
+        companyName={companyName}
+        adminToken={getAdminSession()?.token}
+      />
     </div>
   );
 }

@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { AIAssistant } from "@/components/ai-assistant";
 import { Link, useParams, useLocation } from "wouter";
 import { Tent, Clock, Lock, User, LogOut, BookOpen } from "lucide-react";
 import { useGetBusinessProfile } from "@workspace/api-client-react";
@@ -301,6 +302,15 @@ export function StorefrontLayout({ children }: { children: React.ReactNode }) {
 
       {/* Fixed corner badge — only shown during trial */}
       {trialActive && <PoweredByBadge variant="fixed" />}
+
+      {/* AI Renter Assistant */}
+      {slug && (
+        <AIAssistant
+          role="renter"
+          tenantSlug={slug}
+          companyName={profile?.name ?? undefined}
+        />
+      )}
     </div>
   );
 }

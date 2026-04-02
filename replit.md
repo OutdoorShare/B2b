@@ -149,6 +149,26 @@ Every data-writing endpoint stamps `tenantId` from `req.tenantId`. Every data-re
 - **communications/renters**: scoped to tenant bookings; message_logs scoped by `tenant_id`
 - **automation_settings**: per-tenant, seeded on first GET `/communications/automations`
 
+## AI Assistant (OutdoorBot)
+
+A floating chat widget powered by OpenAI appears on both the storefront and admin dashboard.
+
+### Backend: `POST /api/ai/chat`
+- Accepts `{ messages, role, tenantSlug, companyName }` body + auth headers
+- Returns SSE stream (text/event-stream) with `{ content }`, `{ tool }`, `{ done }` events
+- **Admin role**: Uses function-calling tools (get/update listings, bookings, business settings). Requires `x-admin-token` or `x-superadmin-token` header.
+- **Renter role**: Read-only assistant explaining policies, protection plan, booking process. No auth required.
+- Model: `gpt-5-mini`; up to 5 tool-call loops per request; max 1024 tokens per response
+
+### Frontend: `AIChatWidget` (`src/components/ai-assistant.tsx`)
+- Floating green Bot button (52px circle, `#3ab549`) fixed bottom-right
+- Opens a 360×520px chat panel with header in dark navy (`#1a2332`)
+- Shows starter prompts before first user message (role-specific)
+- Tool activity indicator shown while admin tools are running ("Looking up your listings…")
+- Markdown-like rendering: `**bold**`, `# headers`, `## headers`, `- bullet lists`, `` `code` ``
+- Conversation state is in-memory only (no DB persistence)
+- Wired into `AdminLayout` (with admin token) and `StorefrontLayout` (renter mode)
+
 ## API Routes
 
 All routes prefixed with `/api`. All data routes are tenant-scoped via the middleware.
