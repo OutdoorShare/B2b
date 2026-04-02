@@ -34,7 +34,11 @@ function darken(hex: string, amt = 20): string {
   return `#${r}${g}${b}`;
 }
 
-function TrialExpiredPaywall({ companyName }: { companyName: string }) {
+function TrialExpiredPaywall({ companyName, companyEmail }: { companyName: string; companyEmail?: string | null }) {
+  const mailtoHref = companyEmail
+    ? `mailto:${companyEmail}?subject=Booking%20Inquiry&body=Hi%2C%20I%27d%20like%20to%20make%20a%20booking%20through%20${encodeURIComponent(companyName)}.`
+    : undefined;
+
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm">
       <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-2xl p-8 max-w-md w-full mx-4 text-center space-y-5">
@@ -42,20 +46,29 @@ function TrialExpiredPaywall({ companyName }: { companyName: string }) {
           <Lock className="w-7 h-7 text-orange-500" />
         </div>
         <div>
-          <h2 className="text-xl font-bold text-foreground mb-2">Free trial ended</h2>
+          <h2 className="text-xl font-bold text-foreground mb-2">Website temporarily unavailable</h2>
           <p className="text-sm text-muted-foreground">
-            <strong>{companyName}</strong>'s free trial has expired. To continue using OutdoorShare and access this storefront, the account owner needs to upgrade to a paid plan.
+            <strong>{companyName}</strong>'s online storefront is currently unavailable. Please contact them directly to make a booking or get more information.
           </p>
         </div>
-        <a
-          href="/get-started"
-          className="block w-full py-2.5 rounded-lg text-white text-sm font-bold transition-opacity hover:opacity-90"
-          style={{ background: `linear-gradient(90deg, #1a6b2e, ${OS_GREEN})` }}
-        >
-          Upgrade Now
-        </a>
+        {mailtoHref ? (
+          <a
+            href={mailtoHref}
+            className="block w-full py-2.5 rounded-lg text-white text-sm font-bold transition-opacity hover:opacity-90"
+            style={{ background: `linear-gradient(90deg, #1a6b2e, ${OS_GREEN})` }}
+          >
+            Contact {companyName}
+          </a>
+        ) : (
+          <div
+            className="block w-full py-2.5 rounded-lg text-white text-sm font-bold"
+            style={{ background: `linear-gradient(90deg, #1a6b2e, ${OS_GREEN})` }}
+          >
+            Contact {companyName}
+          </div>
+        )}
         <p className="text-xs text-muted-foreground">
-          Already upgraded?{" "}
+          Is this your business?{" "}
           <button
             className="underline hover:text-foreground transition-colors"
             onClick={() => window.location.reload()}
@@ -122,8 +135,10 @@ export function StorefrontLayout({ children }: { children: React.ReactNode }) {
   const trialExpired = (profile as any)?.trialExpired as boolean | undefined;
   const isBlocked = (profile as any)?.isBlocked as boolean | undefined;
   const trialEndsAt = (profile as any)?.trialEndsAt as string | null | undefined;
+  const graceEndsAt = (profile as any)?.graceEndsAt as string | null | undefined;
   const plan = (profile as any)?.plan as string | undefined;
   const isPaid = plan && plan !== "starter";
+  const companyEmail = (profile as any)?.email as string | null | undefined;
 
   // Brand colors from admin settings
   const primaryColor = profile?.primaryColor || "#1b4332";
@@ -173,9 +188,12 @@ export function StorefrontLayout({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="min-h-[100dvh] flex flex-col bg-background">
-      {/* Blocked paywall: trial expired with no active subscription */}
-      {(isBlocked || trialExpired) && (
-        <TrialExpiredPaywall companyName={profile?.name || "This company"} />
+      {/* Blocked paywall: trial expired AND 3-day grace period has passed */}
+      {isBlocked && (
+        <TrialExpiredPaywall
+          companyName={profile?.name || "This company"}
+          companyEmail={companyEmail}
+        />
       )}
 
       {/* Subtle trial bar */}

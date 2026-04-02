@@ -39,11 +39,14 @@ async function getTenantTrialInfo(tenantId: number | undefined) {
   }).from(tenantsTable).where(eq(tenantsTable.id, tenantId)).limit(1);
   if (!tenant) return fallback;
   const now = Date.now();
+  const GRACE_MS = 3 * 24 * 60 * 60 * 1000; // 3 days in ms
   const trialMs = tenant.trialEndsAt ? tenant.trialEndsAt.getTime() : null;
   const subscriptionActive = ["active", "trialing"].includes(tenant.subscriptionStatus ?? "");
   const trialActive = trialMs !== null && trialMs > now && !subscriptionActive;
   const trialExpired = trialMs !== null && trialMs <= now && !subscriptionActive;
-  const isBlocked = trialExpired;
+  // Only block the storefront after the 3-day grace period has passed
+  const isBlocked = trialExpired && (now - (trialMs ?? 0)) > GRACE_MS;
+  const graceEndsAt = trialMs !== null ? new Date(trialMs + GRACE_MS).toISOString() : null;
   return {
     plan: tenant.plan,
     siteSlug: tenant.slug,
@@ -51,6 +54,7 @@ async function getTenantTrialInfo(tenantId: number | undefined) {
     trialActive,
     trialExpired,
     isBlocked,
+    graceEndsAt,
     testMode: !!tenant.testMode,
   };
 }
