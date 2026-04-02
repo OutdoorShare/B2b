@@ -1,0 +1,29 @@
+•  Overview/Dashboard View: Show summary cards at the top with key metrics (Total Products, Available Now, In Maintenance, Low Stock/Reserved, Upcoming Maintenance Due). Use clean cards and subtle outdoor-friendly accent colors for status.
+•  Product List/Table: Display all products in a searchable, filterable, sortable table. Columns should include: Product Name, Category, Image/Thumbnail, Current Availability/Status, Quantity (if applicable), Next Maintenance Due, Actions.
+•  Categorization: Products are grouped or filterable by Category (Replit should auto-detect or allow common outdoor rental categories like Tents, Kayaks, Bikes, Camping Gear, etc. — make it easy to add/edit categories).
+•  Bidirectional Linking with Listings:
+	•  When creating or editing a Listing, allow selecting an existing Product from a dropdown or search.
+	•  When adding/creating a new Product in the Inventory section, it should automatically become available to select when creating Listings.
+	•  Clicking on a product in the Inventory section opens a detail view with an option to “Create Listing from this Product” (pre-fills product details).
+•  Product Detail View / Actions (when clicking a product):
+	•  View full details (description, photos, specs, availability calendar).
+	•  Status management: Dropdown or buttons to set/block availability with reasons — options like Available, Maintenance, Damaged, Reserved, Out of Service.
+	•  Maintenance Log:
+		•  Section to view history of past maintenance (date, what was done, notes, performed by).
+		•  Form to log new maintenance (date completed, description of work, cost if any).
+		•  Ability to schedule next maintenance (date due, type of maintenance needed).
+		•  Option for recurring maintenance schedules if the product needs regular service.
+	•  Quick actions: Mark as Damaged, Put into Maintenance, or Delete Product.
+		•  When deleting, show a clear warning modal: “Deleting this product will also delete all associated listings. Are you sure you want to continue?”
+•  Add New Product: Prominent “+ Add Product” button with a form including name, category, description, photos, specs, initial availability, and maintenance notes.
+Super Admin View:
+•  Super admins should have access to the exact same Products / Inventory section (or a read-only/view mode) for all companies.
+•  This allows super admins to review every company’s products, see maintenance due dates, availability issues, and overall inventory health to provide support.
+Design & UX Guidelines:
+•  Keep the UI modern, sleek, and simple — consistent with the updated Communications page (light cool gray #F4F6F9 background, white cards, good spacing, high readability).
+•  Use intuitive table views with filters, search, and pagination.
+•  Status badges should be color-coded (e.g., green for Available, orange for Maintenance, red for Damaged).
+•  Make maintenance logging quick and prominent since this is one of the main purposes of the section.
+•  Ensure everything is responsive and feels professional yet fun for an outdoor rental company.
+Please implement this as a new page/route, update the sidebar navigation, and handle the backend data relationships between Products and Listings (two-way linking). Provide the code changes or files updated, and suggest how to make the maintenance log and schedules persistent.
+If using Tailwind or any component library, keep styling consistent with the rest of the dashboard

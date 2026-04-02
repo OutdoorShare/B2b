@@ -2,7 +2,7 @@ import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
 import { claimsTable, bookingsTable, listingsTable, tenantsTable } from "@workspace/db/schema";
 import { eq, desc, and, gte, lte } from "drizzle-orm";
-import { sendClaimAlertEmail } from "../services/gmail";
+import { sendClaimAlertEmail, sendClaimStatusAlertEmail } from "../services/gmail";
 import { getStripeForTenant } from "../services/stripe";
 
 const router: IRouter = Router();
@@ -199,6 +199,11 @@ router.put("/claims/:id", async (req, res) => {
 
     const whereConditions = [eq(claimsTable.id, Number(req.params.id))];
     if (req.tenantId) whereConditions.push(eq(claimsTable.tenantId, req.tenantId));
+
+    // Fetch current claim so we can detect status changes
+    const [existing] = await db.select().from(claimsTable).where(and(...whereConditions));
+    if (!existing) return res.status(404).json({ error: "Not found" });
+
     const [updated] = await db
       .update(claimsTable)
       .set({
@@ -216,6 +221,32 @@ router.put("/claims/:id", async (req, res) => {
 
     if (!updated) return res.status(404).json({ error: "Not found" });
     res.json(formatClaim(updated));
+
+    // Fire-and-forget: alert super admin when a tenant changes a claim's status
+    if (status && status !== existing.status && existing.tenantId) {
+      (async () => {
+        try {
+          const [tenant] = await db
+            .select({ name: tenantsTable.name, slug: tenantsTable.slug })
+            .from(tenantsTable)
+            .where(eq(tenantsTable.id, existing.tenantId!))
+            .limit(1);
+          await sendClaimStatusAlertEmail({
+            claimId: existing.id,
+            customerName: existing.customerName,
+            customerEmail: existing.customerEmail,
+            type: updated.type,
+            oldStatus: existing.status,
+            newStatus: status,
+            companyName: tenant?.name ?? "Unknown Company",
+            slug: tenant?.slug ?? "unknown",
+            adminNotes: updated.adminNotes,
+          });
+        } catch (e) {
+          req.log.warn({ err: e }, "Failed to send claim status alert email (non-fatal)");
+        }
+      })();
+    }
   } catch (err) {
     req.log.error(err);
     res.status(500).json({ error: "Failed to update claim" });

@@ -565,6 +565,66 @@ export async function sendClaimAlertEmail(opts: {
   });
 }
 
+// ── Claim status change alert (to superadmin) ─────────────────────────────────
+export async function sendClaimStatusAlertEmail(opts: {
+  claimId: number;
+  customerName: string;
+  customerEmail: string;
+  type: string;
+  oldStatus: string;
+  newStatus: string;
+  companyName: string;
+  slug: string;
+  adminNotes?: string | null;
+}): Promise<void> {
+  const { claimId, customerName, customerEmail, type, oldStatus, newStatus, companyName, slug, adminNotes } = opts;
+
+  const gmail = await getUncachableGmailClient();
+  const profile = await gmail.users.getProfile({ userId: "me" });
+  const toEmail = profile.data.emailAddress!;
+
+  const claimsUrl = `${APP_URL}/superadmin/claims`;
+  const typeLabel = type.charAt(0).toUpperCase() + type.slice(1);
+  const capitalize = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
+
+  const statusColors: Record<string, string> = {
+    open: "#dc2626", reviewing: "#d97706", resolved: "#16a34a", denied: "#6b7280",
+  };
+  const badgeColor = statusColors[newStatus] ?? BRAND_DARK;
+
+  const tableRows: { label: string; value: string; mono?: boolean }[] = [
+    { label: "Claim #",   value: `#${claimId}`, mono: true },
+    { label: "Customer",  value: customerName },
+    { label: "Email",     value: customerEmail },
+    { label: "Type",      value: typeLabel },
+    { label: "Company",   value: `${companyName} (/${slug})` },
+    { label: "Status",    value: `${capitalize(oldStatus)} → ${capitalize(newStatus)}` },
+    ...(adminNotes ? [{ label: "Notes", value: adminNotes }] : []),
+  ];
+
+  const body = `
+    <p style="margin:0 0 8px;font-size:18px;font-weight:700;color:${BRAND_DARK};">Claim Status Updated</p>
+    <p style="margin:0 0 20px;font-size:15px;color:#374151;line-height:1.6;">
+      Claim <strong>#${claimId}</strong> for <strong>${companyName}</strong> has been updated to
+      <strong style="color:${badgeColor};">${capitalize(newStatus)}</strong>.
+    </p>
+    ${infoTable(tableRows)}
+    ${ctaButton("View Claim in Console", claimsUrl, badgeColor)}
+  `;
+
+  const html = emailShell({
+    preheader: `Claim #${claimId} status changed from ${oldStatus} to ${newStatus} — ${companyName}.`,
+    badgeLabel: `Claim Updated — ${capitalize(newStatus)}`,
+    badgeColor,
+    body,
+  });
+
+  await gmail.users.messages.send({
+    userId: "me",
+    requestBody: { raw: makeRawEmail(toEmail, `[Claim #${claimId}] Status updated to ${capitalize(newStatus)} — ${companyName}`, html) },
+  });
+}
+
 // ── Booking confirmation + pickup reminder (to renter, non-kiosk) ──────────────
 export async function sendBookingPickupReminderEmail(opts: {
   customerName: string;
