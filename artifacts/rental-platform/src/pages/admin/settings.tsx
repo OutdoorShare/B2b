@@ -108,8 +108,11 @@ export default function AdminSettings() {
             toast({ title: "Saving…", description: "Connection blip — retrying in a moment." });
             return;
           }
+          if (status === 401) {
+            redirectToLogin("Your session has expired. Redirecting you to log in…");
+            return;
+          }
           const msg =
-            status === 401 ? "Session expired — please log in again." :
             status === 403 ? "You don't have permission to save settings." :
             status >= 500 ? "Server error — please try again." :
             err?.message || "Could not save settings.";
@@ -168,6 +171,24 @@ export default function AdminSettings() {
     return {};
   };
 
+  const hasAdminToken = (): boolean => {
+    try {
+      const raw = localStorage.getItem("admin_session");
+      if (!raw) return false;
+      const s = JSON.parse(raw);
+      return !!s?.token;
+    } catch { return false; }
+  };
+
+  const redirectToLogin = (reason: string) => {
+    localStorage.removeItem("admin_session");
+    toast({ title: "Session expired", description: reason, variant: "destructive" });
+    const slug = urlSlug || "";
+    setTimeout(() => {
+      window.location.href = `${BASE}/${slug}/admin`;
+    }, 1200);
+  };
+
   useEffect(() => {
     fetch(`${BASE}/api/stripe/connect/status`, { headers: adminHeaders() })
       .then(r => r.ok ? r.json() : { connected: false })
@@ -177,12 +198,20 @@ export default function AdminSettings() {
   }, [BASE]);
 
   const handleConnectOnboard = async () => {
+    if (!hasAdminToken()) {
+      redirectToLogin("No active session found. Please log in to connect Stripe.");
+      return;
+    }
     setOnboardLoading(true);
     try {
       const res = await fetch(`${BASE}/api/stripe/connect/onboard`, { method: "POST", headers: adminHeaders() });
       const data = await res.json();
       if (res.status === 401) {
-        toast({ title: "Session expired", description: "Please log in again to continue.", variant: "destructive" });
+        redirectToLogin("Your session has expired. Redirecting you to log in…");
+        return;
+      }
+      if (res.status === 403) {
+        toast({ title: "Permission denied", description: "Your account doesn't have permission to manage Stripe.", variant: "destructive" });
         return;
       }
       if (data.url) { window.location.href = data.url; }
@@ -191,7 +220,7 @@ export default function AdminSettings() {
         toast({ title: "Stripe setup failed", description: msg.length > 120 ? msg.slice(0, 120) + "…" : msg, variant: "destructive" });
       }
     } catch {
-      toast({ title: "Stripe connection error", variant: "destructive" });
+      toast({ title: "Connection error", description: "Could not reach the server. Please check your internet connection and try again.", variant: "destructive" });
     } finally {
       setOnboardLoading(false);
     }
