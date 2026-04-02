@@ -481,8 +481,9 @@ export default function AdminListingsForm() {
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="space-y-2">
-                  <Label htmlFor="requirements">Special Requirements</Label>
-                  <Textarea id="requirements" name="requirements" placeholder="e.g. Must have a valid driver's license" value={formData.requirements} onChange={handleChange} rows={3} />
+                  <Label htmlFor="requirements">Additional Requirements</Label>
+                  <p className="text-xs text-muted-foreground">Shown to renters in the Requirements section on the listing page. The "Must be 21+ years old to rent" requirement is always displayed automatically — add any extra conditions here (e.g. tow vehicle specs, license type, gear requirements).</p>
+                  <Textarea id="requirements" name="requirements" placeholder="e.g. A valid driver's license and proof of insurance required. Must have appropriate tow vehicle with 2-5/16 inch ball hitch." value={formData.requirements} onChange={handleChange} rows={4} />
                 </div>
               </CardContent>
             </Card>
