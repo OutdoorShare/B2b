@@ -556,12 +556,62 @@ export default function MyBookingDetail() {
           <span>Total</span>
           <span>${totalPrice.toFixed(2)}</span>
         </div>
-        {booking.depositPaid != null && Number(booking.depositPaid) > 0 && (
-          <div className="flex justify-between text-sm text-muted-foreground">
-            <span>Deposit paid</span>
-            <span>${Number(booking.depositPaid).toFixed(2)}</span>
-          </div>
-        )}
+        {booking.depositPaid != null && Number(booking.depositPaid) > 0 && (() => {
+          const holdStatus = (booking as any).depositHoldStatus as string | null | undefined;
+          const amount = Number(booking.depositPaid);
+          const statusMap: Record<string, { label: string; color: string; note: string }> = {
+            authorized: {
+              label: "Hold Active",
+              color: "bg-amber-100 text-amber-800 border-amber-300",
+              note: "A hold has been placed on your card. It will be released when you return the rental in good condition.",
+            },
+            released: {
+              label: "Released",
+              color: "bg-green-100 text-green-800 border-green-300",
+              note: "Your security deposit hold has been released back to your card.",
+            },
+            captured: {
+              label: "Charged",
+              color: "bg-red-100 text-red-800 border-red-300",
+              note: "Your security deposit was charged. Please contact the rental company for details.",
+            },
+          };
+          const cfg = holdStatus ? statusMap[holdStatus] : null;
+          return (
+            <>
+              <Separator />
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="flex items-center gap-1.5 text-sm text-muted-foreground">
+                    <ShieldCheck className="w-3.5 h-3.5" />
+                    Security Deposit
+                  </span>
+                  <span className="font-medium text-sm">${amount.toFixed(2)}</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-xs text-muted-foreground">Status</span>
+                  {cfg ? (
+                    <span className={`inline-flex items-center text-xs font-semibold px-2 py-0.5 rounded-full border ${cfg.color}`}>
+                      {cfg.label}
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center text-xs font-semibold px-2 py-0.5 rounded-full border border-gray-300 text-gray-600 bg-gray-50">
+                      Pending Authorization
+                    </span>
+                  )}
+                </div>
+                {cfg?.note && (
+                  <p className="text-xs text-muted-foreground leading-relaxed">{cfg.note}</p>
+                )}
+                {!cfg && (
+                  <p className="text-xs text-muted-foreground leading-relaxed">
+                    A hold for this amount will be placed on your card at pickup and released when you return the rental in good condition.
+                  </p>
+                )}
+              </div>
+            </>
+          );
+        })()}
 
         {/* Payment status */}
         {hasPayment && (

@@ -331,7 +331,23 @@ export default function AdminBookings() {
                         </TableCell>
                         <TableCell><SourceBadge source={(booking as any).source} /></TableCell>
                         <TableCell>{getStatusBadge(booking.status)}</TableCell>
-                        <TableCell className="font-medium">${booking.totalPrice.toFixed(2)}</TableCell>
+                        <TableCell className="font-medium">
+                          <div>${booking.totalPrice.toFixed(2)}</div>
+                          {(booking as any).depositPaid && parseFloat((booking as any).depositPaid) > 0 && (() => {
+                            const ds = (booking as any).depositHoldStatus as string | null | undefined;
+                            const cfg: Record<string, { label: string; cls: string }> = {
+                              authorized: { label: "Hold Active",  cls: "bg-amber-50 text-amber-700 border-amber-200" },
+                              released:   { label: "Deposit Released", cls: "bg-green-50 text-green-700 border-green-200" },
+                              captured:   { label: "Deposit Charged",  cls: "bg-red-50 text-red-700 border-red-200" },
+                            };
+                            const c = ds ? cfg[ds] : { label: "Deposit Pending", cls: "bg-gray-50 text-gray-500 border-gray-200" };
+                            return (
+                              <span className={`mt-1 inline-flex items-center text-[10px] font-semibold px-1.5 py-0.5 rounded border ${c.cls}`}>
+                                ${parseFloat((booking as any).depositPaid).toFixed(0)} · {c.label}
+                              </span>
+                            );
+                          })()}
+                        </TableCell>
                         <TableCell className="text-right">
                           <div className="flex justify-end gap-2">
                             {booking.status === "pending" && (
