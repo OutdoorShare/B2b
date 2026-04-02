@@ -256,6 +256,42 @@ router.get("/customers/lookup-by-email", async (req, res) => {
   }
 });
 
+router.post("/customers/:id/change-password", async (req, res) => {
+  try {
+    const { currentPassword, newPassword } = req.body;
+    if (!currentPassword || !newPassword) {
+      res.status(400).json({ error: "currentPassword and newPassword are required" });
+      return;
+    }
+    if (newPassword.length < 6) {
+      res.status(400).json({ error: "New password must be at least 6 characters" });
+      return;
+    }
+    const [customer] = await db
+      .select()
+      .from(customersTable)
+      .where(eq(customersTable.id, Number(req.params.id)));
+    if (!customer) {
+      res.status(404).json({ error: "Not found" });
+      return;
+    }
+    const valid = await verifyPassword(currentPassword, customer.passwordHash);
+    if (!valid) {
+      res.status(401).json({ error: "Current password is incorrect" });
+      return;
+    }
+    const newHash = await hashPassword(newPassword);
+    await db
+      .update(customersTable)
+      .set({ passwordHash: newHash, updatedAt: new Date() })
+      .where(eq(customersTable.id, customer.id));
+    res.json({ ok: true });
+  } catch (err) {
+    req.log.error(err);
+    res.status(500).json({ error: "Failed to change password" });
+  }
+});
+
 router.put("/customers/:id", async (req, res) => {
   try {
     const { name, phone, billingAddress, billingCity, billingState, billingZip, cardLastFour, cardBrand } = req.body;

@@ -1,7 +1,14 @@
 import { useState, useEffect } from "react";
 import { AIAssistant } from "@/components/ai-assistant";
 import { Link, useParams, useLocation } from "wouter";
-import { Tent, Clock, Lock, User, LogOut, BookOpen } from "lucide-react";
+import { Tent, Clock, Lock, User, LogOut, BookOpen, UserCircle } from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { useGetBusinessProfile } from "@workspace/api-client-react";
 import { PoweredByBadge } from "@/components/powered-by-badge";
 import { applyBrandColors } from "@/lib/theme";
@@ -216,42 +223,51 @@ export function StorefrontLayout({ children }: { children: React.ReactNode }) {
 
             {customer ? (
               /* Logged-in state */
-              <div className="flex items-center gap-2">
-                <Link
-                  href={`${base}/my-bookings`}
-                  className="flex items-center gap-1.5 text-sm font-medium transition-opacity hover:opacity-100"
-                  style={{ color: headerTextMuted }}
-                >
-                  <BookOpen className="w-3.5 h-3.5" />
-                  <span className="hidden sm:inline">My Bookings</span>
-                </Link>
-                {/* Avatar + name */}
-                <div
-                  className="flex items-center gap-2 pl-3 ml-1 border-l"
-                  style={{ borderColor: headerBorder }}
-                >
-                  <div
-                    className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold shrink-0"
-                    style={{ backgroundColor: accentColor, color: btnText }}
-                  >
-                    {initials || <User className="w-3.5 h-3.5" />}
-                  </div>
-                  <span
-                    className="text-sm font-medium hidden md:inline max-w-[100px] truncate"
-                    style={{ color: headerText }}
-                  >
-                    {customer.name.split(" ")[0]}
-                  </span>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
                   <button
-                    onClick={handleLogout}
-                    title="Sign out"
-                    className="transition-opacity hover:opacity-100 ml-1"
-                    style={{ color: headerTextMuted }}
+                    className="flex items-center gap-2 rounded-full focus:outline-none"
+                    aria-label="Account menu"
                   >
-                    <LogOut className="w-4 h-4" />
+                    <div
+                      className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold shrink-0 transition-opacity hover:opacity-80"
+                      style={{ backgroundColor: accentColor, color: btnText }}
+                    >
+                      {initials || <User className="w-3.5 h-3.5" />}
+                    </div>
+                    <span
+                      className="text-sm font-medium hidden md:inline max-w-[100px] truncate"
+                      style={{ color: headerText }}
+                    >
+                      {customer.name.split(" ")[0]}
+                    </span>
                   </button>
-                </div>
-              </div>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-48">
+                  <div className="px-3 py-2">
+                    <p className="text-xs font-semibold text-gray-900 truncate">{customer.name}</p>
+                    <p className="text-xs text-gray-400 truncate">{customer.email}</p>
+                  </div>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem asChild>
+                    <Link href={`${base}/profile`} className="flex items-center gap-2 cursor-pointer">
+                      <UserCircle className="w-4 h-4" /> My Profile
+                    </Link>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem asChild>
+                    <Link href={`${base}/my-bookings`} className="flex items-center gap-2 cursor-pointer">
+                      <BookOpen className="w-4 h-4" /> My Bookings
+                    </Link>
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem
+                    onClick={handleLogout}
+                    className="flex items-center gap-2 text-red-600 cursor-pointer"
+                  >
+                    <LogOut className="w-4 h-4" /> Sign Out
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
             ) : (
               /* Logged-out state */
               <Link
