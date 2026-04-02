@@ -19,7 +19,7 @@ import {
   Lock, User, CreditCard, FileText, Eye, EyeOff, ShieldCheck,
   Zap, AlertTriangle, Umbrella, Star, Loader2, BadgeCheck,
   ScanFace, RefreshCw, XCircle, Clock, Tag, Monitor, QrCode, Smartphone,
-  ScanLine, X, Copy, Check, Upload, ImagePlus, Car, Mountain, BookOpen
+  ScanLine, X, Copy, Check, Upload, ImagePlus, Car, Mountain, BookOpen, Building2
 } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { differenceInDays, format, addDays } from "date-fns";
@@ -401,6 +401,7 @@ export default function StorefrontBook() {
   const [sigHasContent, setSigHasContent] = useState(false);
   const [listingRules, setListingRules] = useState<ListingRule[]>([]);
   const [ruleInitials, setRuleInitials] = useState<Record<number, string>>({});
+  const [ruleChecks, setRuleChecks] = useState<Record<number, boolean>>({});
 
   // Verification
   const [identityClientSecret, setIdentityClientSecret] = useState<string | null>(null);
@@ -922,9 +923,9 @@ export default function StorefrontBook() {
       }
     }
 
-    const uninitialedRules = listingRules.filter(r => !ruleInitials[r.id]?.trim());
-    if (uninitialedRules.length > 0) {
-      toast({ title: "Please initial all rental rules", description: `${uninitialedRules.length} rule${uninitialedRules.length > 1 ? "s" : ""} still need your initials.`, variant: "destructive" });
+    const uncheckedRules = listingRules.filter(r => !ruleChecks[r.id]);
+    if (uncheckedRules.length > 0) {
+      toast({ title: "Please acknowledge all rental rules", description: `${uncheckedRules.length} rule${uncheckedRules.length > 1 ? "s" : ""} still need your acknowledgment.`, variant: "destructive" });
       return;
     }
 
@@ -970,7 +971,7 @@ export default function StorefrontBook() {
                 ruleId: r.id,
                 title: r.title,
                 fee: r.fee,
-                initials: ruleInitials[r.id] ?? "",
+                initials: ruleChecks[r.id] ? "✓" : "",
                 initialedAt: new Date().toISOString(),
               })))
             : undefined,
@@ -1849,48 +1850,65 @@ export default function StorefrontBook() {
                       <p className="text-xs italic">By signing below, you confirm you have read, understood, and agree to all terms in this rental agreement.</p>
                     </div>
 
-                    {/* Listing rules */}
+                    {/* Listing rules — checkbox acknowledgment */}
                     {listingRules.length > 0 && (
                       <div className="bg-background rounded-2xl border shadow-sm p-6 space-y-4">
                         <div className="flex items-center gap-2">
                           <ShieldCheck className="w-4 h-4 text-primary" />
-                          <h3 className="font-semibold">Rental Rules — Initial Each to Acknowledge</h3>
+                          <h3 className="font-semibold">Rental Rules — Check Each to Acknowledge</h3>
                         </div>
-                        <p className="text-sm text-muted-foreground">Type your initials next to each rule confirming you have read and agree to it.</p>
-                        <div className="space-y-3">
+                        <p className="text-sm text-muted-foreground">
+                          Check the box next to each rule to confirm you have read and agree to it before signing.
+                        </p>
+                        <div className="space-y-2.5">
                           {listingRules.map(rule => {
-                            const initialed = !!ruleInitials[rule.id]?.trim();
+                            const checked = !!ruleChecks[rule.id];
                             return (
-                              <div key={rule.id} className={`flex gap-4 items-start rounded-xl border p-4 transition-colors ${initialed ? "border-green-200 bg-green-50/40" : "border-dashed border-muted-foreground/30 bg-muted/20"}`}>
+                              <button
+                                key={rule.id}
+                                type="button"
+                                onClick={() => setRuleChecks(prev => ({ ...prev, [rule.id]: !prev[rule.id] }))}
+                                className={`w-full flex gap-4 items-start rounded-xl border p-4 text-left transition-all cursor-pointer
+                                  ${checked
+                                    ? "border-green-300 bg-green-50/60 shadow-sm"
+                                    : "border-dashed border-muted-foreground/30 bg-muted/20 hover:border-muted-foreground/50 hover:bg-muted/30"}`}
+                              >
+                                {/* Checkbox */}
+                                <div className={`mt-0.5 w-5 h-5 rounded border-2 shrink-0 flex items-center justify-center transition-all
+                                  ${checked
+                                    ? "bg-green-600 border-green-600"
+                                    : "bg-background border-muted-foreground/40"}`}
+                                >
+                                  {checked && (
+                                    <svg viewBox="0 0 12 9" className="w-3 h-3 text-white fill-current" xmlns="http://www.w3.org/2000/svg">
+                                      <path d="M1 4l3.5 3.5L11 1" stroke="white" strokeWidth="1.8" fill="none" strokeLinecap="round" strokeLinejoin="round" />
+                                    </svg>
+                                  )}
+                                </div>
+                                {/* Content */}
                                 <div className="flex-1 min-w-0">
                                   <p className="font-medium text-sm">{rule.title}</p>
-                                  {rule.description && <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed">{rule.description}</p>}
+                                  {rule.description && (
+                                    <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed">{rule.description}</p>
+                                  )}
                                   {rule.fee > 0 && (
-                                    <p className="text-xs text-amber-700 mt-1 font-medium flex items-center gap-1">
-                                      <AlertTriangle className="w-3 h-3" />
-                                      Violation fee: ${rule.fee.toFixed(2)}
+                                    <p className="text-xs text-amber-700 mt-1.5 font-semibold flex items-center gap-1">
+                                      <AlertTriangle className="w-3 h-3 shrink-0" />
+                                      Violation fee: ${rule.fee.toFixed(2)} one time
                                     </p>
                                   )}
                                 </div>
-                                <div className="shrink-0 flex flex-col items-center gap-1.5 w-16">
-                                  <input
-                                    type="text"
-                                    value={ruleInitials[rule.id] ?? ""}
-                                    onChange={e => setRuleInitials(prev => ({ ...prev, [rule.id]: e.target.value.slice(0, 4).toUpperCase() }))}
-                                    placeholder="Init."
-                                    maxLength={4}
-                                    className="w-16 h-9 text-center font-bold uppercase text-sm border rounded-lg bg-background focus:outline-none focus:ring-2 focus:ring-primary/40 transition-all"
-                                  />
-                                  {initialed && <CheckCircle2 className="w-4 h-4 text-green-600" />}
-                                </div>
-                              </div>
+                                {checked && (
+                                  <CheckCircle2 className="w-4 h-4 text-green-600 shrink-0 mt-0.5" />
+                                )}
+                              </button>
                             );
                           })}
                         </div>
-                        {listingRules.some(r => !ruleInitials[r.id]?.trim()) && (
+                        {listingRules.some(r => !ruleChecks[r.id]) && (
                           <p className="text-xs text-amber-700 flex items-center gap-1.5">
                             <AlertTriangle className="w-3.5 h-3.5" />
-                            All rules must be initialed before you can sign the agreement.
+                            All rules must be checked before you can sign the agreement.
                           </p>
                         )}
                       </div>

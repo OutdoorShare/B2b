@@ -96,47 +96,6 @@ export async function generateAgreementPdf(opts: AgreementPdfOptions): Promise<s
       doc.moveDown(0.8);
     }
 
-    // ── Rental Rules & Initials ──────────────────────────────────────────────
-    if (opts.ruleInitials && opts.ruleInitials.length > 0) {
-      doc.moveDown(0.5);
-      doc.fillColor(PRIMARY).font("Helvetica-Bold").fontSize(13).text("Rental Rules & Acknowledgments", 60);
-      doc.moveDown(0.3);
-      doc.moveTo(60, doc.y).lineTo(60 + PAGE_WIDTH, doc.y).strokeColor("#dddddd").lineWidth(1).stroke();
-      doc.moveDown(0.5);
-
-      for (const rule of opts.ruleInitials) {
-        // Check if we need a new page
-        if (doc.y > doc.page.height - 120) doc.addPage();
-
-        const rowTop = doc.y;
-        const rowHeight = 44;
-
-        // Rule row background
-        doc.rect(60, rowTop, PAGE_WIDTH, rowHeight).fill(LIGHT_GRAY).stroke("#e8e8e8");
-
-        // Initials box on the right
-        const initialsBoxW = 56;
-        const initialsBoxX = 60 + PAGE_WIDTH - initialsBoxW - 10;
-        doc.rect(initialsBoxX, rowTop + 6, initialsBoxW, rowHeight - 12).fill("#ffffff").stroke("#cccccc");
-        doc.fillColor(DARK).font("Helvetica-Bold").fontSize(14)
-          .text(rule.initials, initialsBoxX, rowTop + 13, { width: initialsBoxW, align: "center" });
-
-        // Rule text
-        doc.fillColor(DARK).font("Helvetica-Bold").fontSize(9).text(rule.title, 75, rowTop + 8, { width: PAGE_WIDTH - initialsBoxW - 30 });
-        if (rule.fee > 0) {
-          doc.fillColor("#92400e").font("Helvetica").fontSize(8)
-            .text(`Violation fee: $${rule.fee.toFixed(2)}`, 75, rowTop + 22);
-        }
-
-        doc.y = rowTop + rowHeight + 4;
-      }
-
-      doc.moveDown(0.5);
-      doc.fillColor(MID_GRAY).font("Helvetica-Oblique").fontSize(7.5)
-        .text("Each rule above was initialed by the renter, confirming they read and accepted the stated terms.", 60, doc.y, { width: PAGE_WIDTH });
-      doc.moveDown(1);
-    }
-
     // ── Signature section ────────────────────────────────────────────────────
     doc.addPage();
 
@@ -189,11 +148,109 @@ export async function generateAgreementPdf(opts: AgreementPdfOptions): Promise<s
         60, doc.y, { width: PAGE_WIDTH, align: "center" }
       );
 
-    // ── Footer ───────────────────────────────────────────────────────────────
+    // ── Footer (signature page) ───────────────────────────────────────────────
     const pageHeight = doc.page.height;
     doc.moveTo(60, pageHeight - 50).lineTo(60 + PAGE_WIDTH, pageHeight - 50).strokeColor("#e0e0e0").lineWidth(1).stroke();
     doc.fillColor(MID_GRAY).font("Helvetica").fontSize(8)
       .text(`${opts.companyName} · Rental Agreement · Booking #${opts.bookingId}`, 60, pageHeight - 36, { width: PAGE_WIDTH, align: "center" });
+
+    // ── Rental Rules Addendum ─────────────────────────────────────────────────
+    if (opts.ruleInitials && opts.ruleInitials.length > 0) {
+      doc.addPage();
+
+      // Addendum header bar
+      doc.rect(0, 0, doc.page.width, 64).fill(PRIMARY);
+      doc.fillColor("#ffffff").font("Helvetica-Bold").fontSize(16)
+        .text(opts.companyName, 60, 14);
+      doc.fillColor("rgba(255,255,255,0.75)").font("Helvetica").fontSize(10)
+        .text("Rental Rules Addendum  ·  Booking #" + opts.bookingId, 60, 36);
+
+      // Subheading
+      doc.fillColor(DARK).y = 84;
+      doc.fillColor(PRIMARY).font("Helvetica-Bold").fontSize(12)
+        .text("Acknowledged Rental Rules", 60, 84);
+      doc.moveDown(0.2);
+      doc.moveTo(60, doc.y).lineTo(60 + PAGE_WIDTH, doc.y).strokeColor("#dddddd").lineWidth(1).stroke();
+      doc.moveDown(0.3);
+      doc.fillColor(MID_GRAY).font("Helvetica").fontSize(9)
+        .text(
+          `The renter (${opts.customerName}) confirmed the following rules by checking each box prior to signing the rental agreement for "${opts.listingTitle}".`,
+          60, doc.y, { width: PAGE_WIDTH }
+        );
+      doc.moveDown(0.8);
+
+      // Rule rows with checkboxes
+      for (const rule of opts.ruleInitials) {
+        if (doc.y > doc.page.height - 100) {
+          doc.addPage();
+          // Continuation header
+          doc.fillColor(MID_GRAY).font("Helvetica-Oblique").fontSize(8)
+            .text(`Rental Rules Addendum (continued) · Booking #${opts.bookingId}`, 60, 30, { width: PAGE_WIDTH, align: "center" });
+          doc.y = 60;
+        }
+
+        const rowTop = doc.y;
+        const acknowledged = rule.initials === "✓" || rule.initials.length > 0;
+
+        // Row background — green tint if acknowledged
+        const rowBg = acknowledged ? "#f0fdf4" : "#fff7f7";
+        const rowBorder = acknowledged ? "#bbf7d0" : "#fee2e2";
+        doc.rect(60, rowTop, PAGE_WIDTH, 46).fill(rowBg).stroke(rowBorder);
+
+        // Draw checkbox (square with checkmark if acknowledged)
+        const cbX = 75;
+        const cbY = rowTop + 13;
+        const cbSize = 14;
+        doc.rect(cbX, cbY, cbSize, cbSize).fill("#ffffff").stroke(acknowledged ? "#16a34a" : "#d1d5db");
+        if (acknowledged) {
+          // Draw checkmark
+          doc.save();
+          doc.moveTo(cbX + 2.5, cbY + 7)
+            .lineTo(cbX + 5.5, cbY + 10.5)
+            .lineTo(cbX + 11.5, cbY + 3.5)
+            .stroke("#16a34a");
+          doc.restore();
+        }
+
+        // Rule title
+        const textX = cbX + cbSize + 10;
+        const textW = PAGE_WIDTH - cbSize - 20;
+        doc.fillColor(DARK).font("Helvetica-Bold").fontSize(9.5)
+          .text(rule.title, textX, rowTop + 8, { width: textW - 30 });
+
+        // Fee badge on the right if present
+        if (rule.fee > 0) {
+          const feeText = `Fee: $${rule.fee.toFixed(2)}`;
+          const feeX = 60 + PAGE_WIDTH - 90;
+          doc.fillColor("#92400e").font("Helvetica").fontSize(8)
+            .text(feeText, feeX, rowTop + 28, { width: 84, align: "right" });
+        }
+
+        // "Acknowledged" label
+        doc.fillColor(acknowledged ? "#15803d" : "#dc2626").font("Helvetica").fontSize(7.5)
+          .text(acknowledged ? "✓ Acknowledged" : "Not acknowledged", textX, rowTop + 30);
+
+        doc.y = rowTop + 46 + 4;
+      }
+
+      doc.moveDown(1);
+      doc.fillColor(MID_GRAY).font("Helvetica-Oblique").fontSize(7.5)
+        .text(
+          `Each rule above was acknowledged by ${opts.customerName} by checking the corresponding checkbox in the online booking flow prior to signing the rental agreement. This addendum is part of the rental agreement for Booking #${opts.bookingId}.`,
+          60, doc.y, { width: PAGE_WIDTH }
+        );
+
+      // Addendum footer
+      const addendumPageH = doc.page.height;
+      doc.moveTo(60, addendumPageH - 50)
+        .lineTo(60 + PAGE_WIDTH, addendumPageH - 50)
+        .strokeColor("#e0e0e0").lineWidth(1).stroke();
+      doc.fillColor(MID_GRAY).font("Helvetica").fontSize(8)
+        .text(
+          `${opts.companyName} · Rental Rules Addendum · Booking #${opts.bookingId}`,
+          60, addendumPageH - 36, { width: PAGE_WIDTH, align: "center" }
+        );
+    }
 
     doc.end();
     stream.on("finish", () => resolve(filename));
