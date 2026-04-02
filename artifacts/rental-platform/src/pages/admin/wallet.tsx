@@ -16,6 +16,7 @@ import {
   CreditCard,
   DollarSign,
   Building2,
+  FlaskConical,
 } from "lucide-react";
 
 function getAdminToken(): string {
@@ -47,6 +48,7 @@ const fmtDate = (s: string) =>
 
 type WalletData = {
   connected: boolean;
+  testMode: boolean;
   balance: { available: number; pending: number; currency: string } | null;
   payouts: { id: string; amount: number; currency: string; status: string; arrivalDate: string; description?: string | null }[];
   transactions: { id: number; customerName: string; listingTitle: string; startDate: string; endDate: string; gross: number; platformFee: number; net: number; status: string; createdAt: string }[];
@@ -139,6 +141,19 @@ export default function AdminWallet() {
           Refresh
         </Button>
       </div>
+
+      {/* Test Mode Banner */}
+      {!loading && data?.testMode && (
+        <div className="flex items-center gap-3 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3">
+          <FlaskConical className="h-4 w-4 text-amber-600 shrink-0" />
+          <div>
+            <p className="text-sm font-semibold text-amber-900">Stripe Test Mode Active</p>
+            <p className="text-xs text-amber-700">
+              This account is running in test mode. All payments, payouts, and Stripe Connect operations use Stripe test keys — no real money moves.
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* Stripe Connect status card */}
       {loading ? (

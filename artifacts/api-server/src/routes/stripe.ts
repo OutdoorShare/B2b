@@ -23,11 +23,14 @@ router.post("/stripe/connect/onboard", requireAdminAuth, async (req, res) => {
     const [tenant] = await db.select().from(tenantsTable).where(eq(tenantsTable.id, tenantId));
     if (!tenant) { res.status(404).json({ error: "Tenant not found" }); return; }
 
+    const isTestMode = !!tenant.testMode;
+    const stripeClient = getStripeForTenant(isTestMode);
+
     let accountId = tenant.stripeAccountId;
 
     // Create a new Express account if one doesn't exist yet
     if (!accountId) {
-      const account = await stripe.accounts.create({
+      const account = await stripeClient.accounts.create({
         type: "express",
         email: tenant.email,
         metadata: { tenant_id: String(tenantId), tenant_slug: tenant.slug },
@@ -48,14 +51,14 @@ router.post("/stripe/connect/onboard", requireAdminAuth, async (req, res) => {
     const host = req.get("host");
     const baseUrl = `${protocol}://${host}`;
 
-    const link = await stripe.accountLinks.create({
+    const link = await stripeClient.accountLinks.create({
       account: accountId,
       refresh_url: `${baseUrl}/${tenant.slug}/admin/settings?stripe=refresh`,
       return_url: `${baseUrl}/${tenant.slug}/admin/settings?stripe=success`,
       type: "account_onboarding",
     });
 
-    res.json({ url: link.url });
+    res.json({ url: link.url, testMode: isTestMode });
   } catch (e: any) {
     console.error("[stripe/connect/onboard]", e.message);
     res.status(500).json({ error: e.message || "Failed to start onboarding" });
@@ -69,11 +72,12 @@ router.get("/stripe/connect/status", requireAdminAuth, async (req, res) => {
     const [tenant] = await db.select().from(tenantsTable).where(eq(tenantsTable.id, tenantId));
     if (!tenant) { res.status(404).json({ error: "Tenant not found" }); return; }
     if (!tenant.stripeAccountId) {
-      res.json({ connected: false });
+      res.json({ connected: false, testMode: !!tenant.testMode });
       return;
     }
 
-    const account = await stripe.accounts.retrieve(tenant.stripeAccountId);
+    const stripeClient = getStripeForTenant(!!tenant.testMode);
+    const account = await stripeClient.accounts.retrieve(tenant.stripeAccountId);
     const chargesEnabled = account.charges_enabled;
     const payoutsEnabled = account.payouts_enabled;
 
@@ -103,7 +107,8 @@ router.post("/stripe/connect/dashboard", requireAdminAuth, async (req, res) => {
     const tenantId = req.tenantId!;
     const [tenant] = await db.select().from(tenantsTable).where(eq(tenantsTable.id, tenantId));
     if (!tenant?.stripeAccountId) { res.status(400).json({ error: "No Stripe account connected" }); return; }
-    const link = await stripe.accounts.createLoginLink(tenant.stripeAccountId);
+    const stripeClient = getStripeForTenant(!!tenant.testMode);
+    const link = await stripeClient.accounts.createLoginLink(tenant.stripeAccountId);
     res.json({ url: link.url });
   } catch (e: any) {
     res.status(500).json({ error: e.message });
@@ -117,6 +122,8 @@ router.get("/stripe/wallet", requireAdminAuth, async (req, res) => {
     const [tenant] = await db.select().from(tenantsTable).where(eq(tenantsTable.id, tenantId));
     if (!tenant) { res.status(404).json({ error: "Tenant not found" }); return; }
 
+    const isTestMode = !!tenant.testMode;
+    const walletStripe = getStripeForTenant(isTestMode);
     const feePercent = parseFloat(tenant.platformFeePercent ?? String(PLATFORM_FEE_PERCENT * 100));
 
     // Fetch bookings with listing titles
@@ -161,6 +168,7 @@ router.get("/stripe/wallet", requireAdminAuth, async (req, res) => {
     if (!tenant.stripeAccountId) {
       return res.json({
         connected: false,
+        testMode: isTestMode,
         balance: null,
         payouts: [],
         transactions,
@@ -170,8 +178,8 @@ router.get("/stripe/wallet", requireAdminAuth, async (req, res) => {
 
     // Fetch Stripe balance + recent payouts
     const [balance, payoutsResp] = await Promise.all([
-      stripe.balance.retrieve({ stripeAccount: tenant.stripeAccountId }),
-      stripe.payouts.list({ limit: 20 }, { stripeAccount: tenant.stripeAccountId }),
+      walletStripe.balance.retrieve({ stripeAccount: tenant.stripeAccountId }),
+      walletStripe.payouts.list({ limit: 20 }, { stripeAccount: tenant.stripeAccountId }),
     ]);
 
     const available = balance.available.reduce((sum, b) => sum + b.amount, 0) / 100;
@@ -186,7 +194,7 @@ router.get("/stripe/wallet", requireAdminAuth, async (req, res) => {
       description: p.description,
     }));
 
-    res.json({ connected: true, balance: { available, pending, currency: balance.available[0]?.currency?.toUpperCase() ?? "USD" }, payouts, transactions, feePercent });
+    res.json({ connected: true, testMode: isTestMode, balance: { available, pending, currency: balance.available[0]?.currency?.toUpperCase() ?? "USD" }, payouts, transactions, feePercent });
   } catch (e: any) {
     console.error("[stripe/wallet]", e.message);
     res.status(500).json({ error: e.message });
@@ -287,6 +295,7 @@ router.post("/stripe/payment-intent", async (req, res) => {
 async function sweepPendingPayouts(tenantId: number): Promise<{ swept: number; totalCents: number }> {
   const [tenant] = await db.select().from(tenantsTable).where(eq(tenantsTable.id, tenantId));
   if (!tenant?.stripeAccountId || !tenant.stripeChargesEnabled) return { swept: 0, totalCents: 0 };
+  const sweepStripe = getStripeForTenant(!!tenant.testMode);
 
   // Bookings paid to platform but not yet transferred to tenant
   const pending = await db.select().from(bookingsTable).where(
@@ -308,7 +317,7 @@ async function sweepPendingPayouts(tenantId: number): Promise<{ swept: number; t
   for (const booking of pending) {
     // Check if this PI originally had transfer_data (already routed to tenant) by checking metadata
     try {
-      const pi = await stripe.paymentIntents.retrieve(booking.stripePaymentIntentId!);
+      const pi = await sweepStripe.paymentIntents.retrieve(booking.stripePaymentIntentId!);
       // If transfer_data was set on the original PI, funds already went to tenant — mark as transferred
       if ((pi as any).transfer_data?.destination) {
         await db.update(bookingsTable).set({
@@ -324,7 +333,7 @@ async function sweepPendingPayouts(tenantId: number): Promise<{ swept: number; t
       const transferAmt = totalCentsForBooking - platformFee;
       if (transferAmt < 50) continue; // Stripe minimum
 
-      const transfer = await stripe.transfers.create({
+      const transfer = await sweepStripe.transfers.create({
         amount: transferAmt,
         currency: "usd",
         destination: tenant.stripeAccountId,
