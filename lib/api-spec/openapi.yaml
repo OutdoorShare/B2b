@@ -21,6 +21,8 @@ tags:
     description: Analytics and reporting
   - name: categories
     description: Equipment categories
+  - name: docs
+    description: Documentation portal
 
 paths:
   /healthz:
@@ -419,6 +421,473 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/StatusCount"
+
+  # ── Documentation Portal ─────────────────────────────────────────────────
+
+  /docs/stats:
+    get:
+      operationId: getDocsStats
+      tags: [docs]
+      summary: Portal statistics
+      responses:
+        "200":
+          description: Stats
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DocStats"
+
+  /docs/search:
+    get:
+      operationId: searchDocs
+      tags: [docs]
+      summary: Full-text search across all docs
+      parameters:
+        - name: q
+          in: query
+          schema:
+            type: string
+        - name: type
+          in: query
+          schema:
+            type: string
+            enum: [guide, faq, troubleshooting, release-notes, reference]
+        - name: categoryId
+          in: query
+          schema:
+            type: number
+        - name: projectId
+          in: query
+          schema:
+            type: number
+        - name: limit
+          in: query
+          schema:
+            type: number
+      responses:
+        "200":
+          description: Search results
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/DocSearchResult"
+
+  /docs/trending:
+    get:
+      operationId: getTrendingDocs
+      tags: [docs]
+      summary: Trending / most-viewed articles
+      responses:
+        "200":
+          description: Trending articles
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/DocArticle"
+
+  /docs/categories:
+    get:
+      operationId: getDocCategories
+      tags: [docs]
+      summary: List all documentation categories
+      responses:
+        "200":
+          description: Categories
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/DocCategory"
+    post:
+      operationId: createDocCategory
+      tags: [docs]
+      summary: Create a documentation category
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateDocCategory"
+      responses:
+        "201":
+          description: Created category
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DocCategory"
+
+  /docs/categories/{slug}:
+    get:
+      operationId: getDocCategory
+      tags: [docs]
+      summary: Get a category with its articles
+      parameters:
+        - name: slug
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Category detail
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DocCategoryDetail"
+
+  /docs/categories/{id}:
+    put:
+      operationId: updateDocCategory
+      tags: [docs]
+      summary: Update a documentation category
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: number
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateDocCategory"
+      responses:
+        "200":
+          description: Updated category
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DocCategory"
+    delete:
+      operationId: deleteDocCategory
+      tags: [docs]
+      summary: Delete a documentation category
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: number
+      responses:
+        "204":
+          description: Deleted
+
+  /docs/articles:
+    get:
+      operationId: getDocArticles
+      tags: [docs]
+      summary: List documentation articles
+      parameters:
+        - name: q
+          in: query
+          schema:
+            type: string
+        - name: categoryId
+          in: query
+          schema:
+            type: number
+        - name: type
+          in: query
+          schema:
+            type: string
+            enum: [guide, faq, troubleshooting, release-notes, reference]
+        - name: projectId
+          in: query
+          schema:
+            type: number
+        - name: featureId
+          in: query
+          schema:
+            type: number
+        - name: published
+          in: query
+          schema:
+            type: boolean
+        - name: limit
+          in: query
+          schema:
+            type: number
+        - name: offset
+          in: query
+          schema:
+            type: number
+      responses:
+        "200":
+          description: Articles
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/DocArticle"
+    post:
+      operationId: createDocArticle
+      tags: [docs]
+      summary: Create a documentation article
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateDocArticle"
+      responses:
+        "201":
+          description: Created article
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DocArticle"
+
+  /docs/articles/{slug}:
+    get:
+      operationId: getDocArticle
+      tags: [docs]
+      summary: Get an article by slug with related articles
+      parameters:
+        - name: slug
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Article detail
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DocArticleDetail"
+
+  /docs/articles/{id}:
+    put:
+      operationId: updateDocArticle
+      tags: [docs]
+      summary: Update a documentation article
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: number
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateDocArticle"
+      responses:
+        "200":
+          description: Updated article
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DocArticle"
+    delete:
+      operationId: deleteDocArticle
+      tags: [docs]
+      summary: Delete an article
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: number
+      responses:
+        "204":
+          description: Deleted
+
+  /docs/projects:
+    get:
+      operationId: getDocProjects
+      tags: [docs]
+      summary: List all projects
+      responses:
+        "200":
+          description: Projects
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/DocProject"
+    post:
+      operationId: createDocProject
+      tags: [docs]
+      summary: Create a project
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateDocProject"
+      responses:
+        "201":
+          description: Created project
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DocProject"
+
+  /docs/projects/{slug}:
+    get:
+      operationId: getDocProject
+      tags: [docs]
+      summary: Get a project with its articles
+      parameters:
+        - name: slug
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Project detail
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DocProjectDetail"
+
+  /docs/projects/{id}:
+    put:
+      operationId: updateDocProject
+      tags: [docs]
+      summary: Update a project
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: number
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateDocProject"
+      responses:
+        "200":
+          description: Updated project
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DocProject"
+    delete:
+      operationId: deleteDocProject
+      tags: [docs]
+      summary: Delete a project
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: number
+      responses:
+        "204":
+          description: Deleted
+
+  /docs/features:
+    get:
+      operationId: getDocFeatures
+      tags: [docs]
+      summary: List all features
+      parameters:
+        - name: projectId
+          in: query
+          schema:
+            type: number
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [stable, beta, deprecated]
+      responses:
+        "200":
+          description: Features
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/DocFeature"
+    post:
+      operationId: createDocFeature
+      tags: [docs]
+      summary: Create a feature
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateDocFeature"
+      responses:
+        "201":
+          description: Created feature
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DocFeature"
+
+  /docs/features/{slug}:
+    get:
+      operationId: getDocFeature
+      tags: [docs]
+      summary: Get a feature with its articles
+      parameters:
+        - name: slug
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Feature detail
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DocFeatureDetail"
+
+  /docs/features/{id}:
+    put:
+      operationId: updateDocFeature
+      tags: [docs]
+      summary: Update a feature
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: number
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateDocFeature"
+      responses:
+        "200":
+          description: Updated feature
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DocFeature"
+    delete:
+      operationId: deleteDocFeature
+      tags: [docs]
+      summary: Delete a feature
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: number
+      responses:
+        "204":
+          description: Deleted
 
 components:
   schemas:
@@ -1150,3 +1619,473 @@ components:
         percentage:
           type: number
       required: [status, count, percentage]
+
+    # ── Documentation Portal Schemas ─────────────────────────────────────────
+
+    DocStats:
+      type: object
+      properties:
+        totalArticles:
+          type: number
+        totalCategories:
+          type: number
+        totalProjects:
+          type: number
+        totalFeatures:
+          type: number
+        publishedArticles:
+          type: number
+        recentUpdates:
+          type: number
+      required: [totalArticles, totalCategories, totalProjects, totalFeatures, publishedArticles, recentUpdates]
+
+    DocSearchResult:
+      type: object
+      properties:
+        id:
+          type: number
+        title:
+          type: string
+        slug:
+          type: string
+        excerpt:
+          type: string
+          nullable: true
+        type:
+          type: string
+        categoryName:
+          type: string
+          nullable: true
+        categorySlug:
+          type: string
+          nullable: true
+        projectName:
+          type: string
+          nullable: true
+        tags:
+          type: array
+          items:
+            type: string
+        updatedAt:
+          type: string
+      required: [id, title, slug, type, tags, updatedAt]
+
+    DocCategory:
+      type: object
+      properties:
+        id:
+          type: number
+        name:
+          type: string
+        slug:
+          type: string
+        description:
+          type: string
+          nullable: true
+        icon:
+          type: string
+          nullable: true
+        color:
+          type: string
+          nullable: true
+        sortOrder:
+          type: number
+        articleCount:
+          type: number
+        createdAt:
+          type: string
+      required: [id, name, slug, sortOrder, articleCount, createdAt]
+
+    CreateDocCategory:
+      type: object
+      properties:
+        name:
+          type: string
+        slug:
+          type: string
+        description:
+          type: string
+          nullable: true
+        icon:
+          type: string
+          nullable: true
+        color:
+          type: string
+          nullable: true
+        sortOrder:
+          type: number
+      required: [name, slug]
+
+    DocCategoryDetail:
+      type: object
+      properties:
+        id:
+          type: number
+        name:
+          type: string
+        slug:
+          type: string
+        description:
+          type: string
+          nullable: true
+        icon:
+          type: string
+          nullable: true
+        color:
+          type: string
+          nullable: true
+        sortOrder:
+          type: number
+        articleCount:
+          type: number
+        createdAt:
+          type: string
+        articles:
+          type: array
+          items:
+            $ref: "#/components/schemas/DocArticle"
+      required: [id, name, slug, sortOrder, articleCount, createdAt, articles]
+
+    DocArticle:
+      type: object
+      properties:
+        id:
+          type: number
+        title:
+          type: string
+        slug:
+          type: string
+        excerpt:
+          type: string
+          nullable: true
+        type:
+          type: string
+          enum: [guide, faq, troubleshooting, release-notes, reference]
+        categoryId:
+          type: number
+          nullable: true
+        categoryName:
+          type: string
+          nullable: true
+        categorySlug:
+          type: string
+          nullable: true
+        projectId:
+          type: number
+          nullable: true
+        projectName:
+          type: string
+          nullable: true
+        featureId:
+          type: number
+          nullable: true
+        featureName:
+          type: string
+          nullable: true
+        author:
+          type: string
+          nullable: true
+        tags:
+          type: array
+          items:
+            type: string
+        published:
+          type: boolean
+        viewCount:
+          type: number
+        readingTime:
+          type: number
+        createdAt:
+          type: string
+        updatedAt:
+          type: string
+      required: [id, title, slug, type, tags, published, viewCount, readingTime, createdAt, updatedAt]
+
+    DocArticleDetail:
+      type: object
+      properties:
+        id:
+          type: number
+        title:
+          type: string
+        slug:
+          type: string
+        excerpt:
+          type: string
+          nullable: true
+        content:
+          type: string
+        type:
+          type: string
+          enum: [guide, faq, troubleshooting, release-notes, reference]
+        categoryId:
+          type: number
+          nullable: true
+        categoryName:
+          type: string
+          nullable: true
+        categorySlug:
+          type: string
+          nullable: true
+        projectId:
+          type: number
+          nullable: true
+        projectName:
+          type: string
+          nullable: true
+        featureId:
+          type: number
+          nullable: true
+        featureName:
+          type: string
+          nullable: true
+        author:
+          type: string
+          nullable: true
+        tags:
+          type: array
+          items:
+            type: string
+        published:
+          type: boolean
+        viewCount:
+          type: number
+        readingTime:
+          type: number
+        relatedArticles:
+          type: array
+          items:
+            $ref: "#/components/schemas/DocArticle"
+        createdAt:
+          type: string
+        updatedAt:
+          type: string
+      required: [id, title, slug, content, type, tags, published, viewCount, readingTime, relatedArticles, createdAt, updatedAt]
+
+    CreateDocArticle:
+      type: object
+      properties:
+        title:
+          type: string
+        slug:
+          type: string
+        excerpt:
+          type: string
+          nullable: true
+        content:
+          type: string
+        type:
+          type: string
+          enum: [guide, faq, troubleshooting, release-notes, reference]
+        categoryId:
+          type: number
+          nullable: true
+        projectId:
+          type: number
+          nullable: true
+        featureId:
+          type: number
+          nullable: true
+        author:
+          type: string
+          nullable: true
+        tags:
+          type: array
+          items:
+            type: string
+        published:
+          type: boolean
+        relatedArticleIds:
+          type: array
+          items:
+            type: number
+      required: [title, slug, content, type]
+
+    DocProject:
+      type: object
+      properties:
+        id:
+          type: number
+        name:
+          type: string
+        slug:
+          type: string
+        description:
+          type: string
+          nullable: true
+        icon:
+          type: string
+          nullable: true
+        status:
+          type: string
+          enum: [active, beta, deprecated, planned]
+        tags:
+          type: array
+          items:
+            type: string
+        articleCount:
+          type: number
+        featureCount:
+          type: number
+        createdAt:
+          type: string
+        updatedAt:
+          type: string
+      required: [id, name, slug, status, tags, articleCount, featureCount, createdAt, updatedAt]
+
+    CreateDocProject:
+      type: object
+      properties:
+        name:
+          type: string
+        slug:
+          type: string
+        description:
+          type: string
+          nullable: true
+        icon:
+          type: string
+          nullable: true
+        status:
+          type: string
+          enum: [active, beta, deprecated, planned]
+        tags:
+          type: array
+          items:
+            type: string
+      required: [name, slug, status]
+
+    DocProjectDetail:
+      type: object
+      properties:
+        id:
+          type: number
+        name:
+          type: string
+        slug:
+          type: string
+        description:
+          type: string
+          nullable: true
+        icon:
+          type: string
+          nullable: true
+        status:
+          type: string
+          enum: [active, beta, deprecated, planned]
+        tags:
+          type: array
+          items:
+            type: string
+        articleCount:
+          type: number
+        featureCount:
+          type: number
+        articles:
+          type: array
+          items:
+            $ref: "#/components/schemas/DocArticle"
+        features:
+          type: array
+          items:
+            $ref: "#/components/schemas/DocFeature"
+        createdAt:
+          type: string
+        updatedAt:
+          type: string
+      required: [id, name, slug, status, tags, articleCount, featureCount, articles, features, createdAt, updatedAt]
+
+    DocFeature:
+      type: object
+      properties:
+        id:
+          type: number
+        name:
+          type: string
+        slug:
+          type: string
+        description:
+          type: string
+          nullable: true
+        status:
+          type: string
+          enum: [stable, beta, deprecated]
+        projectId:
+          type: number
+          nullable: true
+        projectName:
+          type: string
+          nullable: true
+        categoryId:
+          type: number
+          nullable: true
+        categoryName:
+          type: string
+          nullable: true
+        articleCount:
+          type: number
+        createdAt:
+          type: string
+        updatedAt:
+          type: string
+      required: [id, name, slug, status, articleCount, createdAt, updatedAt]
+
+    CreateDocFeature:
+      type: object
+      properties:
+        name:
+          type: string
+        slug:
+          type: string
+        description:
+          type: string
+          nullable: true
+        status:
+          type: string
+          enum: [stable, beta, deprecated]
+        projectId:
+          type: number
+          nullable: true
+        categoryId:
+          type: number
+          nullable: true
+      required: [name, slug, status]
+
+    DocFeatureDetail:
+      type: object
+      properties:
+        id:
+          type: number
+        name:
+          type: string
+        slug:
+          type: string
+        description:
+          type: string
+          nullable: true
+        status:
+          type: string
+          enum: [stable, beta, deprecated]
+        projectId:
+          type: number
+          nullable: true
+        projectName:
+          type: string
+          nullable: true
+        categoryId:
+          type: number
+          nullable: true
+        categoryName:
+          type: string
+          nullable: true
+        articleCount:
+          type: number
+        articles:
+          type: array
+          items:
+            $ref: "#/components/schemas/DocArticle"
+        createdAt:
+          type: string
+        updatedAt:
+          type: string
+      required: [id, name, slug, status, articleCount, articles, createdAt, updatedAt]

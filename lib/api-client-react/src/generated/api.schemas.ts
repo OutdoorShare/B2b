@@ -402,6 +402,292 @@ export interface StatusCount {
   percentage: number;
 }
 
+export interface DocStats {
+  totalArticles: number;
+  totalCategories: number;
+  totalProjects: number;
+  totalFeatures: number;
+  publishedArticles: number;
+  recentUpdates: number;
+}
+
+export interface DocSearchResult {
+  id: number;
+  title: string;
+  slug: string;
+  excerpt?: string | null;
+  type: string;
+  categoryName?: string | null;
+  categorySlug?: string | null;
+  projectName?: string | null;
+  tags: string[];
+  updatedAt: string;
+}
+
+export interface DocCategory {
+  id: number;
+  name: string;
+  slug: string;
+  description?: string | null;
+  icon?: string | null;
+  color?: string | null;
+  sortOrder: number;
+  articleCount: number;
+  createdAt: string;
+}
+
+export interface CreateDocCategory {
+  name: string;
+  slug: string;
+  description?: string | null;
+  icon?: string | null;
+  color?: string | null;
+  sortOrder?: number;
+}
+
+export type DocArticleType =
+  (typeof DocArticleType)[keyof typeof DocArticleType];
+
+export const DocArticleType = {
+  guide: "guide",
+  faq: "faq",
+  troubleshooting: "troubleshooting",
+  "release-notes": "release-notes",
+  reference: "reference",
+} as const;
+
+export interface DocArticle {
+  id: number;
+  title: string;
+  slug: string;
+  excerpt?: string | null;
+  type: DocArticleType;
+  categoryId?: number | null;
+  categoryName?: string | null;
+  categorySlug?: string | null;
+  projectId?: number | null;
+  projectName?: string | null;
+  featureId?: number | null;
+  featureName?: string | null;
+  author?: string | null;
+  tags: string[];
+  published: boolean;
+  viewCount: number;
+  readingTime: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface DocCategoryDetail {
+  id: number;
+  name: string;
+  slug: string;
+  description?: string | null;
+  icon?: string | null;
+  color?: string | null;
+  sortOrder: number;
+  articleCount: number;
+  createdAt: string;
+  articles: DocArticle[];
+}
+
+export type DocArticleDetailType =
+  (typeof DocArticleDetailType)[keyof typeof DocArticleDetailType];
+
+export const DocArticleDetailType = {
+  guide: "guide",
+  faq: "faq",
+  troubleshooting: "troubleshooting",
+  "release-notes": "release-notes",
+  reference: "reference",
+} as const;
+
+export interface DocArticleDetail {
+  id: number;
+  title: string;
+  slug: string;
+  excerpt?: string | null;
+  content: string;
+  type: DocArticleDetailType;
+  categoryId?: number | null;
+  categoryName?: string | null;
+  categorySlug?: string | null;
+  projectId?: number | null;
+  projectName?: string | null;
+  featureId?: number | null;
+  featureName?: string | null;
+  author?: string | null;
+  tags: string[];
+  published: boolean;
+  viewCount: number;
+  readingTime: number;
+  relatedArticles: DocArticle[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type CreateDocArticleType =
+  (typeof CreateDocArticleType)[keyof typeof CreateDocArticleType];
+
+export const CreateDocArticleType = {
+  guide: "guide",
+  faq: "faq",
+  troubleshooting: "troubleshooting",
+  "release-notes": "release-notes",
+  reference: "reference",
+} as const;
+
+export interface CreateDocArticle {
+  title: string;
+  slug: string;
+  excerpt?: string | null;
+  content: string;
+  type: CreateDocArticleType;
+  categoryId?: number | null;
+  projectId?: number | null;
+  featureId?: number | null;
+  author?: string | null;
+  tags?: string[];
+  published?: boolean;
+  relatedArticleIds?: number[];
+}
+
+export type DocProjectStatus =
+  (typeof DocProjectStatus)[keyof typeof DocProjectStatus];
+
+export const DocProjectStatus = {
+  active: "active",
+  beta: "beta",
+  deprecated: "deprecated",
+  planned: "planned",
+} as const;
+
+export interface DocProject {
+  id: number;
+  name: string;
+  slug: string;
+  description?: string | null;
+  icon?: string | null;
+  status: DocProjectStatus;
+  tags: string[];
+  articleCount: number;
+  featureCount: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type CreateDocProjectStatus =
+  (typeof CreateDocProjectStatus)[keyof typeof CreateDocProjectStatus];
+
+export const CreateDocProjectStatus = {
+  active: "active",
+  beta: "beta",
+  deprecated: "deprecated",
+  planned: "planned",
+} as const;
+
+export interface CreateDocProject {
+  name: string;
+  slug: string;
+  description?: string | null;
+  icon?: string | null;
+  status: CreateDocProjectStatus;
+  tags?: string[];
+}
+
+export type DocProjectDetailStatus =
+  (typeof DocProjectDetailStatus)[keyof typeof DocProjectDetailStatus];
+
+export const DocProjectDetailStatus = {
+  active: "active",
+  beta: "beta",
+  deprecated: "deprecated",
+  planned: "planned",
+} as const;
+
+export type DocFeatureStatus =
+  (typeof DocFeatureStatus)[keyof typeof DocFeatureStatus];
+
+export const DocFeatureStatus = {
+  stable: "stable",
+  beta: "beta",
+  deprecated: "deprecated",
+} as const;
+
+export interface DocFeature {
+  id: number;
+  name: string;
+  slug: string;
+  description?: string | null;
+  status: DocFeatureStatus;
+  projectId?: number | null;
+  projectName?: string | null;
+  categoryId?: number | null;
+  categoryName?: string | null;
+  articleCount: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface DocProjectDetail {
+  id: number;
+  name: string;
+  slug: string;
+  description?: string | null;
+  icon?: string | null;
+  status: DocProjectDetailStatus;
+  tags: string[];
+  articleCount: number;
+  featureCount: number;
+  articles: DocArticle[];
+  features: DocFeature[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type CreateDocFeatureStatus =
+  (typeof CreateDocFeatureStatus)[keyof typeof CreateDocFeatureStatus];
+
+export const CreateDocFeatureStatus = {
+  stable: "stable",
+  beta: "beta",
+  deprecated: "deprecated",
+} as const;
+
+export interface CreateDocFeature {
+  name: string;
+  slug: string;
+  description?: string | null;
+  status: CreateDocFeatureStatus;
+  projectId?: number | null;
+  categoryId?: number | null;
+}
+
+export type DocFeatureDetailStatus =
+  (typeof DocFeatureDetailStatus)[keyof typeof DocFeatureDetailStatus];
+
+export const DocFeatureDetailStatus = {
+  stable: "stable",
+  beta: "beta",
+  deprecated: "deprecated",
+} as const;
+
+export interface DocFeatureDetail {
+  id: number;
+  name: string;
+  slug: string;
+  description?: string | null;
+  status: DocFeatureDetailStatus;
+  projectId?: number | null;
+  projectName?: string | null;
+  categoryId?: number | null;
+  categoryName?: string | null;
+  articleCount: number;
+  articles: DocArticle[];
+  createdAt: string;
+  updatedAt: string;
+}
+
 export type GetListingsParams = {
   categoryId?: number;
   status?: GetListingsStatus;
@@ -449,4 +735,59 @@ export const GetRevenueAnalyticsPeriod = {
   "30d": "30d",
   "90d": "90d",
   "12m": "12m",
+} as const;
+
+export type SearchDocsParams = {
+  q?: string;
+  type?: SearchDocsType;
+  categoryId?: number;
+  projectId?: number;
+  limit?: number;
+};
+
+export type SearchDocsType =
+  (typeof SearchDocsType)[keyof typeof SearchDocsType];
+
+export const SearchDocsType = {
+  guide: "guide",
+  faq: "faq",
+  troubleshooting: "troubleshooting",
+  "release-notes": "release-notes",
+  reference: "reference",
+} as const;
+
+export type GetDocArticlesParams = {
+  q?: string;
+  categoryId?: number;
+  type?: GetDocArticlesType;
+  projectId?: number;
+  featureId?: number;
+  published?: boolean;
+  limit?: number;
+  offset?: number;
+};
+
+export type GetDocArticlesType =
+  (typeof GetDocArticlesType)[keyof typeof GetDocArticlesType];
+
+export const GetDocArticlesType = {
+  guide: "guide",
+  faq: "faq",
+  troubleshooting: "troubleshooting",
+  "release-notes": "release-notes",
+  reference: "reference",
+} as const;
+
+export type GetDocFeaturesParams = {
+  projectId?: number;
+  status?: GetDocFeaturesStatus;
+};
+
+export type GetDocFeaturesStatus =
+  (typeof GetDocFeaturesStatus)[keyof typeof GetDocFeaturesStatus];
+
+export const GetDocFeaturesStatus = {
+  stable: "stable",
+  beta: "beta",
+  deprecated: "deprecated",
 } as const;

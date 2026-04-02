@@ -10,6 +10,7 @@ import promoCodesRouter from "./routes/promo-codes";
 import listingRulesRouter from "./routes/listing-rules";
 import protectionPlansRouter from "./routes/superadmin-protection";
 import productsRouter from "./routes/products";
+import docsRouter from "./routes/docs";
 import { logger } from "./lib/logger";
 import { resolveTenant } from "./middleware/admin-auth";
 

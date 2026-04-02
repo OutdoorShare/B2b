@@ -587,3 +587,640 @@ export const GetBookingStatusBreakdownResponseItem = zod.object({
 export const GetBookingStatusBreakdownResponse = zod.array(
   GetBookingStatusBreakdownResponseItem,
 );
+
+/**
+ * @summary Portal statistics
+ */
+export const GetDocsStatsResponse = zod.object({
+  totalArticles: zod.number(),
+  totalCategories: zod.number(),
+  totalProjects: zod.number(),
+  totalFeatures: zod.number(),
+  publishedArticles: zod.number(),
+  recentUpdates: zod.number(),
+});
+
+/**
+ * @summary Full-text search across all docs
+ */
+export const SearchDocsQueryParams = zod.object({
+  q: zod.coerce.string().optional(),
+  type: zod
+    .enum(["guide", "faq", "troubleshooting", "release-notes", "reference"])
+    .optional(),
+  categoryId: zod.coerce.number().optional(),
+  projectId: zod.coerce.number().optional(),
+  limit: zod.coerce.number().optional(),
+});
+
+export const SearchDocsResponseItem = zod.object({
+  id: zod.number(),
+  title: zod.string(),
+  slug: zod.string(),
+  excerpt: zod.string().nullish(),
+  type: zod.string(),
+  categoryName: zod.string().nullish(),
+  categorySlug: zod.string().nullish(),
+  projectName: zod.string().nullish(),
+  tags: zod.array(zod.string()),
+  updatedAt: zod.string(),
+});
+export const SearchDocsResponse = zod.array(SearchDocsResponseItem);
+
+/**
+ * @summary Trending / most-viewed articles
+ */
+export const GetTrendingDocsResponseItem = zod.object({
+  id: zod.number(),
+  title: zod.string(),
+  slug: zod.string(),
+  excerpt: zod.string().nullish(),
+  type: zod.enum([
+    "guide",
+    "faq",
+    "troubleshooting",
+    "release-notes",
+    "reference",
+  ]),
+  categoryId: zod.number().nullish(),
+  categoryName: zod.string().nullish(),
+  categorySlug: zod.string().nullish(),
+  projectId: zod.number().nullish(),
+  projectName: zod.string().nullish(),
+  featureId: zod.number().nullish(),
+  featureName: zod.string().nullish(),
+  author: zod.string().nullish(),
+  tags: zod.array(zod.string()),
+  published: zod.boolean(),
+  viewCount: zod.number(),
+  readingTime: zod.number(),
+  createdAt: zod.string(),
+  updatedAt: zod.string(),
+});
+export const GetTrendingDocsResponse = zod.array(GetTrendingDocsResponseItem);
+
+/**
+ * @summary List all documentation categories
+ */
+export const GetDocCategoriesResponseItem = zod.object({
+  id: zod.number(),
+  name: zod.string(),
+  slug: zod.string(),
+  description: zod.string().nullish(),
+  icon: zod.string().nullish(),
+  color: zod.string().nullish(),
+  sortOrder: zod.number(),
+  articleCount: zod.number(),
+  createdAt: zod.string(),
+});
+export const GetDocCategoriesResponse = zod.array(GetDocCategoriesResponseItem);
+
+/**
+ * @summary Create a documentation category
+ */
+export const CreateDocCategoryBody = zod.object({
+  name: zod.string(),
+  slug: zod.string(),
+  description: zod.string().nullish(),
+  icon: zod.string().nullish(),
+  color: zod.string().nullish(),
+  sortOrder: zod.number().optional(),
+});
+
+/**
+ * @summary Get a category with its articles
+ */
+export const GetDocCategoryParams = zod.object({
+  slug: zod.coerce.string(),
+});
+
+export const GetDocCategoryResponse = zod.object({
+  id: zod.number(),
+  name: zod.string(),
+  slug: zod.string(),
+  description: zod.string().nullish(),
+  icon: zod.string().nullish(),
+  color: zod.string().nullish(),
+  sortOrder: zod.number(),
+  articleCount: zod.number(),
+  createdAt: zod.string(),
+  articles: zod.array(
+    zod.object({
+      id: zod.number(),
+      title: zod.string(),
+      slug: zod.string(),
+      excerpt: zod.string().nullish(),
+      type: zod.enum([
+        "guide",
+        "faq",
+        "troubleshooting",
+        "release-notes",
+        "reference",
+      ]),
+      categoryId: zod.number().nullish(),
+      categoryName: zod.string().nullish(),
+      categorySlug: zod.string().nullish(),
+      projectId: zod.number().nullish(),
+      projectName: zod.string().nullish(),
+      featureId: zod.number().nullish(),
+      featureName: zod.string().nullish(),
+      author: zod.string().nullish(),
+      tags: zod.array(zod.string()),
+      published: zod.boolean(),
+      viewCount: zod.number(),
+      readingTime: zod.number(),
+      createdAt: zod.string(),
+      updatedAt: zod.string(),
+    }),
+  ),
+});
+
+/**
+ * @summary Update a documentation category
+ */
+export const UpdateDocCategoryParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const UpdateDocCategoryBody = zod.object({
+  name: zod.string(),
+  slug: zod.string(),
+  description: zod.string().nullish(),
+  icon: zod.string().nullish(),
+  color: zod.string().nullish(),
+  sortOrder: zod.number().optional(),
+});
+
+export const UpdateDocCategoryResponse = zod.object({
+  id: zod.number(),
+  name: zod.string(),
+  slug: zod.string(),
+  description: zod.string().nullish(),
+  icon: zod.string().nullish(),
+  color: zod.string().nullish(),
+  sortOrder: zod.number(),
+  articleCount: zod.number(),
+  createdAt: zod.string(),
+});
+
+/**
+ * @summary Delete a documentation category
+ */
+export const DeleteDocCategoryParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+/**
+ * @summary List documentation articles
+ */
+export const GetDocArticlesQueryParams = zod.object({
+  q: zod.coerce.string().optional(),
+  categoryId: zod.coerce.number().optional(),
+  type: zod
+    .enum(["guide", "faq", "troubleshooting", "release-notes", "reference"])
+    .optional(),
+  projectId: zod.coerce.number().optional(),
+  featureId: zod.coerce.number().optional(),
+  published: zod.coerce.boolean().optional(),
+  limit: zod.coerce.number().optional(),
+  offset: zod.coerce.number().optional(),
+});
+
+export const GetDocArticlesResponseItem = zod.object({
+  id: zod.number(),
+  title: zod.string(),
+  slug: zod.string(),
+  excerpt: zod.string().nullish(),
+  type: zod.enum([
+    "guide",
+    "faq",
+    "troubleshooting",
+    "release-notes",
+    "reference",
+  ]),
+  categoryId: zod.number().nullish(),
+  categoryName: zod.string().nullish(),
+  categorySlug: zod.string().nullish(),
+  projectId: zod.number().nullish(),
+  projectName: zod.string().nullish(),
+  featureId: zod.number().nullish(),
+  featureName: zod.string().nullish(),
+  author: zod.string().nullish(),
+  tags: zod.array(zod.string()),
+  published: zod.boolean(),
+  viewCount: zod.number(),
+  readingTime: zod.number(),
+  createdAt: zod.string(),
+  updatedAt: zod.string(),
+});
+export const GetDocArticlesResponse = zod.array(GetDocArticlesResponseItem);
+
+/**
+ * @summary Create a documentation article
+ */
+export const CreateDocArticleBody = zod.object({
+  title: zod.string(),
+  slug: zod.string(),
+  excerpt: zod.string().nullish(),
+  content: zod.string(),
+  type: zod.enum([
+    "guide",
+    "faq",
+    "troubleshooting",
+    "release-notes",
+    "reference",
+  ]),
+  categoryId: zod.number().nullish(),
+  projectId: zod.number().nullish(),
+  featureId: zod.number().nullish(),
+  author: zod.string().nullish(),
+  tags: zod.array(zod.string()).optional(),
+  published: zod.boolean().optional(),
+  relatedArticleIds: zod.array(zod.number()).optional(),
+});
+
+/**
+ * @summary Get an article by slug with related articles
+ */
+export const GetDocArticleParams = zod.object({
+  slug: zod.coerce.string(),
+});
+
+export const GetDocArticleResponse = zod.object({
+  id: zod.number(),
+  title: zod.string(),
+  slug: zod.string(),
+  excerpt: zod.string().nullish(),
+  content: zod.string(),
+  type: zod.enum([
+    "guide",
+    "faq",
+    "troubleshooting",
+    "release-notes",
+    "reference",
+  ]),
+  categoryId: zod.number().nullish(),
+  categoryName: zod.string().nullish(),
+  categorySlug: zod.string().nullish(),
+  projectId: zod.number().nullish(),
+  projectName: zod.string().nullish(),
+  featureId: zod.number().nullish(),
+  featureName: zod.string().nullish(),
+  author: zod.string().nullish(),
+  tags: zod.array(zod.string()),
+  published: zod.boolean(),
+  viewCount: zod.number(),
+  readingTime: zod.number(),
+  relatedArticles: zod.array(
+    zod.object({
+      id: zod.number(),
+      title: zod.string(),
+      slug: zod.string(),
+      excerpt: zod.string().nullish(),
+      type: zod.enum([
+        "guide",
+        "faq",
+        "troubleshooting",
+        "release-notes",
+        "reference",
+      ]),
+      categoryId: zod.number().nullish(),
+      categoryName: zod.string().nullish(),
+      categorySlug: zod.string().nullish(),
+      projectId: zod.number().nullish(),
+      projectName: zod.string().nullish(),
+      featureId: zod.number().nullish(),
+      featureName: zod.string().nullish(),
+      author: zod.string().nullish(),
+      tags: zod.array(zod.string()),
+      published: zod.boolean(),
+      viewCount: zod.number(),
+      readingTime: zod.number(),
+      createdAt: zod.string(),
+      updatedAt: zod.string(),
+    }),
+  ),
+  createdAt: zod.string(),
+  updatedAt: zod.string(),
+});
+
+/**
+ * @summary Update a documentation article
+ */
+export const UpdateDocArticleParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const UpdateDocArticleBody = zod.object({
+  title: zod.string(),
+  slug: zod.string(),
+  excerpt: zod.string().nullish(),
+  content: zod.string(),
+  type: zod.enum([
+    "guide",
+    "faq",
+    "troubleshooting",
+    "release-notes",
+    "reference",
+  ]),
+  categoryId: zod.number().nullish(),
+  projectId: zod.number().nullish(),
+  featureId: zod.number().nullish(),
+  author: zod.string().nullish(),
+  tags: zod.array(zod.string()).optional(),
+  published: zod.boolean().optional(),
+  relatedArticleIds: zod.array(zod.number()).optional(),
+});
+
+export const UpdateDocArticleResponse = zod.object({
+  id: zod.number(),
+  title: zod.string(),
+  slug: zod.string(),
+  excerpt: zod.string().nullish(),
+  type: zod.enum([
+    "guide",
+    "faq",
+    "troubleshooting",
+    "release-notes",
+    "reference",
+  ]),
+  categoryId: zod.number().nullish(),
+  categoryName: zod.string().nullish(),
+  categorySlug: zod.string().nullish(),
+  projectId: zod.number().nullish(),
+  projectName: zod.string().nullish(),
+  featureId: zod.number().nullish(),
+  featureName: zod.string().nullish(),
+  author: zod.string().nullish(),
+  tags: zod.array(zod.string()),
+  published: zod.boolean(),
+  viewCount: zod.number(),
+  readingTime: zod.number(),
+  createdAt: zod.string(),
+  updatedAt: zod.string(),
+});
+
+/**
+ * @summary Delete an article
+ */
+export const DeleteDocArticleParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+/**
+ * @summary List all projects
+ */
+export const GetDocProjectsResponseItem = zod.object({
+  id: zod.number(),
+  name: zod.string(),
+  slug: zod.string(),
+  description: zod.string().nullish(),
+  icon: zod.string().nullish(),
+  status: zod.enum(["active", "beta", "deprecated", "planned"]),
+  tags: zod.array(zod.string()),
+  articleCount: zod.number(),
+  featureCount: zod.number(),
+  createdAt: zod.string(),
+  updatedAt: zod.string(),
+});
+export const GetDocProjectsResponse = zod.array(GetDocProjectsResponseItem);
+
+/**
+ * @summary Create a project
+ */
+export const CreateDocProjectBody = zod.object({
+  name: zod.string(),
+  slug: zod.string(),
+  description: zod.string().nullish(),
+  icon: zod.string().nullish(),
+  status: zod.enum(["active", "beta", "deprecated", "planned"]),
+  tags: zod.array(zod.string()).optional(),
+});
+
+/**
+ * @summary Get a project with its articles
+ */
+export const GetDocProjectParams = zod.object({
+  slug: zod.coerce.string(),
+});
+
+export const GetDocProjectResponse = zod.object({
+  id: zod.number(),
+  name: zod.string(),
+  slug: zod.string(),
+  description: zod.string().nullish(),
+  icon: zod.string().nullish(),
+  status: zod.enum(["active", "beta", "deprecated", "planned"]),
+  tags: zod.array(zod.string()),
+  articleCount: zod.number(),
+  featureCount: zod.number(),
+  articles: zod.array(
+    zod.object({
+      id: zod.number(),
+      title: zod.string(),
+      slug: zod.string(),
+      excerpt: zod.string().nullish(),
+      type: zod.enum([
+        "guide",
+        "faq",
+        "troubleshooting",
+        "release-notes",
+        "reference",
+      ]),
+      categoryId: zod.number().nullish(),
+      categoryName: zod.string().nullish(),
+      categorySlug: zod.string().nullish(),
+      projectId: zod.number().nullish(),
+      projectName: zod.string().nullish(),
+      featureId: zod.number().nullish(),
+      featureName: zod.string().nullish(),
+      author: zod.string().nullish(),
+      tags: zod.array(zod.string()),
+      published: zod.boolean(),
+      viewCount: zod.number(),
+      readingTime: zod.number(),
+      createdAt: zod.string(),
+      updatedAt: zod.string(),
+    }),
+  ),
+  features: zod.array(
+    zod.object({
+      id: zod.number(),
+      name: zod.string(),
+      slug: zod.string(),
+      description: zod.string().nullish(),
+      status: zod.enum(["stable", "beta", "deprecated"]),
+      projectId: zod.number().nullish(),
+      projectName: zod.string().nullish(),
+      categoryId: zod.number().nullish(),
+      categoryName: zod.string().nullish(),
+      articleCount: zod.number(),
+      createdAt: zod.string(),
+      updatedAt: zod.string(),
+    }),
+  ),
+  createdAt: zod.string(),
+  updatedAt: zod.string(),
+});
+
+/**
+ * @summary Update a project
+ */
+export const UpdateDocProjectParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const UpdateDocProjectBody = zod.object({
+  name: zod.string(),
+  slug: zod.string(),
+  description: zod.string().nullish(),
+  icon: zod.string().nullish(),
+  status: zod.enum(["active", "beta", "deprecated", "planned"]),
+  tags: zod.array(zod.string()).optional(),
+});
+
+export const UpdateDocProjectResponse = zod.object({
+  id: zod.number(),
+  name: zod.string(),
+  slug: zod.string(),
+  description: zod.string().nullish(),
+  icon: zod.string().nullish(),
+  status: zod.enum(["active", "beta", "deprecated", "planned"]),
+  tags: zod.array(zod.string()),
+  articleCount: zod.number(),
+  featureCount: zod.number(),
+  createdAt: zod.string(),
+  updatedAt: zod.string(),
+});
+
+/**
+ * @summary Delete a project
+ */
+export const DeleteDocProjectParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+/**
+ * @summary List all features
+ */
+export const GetDocFeaturesQueryParams = zod.object({
+  projectId: zod.coerce.number().optional(),
+  status: zod.enum(["stable", "beta", "deprecated"]).optional(),
+});
+
+export const GetDocFeaturesResponseItem = zod.object({
+  id: zod.number(),
+  name: zod.string(),
+  slug: zod.string(),
+  description: zod.string().nullish(),
+  status: zod.enum(["stable", "beta", "deprecated"]),
+  projectId: zod.number().nullish(),
+  projectName: zod.string().nullish(),
+  categoryId: zod.number().nullish(),
+  categoryName: zod.string().nullish(),
+  articleCount: zod.number(),
+  createdAt: zod.string(),
+  updatedAt: zod.string(),
+});
+export const GetDocFeaturesResponse = zod.array(GetDocFeaturesResponseItem);
+
+/**
+ * @summary Create a feature
+ */
+export const CreateDocFeatureBody = zod.object({
+  name: zod.string(),
+  slug: zod.string(),
+  description: zod.string().nullish(),
+  status: zod.enum(["stable", "beta", "deprecated"]),
+  projectId: zod.number().nullish(),
+  categoryId: zod.number().nullish(),
+});
+
+/**
+ * @summary Get a feature with its articles
+ */
+export const GetDocFeatureParams = zod.object({
+  slug: zod.coerce.string(),
+});
+
+export const GetDocFeatureResponse = zod.object({
+  id: zod.number(),
+  name: zod.string(),
+  slug: zod.string(),
+  description: zod.string().nullish(),
+  status: zod.enum(["stable", "beta", "deprecated"]),
+  projectId: zod.number().nullish(),
+  projectName: zod.string().nullish(),
+  categoryId: zod.number().nullish(),
+  categoryName: zod.string().nullish(),
+  articleCount: zod.number(),
+  articles: zod.array(
+    zod.object({
+      id: zod.number(),
+      title: zod.string(),
+      slug: zod.string(),
+      excerpt: zod.string().nullish(),
+      type: zod.enum([
+        "guide",
+        "faq",
+        "troubleshooting",
+        "release-notes",
+        "reference",
+      ]),
+      categoryId: zod.number().nullish(),
+      categoryName: zod.string().nullish(),
+      categorySlug: zod.string().nullish(),
+      projectId: zod.number().nullish(),
+      projectName: zod.string().nullish(),
+      featureId: zod.number().nullish(),
+      featureName: zod.string().nullish(),
+      author: zod.string().nullish(),
+      tags: zod.array(zod.string()),
+      published: zod.boolean(),
+      viewCount: zod.number(),
+      readingTime: zod.number(),
+      createdAt: zod.string(),
+      updatedAt: zod.string(),
+    }),
+  ),
+  createdAt: zod.string(),
+  updatedAt: zod.string(),
+});
+
+/**
+ * @summary Update a feature
+ */
+export const UpdateDocFeatureParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const UpdateDocFeatureBody = zod.object({
+  name: zod.string(),
+  slug: zod.string(),
+  description: zod.string().nullish(),
+  status: zod.enum(["stable", "beta", "deprecated"]),
+  projectId: zod.number().nullish(),
+  categoryId: zod.number().nullish(),
+});
+
+export const UpdateDocFeatureResponse = zod.object({
+  id: zod.number(),
+  name: zod.string(),
+  slug: zod.string(),
+  description: zod.string().nullish(),
+  status: zod.enum(["stable", "beta", "deprecated"]),
+  projectId: zod.number().nullish(),
+  projectName: zod.string().nullish(),
+  categoryId: zod.number().nullish(),
+  categoryName: zod.string().nullish(),
+  articleCount: zod.number(),
+  createdAt: zod.string(),
+  updatedAt: zod.string(),
+});
+
+/**
+ * @summary Delete a feature
+ */
+export const DeleteDocFeatureParams = zod.object({
+  id: zod.coerce.number(),
+});

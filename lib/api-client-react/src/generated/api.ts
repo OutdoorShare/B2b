@@ -23,15 +23,32 @@ import type {
   Category,
   CreateBooking,
   CreateCategory,
+  CreateDocArticle,
+  CreateDocCategory,
+  CreateDocFeature,
+  CreateDocProject,
   CreateListing,
   CreateQuote,
+  DocArticle,
+  DocArticleDetail,
+  DocCategory,
+  DocCategoryDetail,
+  DocFeature,
+  DocFeatureDetail,
+  DocProject,
+  DocProjectDetail,
+  DocSearchResult,
+  DocStats,
   GetBookingsParams,
+  GetDocArticlesParams,
+  GetDocFeaturesParams,
   GetListingsParams,
   GetRevenueAnalyticsParams,
   HealthStatus,
   Listing,
   Quote,
   RevenueDataPoint,
+  SearchDocsParams,
   StatusCount,
   TopListing,
   UpdateBooking,
@@ -1801,3 +1818,1961 @@ export function useGetBookingStatusBreakdown<
 
   return { ...query, queryKey: queryOptions.queryKey };
 }
+
+/**
+ * @summary Portal statistics
+ */
+export const getGetDocsStatsUrl = () => {
+  return `/api/docs/stats`;
+};
+
+export const getDocsStats = async (
+  options?: RequestInit,
+): Promise<DocStats> => {
+  return customFetch<DocStats>(getGetDocsStatsUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetDocsStatsQueryKey = () => {
+  return [`/api/docs/stats`] as const;
+};
+
+export const getGetDocsStatsQueryOptions = <
+  TData = Awaited<ReturnType<typeof getDocsStats>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getDocsStats>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetDocsStatsQueryKey();
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof getDocsStats>>> = ({
+    signal,
+  }) => getDocsStats({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getDocsStats>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetDocsStatsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getDocsStats>>
+>;
+export type GetDocsStatsQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Portal statistics
+ */
+
+export function useGetDocsStats<
+  TData = Awaited<ReturnType<typeof getDocsStats>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getDocsStats>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetDocsStatsQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Full-text search across all docs
+ */
+export const getSearchDocsUrl = (params?: SearchDocsParams) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/docs/search?${stringifiedParams}`
+    : `/api/docs/search`;
+};
+
+export const searchDocs = async (
+  params?: SearchDocsParams,
+  options?: RequestInit,
+): Promise<DocSearchResult[]> => {
+  return customFetch<DocSearchResult[]>(getSearchDocsUrl(params), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getSearchDocsQueryKey = (params?: SearchDocsParams) => {
+  return [`/api/docs/search`, ...(params ? [params] : [])] as const;
+};
+
+export const getSearchDocsQueryOptions = <
+  TData = Awaited<ReturnType<typeof searchDocs>>,
+  TError = ErrorType<unknown>,
+>(
+  params?: SearchDocsParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof searchDocs>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getSearchDocsQueryKey(params);
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof searchDocs>>> = ({
+    signal,
+  }) => searchDocs(params, { signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof searchDocs>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type SearchDocsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof searchDocs>>
+>;
+export type SearchDocsQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Full-text search across all docs
+ */
+
+export function useSearchDocs<
+  TData = Awaited<ReturnType<typeof searchDocs>>,
+  TError = ErrorType<unknown>,
+>(
+  params?: SearchDocsParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof searchDocs>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getSearchDocsQueryOptions(params, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Trending / most-viewed articles
+ */
+export const getGetTrendingDocsUrl = () => {
+  return `/api/docs/trending`;
+};
+
+export const getTrendingDocs = async (
+  options?: RequestInit,
+): Promise<DocArticle[]> => {
+  return customFetch<DocArticle[]>(getGetTrendingDocsUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetTrendingDocsQueryKey = () => {
+  return [`/api/docs/trending`] as const;
+};
+
+export const getGetTrendingDocsQueryOptions = <
+  TData = Awaited<ReturnType<typeof getTrendingDocs>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getTrendingDocs>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetTrendingDocsQueryKey();
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof getTrendingDocs>>> = ({
+    signal,
+  }) => getTrendingDocs({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getTrendingDocs>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetTrendingDocsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getTrendingDocs>>
+>;
+export type GetTrendingDocsQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Trending / most-viewed articles
+ */
+
+export function useGetTrendingDocs<
+  TData = Awaited<ReturnType<typeof getTrendingDocs>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getTrendingDocs>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetTrendingDocsQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary List all documentation categories
+ */
+export const getGetDocCategoriesUrl = () => {
+  return `/api/docs/categories`;
+};
+
+export const getDocCategories = async (
+  options?: RequestInit,
+): Promise<DocCategory[]> => {
+  return customFetch<DocCategory[]>(getGetDocCategoriesUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetDocCategoriesQueryKey = () => {
+  return [`/api/docs/categories`] as const;
+};
+
+export const getGetDocCategoriesQueryOptions = <
+  TData = Awaited<ReturnType<typeof getDocCategories>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getDocCategories>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetDocCategoriesQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getDocCategories>>
+  > = ({ signal }) => getDocCategories({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getDocCategories>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetDocCategoriesQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getDocCategories>>
+>;
+export type GetDocCategoriesQueryError = ErrorType<unknown>;
+
+/**
+ * @summary List all documentation categories
+ */
+
+export function useGetDocCategories<
+  TData = Awaited<ReturnType<typeof getDocCategories>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getDocCategories>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetDocCategoriesQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Create a documentation category
+ */
+export const getCreateDocCategoryUrl = () => {
+  return `/api/docs/categories`;
+};
+
+export const createDocCategory = async (
+  createDocCategory: CreateDocCategory,
+  options?: RequestInit,
+): Promise<DocCategory> => {
+  return customFetch<DocCategory>(getCreateDocCategoryUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(createDocCategory),
+  });
+};
+
+export const getCreateDocCategoryMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof createDocCategory>>,
+    TError,
+    { data: BodyType<CreateDocCategory> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof createDocCategory>>,
+  TError,
+  { data: BodyType<CreateDocCategory> },
+  TContext
+> => {
+  const mutationKey = ["createDocCategory"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof createDocCategory>>,
+    { data: BodyType<CreateDocCategory> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return createDocCategory(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type CreateDocCategoryMutationResult = NonNullable<
+  Awaited<ReturnType<typeof createDocCategory>>
+>;
+export type CreateDocCategoryMutationBody = BodyType<CreateDocCategory>;
+export type CreateDocCategoryMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Create a documentation category
+ */
+export const useCreateDocCategory = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof createDocCategory>>,
+    TError,
+    { data: BodyType<CreateDocCategory> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof createDocCategory>>,
+  TError,
+  { data: BodyType<CreateDocCategory> },
+  TContext
+> => {
+  return useMutation(getCreateDocCategoryMutationOptions(options));
+};
+
+/**
+ * @summary Get a category with its articles
+ */
+export const getGetDocCategoryUrl = (slug: string) => {
+  return `/api/docs/categories/${slug}`;
+};
+
+export const getDocCategory = async (
+  slug: string,
+  options?: RequestInit,
+): Promise<DocCategoryDetail> => {
+  return customFetch<DocCategoryDetail>(getGetDocCategoryUrl(slug), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetDocCategoryQueryKey = (slug: string) => {
+  return [`/api/docs/categories/${slug}`] as const;
+};
+
+export const getGetDocCategoryQueryOptions = <
+  TData = Awaited<ReturnType<typeof getDocCategory>>,
+  TError = ErrorType<unknown>,
+>(
+  slug: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getDocCategory>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetDocCategoryQueryKey(slug);
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof getDocCategory>>> = ({
+    signal,
+  }) => getDocCategory(slug, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!slug,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof getDocCategory>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetDocCategoryQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getDocCategory>>
+>;
+export type GetDocCategoryQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Get a category with its articles
+ */
+
+export function useGetDocCategory<
+  TData = Awaited<ReturnType<typeof getDocCategory>>,
+  TError = ErrorType<unknown>,
+>(
+  slug: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getDocCategory>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetDocCategoryQueryOptions(slug, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Update a documentation category
+ */
+export const getUpdateDocCategoryUrl = (id: number) => {
+  return `/api/docs/categories/${id}`;
+};
+
+export const updateDocCategory = async (
+  id: number,
+  createDocCategory: CreateDocCategory,
+  options?: RequestInit,
+): Promise<DocCategory> => {
+  return customFetch<DocCategory>(getUpdateDocCategoryUrl(id), {
+    ...options,
+    method: "PUT",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(createDocCategory),
+  });
+};
+
+export const getUpdateDocCategoryMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateDocCategory>>,
+    TError,
+    { id: number; data: BodyType<CreateDocCategory> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof updateDocCategory>>,
+  TError,
+  { id: number; data: BodyType<CreateDocCategory> },
+  TContext
+> => {
+  const mutationKey = ["updateDocCategory"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof updateDocCategory>>,
+    { id: number; data: BodyType<CreateDocCategory> }
+  > = (props) => {
+    const { id, data } = props ?? {};
+
+    return updateDocCategory(id, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type UpdateDocCategoryMutationResult = NonNullable<
+  Awaited<ReturnType<typeof updateDocCategory>>
+>;
+export type UpdateDocCategoryMutationBody = BodyType<CreateDocCategory>;
+export type UpdateDocCategoryMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Update a documentation category
+ */
+export const useUpdateDocCategory = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateDocCategory>>,
+    TError,
+    { id: number; data: BodyType<CreateDocCategory> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof updateDocCategory>>,
+  TError,
+  { id: number; data: BodyType<CreateDocCategory> },
+  TContext
+> => {
+  return useMutation(getUpdateDocCategoryMutationOptions(options));
+};
+
+/**
+ * @summary Delete a documentation category
+ */
+export const getDeleteDocCategoryUrl = (id: number) => {
+  return `/api/docs/categories/${id}`;
+};
+
+export const deleteDocCategory = async (
+  id: number,
+  options?: RequestInit,
+): Promise<void> => {
+  return customFetch<void>(getDeleteDocCategoryUrl(id), {
+    ...options,
+    method: "DELETE",
+  });
+};
+
+export const getDeleteDocCategoryMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof deleteDocCategory>>,
+    TError,
+    { id: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof deleteDocCategory>>,
+  TError,
+  { id: number },
+  TContext
+> => {
+  const mutationKey = ["deleteDocCategory"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof deleteDocCategory>>,
+    { id: number }
+  > = (props) => {
+    const { id } = props ?? {};
+
+    return deleteDocCategory(id, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type DeleteDocCategoryMutationResult = NonNullable<
+  Awaited<ReturnType<typeof deleteDocCategory>>
+>;
+
+export type DeleteDocCategoryMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Delete a documentation category
+ */
+export const useDeleteDocCategory = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof deleteDocCategory>>,
+    TError,
+    { id: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof deleteDocCategory>>,
+  TError,
+  { id: number },
+  TContext
+> => {
+  return useMutation(getDeleteDocCategoryMutationOptions(options));
+};
+
+/**
+ * @summary List documentation articles
+ */
+export const getGetDocArticlesUrl = (params?: GetDocArticlesParams) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/docs/articles?${stringifiedParams}`
+    : `/api/docs/articles`;
+};
+
+export const getDocArticles = async (
+  params?: GetDocArticlesParams,
+  options?: RequestInit,
+): Promise<DocArticle[]> => {
+  return customFetch<DocArticle[]>(getGetDocArticlesUrl(params), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetDocArticlesQueryKey = (params?: GetDocArticlesParams) => {
+  return [`/api/docs/articles`, ...(params ? [params] : [])] as const;
+};
+
+export const getGetDocArticlesQueryOptions = <
+  TData = Awaited<ReturnType<typeof getDocArticles>>,
+  TError = ErrorType<unknown>,
+>(
+  params?: GetDocArticlesParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getDocArticles>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetDocArticlesQueryKey(params);
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof getDocArticles>>> = ({
+    signal,
+  }) => getDocArticles(params, { signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getDocArticles>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetDocArticlesQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getDocArticles>>
+>;
+export type GetDocArticlesQueryError = ErrorType<unknown>;
+
+/**
+ * @summary List documentation articles
+ */
+
+export function useGetDocArticles<
+  TData = Awaited<ReturnType<typeof getDocArticles>>,
+  TError = ErrorType<unknown>,
+>(
+  params?: GetDocArticlesParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getDocArticles>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetDocArticlesQueryOptions(params, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Create a documentation article
+ */
+export const getCreateDocArticleUrl = () => {
+  return `/api/docs/articles`;
+};
+
+export const createDocArticle = async (
+  createDocArticle: CreateDocArticle,
+  options?: RequestInit,
+): Promise<DocArticle> => {
+  return customFetch<DocArticle>(getCreateDocArticleUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(createDocArticle),
+  });
+};
+
+export const getCreateDocArticleMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof createDocArticle>>,
+    TError,
+    { data: BodyType<CreateDocArticle> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof createDocArticle>>,
+  TError,
+  { data: BodyType<CreateDocArticle> },
+  TContext
+> => {
+  const mutationKey = ["createDocArticle"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof createDocArticle>>,
+    { data: BodyType<CreateDocArticle> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return createDocArticle(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type CreateDocArticleMutationResult = NonNullable<
+  Awaited<ReturnType<typeof createDocArticle>>
+>;
+export type CreateDocArticleMutationBody = BodyType<CreateDocArticle>;
+export type CreateDocArticleMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Create a documentation article
+ */
+export const useCreateDocArticle = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof createDocArticle>>,
+    TError,
+    { data: BodyType<CreateDocArticle> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof createDocArticle>>,
+  TError,
+  { data: BodyType<CreateDocArticle> },
+  TContext
+> => {
+  return useMutation(getCreateDocArticleMutationOptions(options));
+};
+
+/**
+ * @summary Get an article by slug with related articles
+ */
+export const getGetDocArticleUrl = (slug: string) => {
+  return `/api/docs/articles/${slug}`;
+};
+
+export const getDocArticle = async (
+  slug: string,
+  options?: RequestInit,
+): Promise<DocArticleDetail> => {
+  return customFetch<DocArticleDetail>(getGetDocArticleUrl(slug), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetDocArticleQueryKey = (slug: string) => {
+  return [`/api/docs/articles/${slug}`] as const;
+};
+
+export const getGetDocArticleQueryOptions = <
+  TData = Awaited<ReturnType<typeof getDocArticle>>,
+  TError = ErrorType<unknown>,
+>(
+  slug: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getDocArticle>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetDocArticleQueryKey(slug);
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof getDocArticle>>> = ({
+    signal,
+  }) => getDocArticle(slug, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!slug,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof getDocArticle>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetDocArticleQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getDocArticle>>
+>;
+export type GetDocArticleQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Get an article by slug with related articles
+ */
+
+export function useGetDocArticle<
+  TData = Awaited<ReturnType<typeof getDocArticle>>,
+  TError = ErrorType<unknown>,
+>(
+  slug: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getDocArticle>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetDocArticleQueryOptions(slug, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Update a documentation article
+ */
+export const getUpdateDocArticleUrl = (id: number) => {
+  return `/api/docs/articles/${id}`;
+};
+
+export const updateDocArticle = async (
+  id: number,
+  createDocArticle: CreateDocArticle,
+  options?: RequestInit,
+): Promise<DocArticle> => {
+  return customFetch<DocArticle>(getUpdateDocArticleUrl(id), {
+    ...options,
+    method: "PUT",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(createDocArticle),
+  });
+};
+
+export const getUpdateDocArticleMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateDocArticle>>,
+    TError,
+    { id: number; data: BodyType<CreateDocArticle> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof updateDocArticle>>,
+  TError,
+  { id: number; data: BodyType<CreateDocArticle> },
+  TContext
+> => {
+  const mutationKey = ["updateDocArticle"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof updateDocArticle>>,
+    { id: number; data: BodyType<CreateDocArticle> }
+  > = (props) => {
+    const { id, data } = props ?? {};
+
+    return updateDocArticle(id, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type UpdateDocArticleMutationResult = NonNullable<
+  Awaited<ReturnType<typeof updateDocArticle>>
+>;
+export type UpdateDocArticleMutationBody = BodyType<CreateDocArticle>;
+export type UpdateDocArticleMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Update a documentation article
+ */
+export const useUpdateDocArticle = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateDocArticle>>,
+    TError,
+    { id: number; data: BodyType<CreateDocArticle> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof updateDocArticle>>,
+  TError,
+  { id: number; data: BodyType<CreateDocArticle> },
+  TContext
+> => {
+  return useMutation(getUpdateDocArticleMutationOptions(options));
+};
+
+/**
+ * @summary Delete an article
+ */
+export const getDeleteDocArticleUrl = (id: number) => {
+  return `/api/docs/articles/${id}`;
+};
+
+export const deleteDocArticle = async (
+  id: number,
+  options?: RequestInit,
+): Promise<void> => {
+  return customFetch<void>(getDeleteDocArticleUrl(id), {
+    ...options,
+    method: "DELETE",
+  });
+};
+
+export const getDeleteDocArticleMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof deleteDocArticle>>,
+    TError,
+    { id: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof deleteDocArticle>>,
+  TError,
+  { id: number },
+  TContext
+> => {
+  const mutationKey = ["deleteDocArticle"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof deleteDocArticle>>,
+    { id: number }
+  > = (props) => {
+    const { id } = props ?? {};
+
+    return deleteDocArticle(id, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type DeleteDocArticleMutationResult = NonNullable<
+  Awaited<ReturnType<typeof deleteDocArticle>>
+>;
+
+export type DeleteDocArticleMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Delete an article
+ */
+export const useDeleteDocArticle = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof deleteDocArticle>>,
+    TError,
+    { id: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof deleteDocArticle>>,
+  TError,
+  { id: number },
+  TContext
+> => {
+  return useMutation(getDeleteDocArticleMutationOptions(options));
+};
+
+/**
+ * @summary List all projects
+ */
+export const getGetDocProjectsUrl = () => {
+  return `/api/docs/projects`;
+};
+
+export const getDocProjects = async (
+  options?: RequestInit,
+): Promise<DocProject[]> => {
+  return customFetch<DocProject[]>(getGetDocProjectsUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetDocProjectsQueryKey = () => {
+  return [`/api/docs/projects`] as const;
+};
+
+export const getGetDocProjectsQueryOptions = <
+  TData = Awaited<ReturnType<typeof getDocProjects>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getDocProjects>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetDocProjectsQueryKey();
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof getDocProjects>>> = ({
+    signal,
+  }) => getDocProjects({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getDocProjects>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetDocProjectsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getDocProjects>>
+>;
+export type GetDocProjectsQueryError = ErrorType<unknown>;
+
+/**
+ * @summary List all projects
+ */
+
+export function useGetDocProjects<
+  TData = Awaited<ReturnType<typeof getDocProjects>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getDocProjects>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetDocProjectsQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Create a project
+ */
+export const getCreateDocProjectUrl = () => {
+  return `/api/docs/projects`;
+};
+
+export const createDocProject = async (
+  createDocProject: CreateDocProject,
+  options?: RequestInit,
+): Promise<DocProject> => {
+  return customFetch<DocProject>(getCreateDocProjectUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(createDocProject),
+  });
+};
+
+export const getCreateDocProjectMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof createDocProject>>,
+    TError,
+    { data: BodyType<CreateDocProject> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof createDocProject>>,
+  TError,
+  { data: BodyType<CreateDocProject> },
+  TContext
+> => {
+  const mutationKey = ["createDocProject"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof createDocProject>>,
+    { data: BodyType<CreateDocProject> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return createDocProject(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type CreateDocProjectMutationResult = NonNullable<
+  Awaited<ReturnType<typeof createDocProject>>
+>;
+export type CreateDocProjectMutationBody = BodyType<CreateDocProject>;
+export type CreateDocProjectMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Create a project
+ */
+export const useCreateDocProject = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof createDocProject>>,
+    TError,
+    { data: BodyType<CreateDocProject> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof createDocProject>>,
+  TError,
+  { data: BodyType<CreateDocProject> },
+  TContext
+> => {
+  return useMutation(getCreateDocProjectMutationOptions(options));
+};
+
+/**
+ * @summary Get a project with its articles
+ */
+export const getGetDocProjectUrl = (slug: string) => {
+  return `/api/docs/projects/${slug}`;
+};
+
+export const getDocProject = async (
+  slug: string,
+  options?: RequestInit,
+): Promise<DocProjectDetail> => {
+  return customFetch<DocProjectDetail>(getGetDocProjectUrl(slug), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetDocProjectQueryKey = (slug: string) => {
+  return [`/api/docs/projects/${slug}`] as const;
+};
+
+export const getGetDocProjectQueryOptions = <
+  TData = Awaited<ReturnType<typeof getDocProject>>,
+  TError = ErrorType<unknown>,
+>(
+  slug: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getDocProject>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetDocProjectQueryKey(slug);
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof getDocProject>>> = ({
+    signal,
+  }) => getDocProject(slug, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!slug,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof getDocProject>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetDocProjectQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getDocProject>>
+>;
+export type GetDocProjectQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Get a project with its articles
+ */
+
+export function useGetDocProject<
+  TData = Awaited<ReturnType<typeof getDocProject>>,
+  TError = ErrorType<unknown>,
+>(
+  slug: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getDocProject>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetDocProjectQueryOptions(slug, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Update a project
+ */
+export const getUpdateDocProjectUrl = (id: number) => {
+  return `/api/docs/projects/${id}`;
+};
+
+export const updateDocProject = async (
+  id: number,
+  createDocProject: CreateDocProject,
+  options?: RequestInit,
+): Promise<DocProject> => {
+  return customFetch<DocProject>(getUpdateDocProjectUrl(id), {
+    ...options,
+    method: "PUT",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(createDocProject),
+  });
+};
+
+export const getUpdateDocProjectMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateDocProject>>,
+    TError,
+    { id: number; data: BodyType<CreateDocProject> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof updateDocProject>>,
+  TError,
+  { id: number; data: BodyType<CreateDocProject> },
+  TContext
+> => {
+  const mutationKey = ["updateDocProject"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof updateDocProject>>,
+    { id: number; data: BodyType<CreateDocProject> }
+  > = (props) => {
+    const { id, data } = props ?? {};
+
+    return updateDocProject(id, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type UpdateDocProjectMutationResult = NonNullable<
+  Awaited<ReturnType<typeof updateDocProject>>
+>;
+export type UpdateDocProjectMutationBody = BodyType<CreateDocProject>;
+export type UpdateDocProjectMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Update a project
+ */
+export const useUpdateDocProject = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateDocProject>>,
+    TError,
+    { id: number; data: BodyType<CreateDocProject> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof updateDocProject>>,
+  TError,
+  { id: number; data: BodyType<CreateDocProject> },
+  TContext
+> => {
+  return useMutation(getUpdateDocProjectMutationOptions(options));
+};
+
+/**
+ * @summary Delete a project
+ */
+export const getDeleteDocProjectUrl = (id: number) => {
+  return `/api/docs/projects/${id}`;
+};
+
+export const deleteDocProject = async (
+  id: number,
+  options?: RequestInit,
+): Promise<void> => {
+  return customFetch<void>(getDeleteDocProjectUrl(id), {
+    ...options,
+    method: "DELETE",
+  });
+};
+
+export const getDeleteDocProjectMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof deleteDocProject>>,
+    TError,
+    { id: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof deleteDocProject>>,
+  TError,
+  { id: number },
+  TContext
+> => {
+  const mutationKey = ["deleteDocProject"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof deleteDocProject>>,
+    { id: number }
+  > = (props) => {
+    const { id } = props ?? {};
+
+    return deleteDocProject(id, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type DeleteDocProjectMutationResult = NonNullable<
+  Awaited<ReturnType<typeof deleteDocProject>>
+>;
+
+export type DeleteDocProjectMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Delete a project
+ */
+export const useDeleteDocProject = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof deleteDocProject>>,
+    TError,
+    { id: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof deleteDocProject>>,
+  TError,
+  { id: number },
+  TContext
+> => {
+  return useMutation(getDeleteDocProjectMutationOptions(options));
+};
+
+/**
+ * @summary List all features
+ */
+export const getGetDocFeaturesUrl = (params?: GetDocFeaturesParams) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/docs/features?${stringifiedParams}`
+    : `/api/docs/features`;
+};
+
+export const getDocFeatures = async (
+  params?: GetDocFeaturesParams,
+  options?: RequestInit,
+): Promise<DocFeature[]> => {
+  return customFetch<DocFeature[]>(getGetDocFeaturesUrl(params), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetDocFeaturesQueryKey = (params?: GetDocFeaturesParams) => {
+  return [`/api/docs/features`, ...(params ? [params] : [])] as const;
+};
+
+export const getGetDocFeaturesQueryOptions = <
+  TData = Awaited<ReturnType<typeof getDocFeatures>>,
+  TError = ErrorType<unknown>,
+>(
+  params?: GetDocFeaturesParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getDocFeatures>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetDocFeaturesQueryKey(params);
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof getDocFeatures>>> = ({
+    signal,
+  }) => getDocFeatures(params, { signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getDocFeatures>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetDocFeaturesQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getDocFeatures>>
+>;
+export type GetDocFeaturesQueryError = ErrorType<unknown>;
+
+/**
+ * @summary List all features
+ */
+
+export function useGetDocFeatures<
+  TData = Awaited<ReturnType<typeof getDocFeatures>>,
+  TError = ErrorType<unknown>,
+>(
+  params?: GetDocFeaturesParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getDocFeatures>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetDocFeaturesQueryOptions(params, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Create a feature
+ */
+export const getCreateDocFeatureUrl = () => {
+  return `/api/docs/features`;
+};
+
+export const createDocFeature = async (
+  createDocFeature: CreateDocFeature,
+  options?: RequestInit,
+): Promise<DocFeature> => {
+  return customFetch<DocFeature>(getCreateDocFeatureUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(createDocFeature),
+  });
+};
+
+export const getCreateDocFeatureMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof createDocFeature>>,
+    TError,
+    { data: BodyType<CreateDocFeature> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof createDocFeature>>,
+  TError,
+  { data: BodyType<CreateDocFeature> },
+  TContext
+> => {
+  const mutationKey = ["createDocFeature"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof createDocFeature>>,
+    { data: BodyType<CreateDocFeature> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return createDocFeature(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type CreateDocFeatureMutationResult = NonNullable<
+  Awaited<ReturnType<typeof createDocFeature>>
+>;
+export type CreateDocFeatureMutationBody = BodyType<CreateDocFeature>;
+export type CreateDocFeatureMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Create a feature
+ */
+export const useCreateDocFeature = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof createDocFeature>>,
+    TError,
+    { data: BodyType<CreateDocFeature> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof createDocFeature>>,
+  TError,
+  { data: BodyType<CreateDocFeature> },
+  TContext
+> => {
+  return useMutation(getCreateDocFeatureMutationOptions(options));
+};
+
+/**
+ * @summary Get a feature with its articles
+ */
+export const getGetDocFeatureUrl = (slug: string) => {
+  return `/api/docs/features/${slug}`;
+};
+
+export const getDocFeature = async (
+  slug: string,
+  options?: RequestInit,
+): Promise<DocFeatureDetail> => {
+  return customFetch<DocFeatureDetail>(getGetDocFeatureUrl(slug), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetDocFeatureQueryKey = (slug: string) => {
+  return [`/api/docs/features/${slug}`] as const;
+};
+
+export const getGetDocFeatureQueryOptions = <
+  TData = Awaited<ReturnType<typeof getDocFeature>>,
+  TError = ErrorType<unknown>,
+>(
+  slug: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getDocFeature>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetDocFeatureQueryKey(slug);
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof getDocFeature>>> = ({
+    signal,
+  }) => getDocFeature(slug, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!slug,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof getDocFeature>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetDocFeatureQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getDocFeature>>
+>;
+export type GetDocFeatureQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Get a feature with its articles
+ */
+
+export function useGetDocFeature<
+  TData = Awaited<ReturnType<typeof getDocFeature>>,
+  TError = ErrorType<unknown>,
+>(
+  slug: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getDocFeature>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetDocFeatureQueryOptions(slug, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Update a feature
+ */
+export const getUpdateDocFeatureUrl = (id: number) => {
+  return `/api/docs/features/${id}`;
+};
+
+export const updateDocFeature = async (
+  id: number,
+  createDocFeature: CreateDocFeature,
+  options?: RequestInit,
+): Promise<DocFeature> => {
+  return customFetch<DocFeature>(getUpdateDocFeatureUrl(id), {
+    ...options,
+    method: "PUT",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(createDocFeature),
+  });
+};
+
+export const getUpdateDocFeatureMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateDocFeature>>,
+    TError,
+    { id: number; data: BodyType<CreateDocFeature> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof updateDocFeature>>,
+  TError,
+  { id: number; data: BodyType<CreateDocFeature> },
+  TContext
+> => {
+  const mutationKey = ["updateDocFeature"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof updateDocFeature>>,
+    { id: number; data: BodyType<CreateDocFeature> }
+  > = (props) => {
+    const { id, data } = props ?? {};
+
+    return updateDocFeature(id, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type UpdateDocFeatureMutationResult = NonNullable<
+  Awaited<ReturnType<typeof updateDocFeature>>
+>;
+export type UpdateDocFeatureMutationBody = BodyType<CreateDocFeature>;
+export type UpdateDocFeatureMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Update a feature
+ */
+export const useUpdateDocFeature = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateDocFeature>>,
+    TError,
+    { id: number; data: BodyType<CreateDocFeature> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof updateDocFeature>>,
+  TError,
+  { id: number; data: BodyType<CreateDocFeature> },
+  TContext
+> => {
+  return useMutation(getUpdateDocFeatureMutationOptions(options));
+};
+
+/**
+ * @summary Delete a feature
+ */
+export const getDeleteDocFeatureUrl = (id: number) => {
+  return `/api/docs/features/${id}`;
+};
+
+export const deleteDocFeature = async (
+  id: number,
+  options?: RequestInit,
+): Promise<void> => {
+  return customFetch<void>(getDeleteDocFeatureUrl(id), {
+    ...options,
+    method: "DELETE",
+  });
+};
+
+export const getDeleteDocFeatureMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof deleteDocFeature>>,
+    TError,
+    { id: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof deleteDocFeature>>,
+  TError,
+  { id: number },
+  TContext
+> => {
+  const mutationKey = ["deleteDocFeature"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof deleteDocFeature>>,
+    { id: number }
+  > = (props) => {
+    const { id } = props ?? {};
+
+    return deleteDocFeature(id, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type DeleteDocFeatureMutationResult = NonNullable<
+  Awaited<ReturnType<typeof deleteDocFeature>>
+>;
+
+export type DeleteDocFeatureMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Delete a feature
+ */
+export const useDeleteDocFeature = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof deleteDocFeature>>,
+    TError,
+    { id: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof deleteDocFeature>>,
+  TError,
+  { id: number },
+  TContext
+> => {
+  return useMutation(getDeleteDocFeatureMutationOptions(options));
+};
