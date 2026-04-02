@@ -22,30 +22,61 @@ import {
   CreditCard,
   MessageSquarePlus,
   IdCard,
+  Clock,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useGetBusinessProfile } from "@workspace/api-client-react";
 import { getAdminSlug } from "@/lib/admin-nav";
 
-const NAV_ITEMS = [
-  { name: "Dashboard", path: "", icon: LayoutDashboard },
-  { name: "Launchpad", path: "/launchpad", icon: Rocket },
-  { name: "Listings", path: "/listings", icon: Package },
-  { name: "Bookings", path: "/bookings", icon: CalendarDays },
-  { name: "Quotes", path: "/quotes", icon: FileText },
-  { name: "Claims", path: "/claims", icon: ShieldAlert },
-  { name: "Communications", path: "/communications", icon: MessageSquare },
-  { name: "Analytics", path: "/analytics", icon: BarChart3 },
-  { name: "Team", path: "/team", icon: Users },
-  { name: "Waivers", path: "/waivers", icon: FileSignature },
-  { name: "Kiosk Mode", path: "/kiosk", icon: MonitorSmartphone },
-  { name: "Promo Codes", path: "/promo-codes", icon: Tag },
-  { name: "My Wallet", path: "/wallet", icon: Wallet },
-  { name: "Billing", path: "/billing", icon: CreditCard },
-  { name: "Contact Cards", path: "/contact-cards", icon: IdCard },
-  { name: "Feedback", path: "/feedback", icon: MessageSquarePlus },
-  { name: "Settings", path: "/settings", icon: Settings },
+type NavItem = { name: string; path: string; icon: React.ElementType };
+type NavGroup = { group: string | null; items: NavItem[] };
+
+const NAV_GROUPS: NavGroup[] = [
+  {
+    group: null,
+    items: [
+      { name: "Dashboard", path: "", icon: LayoutDashboard },
+      { name: "Launchpad", path: "/launchpad", icon: Rocket },
+    ],
+  },
+  {
+    group: "Operations",
+    items: [
+      { name: "Listings", path: "/listings", icon: Package },
+      { name: "Bookings", path: "/bookings", icon: CalendarDays },
+      { name: "Quotes", path: "/quotes", icon: FileText },
+      { name: "Claims", path: "/claims", icon: ShieldAlert },
+    ],
+  },
+  {
+    group: "Customers",
+    items: [
+      { name: "Communications", path: "/communications", icon: MessageSquare },
+      { name: "Contact Cards", path: "/contact-cards", icon: IdCard },
+    ],
+  },
+  {
+    group: "Tools",
+    items: [
+      { name: "Analytics", path: "/analytics", icon: BarChart3 },
+      { name: "Promo Codes", path: "/promo-codes", icon: Tag },
+      { name: "Waivers", path: "/waivers", icon: FileSignature },
+      { name: "Kiosk Mode", path: "/kiosk", icon: MonitorSmartphone },
+    ],
+  },
+  {
+    group: "Account",
+    items: [
+      { name: "Team", path: "/team", icon: Users },
+      { name: "My Wallet", path: "/wallet", icon: Wallet },
+      { name: "Billing", path: "/billing", icon: CreditCard },
+      { name: "Settings", path: "/settings", icon: Settings },
+      { name: "Feedback", path: "/feedback", icon: MessageSquarePlus },
+    ],
+  },
 ];
+
+const NAV_ITEMS: NavItem[] = NAV_GROUPS.flatMap(g => g.items);
 
 function TrialStatusBanner() {
   const slug = getAdminSlug();
@@ -106,21 +137,17 @@ export function AdminLayout({ children }: { children: React.ReactNode }) {
   const slug = getAdminSlug();
   const adminBase = `/${slug}/admin`;
 
-  // Extract slug from pathname (most reliable — admin is always /<slug>/admin/...)
   const base = import.meta.env.BASE_URL.replace(/\/+$/, "");
   const strippedPath = window.location.pathname.replace(base, "").replace(/^\/+/, "");
   const slugFromPath = strippedPath.split("/")[0] || slug;
   const storefrontHref = slugFromPath ? `${base}/${slugFromPath}` : base || "/";
 
-  // Fetch the tenant's business profile so we can use their logo as the favicon
   const { data: profile } = useGetBusinessProfile({
     query: { queryKey: ["/api/business", "admin-layout"] }
   });
   const companyLogoUrl = (profile as any)?.logoUrl as string | undefined;
   const companyName = (profile as any)?.name as string | undefined;
 
-  // Swap the browser-tab favicon to the tenant's logo while in their admin.
-  // Restore the OutdoorShare logo on unmount (navigating away from admin).
   useEffect(() => {
     const setFavicon = (href: string) => {
       let link = document.querySelector<HTMLLinkElement>("link#favicon");
@@ -169,28 +196,40 @@ export function AdminLayout({ children }: { children: React.ReactNode }) {
             </div>
           </Link>
         </div>
-        <nav className="p-4 flex-1 space-y-1 overflow-y-auto">
-          {NAV_ITEMS.map((item) => {
-            const href = `${adminBase}${item.path}`;
-            const isActive = item.path === ""
-              ? location === href
-              : location === href || location.startsWith(href + "/") || location.startsWith(href + "?");
-            return (
-              <Link 
-                key={item.name} 
-                href={href}
-                className={cn(
-                  "flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium transition-colors",
-                  isActive 
-                    ? "bg-primary text-primary-foreground" 
-                    : "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
-                )}
-              >
-                <item.icon className="w-4 h-4" />
-                {item.name}
-              </Link>
-            );
-          })}
+
+        <nav className="px-3 py-3 flex-1 overflow-y-auto space-y-4">
+          {NAV_GROUPS.map((group, gi) => (
+            <div key={gi}>
+              {group.group && (
+                <p className="px-2 mb-1 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/60 select-none">
+                  {group.group}
+                </p>
+              )}
+              <div className="space-y-0.5">
+                {group.items.map((item) => {
+                  const href = `${adminBase}${item.path}`;
+                  const isActive = item.path === ""
+                    ? location === href
+                    : location === href || location.startsWith(href + "/") || location.startsWith(href + "?");
+                  return (
+                    <Link
+                      key={item.name}
+                      href={href}
+                      className={cn(
+                        "flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium transition-colors",
+                        isActive
+                          ? "bg-primary text-primary-foreground"
+                          : "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+                      )}
+                    >
+                      <item.icon className="w-4 h-4 shrink-0" />
+                      {item.name}
+                    </Link>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
         </nav>
       </aside>
 
