@@ -47,6 +47,7 @@ function useCategories() {
 }
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
+const OPTIONAL_NUMERIC = new Set(['pricePerWeek', 'pricePerHour', 'depositAmount', 'ageRestriction']);
 
 export default function AdminListingsForm() {
   const contactCards = useContactCards();
@@ -95,9 +96,9 @@ export default function AdminListingsForm() {
     categoryId: null as number | null,
     status: 'draft' as any,
     pricePerDay: 0,
-    pricePerWeek: 0,
-    pricePerHour: 0,
-    depositAmount: 0,
+    pricePerWeek: null as number | null,
+    pricePerHour: null as number | null,
+    depositAmount: null as number | null,
     quantity: 1,
     imageUrls: [] as string[],
     location: '',
@@ -123,9 +124,9 @@ export default function AdminListingsForm() {
         categoryId: listing.categoryId || null,
         status: listing.status,
         pricePerDay: listing.pricePerDay,
-        pricePerWeek: listing.pricePerWeek || 0,
-        pricePerHour: listing.pricePerHour || 0,
-        depositAmount: listing.depositAmount || 0,
+        pricePerWeek: listing.pricePerWeek ?? null,
+        pricePerHour: listing.pricePerHour ?? null,
+        depositAmount: listing.depositAmount ?? null,
         quantity: listing.quantity,
         imageUrls: listing.imageUrls || [],
         location: listing.location || '',
@@ -159,7 +160,9 @@ export default function AdminListingsForm() {
     const { name, value, type } = e.target;
     setFormData(prev => ({
       ...prev,
-      [name]: type === 'number' ? (value ? Number(value) : 0) : value
+      [name]: type === 'number'
+        ? (value === '' ? (OPTIONAL_NUMERIC.has(name) ? null : 0) : Number(value))
+        : value
     }));
   };
 
