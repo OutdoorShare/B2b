@@ -379,6 +379,15 @@ router.post("/stripe/identity/session", async (req, res) => {
     const { tenantSlug, customerId, returnUrl } = req.body;
     if (!tenantSlug) { res.status(400).json({ error: "tenantSlug required" }); return; }
 
+    // If the customer is already verified, skip creating a new session
+    if (customerId) {
+      const [existing] = await db.select().from(customersTable).where(eq(customersTable.id, customerId));
+      if (existing?.identityVerificationStatus === "verified") {
+        res.json({ alreadyVerified: true });
+        return;
+      }
+    }
+
     const [tenant] = await db.select().from(tenantsTable).where(eq(tenantsTable.slug, tenantSlug));
     const isTestMode = !!(tenant?.testMode);
 

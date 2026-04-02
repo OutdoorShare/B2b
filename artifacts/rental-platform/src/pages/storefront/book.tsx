@@ -518,7 +518,12 @@ export default function StorefrontBook() {
         }),
       });
       const idData = await idRes.json();
-      if (idRes.ok && idData.clientSecret) {
+      if (idRes.ok && idData.alreadyVerified) {
+        // Customer already verified — skip the step entirely
+        setIdentityStatus("verified");
+        sessionStorage.removeItem(`identity_session_${listingId}`);
+        setTimeout(() => { setCompletePhase(isKiosk ? "photos" : "confirmed"); window.scrollTo(0, 0); }, 600);
+      } else if (idRes.ok && idData.clientSecret) {
         setIdentityClientSecret(idData.clientSecret);
         setIdentitySessionId(idData.sessionId);
         setIdentityIsTestMode(!!idData.testMode);
@@ -1023,6 +1028,14 @@ export default function StorefrontBook() {
         body: JSON.stringify({ tenantSlug: slug, customerId: session?.id ?? undefined, returnUrl: window.location.href }),
       });
       const idData = await idRes.json();
+      if (idRes.ok && idData.alreadyVerified) {
+        // Already verified — skip
+        setIdentityStatus("verified");
+        setIdentitySessionLoading(false);
+        sessionStorage.removeItem(`identity_session_${listingId}`);
+        setTimeout(() => { setCompletePhase(isKiosk ? "photos" : "confirmed"); window.scrollTo(0, 0); }, 600);
+        return;
+      }
       if (!idRes.ok || !idData.clientSecret) { setIdentitySessionFailed(true); return; }
 
       setIdentityClientSecret(idData.clientSecret);
