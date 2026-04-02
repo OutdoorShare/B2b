@@ -775,6 +775,19 @@ export default function StorefrontBook() {
     }
   }, [slug, email, name, listingId, toast]);
 
+  // Auto-create payment intent for logged-in or kiosk users as soon as all info is ready
+  useEffect(() => {
+    if (!session && !isKiosk) return;
+    if (clientSecret) return;
+    if (paymentConfirmed) return;
+    if (!email || !name) return;
+    if (!dateRange?.from || !dateRange?.to) return;
+    if (discountedTotal <= 0) return;
+    const cents = Math.round(discountedTotal * 100);
+    setShowStripeForm(true);
+    createPaymentIntent(cents);
+  }, [session, isKiosk, email, name, discountedTotal, clientSecret, paymentConfirmed, dateRange, createPaymentIntent]);
+
   if (!listingIdStr) {
     return (
       <div className="container mx-auto px-4 py-16 text-center">
@@ -1613,10 +1626,10 @@ export default function StorefrontBook() {
                               {isSubmitting ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Creating account…</> : <><ShieldCheck className="w-4 h-4 mr-2" />Create Account & Pay {appliedPromo ? `— $${discountedTotal.toFixed(2)}` : ""}</>}
                             </Button>
                           ) : (
-                            <Button size="lg" className="w-full h-13 text-base font-bold rounded-xl" onClick={handleContinueToPayment}>
-                              <CreditCard className="w-4 h-4 mr-2" />
-                              Enter Card Details{appliedPromo ? ` — $${discountedTotal.toFixed(2)}` : ""}
-                            </Button>
+                            <div className="flex items-center justify-center py-6 gap-3 text-muted-foreground">
+                              <Loader2 className="w-5 h-5 animate-spin" />
+                              <span>Preparing payment…</span>
+                            </div>
                           )}
                           <div className="flex justify-center">
                             <CardScanHelper />
