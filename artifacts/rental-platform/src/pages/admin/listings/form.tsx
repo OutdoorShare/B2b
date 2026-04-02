@@ -202,20 +202,25 @@ export default function AdminListingsForm() {
     { key: "photos",      label: "At least one photo", done: formData.imageUrls.length > 0 },
   ];
   const publishBlocked = formData.status === "active" && publishChecks.some(c => !c.done);
+  const [publishIntent, setPublishIntent] = useState(false);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (publishBlocked) {
+    const statusToSave = publishIntent ? "active" : formData.status;
+
+    // Validate before publishing
+    if (statusToSave === "active" && publishChecks.some(c => !c.done)) {
       toast({
         title: "Cannot publish listing",
-        description: "Please complete all required sections before setting status to Active.",
+        description: "Please complete all required sections before publishing.",
         variant: "destructive",
       });
+      setPublishIntent(false);
       return;
     }
 
-    const payload = { ...formData };
+    const payload = { ...formData, status: statusToSave };
 
     if (isEditing) {
       updateListing.mutate(
@@ -224,11 +229,12 @@ export default function AdminListingsForm() {
           onSuccess: (data) => {
             queryClient.setQueryData(getGetListingQueryKey(id), data);
             queryClient.invalidateQueries({ queryKey: getGetListingsQueryKey() });
-            toast({ title: "Listing updated successfully" });
+            toast({ title: statusToSave === "active" ? "Listing published!" : "Listing saved" });
             setLocation(adminPath("/listings"));
           },
           onError: () => {
             toast({ title: "Failed to update listing", variant: "destructive" });
+            setPublishIntent(false);
           }
         }
       );
@@ -238,11 +244,12 @@ export default function AdminListingsForm() {
         {
           onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: getGetListingsQueryKey() });
-            toast({ title: "Listing created successfully" });
+            toast({ title: statusToSave === "active" ? "Listing published!" : "Listing saved as draft" });
             setLocation(adminPath("/listings"));
           },
           onError: () => {
             toast({ title: "Failed to create listing", variant: "destructive" });
+            setPublishIntent(false);
           }
         }
       );
@@ -533,12 +540,12 @@ export default function AdminListingsForm() {
                 </CardTitle>
                 {publishBlocked && (
                   <CardDescription className="text-xs">
-                    Set status to <strong>Draft</strong> or fill in the missing sections below.
+                    Fill in the missing sections below to publish.
                   </CardDescription>
                 )}
                 {!publishBlocked && !allDone && (
                   <CardDescription className="text-xs">
-                    Complete all items before setting status to <strong>Active</strong>.
+                    Complete all items to use <strong>Save & Publish</strong>.
                   </CardDescription>
                 )}
               </CardHeader>
@@ -613,13 +620,27 @@ export default function AdminListingsForm() {
               </CardContent>
             </Card>
 
-            <div className="flex justify-end gap-4">
+            <div className="flex justify-end gap-3">
               <Button type="button" variant="outline" onClick={() => setLocation(adminPath("/listings"))}>
                 Cancel
               </Button>
-              <Button type="submit" disabled={isPending || publishBlocked}>
-                {isPending ? 'Saving...' : (isEditing ? 'Save Changes' : 'Create Listing')}
+              <Button
+                type="submit"
+                variant="outline"
+                disabled={isPending}
+                onClick={() => setPublishIntent(false)}
+              >
+                {isPending && !publishIntent ? 'Saving...' : (isEditing ? 'Save Changes' : 'Save as Draft')}
               </Button>
+              {formData.status !== "active" && (
+                <Button
+                  type="submit"
+                  disabled={isPending}
+                  onClick={() => setPublishIntent(true)}
+                >
+                  {isPending && publishIntent ? 'Publishing...' : 'Save & Publish'}
+                </Button>
+              )}
             </div>
           </div>
         </div>
