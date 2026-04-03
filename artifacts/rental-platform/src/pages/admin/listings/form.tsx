@@ -517,15 +517,16 @@ export default function AdminListingsForm() {
                         <PopoverContent side="top" className="w-80 text-sm space-y-2 p-4">
                           <p className="font-semibold text-foreground">How Security Deposits Work</p>
                           <p className="text-muted-foreground leading-relaxed">
-                            When a renter books, a hold is placed on their card for this amount — the money is <strong>not charged</strong> at that time.
+                            A security deposit is <strong>required on all rentals</strong>. The deposit is processed automatically at <strong>pickup time</strong> — when the renter submits their before-photos and completes the pickup process.
                           </p>
                           <ul className="text-muted-foreground space-y-1 list-disc list-inside leading-relaxed">
-                            <li>If the gear is returned in good condition, the hold is <strong>released</strong> and the renter is never charged.</li>
-                            <li>If there is damage, you can <strong>capture</strong> all or part of the deposit from the Booking detail page.</li>
+                            <li><strong>Rentals under 5 days</strong> — a hold is placed on the renter's card. The money is not charged unless there is damage.</li>
+                            <li><strong>Rentals 5 days or longer</strong> — the deposit is <strong>fully charged</strong> at pickup and refunded manually at return if no damage.</li>
                           </ul>
-                          <p className="text-muted-foreground leading-relaxed">
-                            Leave blank to skip the deposit for this listing.
-                          </p>
+                          <ul className="text-muted-foreground space-y-1 list-disc list-inside leading-relaxed">
+                            <li>If the gear is returned undamaged, release the hold (or issue a refund for long rentals) from the Booking detail page.</li>
+                            <li>If there is damage, capture the hold or keep the charge from the Booking detail page.</li>
+                          </ul>
                         </PopoverContent>
                       </Popover>
                     </div>

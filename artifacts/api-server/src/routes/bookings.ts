@@ -18,6 +18,70 @@ import {
   sendAdminBookingContactEmail,
 } from "../services/gmail";
 import { openai } from "@workspace/integrations-openai-ai-server";
+import { getStripeForTenant } from "../services/stripe";
+
+// ── Auto-trigger deposit at pickup ─────────────────────────────────────────────
+// Called on both pickup endpoints when isFirstCompletion is true.
+// Silently skips if: no deposit configured, no saved payment method, or
+// deposit was already processed (depositHoldIntentId already set).
+async function triggerDepositAtPickup(
+  booking: typeof bookingsTable.$inferSelect,
+  logger?: { warn: (obj: unknown, msg: string) => void }
+) {
+  try {
+    if (!booking.listingId || !booking.tenantId) return;
+    if (booking.depositHoldIntentId) return; // already processed
+
+    const [listing] = await db.select().from(listingsTable)
+      .where(eq(listingsTable.id, booking.listingId));
+    const depositAmountCents = listing?.depositAmount
+      ? Math.round(parseFloat(String(listing.depositAmount)) * 100) : 0;
+    if (depositAmountCents < 50) return; // no deposit on this listing
+
+    if (!booking.stripePaymentIntentId) return; // no card on file
+
+    const [tenant] = await db.select().from(tenantsTable)
+      .where(eq(tenantsTable.id, booking.tenantId));
+    if (!tenant) return;
+
+    const stripeClient = getStripeForTenant(!!tenant.testMode);
+    const originalPi = await stripeClient.paymentIntents.retrieve(booking.stripePaymentIntentId);
+    if (!originalPi.payment_method) return; // card not saved
+
+    const startMs = new Date(booking.startDate).getTime();
+    const endMs   = new Date(booking.endDate).getTime();
+    const rentalDays = Math.round((endMs - startMs) / (1000 * 60 * 60 * 24));
+    const isLongBooking = rentalDays >= 5;
+
+    const depositPi = await stripeClient.paymentIntents.create({
+      amount: depositAmountCents,
+      currency: "usd",
+      payment_method: String(originalPi.payment_method),
+      capture_method: isLongBooking ? "automatic" : "manual",
+      confirm: true,
+      off_session: true,
+      description: isLongBooking
+        ? `Security deposit (full charge, ${rentalDays}-day rental) — Booking #${booking.id} (${listing?.title ?? ""})`
+        : `Security deposit hold — Booking #${booking.id} (${listing?.title ?? ""})`,
+      metadata: {
+        booking_id: String(booking.id),
+        tenant_id: String(booking.tenantId),
+        type: isLongBooking ? "deposit_charge" : "deposit_hold",
+        rental_days: String(rentalDays),
+        triggered_by: "pickup",
+      },
+    });
+
+    const newStatus = isLongBooking ? "charged" : "authorized";
+    await db.update(bookingsTable)
+      .set({ depositHoldIntentId: depositPi.id, depositHoldStatus: newStatus, updatedAt: new Date() })
+      .where(eq(bookingsTable.id, booking.id));
+  } catch (err: any) {
+    // Non-fatal — log but don't block pickup from completing
+    logger?.warn({ err: err.message }, "[deposit] Auto-trigger at pickup failed (non-fatal)");
+    console.warn("[deposit] Auto-trigger at pickup failed:", err.message);
+  }
+}
 
 const UPLOADS_DIR_BOOKINGS = path.resolve(process.cwd(), "uploads");
 
@@ -637,34 +701,39 @@ router.post("/bookings/:id/before-photos", pickupUpload.array("photos", 15), asy
       updatedAt: new Date(),
     }).where(eq(bookingsTable.id, booking.id));
 
-    // Send "ready to adventure" email on first completion
-    if (isFirstCompletion && booking.customerEmail) {
-      (async () => {
-        try {
-          let companyName = "Rental Company";
-          let adminEmail: string | undefined;
-          if (booking.tenantId) {
-            const [biz] = await db.select({ businessName: businessProfileTable.businessName })
-              .from(businessProfileTable).where(eq(businessProfileTable.tenantId, booking.tenantId));
-            if (biz?.businessName) companyName = biz.businessName;
-            const [t] = await db.select({ email: tenantsTable.email })
-              .from(tenantsTable).where(eq(tenantsTable.id, booking.tenantId));
-            if (t?.email) adminEmail = t.email;
+    if (isFirstCompletion) {
+      // Auto-trigger deposit hold/charge at pickup (non-fatal)
+      await triggerDepositAtPickup(booking, req.log);
+
+      // Send "ready to adventure" email
+      if (booking.customerEmail) {
+        (async () => {
+          try {
+            let companyName = "Rental Company";
+            let adminEmail: string | undefined;
+            if (booking.tenantId) {
+              const [biz] = await db.select({ businessName: businessProfileTable.businessName })
+                .from(businessProfileTable).where(eq(businessProfileTable.tenantId, booking.tenantId));
+              if (biz?.businessName) companyName = biz.businessName;
+              const [t] = await db.select({ email: tenantsTable.email })
+                .from(tenantsTable).where(eq(tenantsTable.id, booking.tenantId));
+              if (t?.email) adminEmail = t.email;
+            }
+            await sendReadyToAdventureEmail({
+              customerName: booking.customerName,
+              customerEmail: booking.customerEmail,
+              bookingId: booking.id,
+              listingTitle: booking.listingId ? (await db.select({ title: listingsTable.title }).from(listingsTable).where(eq(listingsTable.id, booking.listingId)))[0]?.title ?? "your rental" : "your rental",
+              startDate: booking.startDate,
+              endDate: booking.endDate,
+              companyName,
+              adminEmail,
+            });
+          } catch (emailErr) {
+            req.log.warn(emailErr, "Failed to send ready-to-adventure email");
           }
-          await sendReadyToAdventureEmail({
-            customerName: booking.customerName,
-            customerEmail: booking.customerEmail,
-            bookingId: booking.id,
-            listingTitle: booking.listingId ? (await db.select({ title: listingsTable.title }).from(listingsTable).where(eq(listingsTable.id, booking.listingId)))[0]?.title ?? "your rental" : "your rental",
-            startDate: booking.startDate,
-            endDate: booking.endDate,
-            companyName,
-            adminEmail,
-          });
-        } catch (emailErr) {
-          req.log.warn(emailErr, "Failed to send ready-to-adventure email");
-        }
-      })();
+        })();
+      }
     }
 
     res.json({ ok: true, photos: allPhotos, count: allPhotos.length });
@@ -696,37 +765,42 @@ router.post("/pickup/:token/photos", pickupUpload.array("photos", 20), async (re
       updatedAt: new Date(),
     }).where(eq(bookingsTable.id, booking.id));
 
-    // Send "ready to adventure" email on first completion
-    if (isFirstCompletion && booking.customerEmail) {
-      (async () => {
-        try {
-          let companyName = "Rental Company";
-          let adminEmail: string | undefined;
-          if (booking.tenantId) {
-            const [biz] = await db.select({ businessName: businessProfileTable.businessName })
-              .from(businessProfileTable).where(eq(businessProfileTable.tenantId, booking.tenantId));
-            if (biz?.businessName) companyName = biz.businessName;
-            const [t] = await db.select({ email: tenantsTable.email })
-              .from(tenantsTable).where(eq(tenantsTable.id, booking.tenantId));
-            if (t?.email) adminEmail = t.email;
+    if (isFirstCompletion) {
+      // Auto-trigger deposit hold/charge at pickup (non-fatal)
+      await triggerDepositAtPickup(booking, req.log);
+
+      // Send "ready to adventure" email
+      if (booking.customerEmail) {
+        (async () => {
+          try {
+            let companyName = "Rental Company";
+            let adminEmail: string | undefined;
+            if (booking.tenantId) {
+              const [biz] = await db.select({ businessName: businessProfileTable.businessName })
+                .from(businessProfileTable).where(eq(businessProfileTable.tenantId, booking.tenantId));
+              if (biz?.businessName) companyName = biz.businessName;
+              const [t] = await db.select({ email: tenantsTable.email })
+                .from(tenantsTable).where(eq(tenantsTable.id, booking.tenantId));
+              if (t?.email) adminEmail = t.email;
+            }
+            const listingTitle = booking.listingId
+              ? (await db.select({ title: listingsTable.title }).from(listingsTable).where(eq(listingsTable.id, booking.listingId)))[0]?.title ?? "your rental"
+              : "your rental";
+            await sendReadyToAdventureEmail({
+              customerName: booking.customerName,
+              customerEmail: booking.customerEmail,
+              bookingId: booking.id,
+              listingTitle,
+              startDate: booking.startDate,
+              endDate: booking.endDate,
+              companyName,
+              adminEmail,
+            });
+          } catch (emailErr) {
+            req.log.warn(emailErr, "Failed to send ready-to-adventure email");
           }
-          const listingTitle = booking.listingId
-            ? (await db.select({ title: listingsTable.title }).from(listingsTable).where(eq(listingsTable.id, booking.listingId)))[0]?.title ?? "your rental"
-            : "your rental";
-          await sendReadyToAdventureEmail({
-            customerName: booking.customerName,
-            customerEmail: booking.customerEmail,
-            bookingId: booking.id,
-            listingTitle,
-            startDate: booking.startDate,
-            endDate: booking.endDate,
-            companyName,
-            adminEmail,
-          });
-        } catch (emailErr) {
-          req.log.warn(emailErr, "Failed to send ready-to-adventure email");
-        }
-      })();
+        })();
+      }
     }
 
     res.json({ ok: true, photos: allPhotos, count: allPhotos.length });
