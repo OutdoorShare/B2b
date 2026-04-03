@@ -1,0 +1,152 @@
+uploads = []
+generated = []
+
+[[outputs]]
+id = "dNB2zbroCDiRmYIx0SChq"
+uri = "file://attached_assets/stock_images/polaris-sportsman-570-atv.jpg"
+type = "image"
+title = "Polaris Sportsman 570 red ATV off-road trail riding outdoor adventure"
+
+[[outputs]]
+id = "6Vmw9n4x6pswmwrDaAmbY"
+uri = "file://attached_assets/stock_images/can-am-outlander-atv.jpg"
+type = "image"
+title = "Can-Am Outlander ATV off-road dirt trail adventure outdoor"
+
+[[outputs]]
+id = "L9VbNVHI6JWdxVxPJNCfH"
+uri = "file://attached_assets/stock_images/polaris-rzr-utv.jpg"
+type = "image"
+title = "Polaris RZR side-by-side UTV sport off-road adventure desert"
+
+[[outputs]]
+id = "s77ooMRoy3oDQ_kN0aPYq"
+uri = "file://attached_assets/stock_images/can-am-maverick-utv.jpg"
+type = "image"
+title = "Can-Am Maverick X3 side-by-side UTV off-road racing dunes"
+
+[[outputs]]
+id = "zEQEB0e-dWwRKgwROZFpJ"
+uri = "file://attached_assets/stock_images/pontoon-boat-lake.jpg"
+type = "image"
+title = "pontoon boat on lake summer family fun blue water"
+
+[[outputs]]
+id = "4wqFiNRxIdAwmzbaIKCNO"
+uri = "file://attached_assets/stock_images/fishing-boat-lake.jpg"
+type = "image"
+title = "aluminum fishing bass boat on lake anglers fishing"
+
+[[outputs]]
+id = "nsfRacX2AWdyhmytiGEGk"
+uri = "file://attached_assets/stock_images/sea-doo-spark-jetski.jpg"
+type = "image"
+title = "Sea-Doo personal watercraft jet ski on water action splash"
+
+[[outputs]]
+id = "guXnHNZk3m3EvPi1EeSdf"
+uri = "file://attached_assets/stock_images/yamaha-waverunner.jpg"
+type = "image"
+title = "Yamaha WaveRunner jet ski personal watercraft blue water speed"
+
+[[outputs]]
+id = "i_Mw5iPttFjbmUh2pRvOb"
+uri = "file://attached_assets/stock_images/kawasaki-jetski-ultra.jpg"
+type = "image"
+title = "Kawasaki Jet Ski Ultra high-performance watercraft speed ocean"
+
+[[outputs]]
+id = "mYUzqz6uWqXHV_qDXHo-_"
+uri = "file://attached_assets/stock_images/honda-crf450r-dirt-bike.jpg"
+type = "image"
+title = "Honda CRF450R motocross dirt bike red jumping trail riding"
+
+[[outputs]]
+id = "emiSRJbXWh8Lm0Ifp0rBv"
+uri = "file://attached_assets/stock_images/ktm-300-dirt-bike.jpg"
+type = "image"
+title = "KTM 300 orange dirt bike off-road trail enduro riding"
+
+[[outputs]]
+id = "1zq7do04I79NxeixdciFt"
+uri = "file://attached_assets/stock_images/trek-powerfly-ebike.jpg"
+type = "image"
+title = "Trek electric mountain bike ebike forest trail riding"
+
+[[outputs]]
+id = "rjoLGmqtkqbPUlVdRpy_t"
+uri = "file://attached_assets/stock_images/specialized-turbo-levo.jpg"
+type = "image"
+title = "Specialized electric mountain bike full suspension trail riding"
+
+[[outputs]]
+id = "j8ORQRrU9BqO8-NXemOs0"
+uri = "file://attached_assets/stock_images/rad-power-radrover.jpg"
+type = "image"
+title = "Rad Power fat tire electric bike cruising beach trail"
+
+[[outputs]]
+id = "MytR_3DKwJFcRRBKxXTNf"
+uri = "file://attached_assets/stock_images/airstream-bambi-trailer.jpg"
+type = "image"
+title = "Airstream silver travel trailer glamping outdoor campsite luxury"
+
+[[outputs]]
+id = "gH7EUkMau99b9GOQkaLU5"
+uri = "file://attached_assets/stock_images/lance-truck-camper.jpg"
+type = "image"
+title = "Lance truck camper mounted on pickup truck mountains adventure"
+
+[[outputs]]
+id = "ObCGa2sHly-bulO_SmVWZ"
+uri = "file://attached_assets/stock_images/class-a-motorhome-rv.jpg"
+type = "image"
+title = "Class A motorhome Forest River luxury RV highway travel"
+
+[[outputs]]
+id = "r_LsL9xY3inny4W5MZBWn"
+uri = "file://attached_assets/stock_images/winnebago-class-c-rv.jpg"
+type = "image"
+title = "Class C Winnebago motorhome campground family vacation RV"
+
+[[outputs]]
+id = "bBVpznCVDBpQn1t9FLlZx"
+uri = "file://attached_assets/stock_images/ski-doo-backcountry-snowmobile.jpg"
+type = "image"
+title = "Ski-Doo snowmobile deep powder snow backcountry mountain winter"
+
+[[outputs]]
+id = "2B86yRx1UVneLKm6Hreae"
+uri = "file://attached_assets/stock_images/arctic-cat-snowmobile.jpg"
+type = "image"
+title = "Arctic Cat snowmobile groomed trail winter speed action"
+
+[[outputs]]
+id = "4Sv57qb4bi7ftitamJj4t"
+uri = "file://attached_assets/stock_images/ford-f350-towing-truck.jpg"
+type = "image"
+title = "Ford F-350 Super Duty diesel pickup truck towing trailer heavy duty"
+
+[[outputs]]
+id = "BdSu_cxK7ehw5IGmSSIvC"
+uri = "file://attached_assets/stock_images/ram-3500-diesel-truck.jpg"
+type = "image"
+title = "Ram 3500 Laramie diesel heavy duty pickup truck mountains"
+
+[[outputs]]
+id = "dve_KINNNZlZQab7SZfwJ"
+uri = "file://attached_assets/stock_images/enclosed-cargo-trailer.jpg"
+type = "image"
+title = "enclosed cargo trailer white v-nose parked outdoors utility"
+
+[[outputs]]
+id = "awyswSdjEmmfzhRFvE5C5"
+uri = "file://attached_assets/stock_images/open-utility-flatbed-trailer.jpg"
+type = "image"
+title = "open utility flatbed trailer Big Tex equipment hauling"
+
+[[outputs]]
+id = "G5eAADRA5ednqEcifT5MR"
+uri = "file://attached_assets/stock_images/hydraulic-dump-trailer.jpg"
+type = "image"
+title = "dump trailer hydraulic heavy duty landscaping construction site"
