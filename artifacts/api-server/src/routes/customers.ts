@@ -42,17 +42,14 @@ router.post("/customers/register", async (req, res) => {
     const tenantSlug = (slug ?? "").trim().toLowerCase();
     const normalEmail = email.toLowerCase().trim();
 
-    // Check uniqueness within this tenant
+    // Check uniqueness across all tenants (accounts work cross-tenant)
     const [existing] = await db
       .select()
       .from(customersTable)
-      .where(and(
-        eq(customersTable.email, normalEmail),
-        eq(customersTable.tenantSlug, tenantSlug),
-      ));
+      .where(eq(customersTable.email, normalEmail));
 
     if (existing) {
-      res.status(409).json({ error: "An account with this email already exists" });
+      res.status(409).json({ error: "An account with this email already exists. Please sign in instead." });
       return;
     }
 
@@ -176,6 +173,15 @@ router.post("/customers/login", async (req, res) => {
           eq(customersTable.email, normalEmail),
           eq(customersTable.tenantSlug, ""),
         )))[0];
+    }
+
+    if (!customer) {
+      // Cross-tenant: renter accounts work across all companies
+      customer = (await db
+        .select()
+        .from(customersTable)
+        .where(eq(customersTable.email, normalEmail))
+        .limit(1))[0];
     }
 
     if (!customer) {
