@@ -1489,7 +1489,7 @@ export default function StorefrontBook() {
         {completePhase !== "verification" && completePhase !== "photos" && completePhase !== "confirmed" && (
           <Button variant="ghost" className="mb-6 pl-0 hover:bg-transparent text-muted-foreground" onClick={() => {
             if (step === "book") {
-              if (isKiosk) { setLocation(sfBase || "/"); }
+              if (isKiosk) { setLocation(`${sfBase}/admin/kiosk`); }
               else { window.history.back(); }
             } else {
               setStep("book"); window.scrollTo({ top: 0, behavior: "smooth" });
@@ -2895,7 +2895,7 @@ export default function StorefrontBook() {
                               size="lg"
                               variant="outline"
                               className="w-full font-semibold"
-                              onClick={() => setLocation(sfBase || "/")}
+                              onClick={() => setLocation(`${sfBase}/admin/kiosk`)}
                             >
                               <ArrowLeft className="w-4 h-4 mr-2" />
                               Return to Kiosk
@@ -2925,9 +2925,16 @@ export default function StorefrontBook() {
                             </div>
                           )}
                           <Separator />
-                          <Button variant="outline" size="sm" className="w-full" onClick={() => setLocation(sfBase || "/")}>
-                            Browse More Listings
-                          </Button>
+                          {isKiosk ? (
+                            <Button variant="outline" size="sm" className="w-full" onClick={() => setLocation(`${sfBase}/admin/kiosk`)}>
+                              <ArrowLeft className="w-3.5 h-3.5 mr-1.5" />
+                              Return to Kiosk
+                            </Button>
+                          ) : (
+                            <Button variant="outline" size="sm" className="w-full" onClick={() => setLocation(sfBase || "/")}>
+                              Browse More Listings
+                            </Button>
+                          )}
                         </div>
                       </div>
 
