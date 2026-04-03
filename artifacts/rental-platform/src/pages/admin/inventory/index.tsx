@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import {
   Plus, Search, Package, Wrench, AlertTriangle, CheckCircle2,
-  Archive, Clock, ChevronRight, ImageIcon, Filter,
+  Archive, Clock, ChevronRight, ImageIcon, Filter, Tag,
 } from "lucide-react";
 
 type ProductStatus = "available" | "maintenance" | "damaged" | "reserved" | "out_of_service";
@@ -26,6 +26,8 @@ type Product = {
   createdAt: string;
 };
 
+type Category = { id: number; name: string; slug: string };
+
 const STATUS_CONFIG: Record<ProductStatus, { label: string; color: string; icon: React.ElementType }> = {
   available:     { label: "Available",     color: "bg-green-100 text-green-700 border-green-200",   icon: CheckCircle2 },
   maintenance:   { label: "Maintenance",   color: "bg-orange-100 text-orange-700 border-orange-200", icon: Wrench },
@@ -39,9 +41,11 @@ const ALL_STATUSES = Object.keys(STATUS_CONFIG) as ProductStatus[];
 export default function AdminInventory() {
   const { toast } = useToast();
   const [products, setProducts] = useState<Product[]>([]);
+  const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [filterStatus, setFilterStatus] = useState<ProductStatus | "all">("all");
+  const [filterCategory, setFilterCategory] = useState<number | null>(null);
   const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
   const adminHeaders = (): Record<string, string> => {
@@ -51,8 +55,12 @@ export default function AdminInventory() {
 
   const fetchProducts = async () => {
     try {
-      const res = await fetch(`${BASE}/api/products`, { headers: adminHeaders() });
-      if (res.ok) setProducts(await res.json());
+      const [prodRes, catRes] = await Promise.all([
+        fetch(`${BASE}/api/products`, { headers: adminHeaders() }),
+        fetch(`${BASE}/api/categories`, { headers: adminHeaders() }),
+      ]);
+      if (prodRes.ok) setProducts(await prodRes.json());
+      if (catRes.ok) setCategories(await catRes.json());
     } catch {
       toast({ title: "Failed to load products", variant: "destructive" });
     } finally {
@@ -68,7 +76,8 @@ export default function AdminInventory() {
       || (p.sku ?? "").toLowerCase().includes(search.toLowerCase())
       || (p.brand ?? "").toLowerCase().includes(search.toLowerCase());
     const matchStatus = filterStatus === "all" || p.status === filterStatus;
-    return matchSearch && matchStatus;
+    const matchCategory = filterCategory === null || p.categoryId === filterCategory;
+    return matchSearch && matchStatus && matchCategory;
   });
 
   // Summary counts
@@ -159,6 +168,36 @@ export default function AdminInventory() {
             })}
           </div>
         </div>
+
+        {/* Category filter */}
+        {categories.length > 0 && (
+          <div className="flex items-center gap-1.5 flex-wrap pt-1 border-t">
+            <Tag className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+            <button
+              onClick={() => setFilterCategory(null)}
+              className={`px-3 py-1 rounded-full text-xs font-semibold transition-colors border ${
+                filterCategory === null
+                  ? "bg-primary text-primary-foreground border-primary"
+                  : "bg-muted/50 text-muted-foreground border-transparent hover:border-border hover:text-foreground"
+              }`}
+            >
+              All Categories
+            </button>
+            {categories.map(cat => (
+              <button
+                key={cat.id}
+                onClick={() => setFilterCategory(filterCategory === cat.id ? null : cat.id)}
+                className={`px-3 py-1 rounded-full text-xs font-semibold transition-colors border ${
+                  filterCategory === cat.id
+                    ? "bg-primary text-primary-foreground border-primary"
+                    : "bg-muted/50 text-muted-foreground border-transparent hover:border-border hover:text-foreground"
+                }`}
+              >
+                {cat.name}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Product list */}

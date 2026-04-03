@@ -4,7 +4,10 @@ import { Link, useLocation } from "wouter";
 import {
   useGetBookings,
   useUpdateBooking,
-  getGetBookingsQueryKey
+  useGetCategories,
+  useGetListings,
+  getGetBookingsQueryKey,
+  getGetListingsQueryKey,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent } from "@/components/ui/card";
@@ -16,7 +19,7 @@ import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import {
   CalendarDays, Eye, MoreHorizontal, CheckCircle,
-  List, ChevronLeft, ChevronRight, Plus, Search, X
+  List, ChevronLeft, ChevronRight, Plus, Search, X, Tag
 } from "lucide-react";
 import {
   format, startOfMonth, endOfMonth, startOfWeek, endOfWeek,
@@ -98,6 +101,7 @@ function getStatusBadge(status: string) {
 export default function AdminBookings() {
   const [tab, setTab] = useState<TabKey>("recent");
   const [search, setSearch] = useState("");
+  const [filterCategory, setFilterCategory] = useState<number | null>(null);
   const [view, setView] = useState<ViewMode>("calendar");
   const [calendarMonth, setCalendarMonth] = useState(new Date());
   const { toast } = useToast();
@@ -109,6 +113,20 @@ export default function AdminBookings() {
     {},
     { query: { queryKey: getGetBookingsQueryKey({}) } }
   );
+
+  // Categories and listings for cross-reference filtering
+  const { data: categories = [] } = useGetCategories();
+  const { data: allListings = [] } = useGetListings(
+    {},
+    { query: { queryKey: getGetListingsQueryKey({}) } }
+  );
+
+  // Build listingId → categoryId map
+  const listingCategoryMap = useMemo(() => {
+    const m = new Map<number, number | null>();
+    (allListings as any[]).forEach((l: any) => m.set(l.id, l.categoryId ?? null));
+    return m;
+  }, [allListings]);
 
   const updateBooking = useUpdateBooking();
 
@@ -159,17 +177,20 @@ export default function AdminBookings() {
 
   const displayed = useMemo(() => {
     const q = search.trim().toLowerCase();
-    if (!q) return tabFiltered;
-    return tabFiltered.filter(b =>
-      (b.customerName ?? "").toLowerCase().includes(q) ||
-      (b.customerEmail ?? "").toLowerCase().includes(q) ||
-      (b.listingTitle ?? "").toLowerCase().includes(q) ||
-      (b.status ?? "").toLowerCase().includes(q) ||
-      String(b.id).includes(q) ||
-      (b.startDate ?? "").includes(q) ||
-      (b.endDate ?? "").includes(q)
-    );
-  }, [tabFiltered, search]);
+    return tabFiltered.filter(b => {
+      const matchSearch = !q ||
+        (b.customerName ?? "").toLowerCase().includes(q) ||
+        (b.customerEmail ?? "").toLowerCase().includes(q) ||
+        (b.listingTitle ?? "").toLowerCase().includes(q) ||
+        (b.status ?? "").toLowerCase().includes(q) ||
+        String(b.id).includes(q) ||
+        (b.startDate ?? "").includes(q) ||
+        (b.endDate ?? "").includes(q);
+      const matchCategory = filterCategory === null ||
+        listingCategoryMap.get((b as any).listingId) === filterCategory;
+      return matchSearch && matchCategory;
+    });
+  }, [tabFiltered, search, filterCategory, listingCategoryMap]);
 
   // ── Calendar helpers ──────────────────────────────────────────────────
   const calendarDays = (() => {
@@ -239,45 +260,77 @@ export default function AdminBookings() {
       {view === "list" && (
         <Card className="overflow-hidden">
           {/* Tabs + Search bar */}
-          <div className="px-4 py-3 border-b bg-muted/20 flex flex-col sm:flex-row sm:items-center gap-3">
-            {/* Tabs */}
-            <div className="flex items-center gap-1 flex-wrap">
-              {TABS.map(t => (
-                <button
-                  key={t.key}
-                  onClick={() => setTab(t.key)}
-                  className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-colors flex items-center gap-1.5 ${
-                    tab === t.key
-                      ? "bg-primary text-primary-foreground"
-                      : "bg-muted text-muted-foreground hover:bg-muted/80"
-                  }`}
-                >
-                  {t.label}
-                  <span className={`text-[10px] px-1.5 py-px rounded-full ${tab === t.key ? "bg-primary-foreground/20 text-primary-foreground" : "bg-background text-muted-foreground"}`}>
-                    {tabCounts[t.key]}
-                  </span>
-                </button>
-              ))}
+          <div className="px-4 py-3 border-b bg-muted/20 flex flex-col gap-3">
+            <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+              {/* Status tabs */}
+              <div className="flex items-center gap-1 flex-wrap">
+                {TABS.map(t => (
+                  <button
+                    key={t.key}
+                    onClick={() => setTab(t.key)}
+                    className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-colors flex items-center gap-1.5 ${
+                      tab === t.key
+                        ? "bg-primary text-primary-foreground"
+                        : "bg-muted text-muted-foreground hover:bg-muted/80"
+                    }`}
+                  >
+                    {t.label}
+                    <span className={`text-[10px] px-1.5 py-px rounded-full ${tab === t.key ? "bg-primary-foreground/20 text-primary-foreground" : "bg-background text-muted-foreground"}`}>
+                      {tabCounts[t.key]}
+                    </span>
+                  </button>
+                ))}
+              </div>
+
+              {/* Search */}
+              <div className="relative sm:ml-auto w-full sm:w-72">
+                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
+                <input
+                  value={search}
+                  onChange={e => setSearch(e.target.value)}
+                  placeholder="Search name, listing, date, status…"
+                  className="w-full h-9 pl-8 pr-8 rounded-lg border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+                />
+                {search && (
+                  <button
+                    onClick={() => setSearch("")}
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                )}
+              </div>
             </div>
 
-            {/* Search */}
-            <div className="relative sm:ml-auto w-full sm:w-72">
-              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
-              <input
-                value={search}
-                onChange={e => setSearch(e.target.value)}
-                placeholder="Search name, listing, date, status…"
-                className="w-full h-9 pl-8 pr-8 rounded-lg border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
-              />
-              {search && (
+            {/* Category filter */}
+            {(categories as any[]).length > 0 && (
+              <div className="flex items-center gap-1.5 flex-wrap border-t pt-2.5">
+                <Tag className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
                 <button
-                  onClick={() => setSearch("")}
-                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                  onClick={() => setFilterCategory(null)}
+                  className={`px-3 py-1 rounded-full text-xs font-semibold transition-colors border ${
+                    filterCategory === null
+                      ? "bg-primary text-primary-foreground border-primary"
+                      : "bg-muted/50 text-muted-foreground border-transparent hover:border-border hover:text-foreground"
+                  }`}
                 >
-                  <X className="w-3.5 h-3.5" />
+                  All Categories
                 </button>
-              )}
-            </div>
+                {(categories as any[]).map((cat: any) => (
+                  <button
+                    key={cat.id}
+                    onClick={() => setFilterCategory(filterCategory === cat.id ? null : cat.id)}
+                    className={`px-3 py-1 rounded-full text-xs font-semibold transition-colors border ${
+                      filterCategory === cat.id
+                        ? "bg-primary text-primary-foreground border-primary"
+                        : "bg-muted/50 text-muted-foreground border-transparent hover:border-border hover:text-foreground"
+                    }`}
+                  >
+                    {cat.name}
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
 
           <CardContent className="p-0">

@@ -4,10 +4,11 @@ import { Link, useLocation } from "wouter";
 import { 
   useGetListings, 
   useDeleteListing,
+  useGetCategories,
   getGetListingsQueryKey
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { 
@@ -20,7 +21,7 @@ import {
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, Search, Edit, Trash2, Package, ChevronRight, Upload, Link2, Check } from "lucide-react";
+import { Plus, Search, Edit, Trash2, Package, ChevronRight, Upload, Link2, Check, Tag } from "lucide-react";
 import { getAdminSlug } from "@/lib/admin-nav";
 import {
   AlertDialog,
@@ -36,6 +37,7 @@ import {
 
 export default function AdminListings() {
   const [search, setSearch] = useState("");
+  const [categoryFilter, setCategoryFilter] = useState<number | null>(null);
   const [copiedId, setCopiedId] = useState<number | null>(null);
   const [, setLocation] = useLocation();
   const { toast } = useToast();
@@ -50,9 +52,16 @@ export default function AdminListings() {
   };
   const queryClient = useQueryClient();
 
+  const { data: categories = [] } = useGetCategories();
+
+  const queryParams = {
+    search: search || undefined,
+    categoryId: categoryFilter ?? undefined,
+  };
+
   const { data: listings, isLoading } = useGetListings(
-    { search: search || undefined },
-    { query: { queryKey: getGetListingsQueryKey({ search: search || undefined }) } }
+    queryParams,
+    { query: { queryKey: getGetListingsQueryKey(queryParams) } }
   );
 
   const deleteListing = useDeleteListing();
@@ -96,7 +105,8 @@ export default function AdminListings() {
       </div>
 
       <Card>
-        <CardHeader className="pb-4 border-b">
+        <CardHeader className="pb-3 border-b space-y-3">
+          {/* Search row */}
           <div className="flex items-center gap-4">
             <div className="relative flex-1 max-w-sm">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -108,6 +118,36 @@ export default function AdminListings() {
               />
             </div>
           </div>
+
+          {/* Category filter tabs */}
+          {categories.length > 0 && (
+            <div className="flex items-center gap-1.5 flex-wrap">
+              <Tag className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+              <button
+                onClick={() => setCategoryFilter(null)}
+                className={`px-3 py-1 rounded-full text-xs font-semibold transition-colors border ${
+                  categoryFilter === null
+                    ? "bg-primary text-primary-foreground border-primary"
+                    : "bg-muted/50 text-muted-foreground border-transparent hover:border-border hover:text-foreground"
+                }`}
+              >
+                All
+              </button>
+              {(categories as any[]).map((cat: any) => (
+                <button
+                  key={cat.id}
+                  onClick={() => setCategoryFilter(categoryFilter === cat.id ? null : cat.id)}
+                  className={`px-3 py-1 rounded-full text-xs font-semibold transition-colors border ${
+                    categoryFilter === cat.id
+                      ? "bg-primary text-primary-foreground border-primary"
+                      : "bg-muted/50 text-muted-foreground border-transparent hover:border-border hover:text-foreground"
+                  }`}
+                >
+                  {cat.name}
+                </button>
+              ))}
+            </div>
+          )}
         </CardHeader>
         <CardContent className="p-0">
           {isLoading ? (
@@ -204,10 +244,16 @@ export default function AdminListings() {
             <div className="py-24 text-center flex flex-col items-center">
               <Package className="w-12 h-12 text-muted mb-4" />
               <h3 className="text-lg font-medium mb-1">No listings found</h3>
-              <p className="text-muted-foreground mb-4">You haven't added any listings yet.</p>
-              <Link href={adminPath("/listings/new")}>
-                <Button variant="outline">Create your first listing</Button>
-              </Link>
+              <p className="text-muted-foreground mb-4">
+                {categoryFilter
+                  ? "No listings in this category. Try a different filter."
+                  : "You haven't added any listings yet."}
+              </p>
+              {!categoryFilter && (
+                <Link href={adminPath("/listings/new")}>
+                  <Button variant="outline">Create your first listing</Button>
+                </Link>
+              )}
             </div>
           )}
         </CardContent>
