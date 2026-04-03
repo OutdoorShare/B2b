@@ -210,8 +210,10 @@ function TrialExpiredPaywall({ companyName, companyEmail }: { companyName: strin
 
 function TrialBanner({ trialEndsAt }: { trialEndsAt: string }) {
   const endsAt = new Date(trialEndsAt);
-  const hoursLeft = Math.max(0, Math.ceil((endsAt.getTime() - Date.now()) / (1000 * 60 * 60)));
-  const label = hoursLeft <= 1 ? "<1h" : `${hoursLeft}h`;
+  const msLeft = Math.max(0, endsAt.getTime() - Date.now());
+  const daysLeft = Math.ceil(msLeft / (1000 * 60 * 60 * 24));
+  const hoursLeft = Math.ceil(msLeft / (1000 * 60 * 60));
+  const label = daysLeft > 1 ? `${daysLeft} days` : hoursLeft <= 1 ? "less than 1 hour" : `${hoursLeft} hour${hoursLeft === 1 ? "" : "s"}`;
 
   return (
     <div className="w-full px-4 py-1 flex items-center justify-center gap-2 bg-gray-950 border-b border-white/5">
@@ -225,6 +227,30 @@ function TrialBanner({ trialEndsAt }: { trialEndsAt: string }) {
         className="text-[11px] text-white/35 hover:text-white/60 transition-colors underline underline-offset-2"
       >
         Upgrade
+      </a>
+    </div>
+  );
+}
+
+function GraceBanner({ graceEndsAt }: { graceEndsAt: string }) {
+  const endsAt = new Date(graceEndsAt);
+  const msLeft = Math.max(0, endsAt.getTime() - Date.now());
+  const daysLeft = Math.ceil(msLeft / (1000 * 60 * 60 * 24));
+  const hoursLeft = Math.ceil(msLeft / (1000 * 60 * 60));
+  const label = daysLeft > 1 ? `${daysLeft} days` : hoursLeft <= 1 ? "less than 1 hour" : `${hoursLeft} hour${hoursLeft === 1 ? "" : "s"}`;
+
+  return (
+    <div className="w-full px-4 py-2 flex items-center justify-center gap-2 bg-amber-950 border-b border-amber-800/40">
+      <Clock className="w-3 h-3 text-amber-400 shrink-0" />
+      <span className="text-[11px] text-amber-300 tracking-wide font-medium">
+        Your free trial has ended &mdash; grace period expires in {label}. Your storefront will go offline after that.
+      </span>
+      <span className="text-amber-700">·</span>
+      <a
+        href="/get-started"
+        className="text-[11px] text-amber-400 hover:text-amber-200 transition-colors underline underline-offset-2 font-semibold"
+      >
+        Upgrade now
       </a>
     </div>
   );
@@ -387,9 +413,14 @@ export function StorefrontLayout({ children }: { children: React.ReactNode }) {
         />
       )}
 
-      {/* Subtle trial bar */}
+      {/* Subtle trial bar — shown while trial is still active */}
       {trialActive && trialEndsAt && (
         <TrialBanner trialEndsAt={trialEndsAt} />
+      )}
+
+      {/* Grace period warning — trial expired but storefront still online (3-day window) */}
+      {trialExpired && !isBlocked && graceEndsAt && (
+        <GraceBanner graceEndsAt={graceEndsAt} />
       )}
 
       {/* ── Tenant header ── */}

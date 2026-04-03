@@ -88,20 +88,23 @@ function TrialStatusBanner() {
     query: { queryKey: ["/api/business", "admin"] }
   });
 
-  const trialActive = (profile as any)?.trialActive as boolean | undefined;
+  const trialActive  = (profile as any)?.trialActive  as boolean | undefined;
   const trialExpired = (profile as any)?.trialExpired as boolean | undefined;
-  const trialEndsAt = (profile as any)?.trialEndsAt as string | null | undefined;
+  const isBlocked    = (profile as any)?.isBlocked    as boolean | undefined;
+  const trialEndsAt  = (profile as any)?.trialEndsAt  as string | null | undefined;
+  const graceEndsAt  = (profile as any)?.graceEndsAt  as string | null | undefined;
 
   if (!trialActive && !trialExpired) return null;
 
   const billingHref = `/${slug}/admin/billing`;
 
-  if (trialExpired) {
+  // Hard blocked — grace period over, storefront is offline
+  if (isBlocked) {
     return (
       <div className="w-full bg-red-600 text-white text-xs font-semibold px-4 py-2 flex items-center justify-between gap-4">
         <span className="flex items-center gap-1.5">
           <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
-          Your free trial has expired — your storefront is paused until you subscribe.
+          Your storefront is offline — subscribe to restore customer access.
         </span>
         <Link
           href={billingHref}
@@ -113,21 +116,44 @@ function TrialStatusBanner() {
     );
   }
 
+  // Grace period — trial expired but storefront still online (3 days)
+  if (trialExpired && graceEndsAt) {
+    const endsAt   = new Date(graceEndsAt);
+    const msLeft   = Math.max(0, endsAt.getTime() - Date.now());
+    const daysLeft = Math.ceil(msLeft / (1000 * 60 * 60 * 24));
+    const label    = daysLeft <= 1 ? "less than 1 day" : `${daysLeft} days`;
+    return (
+      <div className="w-full bg-orange-600 text-white text-xs font-semibold px-4 py-2 flex items-center justify-between gap-4">
+        <span className="flex items-center gap-1.5">
+          <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
+          Your free trial has ended. Your storefront goes offline in {label} — subscribe now to keep it running.
+        </span>
+        <Link
+          href={billingHref}
+          className="shrink-0 bg-white text-orange-600 rounded px-2.5 py-0.5 text-xs font-bold hover:bg-orange-50 transition-colors"
+        >
+          Subscribe Now
+        </Link>
+      </div>
+    );
+  }
+
+  // Active trial — show days remaining
   if (trialActive && trialEndsAt) {
-    const endsAt = new Date(trialEndsAt);
+    const endsAt   = new Date(trialEndsAt);
     const daysLeft = Math.max(0, Math.ceil((endsAt.getTime() - Date.now()) / (1000 * 60 * 60 * 24)));
-    const label = daysLeft === 0 ? "less than 1 day" : daysLeft === 1 ? "1 day" : `${daysLeft} days`;
+    const label    = daysLeft === 0 ? "less than 1 day" : daysLeft === 1 ? "1 day" : `${daysLeft} days`;
     return (
       <div className="w-full bg-amber-500 text-white text-xs font-semibold px-4 py-2 flex items-center justify-between gap-4">
         <span className="flex items-center gap-1.5">
           <Clock className="w-3.5 h-3.5 shrink-0" />
-          Free trial: {label} remaining. Add a payment method to avoid any disruption.
+          Free trial: {label} remaining. Subscribe to keep your storefront live after the trial ends.
         </span>
         <Link
           href={billingHref}
           className="shrink-0 bg-white text-amber-600 rounded px-2.5 py-0.5 text-xs font-bold hover:bg-amber-50 transition-colors"
         >
-          Add Payment Method
+          Subscribe
         </Link>
       </div>
     );

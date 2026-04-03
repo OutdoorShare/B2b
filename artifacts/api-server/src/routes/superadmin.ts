@@ -191,6 +191,7 @@ router.post("/superadmin/tenants", requireSuperAdmin, async (req, res) => {
     const slugBase = rawSlug ? nameToSlug(rawSlug) : nameToSlug(name);
     const slug = await generateUniqueSlug(slugBase);
     const adminPasswordHash = await hashPassword(password);
+    const trialEndsAt = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000);
     const [tenant] = await db.insert(tenantsTable).values({
       name, slug, email, adminPasswordHash,
       plan: plan ?? "starter",
@@ -199,6 +200,7 @@ router.post("/superadmin/tenants", requireSuperAdmin, async (req, res) => {
       contactName: contactName ?? null,
       phone: phone ?? null,
       notes: notes ?? null,
+      trialEndsAt,
     }).returning();
 
     // Seed default categories (await so they exist before the response)
