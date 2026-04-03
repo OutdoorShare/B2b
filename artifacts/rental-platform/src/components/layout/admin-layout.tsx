@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { AIAssistant } from "@/components/ai-assistant";
 import { getAdminSession } from "@/lib/admin-nav";
 import { NotificationBell } from "@/components/notification-bell";
+import { useTheme } from "@/components/theme-provider";
 import { 
   LayoutDashboard, 
   Package, 
@@ -28,6 +29,8 @@ import {
   Warehouse,
   BookOpen,
   ExternalLink,
+  Sun,
+  Moon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useGetBusinessProfile } from "@workspace/api-client-react";
@@ -170,6 +173,7 @@ export function AdminLayout({ children }: { children: React.ReactNode }) {
   const [location] = useLocation();
   const slug = getAdminSlug();
   const adminBase = `/${slug}/admin`;
+  const { theme, toggleTheme } = useTheme();
 
   const base = import.meta.env.BASE_URL.replace(/\/+$/, "");
   const strippedPath = window.location.pathname.replace(base, "").replace(/^\/+/, "");
@@ -386,6 +390,16 @@ export function AdminLayout({ children }: { children: React.ReactNode }) {
             </h1>
           </div>
           <div className="flex items-center gap-2">
+            <button
+              onClick={toggleTheme}
+              title={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
+              className="w-8 h-8 rounded-lg flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-sidebar-accent/70 transition-all"
+            >
+              {theme === "dark"
+                ? <Sun className="w-4 h-4" />
+                : <Moon className="w-4 h-4" />
+              }
+            </button>
             <NotificationBell
               mode="admin"
               slug={slug}

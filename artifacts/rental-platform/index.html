@@ -242,6 +242,10 @@
   </head>
   <body>
     <div id="root"></div>
+    <!-- Apply saved theme before React renders to prevent flash -->
+    <script>
+      (function(){try{var t=localStorage.getItem("os-admin-theme");if(t==="dark"||(t==null&&window.matchMedia("(prefers-color-scheme: dark)").matches)){document.documentElement.classList.add("dark")}}catch(e){}})();
+    </script>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
