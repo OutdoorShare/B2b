@@ -20,7 +20,7 @@ import {
   Zap, AlertTriangle, Umbrella, Star, Loader2, BadgeCheck,
   ScanFace, RefreshCw, XCircle, Clock, Tag, Monitor, QrCode, Smartphone,
   ScanLine, X, Copy, Check, Upload, ImagePlus, Car, Mountain, BookOpen, Building2, Package,
-  Minus, Plus
+  Minus, Plus, LogIn
 } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { differenceInDays, format, addDays, eachDayOfInterval, parseISO, isBefore, isAfter, startOfDay } from "date-fns";
@@ -2820,6 +2820,23 @@ export default function StorefrontBook() {
                           <span className="font-semibold text-amber-800">Test Mode — </span>
                           <span className="text-amber-700">No real documents are collected. Use Stripe's test flow to simulate the verification experience.</span>
                         </div>
+                      </div>
+                    )}
+
+                    {/* Renter portal login prompt */}
+                    {identityStatus !== "verified" && (
+                      <div className="flex items-center justify-between gap-3 bg-muted/50 border rounded-xl px-4 py-3 text-sm">
+                        <div className="flex items-center gap-2.5 text-muted-foreground">
+                          <User className="w-4 h-4 shrink-0" />
+                          <span>Already have a renter account?</span>
+                        </div>
+                        <a
+                          href={`/${slug}/login`}
+                          className="flex items-center gap-1.5 font-semibold text-primary hover:underline shrink-0"
+                        >
+                          <LogIn className="w-3.5 h-3.5" />
+                          Log in
+                        </a>
                       </div>
                     )}
 
