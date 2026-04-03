@@ -57,25 +57,25 @@ export default function AdminDashboard() {
     return <div className="p-8">Loading dashboard...</div>;
   }
 
+  const today = new Date().toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" });
+
   return (
-    <div className="space-y-8">
-      <div className="flex justify-between items-end">
-        <div>
-          <h2 className="text-3xl font-bold tracking-tight">Dashboard</h2>
-          <p className="text-muted-foreground mt-1">Overview of your rental business</p>
-        </div>
+    <div className="space-y-6">
+      <div>
+        <p className="text-xs font-medium text-muted-foreground uppercase tracking-widest mb-0.5">{today}</p>
+        <h2 className="text-2xl font-bold tracking-tight">Overview</h2>
       </div>
 
       {/* ── Stripe Connect required banner ── */}
       {showConnectBanner && (
-        <div className="rounded-xl border border-amber-300 bg-amber-50 px-5 py-4 flex flex-col sm:flex-row sm:items-center gap-4">
+        <div className="rounded-2xl border border-amber-200 bg-gradient-to-r from-amber-50 to-orange-50 dark:from-amber-950/40 dark:to-orange-950/30 px-5 py-4 flex flex-col sm:flex-row sm:items-center gap-4">
           <div className="flex items-start gap-3 flex-1">
-            <div className="mt-0.5 shrink-0 w-8 h-8 rounded-full bg-amber-100 flex items-center justify-center">
+            <div className="mt-0.5 shrink-0 w-9 h-9 rounded-xl bg-amber-100 dark:bg-amber-900/50 flex items-center justify-center">
               <AlertTriangle className="w-4 h-4 text-amber-600" />
             </div>
             <div>
-              <p className="font-semibold text-amber-900">Action required: Set up payments to accept bookings</p>
-              <p className="text-sm text-amber-800 mt-0.5">
+              <p className="font-semibold text-amber-900 dark:text-amber-300">Action required: Set up payments to accept bookings</p>
+              <p className="text-sm text-amber-800/80 dark:text-amber-400/80 mt-0.5">
                 Customers cannot complete bookings until you connect your Stripe account. Payments are sent directly to you after each confirmed rental.
               </p>
             </div>
@@ -88,119 +88,142 @@ export default function AdminDashboard() {
         </div>
       )}
 
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Revenue</CardTitle>
-            <div className="w-8 h-8 rounded-lg bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center">
+      {/* ── Stat cards ── */}
+      <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-4">
+        {/* Revenue */}
+        <Card className="overflow-hidden border-0 shadow-sm bg-gradient-to-br from-emerald-50 to-white dark:from-emerald-950/30 dark:to-background ring-1 ring-emerald-100 dark:ring-emerald-900/40">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 pt-4 px-5">
+            <CardTitle className="text-[12px] font-semibold text-emerald-700/80 dark:text-emerald-400/80 uppercase tracking-wide">Total Revenue</CardTitle>
+            <div className="w-8 h-8 rounded-xl bg-emerald-100 dark:bg-emerald-900/50 flex items-center justify-center">
               <DollarSign className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
             </div>
           </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">${summary?.totalRevenue.toFixed(2) || '0.00'}</div>
-            <p className="text-xs text-muted-foreground">
+          <CardContent className="px-5 pb-4">
+            <div className="text-3xl font-extrabold text-emerald-800 dark:text-emerald-300 tracking-tight">${summary?.totalRevenue.toFixed(2) || '0.00'}</div>
+            <p className="text-[11px] text-emerald-600/70 dark:text-emerald-400/60 mt-1 font-medium">
               +${summary?.revenueThisMonth.toFixed(2) || '0.00'} this month
             </p>
           </CardContent>
         </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Active Bookings</CardTitle>
-            <div className="w-8 h-8 rounded-lg bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center">
+
+        {/* Active Bookings */}
+        <Card className="overflow-hidden border-0 shadow-sm bg-gradient-to-br from-blue-50 to-white dark:from-blue-950/30 dark:to-background ring-1 ring-blue-100 dark:ring-blue-900/40">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 pt-4 px-5">
+            <CardTitle className="text-[12px] font-semibold text-blue-700/80 dark:text-blue-400/80 uppercase tracking-wide">Active Bookings</CardTitle>
+            <div className="w-8 h-8 rounded-xl bg-blue-100 dark:bg-blue-900/50 flex items-center justify-center">
               <CalendarDays className="h-4 w-4 text-blue-600 dark:text-blue-400" />
             </div>
           </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{summary?.activeBookings || 0}</div>
-            <p className="text-xs text-muted-foreground">
+          <CardContent className="px-5 pb-4">
+            <div className="text-3xl font-extrabold text-blue-800 dark:text-blue-300 tracking-tight">{summary?.activeBookings || 0}</div>
+            <p className="text-[11px] text-blue-600/70 dark:text-blue-400/60 mt-1 font-medium">
               {summary?.pendingBookings || 0} pending confirmation
             </p>
           </CardContent>
         </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Utilization Rate</CardTitle>
-            <div className="w-8 h-8 rounded-lg bg-violet-100 dark:bg-violet-900/30 flex items-center justify-center">
+
+        {/* Utilization */}
+        <Card className="overflow-hidden border-0 shadow-sm bg-gradient-to-br from-violet-50 to-white dark:from-violet-950/30 dark:to-background ring-1 ring-violet-100 dark:ring-violet-900/40">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 pt-4 px-5">
+            <CardTitle className="text-[12px] font-semibold text-violet-700/80 dark:text-violet-400/80 uppercase tracking-wide">Utilization Rate</CardTitle>
+            <div className="w-8 h-8 rounded-xl bg-violet-100 dark:bg-violet-900/50 flex items-center justify-center">
               <TrendingUp className="h-4 w-4 text-violet-600 dark:text-violet-400" />
             </div>
           </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{((summary?.utilization || 0) * 100).toFixed(1)}%</div>
-            <p className="text-xs text-muted-foreground">
-              Of {summary?.totalListings || 0} total listings
+          <CardContent className="px-5 pb-4">
+            <div className="text-3xl font-extrabold text-violet-800 dark:text-violet-300 tracking-tight">{((summary?.utilization || 0) * 100).toFixed(1)}%</div>
+            <p className="text-[11px] text-violet-600/70 dark:text-violet-400/60 mt-1 font-medium">
+              Across {summary?.totalListings || 0} listings
             </p>
           </CardContent>
         </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Avg. Booking Value</CardTitle>
-            <div className="w-8 h-8 rounded-lg bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center">
+
+        {/* Avg booking value */}
+        <Card className="overflow-hidden border-0 shadow-sm bg-gradient-to-br from-amber-50 to-white dark:from-amber-950/30 dark:to-background ring-1 ring-amber-100 dark:ring-amber-900/40">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 pt-4 px-5">
+            <CardTitle className="text-[12px] font-semibold text-amber-700/80 dark:text-amber-400/80 uppercase tracking-wide">Avg. Booking Value</CardTitle>
+            <div className="w-8 h-8 rounded-xl bg-amber-100 dark:bg-amber-900/50 flex items-center justify-center">
               <Package className="h-4 w-4 text-amber-600 dark:text-amber-400" />
             </div>
           </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">${summary?.averageBookingValue.toFixed(2) || '0.00'}</div>
-            <p className="text-xs text-muted-foreground">
-              Across {summary?.totalBookings || 0} all-time bookings
+          <CardContent className="px-5 pb-4">
+            <div className="text-3xl font-extrabold text-amber-800 dark:text-amber-300 tracking-tight">${summary?.averageBookingValue.toFixed(2) || '0.00'}</div>
+            <p className="text-[11px] text-amber-600/70 dark:text-amber-400/60 mt-1 font-medium">
+              {summary?.totalBookings || 0} all-time bookings
             </p>
           </CardContent>
         </Card>
       </div>
 
+      {/* ── Bottom panels ── */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-7">
-        <Card className="col-span-4">
-          <CardHeader>
-            <CardTitle>Top Performing Listings</CardTitle>
-            <CardDescription>Your most profitable listings this month.</CardDescription>
+        <Card className="col-span-4 border shadow-sm">
+          <CardHeader className="pb-3">
+            <div className="flex items-center gap-2">
+              <div className="w-7 h-7 rounded-lg bg-primary/10 flex items-center justify-center">
+                <Tent className="h-3.5 w-3.5 text-primary" />
+              </div>
+              <div>
+                <CardTitle className="text-[15px]">Top Listings</CardTitle>
+                <CardDescription className="text-xs">Most profitable this month</CardDescription>
+              </div>
+            </div>
           </CardHeader>
           <CardContent>
-            <div className="space-y-4">
-              {topListings?.slice(0, 5).map(listing => (
-                <div key={listing.id} className="flex items-center">
-                  <div className="bg-primary/10 p-2 rounded-md mr-4">
-                    <Tent className="h-4 w-4 text-primary" />
-                  </div>
-                  <div className="space-y-1 flex-1">
-                    <p className="text-sm font-medium leading-none">{listing.title}</p>
-                    <p className="text-xs text-muted-foreground">
-                      {listing.totalBookings} bookings
+            <div className="space-y-3">
+              {topListings?.slice(0, 5).map((listing, i) => (
+                <div key={listing.id} className="flex items-center gap-3 group">
+                  <span className="w-5 h-5 rounded-full bg-muted text-muted-foreground text-[10px] font-bold flex items-center justify-center shrink-0">
+                    {i + 1}
+                  </span>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-semibold leading-none truncate">{listing.title}</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      {listing.totalBookings} booking{listing.totalBookings !== 1 ? "s" : ""}
                     </p>
                   </div>
-                  <div className="font-medium">${listing.totalRevenue.toFixed(2)}</div>
+                  <div className="text-sm font-bold text-emerald-600 dark:text-emerald-400">${listing.totalRevenue.toFixed(2)}</div>
                 </div>
               ))}
               {(!topListings || topListings.length === 0) && (
-                <div className="text-sm text-muted-foreground text-center py-4">No data available yet</div>
+                <div className="text-sm text-muted-foreground text-center py-6">No listing data yet</div>
               )}
             </div>
           </CardContent>
         </Card>
-        
-        <Card className="col-span-3">
-          <CardHeader>
-            <CardTitle>Pending Action</CardTitle>
-            <CardDescription>Recent bookings requiring your attention.</CardDescription>
+
+        <Card className="col-span-3 border shadow-sm">
+          <CardHeader className="pb-3">
+            <div className="flex items-center gap-2">
+              <div className="w-7 h-7 rounded-lg bg-amber-100 dark:bg-amber-900/40 flex items-center justify-center">
+                <AlertTriangle className="h-3.5 w-3.5 text-amber-600 dark:text-amber-400" />
+              </div>
+              <div>
+                <CardTitle className="text-[15px]">Needs Attention</CardTitle>
+                <CardDescription className="text-xs">Bookings awaiting confirmation</CardDescription>
+              </div>
+            </div>
           </CardHeader>
           <CardContent>
-            <div className="space-y-4">
+            <div className="space-y-3">
               {recentBookings?.slice(0, 5).map(booking => (
-                <div key={booking.id} className="flex items-center justify-between border-b pb-4 last:border-0 last:pb-0">
-                  <div className="space-y-1">
-                    <Link href={adminPath(`/bookings/${booking.id}`)} className="text-sm font-medium leading-none hover:underline">
-                      {booking.customerName}
-                    </Link>
-                    <p className="text-xs text-muted-foreground">
-                      {booking.listingTitle}
-                    </p>
-                    <p className="text-xs text-muted-foreground">
-                      {format(new Date(booking.startDate), 'MMM d')} - {format(new Date(booking.endDate), 'MMM d')}
-                    </p>
+                <Link key={booking.id} href={adminPath(`/bookings/${booking.id}`)}>
+                  <div className="flex items-start justify-between gap-2 p-2.5 rounded-xl hover:bg-muted/50 transition-colors cursor-pointer group">
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-semibold leading-none truncate group-hover:text-primary transition-colors">{booking.customerName}</p>
+                      <p className="text-xs text-muted-foreground mt-0.5 truncate">{booking.listingTitle}</p>
+                      <p className="text-xs text-muted-foreground/70 mt-0.5">
+                        {format(new Date(booking.startDate), 'MMM d')} – {format(new Date(booking.endDate), 'MMM d')}
+                      </p>
+                    </div>
+                    <Badge className="shrink-0 bg-amber-100 text-amber-700 border border-amber-200 hover:bg-amber-100 dark:bg-amber-900/30 dark:text-amber-300 dark:border-amber-800 text-[10px] font-semibold px-2">
+                      Pending
+                    </Badge>
                   </div>
-                  <Badge className="bg-amber-100 text-amber-800 border border-amber-200 hover:bg-amber-100 dark:bg-amber-900/30 dark:text-amber-300 dark:border-amber-800">Pending</Badge>
-                </div>
+                </Link>
               ))}
               {(!recentBookings || recentBookings.length === 0) && (
-                <div className="text-sm text-muted-foreground text-center py-4">No pending bookings</div>
+                <div className="text-sm text-muted-foreground text-center py-6">All caught up!</div>
               )}
             </div>
           </CardContent>
