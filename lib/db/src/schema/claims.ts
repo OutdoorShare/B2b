@@ -22,6 +22,9 @@ export const claimsTable = pgTable("claims", {
   chargeStatus: text("charge_status"),
   chargedAmount: decimal("charged_amount", { precision: 10, scale: 2 }),
   stripeChargeRefs: text("stripe_charge_refs"),
+  refundAmount: decimal("refund_amount", { precision: 10, scale: 2 }),
+  refundStatus: text("refund_status", { enum: ["none", "partial", "full"] }),
+  stripeRefundId: text("stripe_refund_id"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });

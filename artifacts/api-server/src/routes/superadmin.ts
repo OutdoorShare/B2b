@@ -4,7 +4,7 @@ import { tenantsTable, listingsTable, bookingsTable, superadminUsersTable, busin
 import { eq, sql, desc, and, ne } from "drizzle-orm";
 import { scrypt, randomBytes, timingSafeEqual } from "crypto";
 import { promisify } from "util";
-import { sendWelcomeEmail, sendAccountUpdatedEmail, sendClaimChargeEmail } from "../services/gmail";
+import { sendWelcomeEmail, sendAccountUpdatedEmail, sendClaimChargeEmail, sendClaimSettlementEmail } from "../services/gmail";
 import { stripe } from "../services/stripe";
 
 const scryptAsync = promisify(scrypt);
@@ -1045,6 +1045,122 @@ router.put("/superadmin/claims/:id", requireSuperAdmin, async (req, res) => {
   } catch (err) {
     req.log.error(err);
     res.status(500).json({ error: "Failed to update claim" });
+  }
+});
+
+// ── POST /superadmin/claims/:id/settle ────────────────────────────────────────
+// Fully resolve a claim: optionally refund part/all of the captured deposit to
+// the renter and send them a settlement email.
+router.post("/superadmin/claims/:id/settle", requireSuperAdmin, async (req, res) => {
+  try {
+    const claimId = Number(req.params.id);
+    const { settledAmount, refundAmount, noRefund, adminNotes } = req.body;
+
+    const [claim] = await db.select().from(claimsTable).where(eq(claimsTable.id, claimId)).limit(1);
+    if (!claim) return res.status(404).json({ error: "Claim not found" });
+
+    const capturedAmount = claim.chargedAmount ? parseFloat(claim.chargedAmount) : 0;
+    const refundAmountFloat = noRefund ? 0 : Math.max(0, parseFloat(refundAmount ?? "0") || 0);
+    const settledAmountFloat = settledAmount != null ? parseFloat(settledAmount) : null;
+
+    let stripeRefundId: string | null = null;
+    let finalRefundStatus: "none" | "partial" | "full" = "none";
+
+    // Process Stripe refund if applicable
+    if (!noRefund && refundAmountFloat > 0 && claim.stripeChargeRefs) {
+      try {
+        const refs: string[] = JSON.parse(claim.stripeChargeRefs);
+        const paymentIntentId = refs[0];
+        if (paymentIntentId) {
+          // Determine test mode from tenant
+          let testMode = true;
+          if (claim.tenantId) {
+            const [t] = await db.select({ testMode: tenantsTable.testMode }).from(tenantsTable)
+              .where(eq(tenantsTable.id, claim.tenantId)).limit(1);
+            testMode = !!t?.testMode;
+          }
+          const stripeClient = testMode
+            ? (await import("../services/stripe")).getStripeForTenant(true)
+            : (await import("../services/stripe")).getStripeForTenant(false);
+
+          const refundAmountCents = Math.round(refundAmountFloat * 100);
+          const capturedCents = Math.round(capturedAmount * 100);
+
+          const refund = await stripeClient.refunds.create({
+            payment_intent: paymentIntentId,
+            amount: refundAmountCents,
+          });
+
+          stripeRefundId = refund.id;
+          finalRefundStatus = refundAmountCents >= capturedCents ? "full" : "partial";
+        }
+      } catch (e: any) {
+        req.log.error({ err: e.message }, "Stripe refund failed");
+        return res.status(502).json({ error: `Stripe refund failed: ${e.message}` });
+      }
+    }
+
+    // Update the claim
+    const [updated] = await db
+      .update(claimsTable)
+      .set({
+        status: "resolved",
+        settledAmount: settledAmountFloat != null ? String(settledAmountFloat) : null,
+        refundAmount: String(refundAmountFloat),
+        refundStatus: finalRefundStatus,
+        ...(stripeRefundId && { stripeRefundId }),
+        ...(adminNotes !== undefined && { adminNotes: adminNotes || null }),
+        updatedAt: new Date(),
+      })
+      .where(eq(claimsTable.id, claimId))
+      .returning();
+
+    res.json({
+      ...updated,
+      claimedAmount: updated.claimedAmount ? parseFloat(updated.claimedAmount) : null,
+      settledAmount: updated.settledAmount ? parseFloat(updated.settledAmount) : null,
+      chargedAmount: updated.chargedAmount ? parseFloat(updated.chargedAmount) : null,
+      refundAmount: updated.refundAmount ? parseFloat(updated.refundAmount) : null,
+      createdAt: updated.createdAt.toISOString(),
+      updatedAt: updated.updatedAt.toISOString(),
+    });
+
+    // Fire-and-forget: send settlement email to renter
+    (async () => {
+      try {
+        let companyName = "OutdoorShare";
+        let tenantSlug = "unknown";
+        let adminEmail: string | undefined;
+        if (claim.tenantId) {
+          const [t] = await db
+            .select({ name: tenantsTable.name, slug: tenantsTable.slug, email: tenantsTable.email })
+            .from(tenantsTable)
+            .where(eq(tenantsTable.id, claim.tenantId))
+            .limit(1);
+          if (t) { companyName = t.name; tenantSlug = t.slug; adminEmail = t.email ?? undefined; }
+        }
+
+        await sendClaimSettlementEmail({
+          claimId,
+          customerName: claim.customerName,
+          customerEmail: claim.customerEmail,
+          type: claim.type,
+          companyName,
+          tenantSlug,
+          chargedAmount: capturedAmount,
+          settledAmount: settledAmountFloat,
+          refundAmount: refundAmountFloat,
+          noRefund: !!noRefund,
+          adminNotes: adminNotes || claim.adminNotes,
+          adminEmail,
+        });
+      } catch (e) {
+        req.log.warn({ err: e }, "Failed to send settlement email (non-fatal)");
+      }
+    })();
+  } catch (err) {
+    req.log.error(err);
+    res.status(500).json({ error: "Failed to settle claim" });
   }
 });
 

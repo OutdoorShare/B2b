@@ -667,6 +667,90 @@ export async function sendClaimStatusAlertEmail(opts: {
   });
 }
 
+// ── Claim settlement email (to renter) ─────────────────────────────────────────
+export async function sendClaimSettlementEmail(opts: {
+  claimId: number;
+  customerName: string;
+  customerEmail: string;
+  type: string;
+  companyName: string;
+  tenantSlug: string;
+  chargedAmount: number;      // deposit that was captured
+  settledAmount: number | null; // damages kept by company
+  refundAmount: number;        // amount refunded to renter
+  noRefund: boolean;           // true if company kept everything
+  adminNotes?: string | null;
+  adminEmail?: string;
+}): Promise<void> {
+  const {
+    claimId, customerName, customerEmail, type, companyName, tenantSlug,
+    chargedAmount, settledAmount, refundAmount, noRefund, adminNotes, adminEmail,
+  } = opts;
+
+  const fromHeader = adminEmail
+    ? `${companyName} <${adminEmail}>`
+    : `${companyName} <contact.us@myoutdoorshare.com>`;
+
+  const typeLabel = type === "policy_violation" ? "Policy Violation"
+    : type.charAt(0).toUpperCase() + type.slice(1);
+
+  const tableRows: { label: string; value: string; mono?: boolean }[] = [
+    { label: "Claim #",          value: `#${claimId}`, mono: true },
+    { label: "Company",          value: companyName },
+    { label: "Claim Type",       value: typeLabel },
+    { label: "Deposit Captured", value: `$${chargedAmount.toFixed(2)}` },
+    ...(settledAmount != null ? [{ label: "Damages Settled",  value: `$${settledAmount.toFixed(2)}` }] : []),
+    {
+      label: "Refund to You",
+      value: noRefund ? "No refund — full deposit retained" : `$${refundAmount.toFixed(2)}`,
+    },
+    ...(adminNotes ? [{ label: "Notes", value: adminNotes }] : []),
+  ];
+
+  const refundColor = noRefund ? "#dc2626" : "#16a34a";
+  const refundNote = noRefund
+    ? `After review, <strong>${companyName}</strong> has determined that no refund is applicable and has retained the full security deposit of <strong>$${chargedAmount.toFixed(2)}</strong>.`
+    : `After review, <strong>${companyName}</strong> has resolved this claim. A refund of <strong style="color:#16a34a;">$${refundAmount.toFixed(2)}</strong> will be returned to your original payment method within 5–10 business days.`;
+
+  const body = `
+    <p style="margin:0 0 8px;font-size:18px;font-weight:700;color:${BRAND_DARK};">Your Claim Has Been Resolved</p>
+    <p style="margin:0 0 20px;font-size:15px;color:#374151;line-height:1.6;">
+      Dear <strong>${customerName}</strong>, your ${typeLabel.toLowerCase()} claim (<strong>#${claimId}</strong>) with <strong>${companyName}</strong> has been fully resolved.
+    </p>
+    ${infoTable(tableRows)}
+    <div style="background:${noRefund ? "#fef2f2" : "#f0fdf4"};border:1px solid ${noRefund ? "#fecaca" : "#bbf7d0"};border-radius:8px;padding:16px;margin:24px 0;">
+      <p style="margin:0;font-size:14px;color:${refundColor};line-height:1.6;">${refundNote}</p>
+    </div>
+    <p style="margin:0;font-size:13px;color:#9ca3af;text-align:center;">
+      Questions? Reply to this email or contact <strong>${companyName}</strong> directly.
+    </p>
+  `;
+
+  const html = emailShell({
+    preheader: noRefund
+      ? `Your claim #${claimId} has been resolved — no refund applicable.`
+      : `Your claim #${claimId} has been resolved — $${refundAmount.toFixed(2)} refund is on its way.`,
+    badgeLabel: `Claim #${claimId} Resolved`,
+    badgeColor: "#16a34a",
+    body,
+  });
+
+  const gmail = await getUncachableGmailClient();
+  await gmail.users.messages.send({
+    userId: "me",
+    requestBody: {
+      raw: makeRawEmail(
+        customerEmail,
+        noRefund
+          ? `[Claim #${claimId}] Resolved — No Refund | ${companyName}`
+          : `[Claim #${claimId}] Resolved — $${refundAmount.toFixed(2)} Refund | ${companyName}`,
+        html,
+        fromHeader,
+      ),
+    },
+  });
+}
+
 // ── Booking confirmation + pickup reminder (to renter, non-kiosk) ──────────────
 export async function sendBookingPickupReminderEmail(opts: {
   customerName: string;
