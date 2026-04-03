@@ -550,6 +550,33 @@ export default function StorefrontBook() {
   const urlStart = searchParams.get("startDate");
   const urlEnd = searchParams.get("endDate");
   const isKiosk = searchParams.get("kiosk") === "1";
+
+  // Keep the browser in fullscreen while the kiosk booking flow is active
+  useEffect(() => {
+    if (!isKiosk) return;
+    const el = document.documentElement as HTMLElement & { webkitRequestFullscreen?: () => Promise<void> };
+    const doc = document as Document & { webkitFullscreenElement?: Element | null; webkitExitFullscreen?: () => void };
+
+    const tryEnter = () => {
+      const enter = el.requestFullscreen?.bind(el) ?? el.webkitRequestFullscreen?.bind(el);
+      enter?.().catch(() => {});
+    };
+
+    tryEnter();
+
+    const onFsChange = () => {
+      const active = doc.fullscreenElement ?? doc.webkitFullscreenElement;
+      if (!active) tryEnter();
+    };
+
+    document.addEventListener("fullscreenchange", onFsChange);
+    document.addEventListener("webkitfullscreenchange", onFsChange);
+    return () => {
+      document.removeEventListener("fullscreenchange", onFsChange);
+      document.removeEventListener("webkitfullscreenchange", onFsChange);
+    };
+  }, [isKiosk]);
+
   const urlPricingType = searchParams.get("pricingType");
   const urlHours = searchParams.get("hours");
 

@@ -14,8 +14,32 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { 
   ArrowLeft, Search, Car, Smartphone, Monitor, X, 
-  Clock, ChevronRight, Delete, Lock, ShieldAlert, LogIn
+  Clock, ChevronRight, Delete, Lock, ShieldAlert, LogIn, Maximize, Maximize2
 } from "lucide-react";
+
+// ── Fullscreen helpers ─────────────────────────────────────────────────────────
+function requestFs() {
+  const el = document.documentElement as HTMLElement & {
+    webkitRequestFullscreen?: () => Promise<void>;
+    mozRequestFullScreen?: () => Promise<void>;
+  };
+  return (el.requestFullscreen?.() ?? el.webkitRequestFullscreen?.() ?? el.mozRequestFullScreen?.() ?? Promise.resolve());
+}
+function exitFs() {
+  const doc = document as Document & {
+    webkitExitFullscreen?: () => void;
+    mozCancelFullScreen?: () => void;
+  };
+  return (doc.exitFullscreen?.() ?? doc.webkitExitFullscreen?.() ?? doc.mozCancelFullScreen?.() ?? Promise.resolve());
+}
+function isFsSupported() {
+  const el = document.documentElement as HTMLElement & { webkitRequestFullscreen?: unknown; mozRequestFullScreen?: unknown };
+  return !!(el.requestFullscreen || el.webkitRequestFullscreen || el.mozRequestFullScreen);
+}
+function getFsElement() {
+  const doc = document as Document & { webkitFullscreenElement?: Element | null; mozFullScreenElement?: Element | null };
+  return doc.fullscreenElement ?? doc.webkitFullscreenElement ?? doc.mozFullScreenElement ?? null;
+}
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
@@ -52,6 +76,10 @@ export default function AdminKiosk() {
   const [enteredPin, setEnteredPin] = useState("");
   const [pinError, setPinError] = useState(false);
   const [shaking, setShaking] = useState(false);
+
+  // Fullscreen state
+  const [fsPrompt, setFsPrompt] = useState(false); // show tap-to-fullscreen overlay
+  const fsSupported = isFsSupported();
 
   const { data: profile } = useGetBusinessProfile({
     query: { queryKey: getGetBusinessProfileQueryKey() }
@@ -114,6 +142,33 @@ export default function AdminKiosk() {
       .catch(() => { /* network error — don't flag as expired */ });
   }, []);
 
+  // Auto-enter fullscreen on mount; re-prompt if user exits with Escape
+  useEffect(() => {
+    if (!fsSupported) return;
+
+    const tryEnter = () =>
+      requestFs().catch(() => setFsPrompt(true));
+
+    // Attempt immediately — works if the user navigated here via a click
+    tryEnter();
+
+    const onFsChange = () => {
+      if (!getFsElement()) {
+        // Fullscreen was lost (Escape key, etc.) — show re-enter overlay
+        setFsPrompt(true);
+      } else {
+        setFsPrompt(false);
+      }
+    };
+
+    document.addEventListener("fullscreenchange", onFsChange);
+    document.addEventListener("webkitfullscreenchange", onFsChange);
+    return () => {
+      document.removeEventListener("fullscreenchange", onFsChange);
+      document.removeEventListener("webkitfullscreenchange", onFsChange);
+    };
+  }, [fsSupported]);
+
   // PIN entry helpers
   function handlePinDigit(digit: string) {
     if (enteredPin.length >= 8) return;
@@ -133,6 +188,8 @@ export default function AdminKiosk() {
       setShowExitPad(false);
       setEnteredPin("");
       setPinError(false);
+      // Exit fullscreen before returning to admin
+      if (getFsElement()) exitFs().catch(() => {});
       setLocation(adminPath(""));
     } else {
       setPinError(true);
@@ -484,6 +541,42 @@ export default function AdminKiosk() {
               </Button>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* ── Fullscreen Prompt Overlay ── */}
+      {fsSupported && fsPrompt && !showExitPad && (
+        <div
+          className="fixed inset-0 z-[200] bg-black/75 backdrop-blur-sm flex items-center justify-center cursor-pointer"
+          onClick={() => requestFs().catch(() => {})}
+        >
+          <div className="bg-background rounded-3xl shadow-2xl w-full max-w-xs mx-4 overflow-hidden text-center">
+            <div className="bg-primary/5 border-b px-8 py-8">
+              <div className="w-16 h-16 bg-primary/10 rounded-full flex items-center justify-center mx-auto mb-4">
+                <Maximize2 className="w-8 h-8 text-primary" />
+              </div>
+              <h2 className="text-xl font-bold">Enter Full Screen</h2>
+              <p className="text-sm text-muted-foreground mt-2 leading-relaxed">
+                Tap anywhere to continue in kiosk mode
+              </p>
+            </div>
+            <div className="p-6">
+              <button
+                className="w-full h-14 bg-primary text-primary-foreground rounded-xl text-base font-bold hover:bg-primary/90 active:scale-95 transition-all flex items-center justify-center gap-2"
+                onClick={e => { e.stopPropagation(); requestFs().catch(() => {}); }}
+              >
+                <Maximize className="w-5 h-5" />
+                Full Screen
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* iOS/unsupported: non-blocking info banner at bottom */}
+      {!fsSupported && (
+        <div className="fixed bottom-0 left-0 right-0 z-[150] bg-amber-500 text-white text-center text-sm px-4 py-2 font-medium">
+          For full-screen kiosk mode on iPad: tap Share → "Add to Home Screen" and launch from there.
         </div>
       )}
 
