@@ -14,7 +14,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
 import { useToast } from "@/hooks/use-toast";
-import { ArrowLeft, CalendarDays, User, DollarSign, Package, Info, Hash, ShieldCheck, ShoppingBag, Tag, Plus, X, CreditCard, Send, Link as LinkIcon, CheckCircle } from "lucide-react";
+import { ArrowLeft, CalendarDays, User, DollarSign, Package, Info, Hash, ShieldCheck, ShoppingBag, Tag, Plus, X, CreditCard, Send, Link as LinkIcon, CheckCircle, Ticket, Loader2 } from "lucide-react";
 import BundlePickerModal, { type BundleItem } from "@/components/bundle-picker-modal";
 import { CustomerAutocomplete } from "@/components/customer-autocomplete";
 import { format, addDays, differenceInDays } from "date-fns";
@@ -86,6 +86,12 @@ export default function AdminBookingForm() {
   const [savedCardLoading, setSavedCardLoading] = useState(false);
   const [paymentLinkUrl, setPaymentLinkUrl] = useState<string | null>(null);
   const [paymentLinkCopied, setPaymentLinkCopied] = useState(false);
+
+  // Promo code
+  const [promoInput, setPromoInput] = useState("");
+  const [appliedPromo, setAppliedPromo] = useState<{ code: string; discountAmount: number; message: string } | null>(null);
+  const [promoLoading, setPromoLoading] = useState(false);
+  const [promoError, setPromoError] = useState<string | null>(null);
 
   const { data: listings } = useGetListings(
     {},
@@ -260,11 +266,39 @@ export default function AdminBookingForm() {
     return allBefore * (bundleDiscountPercent / 100);
   }, [bundleItems, bundleDiscountPercent, basePrice, bundleItemsTotal, platformProtectionFee, protectionPrice]);
 
-  const estimatedTotal = basePrice + bundleItemsTotal + deposit + platformProtectionFee + protectionPrice - bundleDiscountAmount;
+  const promoDiscount = appliedPromo ? Math.min(appliedPromo.discountAmount, basePrice + bundleItemsTotal + deposit + platformProtectionFee + protectionPrice - bundleDiscountAmount) : 0;
+  const estimatedTotal = Math.max(0.50, basePrice + bundleItemsTotal + deposit + platformProtectionFee + protectionPrice - bundleDiscountAmount - promoDiscount);
 
   const handleChange = (field: string, value: string) => {
     setForm(f => ({ ...f, [field]: value }));
     setError("");
+  };
+
+  const handleApplyPromo = async () => {
+    const code = promoInput.trim().toUpperCase();
+    if (!code) return;
+    setPromoLoading(true);
+    setPromoError(null);
+    setAppliedPromo(null);
+    try {
+      const subtotalBeforePromo = basePrice + bundleItemsTotal + deposit + platformProtectionFee + protectionPrice - bundleDiscountAmount;
+      const res = await fetch(`${BASE}/api/promo-codes/validate`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ code, tenantSlug: params.slug, bookingAmountCents: subtotalBeforePromo }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.valid) {
+        setPromoError(data.error || "Invalid or expired promo code");
+      } else {
+        setAppliedPromo({ code, discountAmount: data.discountAmount, message: data.message });
+        setPromoInput("");
+      }
+    } catch {
+      setPromoError("Failed to validate promo code");
+    } finally {
+      setPromoLoading(false);
+    }
   };
 
   const handleSubmit = async () => {
@@ -304,6 +338,8 @@ export default function AdminBookingForm() {
         bundleItems: bundleItems.length > 0 ? bundleItems : undefined,
         bundleDiscountPct: bundleItems.length > 0 ? bundleDiscountPercent : undefined,
         totalPrice: estimatedTotal,
+        appliedPromoCode: appliedPromo?.code || undefined,
+        discountAmount: promoDiscount > 0 ? promoDiscount : undefined,
       };
 
       const url = isEditing ? `${BASE}/api/bookings/${editId}` : `${BASE}/api/bookings`;
@@ -320,6 +356,15 @@ export default function AdminBookingForm() {
       const newBookingId = data.id;
       queryClient.invalidateQueries({ queryKey: getGetBookingsQueryKey() });
       if (isEditing) queryClient.setQueryData(getGetBookingQueryKey(editId), data);
+
+      // Mark promo code as used
+      if (!isEditing && appliedPromo) {
+        fetch(`${BASE}/api/promo-codes/use`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ code: appliedPromo.code, tenantSlug: params.slug, bookingId: newBookingId }),
+        }).catch(() => {});
+      }
 
       // Post-create payment action
       if (!isEditing && paymentMode === "send_link") {
@@ -692,6 +737,64 @@ export default function AdminBookingForm() {
                       {bundleItems.length > 0 ? `Edit bundle (${bundleItems.length} item${bundleItems.length > 1 ? "s" : ""})` : "Add bundle items"}
                     </Button>
                   </div>
+
+                  {/* Promo Code */}
+                  <div className="pt-1 space-y-2">
+                    {appliedPromo ? (
+                      <div className="flex items-center justify-between rounded-lg bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-800 px-3 py-2">
+                        <div className="flex items-center gap-2">
+                          <Ticket className="w-3.5 h-3.5 text-green-600" />
+                          <div>
+                            <p className="text-xs font-semibold text-green-800 dark:text-green-300">{appliedPromo.code}</p>
+                            <p className="text-[10px] text-green-600 dark:text-green-400">{appliedPromo.message}</p>
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => { setAppliedPromo(null); setPromoInput(""); }}
+                          className="text-green-600 hover:text-green-800 dark:text-green-400 p-0.5"
+                        >
+                          <X className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="space-y-1">
+                        <p className="text-xs text-muted-foreground flex items-center gap-1">
+                          <Ticket className="w-3 h-3" /> Promo code
+                        </p>
+                        <div className="flex gap-1.5">
+                          <Input
+                            value={promoInput}
+                            onChange={e => { setPromoInput(e.target.value.toUpperCase()); setPromoError(null); }}
+                            onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); handleApplyPromo(); } }}
+                            placeholder="ENTER CODE"
+                            className="h-8 text-xs font-mono uppercase"
+                          />
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            className="h-8 text-xs shrink-0"
+                            onClick={handleApplyPromo}
+                            disabled={!promoInput.trim() || promoLoading}
+                          >
+                            {promoLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : "Apply"}
+                          </Button>
+                        </div>
+                        {promoError && <p className="text-xs text-destructive">{promoError}</p>}
+                      </div>
+                    )}
+                    {promoDiscount > 0 && (
+                      <div className="flex justify-between text-sm text-green-600 font-medium">
+                        <span className="flex items-center gap-1">
+                          <Ticket className="w-3 h-3" />
+                          Promo: {appliedPromo?.code}
+                        </span>
+                        <span>-${promoDiscount.toFixed(2)}</span>
+                      </div>
+                    )}
+                  </div>
+
                   <Separator />
                   <div className="flex justify-between font-bold">
                     <span>Estimated Total</span>
