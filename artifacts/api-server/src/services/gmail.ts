@@ -1579,6 +1579,97 @@ export async function sendStripeRestrictedAlertEmail(opts: {
   });
 }
 
+// ── Agreement link email (sent to renter so they can sign the rental agreement remotely) ──
+export async function sendAgreementLinkEmail(opts: {
+  toEmail: string;
+  customerName: string;
+  agreementUrl: string;
+  listingTitle: string;
+  startDate: string;
+  endDate: string;
+  companyName: string;
+  companyEmail?: string;
+}): Promise<void> {
+  const { toEmail, customerName, agreementUrl, listingTitle, startDate, endDate, companyName, companyEmail } = opts;
+  const fromHeader = companyEmail ? `${companyName} <${companyEmail}>` : undefined;
+  const subject = `[${companyName}] Please sign your rental agreement`;
+  const preheader = `Action required — sign your rental agreement for ${listingTitle} before pickup.`;
+
+  const tableRows = [
+    { label: "Equipment",    value: listingTitle },
+    { label: "Pickup Date",  value: startDate },
+    { label: "Return Date",  value: endDate },
+    { label: "Company",      value: companyName },
+  ];
+
+  const body = `
+    <p style="margin:0 0 8px;font-size:18px;font-weight:700;color:${BRAND_DARK};">Your rental agreement is ready to sign</p>
+    <p style="margin:0 0 20px;font-size:15px;color:#374151;line-height:1.6;">
+      Hi <strong>${customerName}</strong>, your upcoming rental with <strong>${companyName}</strong> requires you to review and sign the rental agreement before pickup.
+      Please click the button below to complete this step.
+    </p>
+    ${infoTable(tableRows)}
+    <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;padding:14px 18px;margin:20px 0;">
+      <p style="margin:0;font-size:13px;color:#1e40af;font-weight:600;">
+        📋 You'll be able to review and sign the agreement digitally. No printing required.
+      </p>
+    </div>
+    ${ctaButton("Sign Rental Agreement →", agreementUrl, BRAND_GREEN)}
+    <p style="margin:0;font-size:13px;color:#9ca3af;text-align:center;line-height:1.6;">
+      Questions? Contact <strong>${companyName}</strong> directly.
+    </p>
+  `;
+
+  const html = emailShell({ preheader, badgeLabel: "Action Required — Sign Agreement", badgeColor: BRAND_GREEN, body });
+  const gmail = await getUncachableGmailClient();
+  await gmail.users.messages.send({
+    userId: "me",
+    requestBody: { raw: makeRawEmail(toEmail, subject, html, fromHeader) },
+  });
+}
+
+// ── Identity verification email (sent to renter so they can verify via Stripe Identity) ──
+export async function sendIdentityVerificationEmail(opts: {
+  toEmail: string;
+  customerName: string;
+  verificationUrl: string;
+  listingTitle: string;
+  companyName: string;
+  companyEmail?: string;
+}): Promise<void> {
+  const { toEmail, customerName, verificationUrl, listingTitle, companyName, companyEmail } = opts;
+  const fromHeader = companyEmail ? `${companyName} <${companyEmail}>` : undefined;
+  const subject = `[${companyName}] Identity verification required for your rental`;
+  const preheader = `Verify your identity before your rental pickup — takes under 2 minutes.`;
+
+  const body = `
+    <p style="margin:0 0 8px;font-size:18px;font-weight:700;color:${BRAND_DARK};">Identity verification required</p>
+    <p style="margin:0 0 20px;font-size:15px;color:#374151;line-height:1.6;">
+      Hi <strong>${customerName}</strong>, <strong>${companyName}</strong> requires identity verification before your rental of <strong>${listingTitle}</strong>.
+      This is a quick, secure process powered by Stripe that takes under 2 minutes.
+    </p>
+    <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:14px 18px;margin:20px 0;">
+      <p style="margin:0 0 4px;font-size:13px;color:#166534;font-weight:600;">🔒 What you'll need:</p>
+      <ul style="margin:6px 0 0;padding-left:18px;font-size:13px;color:#15803d;line-height:1.8;">
+        <li>A government-issued ID (driver's license, passport, or ID card)</li>
+        <li>A device with a camera for a quick selfie</li>
+      </ul>
+    </div>
+    ${ctaButton("Verify My Identity →", verificationUrl, BRAND_GREEN)}
+    <p style="margin:0;font-size:13px;color:#9ca3af;text-align:center;line-height:1.6;">
+      Your information is encrypted and handled securely by Stripe. <strong>${companyName}</strong> does not store your ID.<br/>
+      Questions? Contact <strong>${companyName}</strong> directly.
+    </p>
+  `;
+
+  const html = emailShell({ preheader, badgeLabel: "Action Required — Verify Identity", badgeColor: BRAND_GREEN, body });
+  const gmail = await getUncachableGmailClient();
+  await gmail.users.messages.send({
+    userId: "me",
+    requestBody: { raw: makeRawEmail(toEmail, subject, html, fromHeader) },
+  });
+}
+
 // ── Payment request email (sent to renter when admin creates a booking with payment link) ──
 export async function sendPaymentRequestEmail(opts: {
   toEmail: string;

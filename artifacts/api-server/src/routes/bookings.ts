@@ -4,7 +4,7 @@ import path from "path";
 import multer from "multer";
 import { randomBytes } from "crypto";
 import { db } from "@workspace/db";
-import { bookingsTable, listingsTable, businessProfileTable, tenantsTable, contactCardsTable } from "@workspace/db/schema";
+import { bookingsTable, listingsTable, businessProfileTable, tenantsTable, contactCardsTable, customersTable } from "@workspace/db/schema";
 import { eq, and, gte, lte, isNull, or, sql } from "drizzle-orm";
 import { generateAgreementPdf } from "../lib/generate-agreement-pdf";
 import {
@@ -16,6 +16,8 @@ import {
   sendReadyToAdventureEmail,
   sendContactCardEmail,
   sendAdminBookingContactEmail,
+  sendAgreementLinkEmail,
+  sendIdentityVerificationEmail,
 } from "../services/gmail";
 import { openai } from "@workspace/integrations-openai-ai-server";
 import { getStripeForTenant } from "../services/stripe";
@@ -113,7 +115,9 @@ type EmailEventType =
   | "return_reminder"
   | "ready_to_adventure"
   | "kiosk_setup"
-  | "contact_card";
+  | "contact_card"
+  | "agreement_link"
+  | "identity_link";
 
 async function appendEmailEvent(bookingId: number, type: EmailEventType, toEmail?: string) {
   try {
@@ -880,6 +884,139 @@ router.post("/bookings/:id/send-pickup-link", async (req, res) => {
   } catch (err) {
     req.log.error(err);
     res.status(500).json({ error: "Failed to send pickup link" });
+  }
+});
+
+// ── POST /bookings/:id/send-agreement-link ─────────────────────────────────────
+// Admin: generate/reuse pickup token and send an agreement-focused email to renter
+router.post("/bookings/:id/send-agreement-link", async (req, res) => {
+  try {
+    const bookingId = Number(req.params.id);
+    const booking = await findBookingForAdmin(bookingId, req.tenantId);
+    if (!booking) { res.status(404).json({ error: "Booking not found" }); return; }
+
+    // Generate or reuse existing pickup token
+    const token = booking.pickupToken ?? randomBytes(24).toString("hex");
+    if (!booking.pickupToken) {
+      await db.update(bookingsTable).set({ pickupToken: token, updatedAt: new Date() }).where(eq(bookingsTable.id, bookingId));
+    }
+
+    const [listing] = await db.select({ title: listingsTable.title }).from(listingsTable).where(eq(listingsTable.id, booking.listingId));
+    let companyName = "OutdoorShare";
+    let companyEmail: string | undefined;
+    if (req.tenantId) {
+      const [biz] = await db.select({ name: businessProfileTable.name }).from(businessProfileTable).where(eq(businessProfileTable.tenantId, req.tenantId));
+      if (biz?.name) companyName = biz.name;
+      const [tenant] = await db.select({ email: tenantsTable.email }).from(tenantsTable).where(eq(tenantsTable.id, req.tenantId)).limit(1);
+      if (tenant?.email) companyEmail = tenant.email;
+    }
+
+    const BASE = process.env.APP_URL || `https://${process.env.REPLIT_DEV_DOMAIN}`;
+    const slug = req.headers["x-tenant-slug"] as string ?? "";
+    const agreementUrl = `${BASE}/${slug}/pickup/${token}`;
+
+    sendAgreementLinkEmail({
+      toEmail: booking.customerEmail,
+      customerName: booking.customerName,
+      agreementUrl,
+      listingTitle: listing?.title ?? "Rental Equipment",
+      startDate: booking.startDate,
+      endDate: booking.endDate,
+      companyName,
+      companyEmail,
+    }).then(() => appendEmailEvent(bookingId, "agreement_link", booking.customerEmail))
+      .catch(err => console.error("[agreement email]", err));
+
+    res.json({ ok: true, token, agreementUrl });
+  } catch (err) {
+    req.log.error(err);
+    res.status(500).json({ error: "Failed to send agreement link" });
+  }
+});
+
+// ── POST /bookings/:id/send-identity-link ──────────────────────────────────────
+// Admin: create a Stripe Identity verification session and email the renter the link
+router.post("/bookings/:id/send-identity-link", async (req, res) => {
+  try {
+    const bookingId = Number(req.params.id);
+    const booking = await findBookingForAdmin(bookingId, req.tenantId);
+    if (!booking) { res.status(404).json({ error: "Booking not found" }); return; }
+
+    const [listing] = await db.select({ title: listingsTable.title }).from(listingsTable).where(eq(listingsTable.id, booking.listingId));
+    let companyName = "OutdoorShare";
+    let companyEmail: string | undefined;
+    const slug = req.headers["x-tenant-slug"] as string ?? "";
+
+    const [tenant] = req.tenantId
+      ? await db.select().from(tenantsTable).where(eq(tenantsTable.id, req.tenantId))
+      : [];
+    if (tenant?.name) companyName = tenant.name;
+    if (tenant?.email) companyEmail = tenant.email;
+
+    const isTestMode = !!(tenant?.testMode);
+    const stripeClient = getStripeForTenant(isTestMode);
+
+    // Look up customer to link session
+    const [customer] = await db.select().from(customersTable).where(eq(customersTable.email, booking.customerEmail.toLowerCase()));
+
+    const BASE = process.env.APP_URL || `https://${process.env.REPLIT_DEV_DOMAIN}`;
+    const returnUrl = `${BASE}/${slug}`;
+
+    let session: any;
+    try {
+      session = await (stripeClient as any).identity.verificationSessions.create({
+        type: "document",
+        metadata: {
+          tenant_slug: slug,
+          booking_id: String(bookingId),
+          customer_id: customer ? String(customer.id) : undefined,
+        },
+        options: {
+          document: {
+            allowed_types: ["driving_license", "passport", "id_card"],
+            require_id_number: false,
+            require_live_capture: true,
+            require_matching_selfie: true,
+          },
+        },
+        return_url: returnUrl,
+      });
+    } catch (primaryErr: any) {
+      // Fall back to test mode if live key lacks identity permission
+      const isPermErr = primaryErr?.code === "permission_error" || (primaryErr?.message ?? "").includes("rak_identity_product_write");
+      if (!isTestMode && isPermErr) {
+        session = await (getStripeForTenant(true) as any).identity.verificationSessions.create({
+          type: "document",
+          metadata: { tenant_slug: slug, booking_id: String(bookingId) },
+          options: { document: { allowed_types: ["driving_license", "passport", "id_card"], require_id_number: false, require_live_capture: true, require_matching_selfie: true } },
+          return_url: returnUrl,
+        });
+      } else throw primaryErr;
+    }
+
+    // Update customer record if found
+    if (customer) {
+      await db.update(customersTable).set({
+        identityVerificationStatus: "pending",
+        identityVerificationSessionId: session.id,
+        updatedAt: new Date(),
+      }).where(eq(customersTable.id, customer.id));
+    }
+
+    sendIdentityVerificationEmail({
+      toEmail: booking.customerEmail,
+      customerName: booking.customerName,
+      verificationUrl: session.url,
+      listingTitle: listing?.title ?? "Rental Equipment",
+      companyName,
+      companyEmail,
+    }).then(() => appendEmailEvent(bookingId, "identity_link", booking.customerEmail))
+      .catch(err => console.error("[identity email]", err));
+
+    res.json({ ok: true, sessionId: session.id, url: session.url });
+  } catch (err: any) {
+    req.log.error(err);
+    res.status(500).json({ error: err.message || "Failed to send identity link" });
   }
 });
 

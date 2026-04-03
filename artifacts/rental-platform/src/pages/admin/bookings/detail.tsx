@@ -81,6 +81,10 @@ export default function AdminBookingDetail() {
   const [revealedReturnUrl, setRevealedReturnUrl] = useState<string | null>(null);
   const [inspecting, setInspecting] = useState(false);
   const [inspectionResult, setInspectionResult] = useState<any | null>(null);
+  const [sendingAgreement, setSendingAgreement] = useState(false);
+  const [agreementSent, setAgreementSent] = useState(false);
+  const [sendingIdentity, setSendingIdentity] = useState(false);
+  const [identitySent, setIdentitySent] = useState(false);
 
   type VerifData = {
     found: boolean;
@@ -131,6 +135,34 @@ export default function AdminBookingDetail() {
     } finally {
       setSendingPickupLink(false);
     }
+  };
+
+  const sendAgreementLink = async () => {
+    setSendingAgreement(true);
+    try {
+      const r = await fetch(`${BASE}/api/bookings/${id}/send-agreement-link`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...(getAdminSession()?.token ? { "x-admin-token": getAdminSession()!.token } : {}) },
+      });
+      const data = await r.json();
+      if (!r.ok || data.error) { toast({ title: "Error", description: data.error ?? "Failed to send link", variant: "destructive" }); return; }
+      setAgreementSent(true);
+      toast({ title: "Agreement link sent!", description: `${booking!.customerEmail} has been emailed a link to sign the rental agreement.` });
+    } finally { setSendingAgreement(false); }
+  };
+
+  const sendIdentityLink = async () => {
+    setSendingIdentity(true);
+    try {
+      const r = await fetch(`${BASE}/api/bookings/${id}/send-identity-link`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...(getAdminSession()?.token ? { "x-admin-token": getAdminSession()!.token } : {}) },
+      });
+      const data = await r.json();
+      if (!r.ok || data.error) { toast({ title: "Error", description: data.error ?? "Failed to send identity link", variant: "destructive" }); return; }
+      setIdentitySent(true);
+      toast({ title: "Verification link sent!", description: `${booking!.customerEmail} has been emailed a Stripe Identity verification link.` });
+    } finally { setSendingIdentity(false); }
   };
 
   const copyPickupLink = async () => {
@@ -763,16 +795,28 @@ export default function AdminBookingDetail() {
                 {(() => {
                   const signed = !!(booking as any).agreementSignerName;
                   return (
-                    <div className={`flex items-start gap-3 rounded-xl p-3 border ${signed ? "bg-green-50 border-green-200" : "bg-muted/30 border-border"}`}>
-                      <div className={`w-6 h-6 rounded-full flex items-center justify-center shrink-0 mt-0.5 ${signed ? "bg-green-500" : "bg-muted-foreground/20"}`}>
+                    <div className={`flex items-center gap-3 rounded-xl p-3 border ${signed ? "bg-green-50 border-green-200" : "bg-muted/30 border-border"}`}>
+                      <div className={`w-6 h-6 rounded-full flex items-center justify-center shrink-0 ${signed ? "bg-green-500" : "bg-muted-foreground/20"}`}>
                         {signed ? <CheckCircle2 className="w-4 h-4 text-white" /> : <span className="text-muted-foreground text-xs font-bold">1</span>}
                       </div>
-                      <div>
+                      <div className="flex-1 min-w-0">
                         <p className={`text-sm font-semibold ${signed ? "text-green-800" : "text-foreground"}`}>Rental Agreement</p>
-                        <p className="text-xs text-muted-foreground mt-0.5">
+                        <p className="text-xs text-muted-foreground">
                           {signed ? `Signed by ${(booking as any).agreementSignerName}` : "Not yet signed by renter"}
                         </p>
                       </div>
+                      {!signed && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="h-7 text-xs gap-1.5 shrink-0"
+                          onClick={sendAgreementLink}
+                          disabled={sendingAgreement}
+                        >
+                          {sendingAgreement ? <Loader2 className="w-3 h-3 animate-spin" /> : agreementSent ? <MailCheck className="w-3 h-3 text-green-600" /> : <Send className="w-3 h-3" />}
+                          {agreementSent ? "Sent!" : "Send"}
+                        </Button>
+                      )}
                     </div>
                   );
                 })()}
@@ -781,16 +825,28 @@ export default function AdminBookingDetail() {
                 {(() => {
                   const verified = verifData?.identityVerificationStatus === "verified";
                   return (
-                    <div className={`flex items-start gap-3 rounded-xl p-3 border ${verified ? "bg-green-50 border-green-200" : "bg-muted/30 border-border"}`}>
-                      <div className={`w-6 h-6 rounded-full flex items-center justify-center shrink-0 mt-0.5 ${verified ? "bg-green-500" : "bg-muted-foreground/20"}`}>
+                    <div className={`flex items-center gap-3 rounded-xl p-3 border ${verified ? "bg-green-50 border-green-200" : "bg-muted/30 border-border"}`}>
+                      <div className={`w-6 h-6 rounded-full flex items-center justify-center shrink-0 ${verified ? "bg-green-500" : "bg-muted-foreground/20"}`}>
                         {verified ? <CheckCircle2 className="w-4 h-4 text-white" /> : <span className="text-muted-foreground text-xs font-bold">2</span>}
                       </div>
-                      <div>
+                      <div className="flex-1 min-w-0">
                         <p className={`text-sm font-semibold ${verified ? "text-green-800" : "text-foreground"}`}>Identity Verified</p>
-                        <p className="text-xs text-muted-foreground mt-0.5">
+                        <p className="text-xs text-muted-foreground">
                           {verified ? `Verified via Stripe Identity` : "Not yet verified — check ID at pickup"}
                         </p>
                       </div>
+                      {!verified && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="h-7 text-xs gap-1.5 shrink-0"
+                          onClick={sendIdentityLink}
+                          disabled={sendingIdentity}
+                        >
+                          {sendingIdentity ? <Loader2 className="w-3 h-3 animate-spin" /> : identitySent ? <MailCheck className="w-3 h-3 text-green-600" /> : <Send className="w-3 h-3" />}
+                          {identitySent ? "Sent!" : "Send"}
+                        </Button>
+                      )}
                     </div>
                   );
                 })()}
@@ -800,16 +856,28 @@ export default function AdminBookingDetail() {
                   const photos = (booking as any).pickupPhotos ?? [];
                   const done = photos.length > 0;
                   return (
-                    <div className={`flex items-start gap-3 rounded-xl p-3 border ${done ? "bg-green-50 border-green-200" : "bg-muted/30 border-border"}`}>
-                      <div className={`w-6 h-6 rounded-full flex items-center justify-center shrink-0 mt-0.5 ${done ? "bg-green-500" : "bg-muted-foreground/20"}`}>
+                    <div className={`flex items-center gap-3 rounded-xl p-3 border ${done ? "bg-green-50 border-green-200" : "bg-muted/30 border-border"}`}>
+                      <div className={`w-6 h-6 rounded-full flex items-center justify-center shrink-0 ${done ? "bg-green-500" : "bg-muted-foreground/20"}`}>
                         {done ? <CheckCircle2 className="w-4 h-4 text-white" /> : <span className="text-muted-foreground text-xs font-bold">3</span>}
                       </div>
-                      <div>
+                      <div className="flex-1 min-w-0">
                         <p className={`text-sm font-semibold ${done ? "text-green-800" : "text-foreground"}`}>Equipment Photos</p>
-                        <p className="text-xs text-muted-foreground mt-0.5">
+                        <p className="text-xs text-muted-foreground">
                           {done ? `${photos.length} photo${photos.length !== 1 ? "s" : ""} submitted by renter` : "Renter hasn't submitted photos yet"}
                         </p>
                       </div>
+                      {!done && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="h-7 text-xs gap-1.5 shrink-0"
+                          onClick={() => sendPickupLink(false)}
+                          disabled={sendingPickupLink}
+                        >
+                          {sendingPickupLink ? <Loader2 className="w-3 h-3 animate-spin" /> : pickupLinkSent ? <MailCheck className="w-3 h-3 text-green-600" /> : <Send className="w-3 h-3" />}
+                          {pickupLinkSent ? "Sent!" : "Send"}
+                        </Button>
+                      )}
                     </div>
                   );
                 })()}
