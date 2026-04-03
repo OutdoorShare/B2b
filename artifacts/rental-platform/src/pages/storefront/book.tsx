@@ -20,7 +20,7 @@ import {
   Zap, AlertTriangle, Umbrella, Star, Loader2, BadgeCheck,
   ScanFace, RefreshCw, XCircle, Clock, Tag, Monitor, QrCode, Smartphone,
   ScanLine, X, Copy, Check, Upload, ImagePlus, Car, Mountain, BookOpen, Building2, Package,
-  Minus, Plus, LogIn
+  Minus, Plus, LogIn, MapPin, Phone, Mail, IdCard, ExternalLink
 } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { differenceInDays, format, addDays, eachDayOfInterval, parseISO, isBefore, isAfter, startOfDay } from "date-fns";
@@ -678,6 +678,7 @@ export default function StorefrontBook() {
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [confirmedBooking, setConfirmedBooking] = useState<{ id: number; totalPrice: number } | null>(null);
+  const [copiedBookingLink, setCopiedBookingLink] = useState(false);
 
   const [customerBookings, setCustomerBookings] = useState<any[]>([]);
   const [bookingsLoading, setBookingsLoading] = useState(false);
@@ -3130,6 +3131,88 @@ export default function StorefrontBook() {
                         )}
                       </div>
                     </div>
+
+                    {/* ── Contact Card + Copy Booking Link ── */}
+                    {(() => {
+                      const cc = (listing as any)?.contactCard as { name: string; address?: string | null; phone?: string | null; email?: string | null; specialInstructions?: string | null } | null;
+                      const bookingDetailUrl = confirmedBooking
+                        ? `${window.location.origin}${sfBase}/my-bookings/${confirmedBooking.id}`
+                        : null;
+                      return (
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                          {/* Contact Card */}
+                          {cc && (
+                            <div className="bg-background rounded-2xl border shadow-sm overflow-hidden">
+                              <div className="bg-gradient-to-br from-primary/8 to-primary/4 px-5 py-4 border-b flex items-center gap-3">
+                                <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
+                                  <IdCard className="w-4 h-4 text-primary" />
+                                </div>
+                                <p className="font-bold text-sm text-foreground">Your Rental Contact</p>
+                              </div>
+                              <div className="p-5 space-y-3">
+                                <p className="font-semibold text-foreground">{cc.name}</p>
+                                {cc.address && (
+                                  <div className="flex items-start gap-2 text-sm text-muted-foreground">
+                                    <MapPin className="w-3.5 h-3.5 mt-0.5 shrink-0 text-primary/60" />
+                                    <span>{cc.address}</span>
+                                  </div>
+                                )}
+                                {cc.phone && (
+                                  <a href={`tel:${cc.phone}`} className="flex items-center gap-2 text-sm text-muted-foreground hover:text-primary transition-colors">
+                                    <Phone className="w-3.5 h-3.5 shrink-0 text-primary/60" />
+                                    <span>{cc.phone}</span>
+                                  </a>
+                                )}
+                                {cc.email && (
+                                  <a href={`mailto:${cc.email}`} className="flex items-center gap-2 text-sm text-muted-foreground hover:text-primary transition-colors">
+                                    <Mail className="w-3.5 h-3.5 shrink-0 text-primary/60" />
+                                    <span>{cc.email}</span>
+                                  </a>
+                                )}
+                                {cc.specialInstructions && (
+                                  <div className="mt-2 text-xs text-muted-foreground bg-muted/50 rounded-lg px-3 py-2 leading-relaxed">
+                                    {cc.specialInstructions}
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Copy Booking Link */}
+                          {bookingDetailUrl && (
+                            <div className={`bg-background rounded-2xl border shadow-sm overflow-hidden ${!cc ? "sm:col-span-2" : ""}`}>
+                              <div className="bg-gradient-to-br from-primary/8 to-primary/4 px-5 py-4 border-b flex items-center gap-3">
+                                <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
+                                  <ExternalLink className="w-4 h-4 text-primary" />
+                                </div>
+                                <p className="font-bold text-sm text-foreground">Your Booking Link</p>
+                              </div>
+                              <div className="p-5 space-y-3">
+                                <p className="text-sm text-muted-foreground">Save or share a direct link to your booking details and documents.</p>
+                                <div className="flex items-center gap-2 bg-muted/50 rounded-lg px-3 py-2 text-xs text-muted-foreground font-mono truncate select-all">
+                                  {bookingDetailUrl}
+                                </div>
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  className="w-full font-semibold"
+                                  onClick={() => {
+                                    navigator.clipboard.writeText(bookingDetailUrl).catch(() => {});
+                                    setCopiedBookingLink(true);
+                                    setTimeout(() => setCopiedBookingLink(false), 2500);
+                                  }}
+                                >
+                                  {copiedBookingLink
+                                    ? <><Check className="w-3.5 h-3.5 mr-1.5 text-green-600" />Copied!</>
+                                    : <><Copy className="w-3.5 h-3.5 mr-1.5" />Copy Link</>
+                                  }
+                                </Button>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })()}
 
                     {/* ── KIOSK: Portal QR code panel ── */}
                     {isKiosk && (() => {

@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
-import { listingsTable, categoriesTable, bookingsTable, blockedDatesTable, listingAddonsTable, productsTable, businessProfileTable } from "@workspace/db/schema";
+import { listingsTable, categoriesTable, bookingsTable, blockedDatesTable, listingAddonsTable, productsTable, businessProfileTable, contactCardsTable } from "@workspace/db/schema";
 import { eq, and, gte, lte, ilike, or, count, sum, inArray, isNotNull } from "drizzle-orm";
 import { sql } from "drizzle-orm";
 
@@ -333,10 +333,25 @@ router.get("/listings/:id", async (req, res) => {
       .from(bookingsTable)
       .where(and(...statsConditions));
 
+    // Include contact card if assigned
+    let contactCard: { id: number; name: string; address: string | null; phone: string | null; email: string | null; specialInstructions: string | null } | null = null;
+    if (listing.contactCardId) {
+      const [cc] = await db.select({
+        id: contactCardsTable.id,
+        name: contactCardsTable.name,
+        address: contactCardsTable.address,
+        phone: contactCardsTable.phone,
+        email: contactCardsTable.email,
+        specialInstructions: contactCardsTable.specialInstructions,
+      }).from(contactCardsTable).where(eq(contactCardsTable.id, listing.contactCardId));
+      contactCard = cc ?? null;
+    }
+
     res.json({
       ...formatListing(listing, categoryName, categorySlug),
       totalBookings: Number(stats?.totalBookings ?? 0),
       totalRevenue: parseFloat(stats?.totalRevenue ?? "0"),
+      contactCard,
     });
   } catch (err) {
     req.log.error(err);
