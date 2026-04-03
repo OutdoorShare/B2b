@@ -1968,7 +1968,7 @@ export default function StorefrontBook() {
                       size="lg"
                       className="w-full h-13 text-base font-bold rounded-xl"
                       onClick={handleFinalSubmit}
-                      disabled={isSubmitting || !agreeChecked || !sigHasContent || listingRules.some(r => !ruleInitials[r.id]?.trim())}
+                      disabled={isSubmitting || !agreeChecked || !sigHasContent || listingRules.some(r => !ruleChecks[r.id])}
                     >
                       {isSubmitting ? "Submitting…" : "Sign & Verify My Identity"}
                       <ScanFace className="w-4 h-4 ml-2" />
@@ -2096,12 +2096,15 @@ export default function StorefrontBook() {
                               <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0 text-amber-600" />
                               <div>
                                 <p className="font-semibold">Couldn't start verification session</p>
-                                <p className="text-amber-700 mt-0.5">There was a problem connecting to our verification service. Please try again.</p>
+                                <p className="text-amber-700 mt-0.5">There was a problem connecting to our verification service. You may retry or continue — your booking is already saved and the rental company will be notified.</p>
                               </div>
                             </div>
                             <Button size="lg" variant="outline" className="w-full h-13 text-base font-bold rounded-xl gap-2" onClick={() => fetchIdentitySession(session?.id ?? undefined)}>
                               <RefreshCw className="w-4 h-4" />
                               Retry
+                            </Button>
+                            <Button size="lg" variant="ghost" className="w-full h-11 text-sm font-medium rounded-xl gap-2 text-muted-foreground hover:text-foreground" onClick={() => { setCompletePhase(isKiosk ? "photos" : "confirmed"); window.scrollTo(0, 0); }}>
+                              Continue without verification
                             </Button>
                           </div>
                         ) : identityStatus === "failed" ? (
