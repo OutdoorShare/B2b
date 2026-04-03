@@ -885,6 +885,7 @@ router.get("/pickup/:token", async (req, res) => {
       listingImage: Array.isArray(listing?.imageUrls) && listing.imageUrls.length > 0 ? listing.imageUrls[0] : null,
       companyName,
       logoUrl,
+      source: booking.source ?? "online",
       pickupCompleted: !!booking.pickupCompletedAt,
       pickupPhotos: booking.pickupPhotos ? JSON.parse(booking.pickupPhotos) : [],
     });

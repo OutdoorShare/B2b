@@ -14,6 +14,7 @@ type PickupInfo = {
   listingImage: string | null;
   companyName: string;
   logoUrl: string | null;
+  source: string;
   pickupCompleted: boolean;
   pickupPhotos: string[];
 };
@@ -157,8 +158,31 @@ export default function PickupPage() {
           </div>
         </div>
 
-        {/* Done / Success state */}
-        {done ? (
+        {/* Kiosk booking — photos were already taken during in-person checkout */}
+        {info.source === "kiosk" && info.pickupPhotos.length > 0 ? (
+          <div className="space-y-4">
+            <div className="bg-white rounded-2xl shadow-sm border border-green-100 p-6 text-center">
+              <CheckCircle2 className="w-12 h-12 mx-auto mb-3" style={{ color: brandColor }} />
+              <h3 className="text-xl font-bold text-gray-900 mb-1">Photos Already Captured</h3>
+              <p className="text-gray-500 text-sm">
+                Your pickup photos were taken in person during checkout — nothing more to do on your end.
+              </p>
+            </div>
+            <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-4">
+              <p className="text-sm font-semibold text-gray-700 mb-3">Photos on file ({info.pickupPhotos.length})</p>
+              <div className="grid grid-cols-3 gap-2">
+                {info.pickupPhotos.map((url, i) => (
+                  <div key={i} className="aspect-square rounded-xl overflow-hidden bg-gray-100">
+                    <img src={url} alt={`Photo ${i + 1}`} className="w-full h-full object-cover" />
+                  </div>
+                ))}
+              </div>
+            </div>
+            <p className="text-center text-xs text-gray-400">
+              Powered by OutdoorShare — photos protect both you and the equipment owner.
+            </p>
+          </div>
+        ) : done ? (
           <div className="space-y-4">
             <div className="bg-white rounded-2xl shadow-sm border border-green-100 p-6 text-center">
               <CheckCircle2 className="w-12 h-12 mx-auto mb-3" style={{ color: brandColor }} />
