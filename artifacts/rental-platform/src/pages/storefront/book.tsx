@@ -143,17 +143,22 @@ function saveSession(c: CustomerSession) {
 }
 
 // ── Card Scan Helper ──────────────────────────────────────────────────────────
+type ScanPhase = "idle" | "camera" | "processing" | "result" | "manual";
+
 function CardScanHelper() {
   const [open, setOpen] = useState(false);
+  const [phase, setPhase] = useState<ScanPhase>("idle");
   const [cardNumber, setCardNumber] = useState("");
   const [expiry, setExpiry] = useState("");
   const [cvc, setCvc] = useState("");
   const [copied, setCopied] = useState<"number" | "expiry" | null>(null);
+  const [camError, setCamError] = useState("");
+  const [ocrProgress, setOcrProgress] = useState(0);
+  const [flashActive, setFlashActive] = useState(false);
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const streamRef = useRef<MediaStream | null>(null);
   const numberRef = useRef<HTMLInputElement>(null);
-
-  useEffect(() => {
-    if (open) { setCardNumber(""); setExpiry(""); setCvc(""); setTimeout(() => numberRef.current?.focus(), 150); }
-  }, [open]);
 
   function fmtNumber(v: string) {
     const d = v.replace(/\D/g, "").slice(0, 16);
@@ -164,21 +169,132 @@ function CardScanHelper() {
     return d.length > 2 ? `${d.slice(0,2)} / ${d.slice(2)}` : d;
   }
 
+  function stopCamera() {
+    streamRef.current?.getTracks().forEach(t => t.stop());
+    streamRef.current = null;
+  }
+
+  function handleClose() {
+    stopCamera();
+    setOpen(false);
+    setPhase("idle");
+    setCamError("");
+    setOcrProgress(0);
+  }
+
+  async function startCamera() {
+    setCamError("");
+    setPhase("camera");
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: { ideal: "environment" }, width: { ideal: 1280 }, height: { ideal: 720 } },
+        audio: false,
+      });
+      streamRef.current = stream;
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+        videoRef.current.play();
+      }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      if (msg.toLowerCase().includes("denied") || msg.toLowerCase().includes("permission")) {
+        setCamError("Camera access was denied. Please allow camera access in your browser settings, or enter the card details manually.");
+      } else {
+        setCamError("Could not open the camera on this device. Please enter the card details manually.");
+      }
+      setPhase("manual");
+    }
+  }
+
+  function parseCardFromText(text: string): { number: string; expiry: string } {
+    const cleaned = text.replace(/[^0-9/\s\-]/g, " ").replace(/\s+/g, " ");
+    let number = "";
+    let expiry = "";
+
+    const numMatch = cleaned.match(/\b(\d{4})[\s\-]?(\d{4})[\s\-]?(\d{4})[\s\-]?(\d{4})\b/);
+    if (numMatch) {
+      number = `${numMatch[1]} ${numMatch[2]} ${numMatch[3]} ${numMatch[4]}`;
+    } else {
+      const amexMatch = cleaned.match(/\b(\d{4})[\s\-]?(\d{6})[\s\-]?(\d{5})\b/);
+      if (amexMatch) number = `${amexMatch[1]} ${amexMatch[2]} ${amexMatch[3]}`;
+    }
+
+    const expMatch = cleaned.match(/\b(0[1-9]|1[0-2])[\s\/\-](\d{2})\b/);
+    if (expMatch) expiry = `${expMatch[1]} / ${expMatch[2]}`;
+
+    return { number, expiry };
+  }
+
+  async function captureAndScan() {
+    const video = videoRef.current;
+    const canvas = canvasRef.current;
+    if (!video || !canvas) return;
+
+    setFlashActive(true);
+    setTimeout(() => setFlashActive(false), 200);
+
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    const ctx = canvas.getContext("2d")!;
+    ctx.drawImage(video, 0, 0);
+
+    const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    const data = imageData.data;
+    for (let i = 0; i < data.length; i += 4) {
+      const avg = 0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2];
+      const enhanced = avg > 140 ? 255 : 0;
+      data[i] = data[i + 1] = data[i + 2] = enhanced;
+    }
+    ctx.putImageData(imageData, 0, 0);
+
+    stopCamera();
+    setPhase("processing");
+    setOcrProgress(0);
+
+    try {
+      const { createWorker } = await import("tesseract.js");
+      const worker = await createWorker("eng", 1, {
+        logger: (m: { status: string; progress: number }) => {
+          if (m.status === "recognizing text") setOcrProgress(Math.round(m.progress * 100));
+        },
+      });
+      await worker.setParameters({ tessedit_char_whitelist: "0123456789/ -" });
+      const { data: { text } } = await worker.recognize(canvas);
+      await worker.terminate();
+
+      const { number, expiry: exp } = parseCardFromText(text);
+      if (number) {
+        setCardNumber(number);
+        setExpiry(exp);
+        setPhase("result");
+      } else {
+        setCamError("Couldn't read card details from the image. Try better lighting and hold the card flat, or enter details manually.");
+        setPhase("manual");
+      }
+    } catch {
+      setCamError("OCR processing failed. Please enter the card details manually.");
+      setPhase("manual");
+    }
+  }
+
   function copyToClipboard(text: string, field: "number" | "expiry") {
     navigator.clipboard.writeText(text.replace(/\s/g, "")).catch(() => {});
     setCopied(field);
     setTimeout(() => setCopied(null), 2000);
   }
 
-  const digits = cardNumber.replace(/\s/g, "");
-  const isScanned = digits.length >= 15;
+  useEffect(() => {
+    if (phase === "manual") setTimeout(() => numberRef.current?.focus(), 150);
+  }, [phase]);
+
+  useEffect(() => () => stopCamera(), []);
 
   if (!open) {
     return (
       <button
         type="button"
         className="flex items-center gap-1.5 text-xs text-primary/80 hover:text-primary transition-colors"
-        onClick={() => setOpen(true)}
+        onClick={() => { setOpen(true); startCamera(); }}
       >
         <ScanLine className="w-3.5 h-3.5" />
         Scan card instead
@@ -187,106 +303,180 @@ function CardScanHelper() {
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50 backdrop-blur-sm p-4">
-      <div className="bg-background rounded-2xl w-full max-w-sm shadow-2xl p-6 space-y-4">
-        <div className="flex items-center justify-between">
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/80 backdrop-blur-sm p-4">
+      <canvas ref={canvasRef} className="hidden" />
+
+      <div className="bg-background rounded-2xl w-full max-w-sm shadow-2xl overflow-hidden">
+        <div className="flex items-center justify-between px-5 pt-5 pb-3">
           <h3 className="font-semibold text-base flex items-center gap-2">
             <ScanLine className="w-4 h-4 text-primary" />
-            Scan your card
+            {phase === "processing" ? "Reading card…" : phase === "result" ? "Card scanned!" : "Scan your card"}
           </h3>
-          <button type="button" onClick={() => setOpen(false)} className="rounded-full p-1.5 hover:bg-muted transition-colors">
+          <button type="button" onClick={handleClose} className="rounded-full p-1.5 hover:bg-muted transition-colors">
             <X className="w-4 h-4" />
           </button>
         </div>
 
-        <p className="text-sm text-muted-foreground leading-snug">
-          On <strong>iPhone/iPad</strong>: tap the card number field — your keyboard will show a{" "}
-          <strong>"Scan Credit Card"</strong> option. On <strong>Android</strong>: use autofill or type manually.
-        </p>
-
-        <div className="space-y-3">
-          <div className="space-y-1">
-            <label className="text-xs text-muted-foreground font-medium">Card number</label>
-            <input
-              ref={numberRef}
-              type="tel"
-              inputMode="numeric"
-              autoComplete="cc-number"
-              value={cardNumber}
-              onChange={e => setCardNumber(fmtNumber(e.target.value))}
-              placeholder="•••• •••• •••• ••••"
-              maxLength={19}
-              className="w-full border rounded-xl px-4 py-3 font-mono text-base tracking-widest bg-background focus:outline-none focus:ring-2 focus:ring-primary/40 transition-all"
+        {phase === "camera" && (
+          <div className="relative bg-black w-full" style={{ aspectRatio: "4/3" }}>
+            <video
+              ref={videoRef}
+              autoPlay
+              playsInline
+              muted
+              className="w-full h-full object-cover"
             />
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1">
-              <label className="text-xs text-muted-foreground font-medium">Expiry</label>
-              <input
-                type="tel"
-                inputMode="numeric"
-                autoComplete="cc-exp"
-                value={expiry}
-                onChange={e => setExpiry(fmtExpiry(e.target.value))}
-                placeholder="MM / YY"
-                maxLength={7}
-                className="w-full border rounded-xl px-4 py-3 font-mono text-base tracking-wider bg-background focus:outline-none focus:ring-2 focus:ring-primary/40 transition-all"
-              />
-            </div>
-            <div className="space-y-1">
-              <label className="text-xs text-muted-foreground font-medium">CVC</label>
-              <input
-                type="tel"
-                inputMode="numeric"
-                autoComplete="cc-csc"
-                value={cvc}
-                onChange={e => setCvc(e.target.value.replace(/\D/g, "").slice(0, 4))}
-                placeholder="•••"
-                maxLength={4}
-                className="w-full border rounded-xl px-4 py-3 font-mono text-base tracking-widest bg-background focus:outline-none focus:ring-2 focus:ring-primary/40 transition-all"
-              />
-            </div>
-          </div>
-        </div>
-
-        {isScanned && (
-          <div className="bg-primary/5 border border-primary/20 rounded-xl p-4 space-y-2.5">
-            <p className="text-xs font-semibold text-primary flex items-center gap-1.5">
-              <CheckCircle2 className="w-3.5 h-3.5" /> Card details ready — enter these below
-            </p>
-            <div className="flex items-center justify-between gap-2">
-              <span className="font-mono text-sm font-bold tracking-widest truncate">{cardNumber}</span>
-              <button
-                type="button"
-                onClick={() => copyToClipboard(cardNumber, "number")}
-                className="shrink-0 flex items-center gap-1 text-xs text-primary hover:underline"
+            {flashActive && <div className="absolute inset-0 bg-white opacity-80 pointer-events-none" />}
+            <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+              <div
+                className="border-2 border-white rounded-xl shadow-lg"
+                style={{ width: "82%", aspectRatio: "1.586/1" }}
               >
-                {copied === "number" ? <><Check className="w-3.5 h-3.5" />Copied</> : <><Copy className="w-3.5 h-3.5" />Copy</>}
-              </button>
-            </div>
-            {expiry && (
-              <div className="flex items-center justify-between gap-2">
-                <span className="text-sm text-muted-foreground">Exp: <span className="font-mono font-medium">{expiry}</span></span>
-                <button
-                  type="button"
-                  onClick={() => copyToClipboard(expiry, "expiry")}
-                  className="shrink-0 flex items-center gap-1 text-xs text-primary hover:underline"
-                >
-                  {copied === "expiry" ? <><Check className="w-3.5 h-3.5" />Copied</> : <><Copy className="w-3.5 h-3.5" />Copy</>}
-                </button>
+                <div className="absolute top-0 left-0 w-6 h-6 border-t-4 border-l-4 border-primary rounded-tl-xl" />
+                <div className="absolute top-0 right-0 w-6 h-6 border-t-4 border-r-4 border-primary rounded-tr-xl" />
+                <div className="absolute bottom-0 left-0 w-6 h-6 border-b-4 border-l-4 border-primary rounded-bl-xl" />
+                <div className="absolute bottom-0 right-0 w-6 h-6 border-b-4 border-r-4 border-primary rounded-br-xl" />
               </div>
-            )}
-            {cvc && <p className="text-sm text-muted-foreground">CVC: <span className="font-mono font-medium">{"•".repeat(cvc.length)}</span></p>}
+            </div>
+            <p className="absolute bottom-3 left-0 right-0 text-center text-white text-xs drop-shadow">
+              Position card inside the frame — front side facing up
+            </p>
           </div>
         )}
 
-        <button
-          type="button"
-          onClick={() => setOpen(false)}
-          className="w-full bg-primary text-primary-foreground rounded-xl py-3 font-semibold text-sm hover:bg-primary/90 transition-colors"
-        >
-          Done — enter details in the form below
-        </button>
+        {phase === "processing" && (
+          <div className="px-5 py-8 flex flex-col items-center gap-4">
+            <div className="relative w-16 h-16 flex items-center justify-center">
+              <svg className="absolute inset-0" viewBox="0 0 64 64">
+                <circle cx="32" cy="32" r="28" fill="none" stroke="currentColor" strokeWidth="4" className="text-muted" />
+                <circle
+                  cx="32" cy="32" r="28" fill="none" stroke="currentColor" strokeWidth="4"
+                  strokeDasharray={`${2 * Math.PI * 28}`}
+                  strokeDashoffset={`${2 * Math.PI * 28 * (1 - ocrProgress / 100)}`}
+                  strokeLinecap="round"
+                  className="text-primary transition-all duration-300"
+                  style={{ transformOrigin: "center", transform: "rotate(-90deg)" }}
+                />
+              </svg>
+              <ScanLine className="w-7 h-7 text-primary" />
+            </div>
+            <div className="text-center">
+              <p className="font-medium text-sm">Analyzing card image…</p>
+              <p className="text-xs text-muted-foreground mt-1">{ocrProgress}% complete</p>
+            </div>
+          </div>
+        )}
+
+        {phase === "result" && (
+          <div className="px-5 pb-5 space-y-4">
+            <div className="bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-800 rounded-xl p-4 space-y-3">
+              <p className="text-xs font-semibold text-green-700 dark:text-green-400 flex items-center gap-1.5">
+                <CheckCircle2 className="w-3.5 h-3.5" /> Card details extracted — enter these in the form below
+              </p>
+              <div className="flex items-center justify-between gap-2">
+                <span className="font-mono text-sm font-bold tracking-widest truncate">{cardNumber}</span>
+                <button type="button" onClick={() => copyToClipboard(cardNumber, "number")} className="shrink-0 flex items-center gap-1 text-xs text-primary hover:underline">
+                  {copied === "number" ? <><Check className="w-3.5 h-3.5" />Copied</> : <><Copy className="w-3.5 h-3.5" />Copy</>}
+                </button>
+              </div>
+              {expiry && (
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-sm text-muted-foreground">Exp: <span className="font-mono font-medium">{expiry}</span></span>
+                  <button type="button" onClick={() => copyToClipboard(expiry, "expiry")} className="shrink-0 flex items-center gap-1 text-xs text-primary hover:underline">
+                    {copied === "expiry" ? <><Check className="w-3.5 h-3.5" />Copied</> : <><Copy className="w-3.5 h-3.5" />Copy</>}
+                  </button>
+                </div>
+              )}
+            </div>
+            <div className="flex gap-2">
+              <button type="button" onClick={() => { setCardNumber(""); setExpiry(""); startCamera(); }}
+                className="flex-1 border rounded-xl py-2.5 text-sm font-medium hover:bg-muted transition-colors flex items-center justify-center gap-1.5">
+                <RefreshCw className="w-4 h-4" /> Scan again
+              </button>
+              <button type="button" onClick={handleClose}
+                className="flex-1 bg-primary text-primary-foreground rounded-xl py-2.5 text-sm font-semibold hover:bg-primary/90 transition-colors">
+                Done
+              </button>
+            </div>
+          </div>
+        )}
+
+        {(phase === "manual" || phase === "camera") && phase !== "camera" && (
+          <div className="px-5 pb-5 space-y-4">
+            {camError && (
+              <div className="bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-700 rounded-xl px-4 py-3 text-xs text-amber-800 dark:text-amber-300 leading-snug">
+                {camError}
+              </div>
+            )}
+            <div className="space-y-3">
+              <div className="space-y-1">
+                <label className="text-xs text-muted-foreground font-medium">Card number</label>
+                <input
+                  ref={numberRef}
+                  type="tel"
+                  inputMode="numeric"
+                  autoComplete="cc-number"
+                  value={cardNumber}
+                  onChange={e => setCardNumber(fmtNumber(e.target.value))}
+                  placeholder="•••• •••• •••• ••••"
+                  maxLength={19}
+                  className="w-full border rounded-xl px-4 py-3 font-mono text-base tracking-widest bg-background focus:outline-none focus:ring-2 focus:ring-primary/40 transition-all"
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <label className="text-xs text-muted-foreground font-medium">Expiry</label>
+                  <input
+                    type="tel"
+                    inputMode="numeric"
+                    autoComplete="cc-exp"
+                    value={expiry}
+                    onChange={e => setExpiry(fmtExpiry(e.target.value))}
+                    placeholder="MM / YY"
+                    maxLength={7}
+                    className="w-full border rounded-xl px-4 py-3 font-mono text-base tracking-wider bg-background focus:outline-none focus:ring-2 focus:ring-primary/40 transition-all"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-xs text-muted-foreground font-medium">CVC</label>
+                  <input
+                    type="tel"
+                    inputMode="numeric"
+                    autoComplete="cc-csc"
+                    value={cvc}
+                    onChange={e => setCvc(e.target.value.replace(/\D/g, "").slice(0, 4))}
+                    placeholder="•••"
+                    maxLength={4}
+                    className="w-full border rounded-xl px-4 py-3 font-mono text-base tracking-widest bg-background focus:outline-none focus:ring-2 focus:ring-primary/40 transition-all"
+                  />
+                </div>
+              </div>
+            </div>
+            <div className="flex gap-2">
+              <button type="button" onClick={() => startCamera()}
+                className="flex items-center gap-1.5 border rounded-xl px-4 py-2.5 text-sm font-medium hover:bg-muted transition-colors">
+                <ScanLine className="w-4 h-4" /> Try camera
+              </button>
+              <button type="button" onClick={handleClose}
+                className="flex-1 bg-primary text-primary-foreground rounded-xl py-2.5 text-sm font-semibold hover:bg-primary/90 transition-colors">
+                Done
+              </button>
+            </div>
+          </div>
+        )}
+
+        {phase === "camera" && (
+          <div className="px-5 py-4 flex gap-2">
+            <button type="button" onClick={() => { stopCamera(); setPhase("manual"); }}
+              className="flex-1 border rounded-xl py-3 text-sm font-medium hover:bg-muted transition-colors">
+              Enter manually
+            </button>
+            <button type="button" onClick={captureAndScan}
+              className="flex-1 bg-primary text-primary-foreground rounded-xl py-3 text-sm font-bold hover:bg-primary/90 transition-colors flex items-center justify-center gap-2">
+              <ScanLine className="w-4 h-4" /> Capture
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );
