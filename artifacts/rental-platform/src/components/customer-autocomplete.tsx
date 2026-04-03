@@ -207,43 +207,51 @@ function SuggestionDropdown({
   setHighlightIdx: (i: number) => void;
 }) {
   return (
-    <div className="absolute z-50 top-full left-0 right-0 mt-1 bg-popover border border-border rounded-xl shadow-lg overflow-hidden">
-      <div className="px-3 py-1.5 border-b bg-muted/40">
-        <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">
-          Existing Contacts
+    <div className="absolute z-50 top-full left-0 right-0 mt-1.5 bg-white dark:bg-zinc-900 border-2 border-border rounded-xl shadow-xl overflow-hidden">
+      <div className="px-4 py-2 bg-muted border-b border-border flex items-center gap-2">
+        <User className="w-3.5 h-3.5 text-muted-foreground" />
+        <p className="text-xs font-semibold text-foreground">
+          Existing contacts
         </p>
       </div>
-      <div className="max-h-52 overflow-y-auto">
+      <div className="max-h-64 overflow-y-auto divide-y divide-border">
         {suggestions.map((r, i) => (
           <button
             key={r.email}
             type="button"
-            className={`w-full text-left px-3 py-2.5 flex items-start gap-3 hover:bg-accent transition-colors ${i === highlightIdx ? "bg-accent" : ""}`}
+            className={`w-full text-left px-4 py-3 flex items-center gap-3 transition-colors ${i === highlightIdx ? "bg-primary/8 dark:bg-primary/15" : "hover:bg-muted/60"}`}
             onMouseEnter={() => setHighlightIdx(i)}
             onMouseDown={e => { e.preventDefault(); onSelect(r); }}
           >
-            <div className="w-7 h-7 rounded-full bg-primary/10 flex items-center justify-center shrink-0 mt-0.5">
-              <span className="text-xs font-bold text-primary">
+            <div className="w-9 h-9 rounded-full bg-primary/15 flex items-center justify-center shrink-0 border border-primary/20">
+              <span className="text-sm font-bold text-primary leading-none">
                 {r.name.trim().charAt(0).toUpperCase()}
               </span>
             </div>
             <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-2">
-                <span className="text-sm font-semibold truncate">{r.name}</span>
+              <div className="flex items-center gap-2 mb-0.5">
+                <span className="text-sm font-semibold text-foreground truncate">{r.name}</span>
                 {r.bookingCount != null && r.bookingCount > 0 && (
-                  <span className="text-[10px] font-medium text-muted-foreground bg-muted px-1.5 py-px rounded-full shrink-0">
-                    {r.bookingCount} booking{r.bookingCount !== 1 ? "s" : ""}
+                  <span className="text-[10px] font-semibold text-primary bg-primary/10 px-2 py-0.5 rounded-full shrink-0">
+                    {r.bookingCount}×
                   </span>
                 )}
               </div>
-              <div className="flex items-center gap-3 mt-0.5">
-                <span className="text-xs text-muted-foreground truncate">{r.email}</span>
+              <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                <Mail className="w-3 h-3 shrink-0" />
+                <span className="truncate">{r.email}</span>
                 {r.phone && (
-                  <span className="text-xs text-muted-foreground shrink-0">{r.phone}</span>
+                  <>
+                    <span className="mx-1 opacity-40">·</span>
+                    <Phone className="w-3 h-3 shrink-0" />
+                    <span className="shrink-0">{r.phone}</span>
+                  </>
                 )}
               </div>
             </div>
-            <Check className="w-3.5 h-3.5 text-primary opacity-0 group-hover:opacity-100 shrink-0 mt-1" />
+            {i === highlightIdx && (
+              <Check className="w-4 h-4 text-primary shrink-0" />
+            )}
           </button>
         ))}
       </div>
