@@ -332,9 +332,31 @@ router.get("/listings/:id/booked-dates", async (req, res) => {
       .from(blockedDatesTable)
       .where(and(...blockConditions));
 
+    // Product service window: if the listing is linked to a product that has a serviceUntil in the future
+    const productBlocks: { start: string; end: string; type: string }[] = [];
+    const [listing] = await db
+      .select({ productId: listingsTable.productId })
+      .from(listingsTable)
+      .where(eq(listingsTable.id, listingId))
+      .limit(1);
+    if (listing?.productId) {
+      const [product] = await db
+        .select({ serviceUntil: productsTable.serviceUntil, status: productsTable.status })
+        .from(productsTable)
+        .where(eq(productsTable.id, listing.productId))
+        .limit(1);
+      if (product?.serviceUntil && product.status !== "available") {
+        const today = new Date().toISOString().split("T")[0];
+        if (product.serviceUntil >= today) {
+          productBlocks.push({ start: today, end: product.serviceUntil, type: "service" });
+        }
+      }
+    }
+
     res.json([
       ...bookings.map(b => ({ start: b.startDate, end: b.endDate, type: "booking" })),
       ...blocked.map(b => ({ start: b.startDate, end: b.endDate, type: "blocked" })),
+      ...productBlocks,
     ]);
   } catch (err) {
     req.log.error(err);

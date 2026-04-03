@@ -19,6 +19,7 @@ export const productsTable = pgTable("products", {
   specs: text("specs"),
   notes: text("notes"),
   nextMaintenanceDate: text("next_maintenance_date"),
+  serviceUntil: text("service_until"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });

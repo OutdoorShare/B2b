@@ -4,6 +4,8 @@ import { productsTable, maintenanceLogsTable, listingsTable } from "@workspace/d
 import { eq, and, desc } from "drizzle-orm";
 import { requireTenant } from "../middleware/admin-auth";
 
+const OUT_OF_SERVICE_STATUSES = ["maintenance", "damaged", "out_of_service"];
+
 const router: IRouter = Router();
 
 // ── List all products for the tenant ────────────────────────────────────────
@@ -101,7 +103,14 @@ router.put("/products/:id", requireTenant as any, async (req, res) => {
     const {
       name, sku, categoryId, description, status, quantity,
       imageUrls, brand, model, specs, notes, nextMaintenanceDate,
+      serviceUntil, deactivateListings,
     } = req.body;
+
+    // Determine serviceUntil: clear it if going back to available
+    const resolvedServiceUntil = status === "available"
+      ? null
+      : (serviceUntil !== undefined ? (serviceUntil || null) : undefined);
+
     const [updated] = await db
       .update(productsTable)
       .set({
@@ -117,10 +126,25 @@ router.put("/products/:id", requireTenant as any, async (req, res) => {
         ...(specs !== undefined && { specs }),
         ...(notes !== undefined && { notes }),
         ...(nextMaintenanceDate !== undefined && { nextMaintenanceDate }),
+        ...(resolvedServiceUntil !== undefined && { serviceUntil: resolvedServiceUntil }),
         updatedAt: new Date(),
       })
       .where(eq(productsTable.id, existing.id))
       .returning();
+
+    // Deactivate or reactivate linked listings based on the toggle
+    if (deactivateListings === true && status && OUT_OF_SERVICE_STATUSES.includes(status)) {
+      await db
+        .update(listingsTable)
+        .set({ status: "draft", updatedAt: new Date() })
+        .where(and(eq(listingsTable.productId, existing.id), eq(listingsTable.tenantId, req.tenantId!)));
+    } else if (status === "available" && deactivateListings === false) {
+      await db
+        .update(listingsTable)
+        .set({ status: "active", updatedAt: new Date() })
+        .where(and(eq(listingsTable.productId, existing.id), eq(listingsTable.tenantId, req.tenantId!)));
+    }
+
     res.json(updated);
   } catch (err) {
     req.log.error(err);

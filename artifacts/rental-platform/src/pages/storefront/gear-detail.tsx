@@ -102,13 +102,28 @@ export default function StorefrontGearDetail() {
       .catch(() => {});
   }, [(listing as any)?.categorySlug]);
 
+  const [serviceDates, setServiceDates] = useState<Date[]>([]);
+
   useEffect(() => {
     if (!id) return;
     fetch(`${BASE}/api/listings/${id}/booked-dates`)
       .then(r => r.json())
-      .then((data: { start: string; end: string }[]) => {
+      .then((data: { start: string; end: string; type?: string }[]) => {
         if (Array.isArray(data)) {
-          setBookedRanges(data.map(b => ({ start: new Date(b.start), end: new Date(b.end) })));
+          const serviceRanges = data.filter(b => b.type === "service");
+          const otherRanges = data.filter(b => b.type !== "service");
+          setBookedRanges(otherRanges.map(b => ({ start: new Date(b.start), end: new Date(b.end) })));
+          // Expand service dates
+          const svcDates: Date[] = [];
+          serviceRanges.forEach(b => {
+            let cur = startOfDay(new Date(b.start));
+            const last = startOfDay(new Date(b.end));
+            while (!isAfter(cur, last)) {
+              svcDates.push(new Date(cur));
+              cur = addDays(cur, 1);
+            }
+          });
+          setServiceDates(svcDates);
         }
       })
       .catch(() => {});
@@ -128,11 +143,13 @@ export default function StorefrontGearDetail() {
     return disabled;
   }, [bookedRanges]);
 
-  // Check if a selected range overlaps any booked range
+  const allDisabledDates = useMemo(() => [...disabledDates, ...serviceDates], [disabledDates, serviceDates]);
+
+  // Check if a selected range overlaps any booked/service range
   const rangeHasConflict = useMemo(() => {
     if (!dateRange?.from || !dateRange?.to) return false;
-    return disabledDates.some(d => isWithinInterval(d, { start: dateRange.from!, end: dateRange.to! }));
-  }, [dateRange, disabledDates]);
+    return allDisabledDates.some(d => isWithinInterval(d, { start: dateRange.from!, end: dateRange.to! }));
+  }, [dateRange, allDisabledDates]);
 
   const days = useMemo(() => {
     if (!dateRange?.from || !dateRange?.to) return 0;
@@ -324,7 +341,7 @@ export default function StorefrontGearDetail() {
                   onSelect={setDateRange}
                   disabled={[
                     { before: new Date() },
-                    ...disabledDates,
+                    ...allDisabledDates,
                   ]}
                   numberOfMonths={calendarMonths}
                   className="[--cell-size:2rem] sm:[--cell-size:2.5rem] w-full"
@@ -332,8 +349,11 @@ export default function StorefrontGearDetail() {
                     root: "w-full",
                     day: "group/day relative aspect-square w-full select-none p-0 text-center [&:first-child[data-selected=true]_button]:rounded-l-md [&:last-child[data-selected=true]_button]:rounded-r-md",
                   }}
-                  modifiers={{ booked: disabledDates }}
-                  modifiersClassNames={{ booked: "bg-red-50 text-red-400 line-through opacity-60" }}
+                  modifiers={{ booked: disabledDates, service: serviceDates }}
+                  modifiersClassNames={{
+                    booked: "bg-red-50 text-red-400 line-through opacity-60",
+                    service: "bg-orange-50 text-orange-400 line-through opacity-60",
+                  }}
                 />
               </div>
 

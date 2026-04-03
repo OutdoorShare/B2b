@@ -12,7 +12,7 @@ import { format } from "date-fns";
 import {
   ArrowLeft, Pencil, Trash2, Plus, Wrench, AlertTriangle,
   CheckCircle2, Clock, Archive, Package, ImageIcon, ExternalLink,
-  ChevronRight, CalendarDays, User, DollarSign, Loader2, X,
+  ChevronRight, CalendarDays, User, DollarSign, Loader2, X, CalendarOff, ToggleLeft, ToggleRight,
 } from "lucide-react";
 
 type ProductStatus = "available" | "maintenance" | "damaged" | "reserved" | "out_of_service";
@@ -32,10 +32,13 @@ type Product = {
   description: string | null;
   notes: string | null;
   nextMaintenanceDate: string | null;
+  serviceUntil: string | null;
   linkedListings: { id: number; title: string; status: string }[];
   createdAt: string;
   updatedAt: string;
 };
+
+const NEEDS_SERVICE_DIALOG: ProductStatus[] = ["maintenance", "damaged", "out_of_service", "reserved"];
 
 type MaintenanceLog = {
   id: number;
@@ -78,6 +81,10 @@ export default function AdminInventoryDetail() {
 
   // Status change
   const [statusSaving, setStatusSaving] = useState(false);
+  // Service dialog (shown when setting non-available status)
+  const [pendingStatus, setPendingStatus] = useState<ProductStatus | null>(null);
+  const [serviceUntil, setServiceUntil] = useState("");
+  const [deactivateListings, setDeactivateListings] = useState(true);
 
   // Log form
   const [showLogForm, setShowLogForm] = useState(false);
@@ -113,19 +120,50 @@ export default function AdminInventoryDetail() {
 
   useEffect(() => { fetchAll(); }, [id]);
 
-  const handleStatusChange = async (newStatus: ProductStatus) => {
+  const handleStatusChange = (newStatus: ProductStatus) => {
+    if (!product || product.status === newStatus) return;
+    if (newStatus === "available") {
+      // Going back to available: skip dialog, just save + clear serviceUntil
+      applyStatusChange(newStatus, "", false);
+    } else {
+      // Non-available: show the service window dialog
+      setServiceUntil("");
+      setDeactivateListings(product.linkedListings?.length > 0);
+      setPendingStatus(newStatus);
+    }
+  };
+
+  const applyStatusChange = async (newStatus: ProductStatus, svcUntil: string, deactivate: boolean) => {
     if (!product) return;
     setStatusSaving(true);
     try {
+      const body: Record<string, unknown> = {
+        status: newStatus,
+        serviceUntil: svcUntil || null,
+      };
+      if (newStatus !== "available") body.deactivateListings = deactivate;
+      else body.deactivateListings = false;
+
       const res = await fetch(`${BASE}/api/products/${id}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json", ...adminHeaders() },
-        body: JSON.stringify({ status: newStatus }),
+        body: JSON.stringify(body),
       });
       if (res.ok) {
         const updated = await res.json();
-        setProduct(prev => prev ? { ...prev, status: updated.status } : prev);
+        setProduct(prev => prev ? {
+          ...prev,
+          status: updated.status,
+          serviceUntil: updated.serviceUntil ?? null,
+          linkedListings: deactivate && newStatus !== "available"
+            ? (prev.linkedListings ?? []).map(l => ({ ...l, status: "draft" }))
+            : (!deactivate && newStatus === "available")
+              ? (prev.linkedListings ?? []).map(l => ({ ...l, status: "active" }))
+              : prev.linkedListings,
+        } : prev);
         toast({ title: `Status updated to ${STATUS_CONFIG[newStatus].label}` });
+        setPendingStatus(null);
+        fetchAll();
       }
     } catch {
       toast({ title: "Failed to update status", variant: "destructive" });
@@ -266,6 +304,81 @@ export default function AdminInventoryDetail() {
           </Button>
         </div>
       </div>
+
+      {/* Service window dialog */}
+      {pendingStatus && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="bg-background rounded-2xl border shadow-xl w-full max-w-sm p-6 space-y-5">
+            <div className="flex items-start gap-3">
+              <div className="shrink-0 w-9 h-9 rounded-full bg-orange-100 flex items-center justify-center">
+                <CalendarOff className="w-4 h-4 text-orange-600" />
+              </div>
+              <div>
+                <h3 className="font-semibold text-base">Set Out-of-Service Window</h3>
+                <p className="text-sm text-muted-foreground mt-0.5">
+                  Changing to <strong>{STATUS_CONFIG[pendingStatus].label}</strong>.
+                  {" "}Optionally block dates on linked listing calendars.
+                </p>
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-sm font-medium flex items-center gap-1.5">
+                <CalendarDays className="w-3.5 h-3.5 text-muted-foreground" />
+                Estimated Return to Service
+              </label>
+              <input
+                type="date"
+                value={serviceUntil}
+                min={new Date().toISOString().split("T")[0]}
+                onChange={e => setServiceUntil(e.target.value)}
+                className="w-full rounded-lg border px-3 py-2 text-sm bg-background focus:outline-none focus:ring-2 focus:ring-primary"
+              />
+              <p className="text-xs text-muted-foreground">
+                Leave blank to mark as out of service with no set return date.
+              </p>
+            </div>
+
+            {(product?.linkedListings?.length ?? 0) > 0 && (
+              <div className="space-y-2">
+                <button
+                  type="button"
+                  onClick={() => setDeactivateListings(v => !v)}
+                  className="w-full flex items-center justify-between px-4 py-3 rounded-xl border bg-muted/30 hover:bg-muted/50 transition-colors"
+                >
+                  <div className="text-left">
+                    <p className="text-sm font-medium">Deactivate associated listings</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      {product!.linkedListings.length} listing{product!.linkedListings.length > 1 ? "s" : ""} will be set to draft and hidden from the storefront
+                    </p>
+                  </div>
+                  {deactivateListings
+                    ? <ToggleRight className="w-6 h-6 text-primary shrink-0" />
+                    : <ToggleLeft className="w-6 h-6 text-muted-foreground shrink-0" />}
+                </button>
+              </div>
+            )}
+
+            <div className="flex gap-2 pt-1">
+              <Button
+                className="flex-1"
+                disabled={statusSaving}
+                onClick={() => applyStatusChange(pendingStatus, serviceUntil, deactivateListings)}
+              >
+                {statusSaving ? <Loader2 className="w-4 h-4 animate-spin mr-1.5" /> : null}
+                Confirm
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() => setPendingStatus(null)}
+                disabled={statusSaving}
+              >
+                Cancel
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Delete confirm */}
       {showDeleteConfirm && (
@@ -523,6 +636,14 @@ export default function AdminInventoryDetail() {
               <StatusIcon className="w-4 h-4" />
               {cfg.label}
             </div>
+            {product.serviceUntil && product.status !== "available" && (
+              <div className="flex items-center gap-2 text-xs bg-orange-50 border border-orange-200 rounded-lg px-3 py-2">
+                <CalendarOff className="w-3.5 h-3.5 text-orange-500 shrink-0" />
+                <span className="text-orange-700">
+                  Back in service: <strong>{format(new Date(product.serviceUntil + "T12:00:00"), "MMM d, yyyy")}</strong>
+                </span>
+              </div>
+            )}
             <div className="space-y-2">
               <p className="text-xs text-muted-foreground font-medium">Change Status</p>
               <div className="space-y-1.5">
