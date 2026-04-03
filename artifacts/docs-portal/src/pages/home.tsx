@@ -66,7 +66,7 @@ export default function Home() {
 
           {/* Brand pill tags */}
           <div className="flex flex-wrap justify-center gap-2 mt-6">
-            {["Getting Started", "Operations", "Customers", "Tools", "Account"].map((tag) => (
+            {["Getting Started", "Operations", "Customers", "Tools", "Account", "FAQs"].map((tag) => (
               <span
                 key={tag}
                 className="text-xs font-medium px-3 py-1 rounded-full"
