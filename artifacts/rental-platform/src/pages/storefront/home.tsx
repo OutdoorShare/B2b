@@ -76,18 +76,18 @@ const HOW_IT_WORKS = [
 const PROTECTION_PILLARS = [
   {
     icon: Car,
-    title: "Equipment Damage",
-    description: "Accidental damage to the rental equipment during your booking period — accidents, weather events, mechanical breakdown, and more.",
+    title: "Accidental Equipment Damage",
+    description: "Covers accidental damage to rented equipment during the rental period, including partial loss from accidents — subject to a deductible.",
   },
   {
     icon: ShieldCheck,
-    title: "Contractual Protection",
-    description: "The OutdoorShare Protection Plan is a contractual protection offering — not an insurance policy. OutdoorShare is not an insurance provider.",
+    title: "Liability Protection",
+    description: "Provides liability protection for certain incidents that occur while using the rented equipment. Not an insurance policy — OutdoorShare is not an insurance provider.",
   },
   {
     icon: AlertTriangle,
     title: "Renter Responsibility",
-    description: "Renters remain responsible for deductibles and situations excluded from coverage. Use equipment responsibly and document its condition.",
+    description: "Renters remain responsible for deductibles, intentional damage, theft without forcible entry, misuse, normal wear and tear, and incidents not reported within 24 hours.",
   },
 ];
 
@@ -98,7 +98,7 @@ const FAQ_ITEMS = [
   },
   {
     question: "How does the protection plan work?",
-    answer: "Every booking includes an OutdoorShare Protection Plan fee paid at checkout. It is a contractual protection offering — not an insurance policy — that covers accidental damage to rental equipment from accidents, weather events, and mechanical breakdown. Renters remain responsible for deductibles and excluded situations. Learn more at myoutdoorshare.com/protection-plan.",
+    answer: "The OutdoorShare Protection Plan is a contractual protection offering — not an insurance policy — that covers accidental damage to rented equipment, liability protection for certain incidents, and partial loss from accidents. Renters remain responsible for deductibles, intentional damage, theft without documented forcible entry, misuse, and normal wear and tear. Learn more at myoutdoorshare.com/protection-plan.",
   },
   {
     question: "Is booking really instant, or do I need to wait for approval?",

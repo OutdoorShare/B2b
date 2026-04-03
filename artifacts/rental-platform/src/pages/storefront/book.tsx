@@ -19,7 +19,7 @@ import {
   Lock, User, CreditCard, FileText, Eye, EyeOff, ShieldCheck,
   Zap, AlertTriangle, Umbrella, Star, Loader2, BadgeCheck,
   ScanFace, RefreshCw, XCircle, Clock, Tag, Monitor, QrCode, Smartphone,
-  ScanLine, X, Copy, Check, Upload, ImagePlus, Car, Mountain, BookOpen, Building2
+  ScanLine, X, Copy, Check, Upload, ImagePlus, Car, Mountain, BookOpen, Building2, Package
 } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { differenceInDays, format, addDays } from "date-fns";
@@ -1306,15 +1306,15 @@ export default function StorefrontBook() {
                               <div className="flex items-start justify-between gap-4">
                                 <div className="flex-1">
                                   <p className="text-sm text-gray-700 mb-3">
-                                    All rentals include the OutdoorShare Protection Plan — a contractual protection offering (not insurance) covering accidental equipment damage. Renters are responsible for deductibles and excluded situations.{" "}
+                                    A contractual protection offering (not insurance) that covers accidental damage to rented equipment, liability protection for certain incidents, and partial loss from accidents. Renters are responsible for deductibles and excluded situations.{" "}
                                     <a href="https://myoutdoorshare.com/protection-plan" target="_blank" rel="noopener noreferrer" className="font-semibold underline" style={{ color: "#3ab549" }}>Learn more →</a>
                                   </p>
                                   <div className="grid grid-cols-2 gap-x-4 gap-y-1.5">
                                     {[
-                                      { icon: AlertTriangle, text: "Accident & collision damage" },
-                                      { icon: Umbrella, text: "Weather & water damage" },
-                                      { icon: Zap, text: "Mechanical breakdown" },
-                                      { icon: ShieldCheck, text: "Disaster & fire coverage" },
+                                      { icon: AlertTriangle, text: "Accidental equipment damage" },
+                                      { icon: ShieldCheck, text: "Liability protection" },
+                                      { icon: Package, text: "Partial loss from accidents" },
+                                      { icon: Lock, text: "Theft w/ forcible entry" },
                                     ].map(({ icon: Icon, text }) => (
                                       <div key={text} className="flex items-center gap-1.5">
                                         <Icon className="w-3.5 h-3.5 shrink-0" style={{ color: "#3ab549" }} />

@@ -452,15 +452,15 @@ export default function StorefrontGearDetail() {
                   <div className="px-4 py-3 flex items-start justify-between gap-4" style={{ background: "#f0faf1" }}>
                     <div className="flex-1">
                       <p className="text-xs text-gray-700 mb-2">
-                        Included with every rental. A contractual protection offering (not insurance) covering accidental equipment damage — accidents, weather events, and mechanical breakdown. Renters are responsible for deductibles.{" "}
+                        A contractual protection offering (not insurance) covering accidental equipment damage, liability protection, and partial loss from accidents. Renters are responsible for deductibles and excluded situations.{" "}
                         <a href="https://myoutdoorshare.com/protection-plan" target="_blank" rel="noopener noreferrer" className="font-semibold underline" style={{ color: "#3ab549" }}>Learn more →</a>
                       </p>
                       <div className="grid grid-cols-2 gap-x-3 gap-y-1">
                         {[
-                          { icon: AlertTriangle, text: "Accident & collision" },
-                          { icon: Umbrella, text: "Weather & water" },
-                          { icon: Zap, text: "Mechanical breakdown" },
-                          { icon: ShieldCheck, text: "Disaster & fire" },
+                          { icon: AlertTriangle, text: "Accidental equipment damage" },
+                          { icon: ShieldCheck, text: "Liability protection" },
+                          { icon: Package, text: "Partial loss from accidents" },
+                          { icon: Lock, text: "Theft w/ forcible entry" },
                         ].map(({ icon: Icon, text }) => (
                           <div key={text} className="flex items-center gap-1">
                             <Icon className="w-3 h-3 shrink-0" style={{ color: "#3ab549" }} />
