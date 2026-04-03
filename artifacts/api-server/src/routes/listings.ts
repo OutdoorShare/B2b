@@ -1,7 +1,7 @@
 import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
-import { listingsTable, categoriesTable, bookingsTable, blockedDatesTable, listingAddonsTable, productsTable } from "@workspace/db/schema";
-import { eq, and, gte, lte, ilike, or, count, sum, inArray } from "drizzle-orm";
+import { listingsTable, categoriesTable, bookingsTable, blockedDatesTable, listingAddonsTable, productsTable, businessProfileTable } from "@workspace/db/schema";
+import { eq, and, gte, lte, ilike, or, count, sum, inArray, isNotNull } from "drizzle-orm";
 import { sql } from "drizzle-orm";
 
 const router: IRouter = Router();
@@ -260,6 +260,39 @@ router.post("/listings/bulk", async (req, res) => {
   } catch (err) {
     req.log.error(err);
     res.status(500).json({ error: "Bulk import failed" });
+  }
+});
+
+// GET /api/listings/addresses — distinct pickup addresses + business address for this tenant
+router.get("/listings/addresses", async (req, res) => {
+  try {
+    const tenantId = req.tenantId;
+    if (!tenantId) return res.status(401).json({ error: "Unauthorized" });
+
+    const rows = await db
+      .selectDistinct({ location: listingsTable.location })
+      .from(listingsTable)
+      .where(and(eq(listingsTable.tenantId, tenantId), isNotNull(listingsTable.location)))
+      .limit(100);
+
+    const usedAddresses = rows
+      .map(r => r.location?.trim())
+      .filter((v): v is string => !!v);
+
+    const [biz] = await db
+      .select()
+      .from(businessProfileTable)
+      .where(eq(businessProfileTable.tenantId, tenantId))
+      .limit(1);
+
+    const businessAddress = biz
+      ? [biz.address, biz.city, biz.state, biz.zipCode].filter(Boolean).join(", ") || null
+      : null;
+
+    return res.json({ usedAddresses, businessAddress });
+  } catch (err) {
+    req.log.error(err);
+    return res.status(500).json({ error: "Failed to fetch addresses" });
   }
 });
 

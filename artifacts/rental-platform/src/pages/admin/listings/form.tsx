@@ -47,12 +47,29 @@ function useCategories() {
   return categories;
 }
 
+interface PickupAddressData { usedAddresses: string[]; businessAddress: string | null; }
+function usePickupAddresses() {
+  const [data, setData] = useState<PickupAddressData>({ usedAddresses: [], businessAddress: null });
+  useEffect(() => {
+    const s = getAdminSession();
+    const headers: Record<string, string> = {};
+    if (s?.token) headers["x-admin-token"] = s.token;
+    fetch(`${BASE}/api/listings/addresses`, { headers })
+      .then(r => r.ok ? r.json() : { usedAddresses: [], businessAddress: null })
+      .then(setData)
+      .catch(() => {});
+  }, []);
+  return data;
+}
+
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 const OPTIONAL_NUMERIC = new Set(['pricePerWeek', 'pricePerHour', 'depositAmount', 'ageRestriction']);
 
 export default function AdminListingsForm() {
   const contactCards = useContactCards();
   const categories = useCategories();
+  const pickupAddresses = usePickupAddresses();
+  const [useBusinessAddress, setUseBusinessAddress] = useState(false);
   const params = useParams<{ slug: string; id?: string }>();
   const isEditing = !!params.id;
   const id = params?.id ? parseInt(params.id) : 0;
@@ -187,6 +204,19 @@ export default function AdminListingsForm() {
     }
   }, [isEditing, listing]);
 
+  // When editing: auto-check "use business address" if the listing location matches the business address (run once)
+  const didAutoSyncAddress = useRef(false);
+  useEffect(() => {
+    if (didAutoSyncAddress.current) return;
+    if (!pickupAddresses.businessAddress || !formData.location) return;
+    if (formData.location.trim() === pickupAddresses.businessAddress.trim()) {
+      setUseBusinessAddress(true);
+      didAutoSyncAddress.current = true;
+    } else if (formData.location.trim()) {
+      didAutoSyncAddress.current = true;
+    }
+  }, [pickupAddresses.businessAddress, formData.location]);
+
   // Resize inline unit rows when quantity changes (only when creating)
   useEffect(() => {
     if (isEditing) return;
@@ -282,6 +312,7 @@ export default function AdminListingsForm() {
     { key: "description", label: "Description",        done: formData.description.trim().length > 0 },
     { key: "category",    label: "Category",           done: !!formData.categoryId },
     { key: "price",       label: "Price per day > $0", done: formData.pricePerDay > 0 },
+    { key: "location",    label: "Pickup address",     done: formData.location.trim().length > 0 },
     { key: "photos",      label: "At least one photo", done: formData.imageUrls.length > 0 },
   ];
   const publishBlocked = formData.status === "active" && publishChecks.some(c => !c.done);
@@ -641,6 +672,73 @@ export default function AdminListingsForm() {
                     </div>
                   )}
                 </div>
+              </CardContent>
+            </Card>
+
+            {/* Pickup Address */}
+            <Card>
+              <CardHeader>
+                <CardTitle>
+                  Pickup Address <span className="text-destructive text-base">*</span>
+                </CardTitle>
+                <CardDescription>Where renters pick up and return this item.</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                {pickupAddresses.businessAddress && (
+                  <div className="flex items-start gap-2.5">
+                    <input
+                      type="checkbox"
+                      id="useBusinessAddress"
+                      className="mt-0.5 h-4 w-4 accent-primary cursor-pointer"
+                      checked={useBusinessAddress}
+                      onChange={e => {
+                        setUseBusinessAddress(e.target.checked);
+                        if (e.target.checked) {
+                          setFormData(prev => ({ ...prev, location: pickupAddresses.businessAddress! }));
+                        } else {
+                          setFormData(prev => ({ ...prev, location: '' }));
+                        }
+                      }}
+                    />
+                    <label htmlFor="useBusinessAddress" className="text-sm cursor-pointer leading-snug">
+                      Use business address
+                      <span className="block text-xs text-muted-foreground mt-0.5">{pickupAddresses.businessAddress}</span>
+                    </label>
+                  </div>
+                )}
+
+                <div className={useBusinessAddress ? "opacity-50 pointer-events-none" : ""}>
+                  <Input
+                    placeholder="e.g. 123 Main St, Denver, CO 80202"
+                    value={formData.location}
+                    onChange={e => setFormData(prev => ({ ...prev, location: e.target.value }))}
+                    className={!formData.location.trim() ? "border-muted" : ""}
+                  />
+                </div>
+
+                {pickupAddresses.usedAddresses.filter(a => a !== formData.location).length > 0 && !useBusinessAddress && (
+                  <div className="space-y-1.5">
+                    <p className="text-xs text-muted-foreground">Previously used addresses — click to fill:</p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {pickupAddresses.usedAddresses
+                        .filter(a => a !== formData.location)
+                        .map(addr => (
+                          <button
+                            key={addr}
+                            type="button"
+                            onClick={() => {
+                              setFormData(prev => ({ ...prev, location: addr }));
+                              setUseBusinessAddress(false);
+                            }}
+                            className="text-xs border rounded-full px-2.5 py-1 hover:bg-muted transition-colors truncate max-w-[220px]"
+                            title={addr}
+                          >
+                            {addr}
+                          </button>
+                        ))}
+                    </div>
+                  </div>
+                )}
               </CardContent>
             </Card>
           </div>
