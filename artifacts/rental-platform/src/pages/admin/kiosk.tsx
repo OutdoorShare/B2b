@@ -564,9 +564,9 @@ export default function AdminKiosk() {
       {/* ── Fullscreen Prompt Banner ── */}
       {fsSupported && fsPrompt && !showExitPad && (
         <div
-          className="fixed top-0 left-0 right-0 z-[200] flex items-center justify-between gap-3 px-5 py-3 shadow-lg cursor-pointer"
+          className="fixed bottom-0 left-0 right-0 z-[200] flex items-center justify-between gap-3 px-5 py-3 shadow-lg cursor-pointer"
           style={{ background: "linear-gradient(90deg, #1a2332 0%, #0f1923 100%)" }}
-          onClick={() => requestFs().catch(() => {})}
+          onClick={() => requestFs().then(() => setFsPrompt(false)).catch(() => {})}
         >
           <div className="flex items-center gap-3">
             <div className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center shrink-0">
@@ -577,13 +577,22 @@ export default function AdminKiosk() {
               <p className="text-white/60 text-xs mt-0.5">For the best kiosk experience</p>
             </div>
           </div>
-          <button
-            className="shrink-0 h-9 px-4 rounded-lg bg-white/10 hover:bg-white/20 active:scale-95 text-white text-sm font-semibold transition-all flex items-center gap-2"
-            onClick={e => { e.stopPropagation(); requestFs().catch(() => {}); }}
-          >
-            <Maximize className="w-4 h-4" />
-            Full Screen
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              className="shrink-0 h-9 px-4 rounded-lg bg-white/10 hover:bg-white/20 active:scale-95 text-white text-sm font-semibold transition-all flex items-center gap-2"
+              onClick={e => { e.stopPropagation(); requestFs().then(() => setFsPrompt(false)).catch(() => {}); }}
+            >
+              <Maximize className="w-4 h-4" />
+              Full Screen
+            </button>
+            <button
+              className="shrink-0 w-9 h-9 rounded-lg bg-white/10 hover:bg-white/20 active:scale-95 text-white transition-all flex items-center justify-center"
+              onClick={e => { e.stopPropagation(); setFsPrompt(false); }}
+              title="Dismiss"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
         </div>
       )}
 
