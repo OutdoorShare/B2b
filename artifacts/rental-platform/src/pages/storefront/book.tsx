@@ -1259,9 +1259,9 @@ export default function StorefrontBook() {
           </Button>
         )}
 
-        <div className={`grid grid-cols-1 gap-8 ${completePhase !== "confirmed" ? "lg:grid-cols-5" : ""}`}>
+        <div className={`grid grid-cols-1 gap-8 ${completePhase !== "confirmed" ? "xl:grid-cols-5" : ""}`}>
           {/* Main content */}
-          <div className={completePhase !== "confirmed" ? "order-1 lg:order-1 lg:col-span-3" : ""}>
+          <div className={`min-w-0 ${completePhase !== "confirmed" ? "order-1 xl:order-1 xl:col-span-3" : ""}`}>
 
             {/* ════════════════════════════════════════
                 SCREEN 1: DETAILS & PAYMENT
@@ -1277,7 +1277,7 @@ export default function StorefrontBook() {
                       <h2 className="text-base font-semibold mb-0.5">Select Rental Dates</h2>
                       <p className="text-xs text-muted-foreground">Choose your pickup and return dates to get started.</p>
                     </div>
-                    <div className="bg-background rounded-2xl border shadow-sm p-3">
+                    <div className="relative z-0 bg-background rounded-2xl border shadow-sm p-3">
                       <Calendar
                         mode="range"
                         selected={dateRange}
@@ -1292,7 +1292,7 @@ export default function StorefrontBook() {
                     {dateRange?.from && dateRange?.to && (
                       hasTimeSlots ? (
                         /* ── Time Slot Picker (kiosk) ── */
-                        <div className="space-y-2">
+                        <div className="relative z-10 space-y-2">
                           <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Select a Time Slot</p>
                           {listingTimeSlots.map((slot, idx) => (
                             <button
@@ -1321,7 +1321,7 @@ export default function StorefrontBook() {
                           ))}
                         </div>
                       ) : (
-                        <div className="grid grid-cols-2 gap-3">
+                        <div className="relative z-10 grid grid-cols-2 gap-3">
                           <div className="bg-background rounded-xl border p-3">
                             <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider mb-1">Pickup</p>
                             <p className="font-semibold text-sm mb-2">{format(dateRange.from, "EEE, MMM d")}</p>
@@ -1331,7 +1331,7 @@ export default function StorefrontBook() {
                                 <SelectTrigger className="pl-8 h-8 text-xs font-medium">
                                   <SelectValue />
                                 </SelectTrigger>
-                                <SelectContent>
+                                <SelectContent position="item-aligned">
                                   {TIME_OPTIONS.map(t => (
                                     <SelectItem key={t} value={t} className="text-xs">{t}</SelectItem>
                                   ))}
@@ -1348,7 +1348,7 @@ export default function StorefrontBook() {
                                 <SelectTrigger className="pl-8 h-8 text-xs font-medium">
                                   <SelectValue />
                                 </SelectTrigger>
-                                <SelectContent>
+                                <SelectContent position="item-aligned">
                                   {TIME_OPTIONS.map(t => (
                                     <SelectItem key={t} value={t} className="text-xs">{t}</SelectItem>
                                   ))}
@@ -2033,7 +2033,7 @@ export default function StorefrontBook() {
                                 <SelectTrigger className="pl-8 h-8 text-xs font-medium">
                                   <SelectValue />
                                 </SelectTrigger>
-                                <SelectContent>
+                                <SelectContent position="item-aligned">
                                   {TIME_OPTIONS.map(t => (
                                     <SelectItem key={t} value={t} className="text-xs">{t}</SelectItem>
                                   ))}
@@ -2050,7 +2050,7 @@ export default function StorefrontBook() {
                                 <SelectTrigger className="pl-8 h-8 text-xs font-medium">
                                   <SelectValue />
                                 </SelectTrigger>
-                                <SelectContent>
+                                <SelectContent position="item-aligned">
                                   {TIME_OPTIONS.map(t => (
                                     <SelectItem key={t} value={t} className="text-xs">{t}</SelectItem>
                                   ))}
@@ -2671,7 +2671,7 @@ export default function StorefrontBook() {
 
           {/* ── SIDEBAR SUMMARY ── */}
           {completePhase !== "confirmed" && (
-            <div className="order-2 lg:order-2 lg:col-span-2">
+            <div className="min-w-0 order-2 xl:order-2 xl:col-span-2">
               <div className="sticky top-32 space-y-4">
                 {dateRange?.from && dateRange?.to && (
                   <div className="bg-background rounded-2xl border shadow-sm p-5 space-y-3">
