@@ -31,7 +31,7 @@ import { cn } from "@/lib/utils";
 import { useGetBusinessProfile } from "@workspace/api-client-react";
 import { getAdminSlug } from "@/lib/admin-nav";
 
-type NavItem = { name: string; path: string; icon: React.ElementType };
+type NavItem = { name: string; path: string; icon: React.ElementType; external?: boolean };
 type NavGroup = { group: string | null; items: NavItem[] };
 
 const NAV_GROUPS: NavGroup[] = [
@@ -76,6 +76,7 @@ const NAV_GROUPS: NavGroup[] = [
       { name: "Billing", path: "/billing", icon: CreditCard },
       { name: "Settings", path: "/settings", icon: Settings },
       { name: "Feedback", path: "/feedback", icon: MessageSquarePlus },
+      { name: "Documentation", path: "/docs/", icon: BookOpen, external: true },
     ],
   },
 ];
@@ -227,8 +228,8 @@ export function AdminLayout({ children }: { children: React.ReactNode }) {
           </Link>
         </div>
 
-        <nav className="px-3 py-3 flex-1 overflow-y-auto flex flex-col">
-          <div className="space-y-4 flex-1">
+        <nav className="px-3 py-3 flex-1 overflow-y-auto">
+          <div className="space-y-4">
             {NAV_GROUPS.map((group, gi) => (
               <div key={gi}>
                 {group.group && (
@@ -238,6 +239,21 @@ export function AdminLayout({ children }: { children: React.ReactNode }) {
                 )}
                 <div className="space-y-0.5">
                   {group.items.map((item) => {
+                    if (item.external) {
+                      return (
+                        <a
+                          key={item.name}
+                          href={item.path}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium transition-colors text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground group"
+                        >
+                          <item.icon className="w-4 h-4 shrink-0" />
+                          <span className="flex-1">{item.name}</span>
+                          <ExternalLink className="w-3 h-3 opacity-40 group-hover:opacity-70 transition-opacity" />
+                        </a>
+                      );
+                    }
                     const href = `${adminBase}${item.path}`;
                     const isActive = item.path === ""
                       ? location === href
@@ -263,19 +279,6 @@ export function AdminLayout({ children }: { children: React.ReactNode }) {
             ))}
           </div>
 
-          {/* Documentation link – always pinned at the bottom */}
-          <div className="pt-3 mt-3 border-t border-border">
-            <a
-              href={`${window.location.origin}/docs/`}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium transition-colors text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground group"
-            >
-              <BookOpen className="w-4 h-4 shrink-0" />
-              <span className="flex-1">Documentation</span>
-              <ExternalLink className="w-3 h-3 opacity-40 group-hover:opacity-70 transition-opacity" />
-            </a>
-          </div>
         </nav>
       </aside>
 
