@@ -706,12 +706,35 @@ export default function AdminSettings() {
                     <Input id="depositPercent" name="depositPercent" type="number" value={formData.depositPercent || 0} onChange={handleChange} min="0" max="100" />
                   </div>
                 )}
-                <div className="space-y-2">
-                  <Label htmlFor="cancellationPolicy">Cancellation Policy</Label>
-                  <Textarea id="cancellationPolicy" name="cancellationPolicy" value={formData.cancellationPolicy || ""} onChange={handleChange} rows={4} />
+                <div className="space-y-3">
+                  <div>
+                    <Label htmlFor="cancellationPolicy">Cancellation Policy</Label>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      This text is shown to renters on the booking page before they sign and also read by your AI assistant so it can answer cancellation questions accurately.
+                    </p>
+                  </div>
+                  <Textarea
+                    id="cancellationPolicy"
+                    name="cancellationPolicy"
+                    value={formData.cancellationPolicy || ""}
+                    onChange={handleChange}
+                    rows={5}
+                    placeholder="Example: Full refund if cancelled more than 48 hours before the rental start date. Cancellations within 48 hours are non-refundable. No-shows forfeit the full amount."
+                  />
+                  {formData.cancellationPolicy && (
+                    <div className="rounded-xl border border-amber-200 bg-amber-50 dark:bg-amber-950/30 dark:border-amber-800 px-4 py-3">
+                      <p className="text-xs font-semibold text-amber-700 dark:text-amber-400 mb-1.5 flex items-center gap-1.5">
+                        <span>👁</span> Renter preview — shown on booking page
+                      </p>
+                      <p className="text-sm text-amber-900 dark:text-amber-200 whitespace-pre-wrap leading-relaxed">
+                        {formData.cancellationPolicy}
+                      </p>
+                    </div>
+                  )}
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="rentalTerms">Rental Terms & Conditions</Label>
+                  <p className="text-xs text-muted-foreground">Full terms shown in the rental agreement. Also available to your AI assistant for answering detailed renter questions.</p>
                   <Textarea id="rentalTerms" name="rentalTerms" value={formData.rentalTerms || ""} onChange={handleChange} rows={6} />
                 </div>
               </CardContent>

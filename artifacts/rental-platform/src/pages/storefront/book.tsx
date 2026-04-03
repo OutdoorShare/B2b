@@ -2661,6 +2661,24 @@ export default function StorefrontBook() {
                       </div>
                     )}
 
+                    {/* Cancellation Policy */}
+                    {(businessProfile as any)?.cancellationPolicy && (
+                      <div className="bg-background rounded-2xl border shadow-sm p-6 space-y-3">
+                        <div className="flex items-center gap-2">
+                          <AlertTriangle className="w-4 h-4 text-amber-500" />
+                          <h3 className="font-semibold">Cancellation Policy</h3>
+                        </div>
+                        <div className="bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-xl px-4 py-3">
+                          <p className="text-sm text-amber-900 dark:text-amber-200 whitespace-pre-wrap leading-relaxed">
+                            {(businessProfile as any).cancellationPolicy}
+                          </p>
+                        </div>
+                        <p className="text-xs text-muted-foreground">
+                          This policy is set by <strong>{(businessProfile as any)?.name}</strong>. Contact them directly if you have questions about your specific situation.
+                        </p>
+                      </div>
+                    )}
+
                     {/* Signature */}
                     <div className="bg-background rounded-2xl border shadow-sm p-6 space-y-4">
                       <div className="flex items-center justify-between">

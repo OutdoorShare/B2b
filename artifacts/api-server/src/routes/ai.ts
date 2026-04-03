@@ -278,7 +278,11 @@ For full details and FAQ: https://myoutdoorshare.com/protection-plan — always 
 
 // ── Renter system prompt ───────────────────────────────────────────────────────
 
-function buildRenterSystemPrompt(companyName: string): string {
+function buildRenterSystemPrompt(
+  companyName: string,
+  cancellationPolicy?: string | null,
+  rentalTerms?: string | null,
+): string {
   return `You are OutdoorBot, a renter-facing assistant for ${companyName}, a gear rental service powered by OutdoorShare.
 
 ## Your role — and strict limits
@@ -329,10 +333,18 @@ Always refer renters to this link for specific coverage questions.
 - Late returns may incur additional daily charges
 
 ## Common questions
-- **Can I cancel?** Check the company's cancellation policy in your booking confirmation
+- **Can I cancel?** See the cancellation policy below — it is set by ${companyName} and shown to every renter before booking.
 - **What if gear is damaged?** Contact the company immediately and document everything with photos. For how claims work, visit myoutdoorshare.com/protection-plan.
 - **How do I see my bookings?** Log in and go to "My Bookings" from the navigation
 - **I lost my booking link** — Log in to your account to view all your bookings
+
+## Company cancellation policy
+${cancellationPolicy
+  ? `${companyName} has set the following cancellation policy. Quote it accurately and completely when renters ask:
+
+"${cancellationPolicy}"`
+  : `${companyName} has not published a specific cancellation policy. Direct renters to contact the company directly for cancellation questions.`}
+${rentalTerms ? `\n## Rental terms & conditions\n${companyName} rental terms:\n"${rentalTerms}"` : ""}
 
 Company: ${companyName}
 Today: ${new Date().toLocaleDateString("en-US", { weekday: "long", year: "numeric", month: "long", day: "numeric" })}`;
@@ -376,10 +388,26 @@ router.post("/ai/chat", async (req: Request, res: Response) => {
 
   if (!tenantId) return res.status(404).json({ error: "Tenant not found" });
 
+  // For renter mode, fetch business profile so the AI knows the actual cancellation
+  // policy and rental terms — it can then quote them accurately when renters ask.
+  let cancellationPolicy: string | null = null;
+  let rentalTerms: string | null = null;
+  if (!isAdmin && tenantId) {
+    const [biz] = await db
+      .select({ name: businessProfileTable.name, cancellationPolicy: businessProfileTable.cancellationPolicy, rentalTerms: businessProfileTable.rentalTerms })
+      .from(businessProfileTable)
+      .where(eq(businessProfileTable.tenantId, tenantId))
+      .limit(1);
+    if (biz) {
+      cancellationPolicy = biz.cancellationPolicy ?? null;
+      rentalTerms = biz.rentalTerms ?? null;
+    }
+  }
+
   const name = companyName ?? tenantSlug;
   const systemPrompt = isAdmin
     ? buildAdminSystemPrompt(name, tenantSlug)
-    : buildRenterSystemPrompt(name);
+    : buildRenterSystemPrompt(name, cancellationPolicy, rentalTerms);
 
   res.setHeader("Content-Type", "text/event-stream");
   res.setHeader("Cache-Control", "no-cache");
