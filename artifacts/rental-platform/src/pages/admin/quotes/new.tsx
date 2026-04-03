@@ -12,6 +12,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { CustomerAutocomplete } from "@/components/customer-autocomplete";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { 
@@ -145,35 +146,14 @@ export default function AdminQuotesNew() {
                 <CardTitle>Customer Information</CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="customerName">Full Name</Label>
-                  <Input 
-                    id="customerName" 
-                    value={formData.customerName} 
-                    onChange={e => setFormData({...formData, customerName: e.target.value})} 
-                    required 
-                  />
-                </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="customerEmail">Email</Label>
-                    <Input 
-                      id="customerEmail" 
-                      type="email"
-                      value={formData.customerEmail} 
-                      onChange={e => setFormData({...formData, customerEmail: e.target.value})} 
-                      required 
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="customerPhone">Phone</Label>
-                    <Input 
-                      id="customerPhone" 
-                      value={formData.customerPhone} 
-                      onChange={e => setFormData({...formData, customerPhone: e.target.value})} 
-                    />
-                  </div>
-                </div>
+                <CustomerAutocomplete
+                  name={formData.customerName}
+                  email={formData.customerEmail}
+                  phone={formData.customerPhone}
+                  onChangeName={v => setFormData({...formData, customerName: v})}
+                  onChangeEmail={v => setFormData({...formData, customerEmail: v})}
+                  onChangePhone={v => setFormData({...formData, customerPhone: v})}
+                />
                 
                 <div className="grid grid-cols-2 gap-4 pt-4 border-t">
                   <div className="space-y-2">
