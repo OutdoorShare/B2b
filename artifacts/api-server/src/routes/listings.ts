@@ -356,7 +356,7 @@ router.get("/listings/:id/booked-dates", async (req, res) => {
     ];
     if (req.tenantId) bookingConditions.push(eq(bookingsTable.tenantId, req.tenantId) as any);
     const bookings = await db
-      .select({ startDate: bookingsTable.startDate, endDate: bookingsTable.endDate })
+      .select({ startDate: bookingsTable.startDate, endDate: bookingsTable.endDate, quantity: bookingsTable.quantity })
       .from(bookingsTable)
       .where(and(...bookingConditions));
 
@@ -375,13 +375,15 @@ router.get("/listings/:id/booked-dates", async (req, res) => {
       .from(blockedDatesTable)
       .where(and(...blockConditions));
 
-    // Product service window: if the listing is linked to a product that has a serviceUntil in the future
+    // Fetch listing quantity (total units available)
     const productBlocks: { start: string; end: string; type: string }[] = [];
     const [listing] = await db
-      .select({ productId: listingsTable.productId })
+      .select({ productId: listingsTable.productId, quantity: listingsTable.quantity })
       .from(listingsTable)
       .where(eq(listingsTable.id, listingId))
       .limit(1);
+    const listingQuantity = listing?.quantity ?? 1;
+
     if (listing?.productId) {
       const [product] = await db
         .select({ serviceUntil: productsTable.serviceUntil, status: productsTable.status })
@@ -396,11 +398,14 @@ router.get("/listings/:id/booked-dates", async (req, res) => {
       }
     }
 
-    res.json([
-      ...bookings.map(b => ({ start: b.startDate, end: b.endDate, type: "booking" })),
-      ...blocked.map(b => ({ start: b.startDate, end: b.endDate, type: "blocked" })),
-      ...productBlocks,
-    ]);
+    res.json({
+      listingQuantity,
+      ranges: [
+        ...bookings.map(b => ({ start: b.startDate, end: b.endDate, type: "booking", quantity: b.quantity ?? 1 })),
+        ...blocked.map(b => ({ start: b.startDate, end: b.endDate, type: "blocked", quantity: listingQuantity })),
+        ...productBlocks.map(b => ({ ...b, quantity: listingQuantity })),
+      ],
+    });
   } catch (err) {
     req.log.error(err);
     res.status(500).json({ error: "Failed to fetch availability" });

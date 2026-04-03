@@ -19,10 +19,11 @@ import {
   Lock, User, CreditCard, FileText, Eye, EyeOff, ShieldCheck,
   Zap, AlertTriangle, Umbrella, Star, Loader2, BadgeCheck,
   ScanFace, RefreshCw, XCircle, Clock, Tag, Monitor, QrCode, Smartphone,
-  ScanLine, X, Copy, Check, Upload, ImagePlus, Car, Mountain, BookOpen, Building2, Package
+  ScanLine, X, Copy, Check, Upload, ImagePlus, Car, Mountain, BookOpen, Building2, Package,
+  Minus, Plus
 } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { differenceInDays, format, addDays } from "date-fns";
+import { differenceInDays, format, addDays, eachDayOfInterval, parseISO, isBefore, isAfter, startOfDay } from "date-fns";
 import { loadStripe } from "@stripe/stripe-js";
 import { Elements, PaymentElement, useStripe, useElements } from "@stripe/react-stripe-js";
 import { QRCodeSVG } from "qrcode.react";
@@ -681,6 +682,13 @@ export default function StorefrontBook() {
   const [availableAddons, setAvailableAddons] = useState<Addon[]>([]);
   const [selectedAddonIds, setSelectedAddonIds] = useState<Set<number>>(new Set());
 
+  // Quantity selection (multi-unit listings)
+  const [selectedQuantity, setSelectedQuantity] = useState(1);
+  const [availabilityData, setAvailabilityData] = useState<{
+    listingQuantity: number;
+    ranges: { start: string; end: string; type: string; quantity: number }[];
+  } | null>(null);
+
   // Platform protection plan (auto-applied based on listing category)
   const [platformProtectionPlan, setPlatformProtectionPlan] = useState<{
     enabled: boolean; feeAmount: string; categoryName?: string; categorySlug?: string;
@@ -720,6 +728,19 @@ export default function StorefrontBook() {
       .then(d => setPlatformProtectionPlan(d))
       .catch(() => {});
   }, [(listing as any)?.categorySlug]);
+
+  // Fetch booked-dates availability for multi-quantity logic
+  useEffect(() => {
+    if (!listingId) return;
+    fetch(`${BASE}/api/listings/${listingId}/booked-dates`)
+      .then(r => r.json())
+      .then(d => {
+        if (d && typeof d.listingQuantity === "number") {
+          setAvailabilityData(d);
+        }
+      })
+      .catch(() => {});
+  }, [listingId]);
 
   // Fetch addons
   useEffect(() => {
@@ -915,21 +936,72 @@ export default function StorefrontBook() {
 
   const fullDayPrice = listing?.pricePerDay ? parseFloat(String(listing.pricePerDay)) : 0;
 
+  // ── Availability / quantity logic ─────────────────────────────────────────────
+  const listingTotalQty = availabilityData?.listingQuantity ?? (listing as any)?.quantity ?? 1;
+
+  // For a given date, compute how many units are booked (sum of booking quantities overlapping that date)
+  const bookedQtyOnDate = useMemo(() => {
+    if (!availabilityData) return (_d: Date) => 0;
+    return (d: Date) => {
+      const dayStr = format(d, "yyyy-MM-dd");
+      return availabilityData.ranges
+        .filter(r => r.type === "booking")
+        .filter(r => r.start <= dayStr && r.end >= dayStr)
+        .reduce((sum, r) => sum + (r.quantity ?? 1), 0);
+    };
+  }, [availabilityData]);
+
+  // Minimum available units across every day in the selected date range
+  const availableQtyForRange = useMemo(() => {
+    if (!dateRange?.from || !dateRange?.to) return listingTotalQty;
+    const days = eachDayOfInterval({ start: dateRange.from, end: dateRange.to });
+    const minAvail = days.reduce((min, d) => {
+      const booked = bookedQtyOnDate(d);
+      return Math.min(min, listingTotalQty - booked);
+    }, listingTotalQty);
+    return Math.max(0, minAvail);
+  }, [dateRange, listingTotalQty, bookedQtyOnDate]);
+
+  // Dates that are completely unavailable (all units booked — disable in calendar)
+  const fullyBookedDates = useMemo(() => {
+    if (!availabilityData || listingTotalQty <= 1) return [];
+    return (d: Date) => {
+      if (isBefore(d, startOfDay(new Date()))) return true;
+      return bookedQtyOnDate(d) >= listingTotalQty;
+    };
+  }, [availabilityData, listingTotalQty, bookedQtyOnDate]);
+
+  // Clamp selectedQuantity to available range when dateRange changes
+  useEffect(() => {
+    if (availableQtyForRange < selectedQuantity) {
+      setSelectedQuantity(Math.max(1, availableQtyForRange));
+    }
+  }, [availableQtyForRange]);
+
   const subtotal = useMemo(() => {
     // Time-slot rate overrides everything else when a slot is selected
+    let base: number;
     if (hasTimeSlots && selectedTimeSlot) {
       if (selectedTimeSlot.rate === "half_day") {
         const hr = listing?.halfDayRate ? parseFloat(String(listing.halfDayRate)) : null;
-        if (hr) return hr;
+        if (hr) { base = hr; }
+        else { base = fullDayPrice; }
+      } else {
+        base = fullDayPrice;
       }
-      return fullDayPrice; // fall back to full day price
+    } else if (!isOneDay || !selectedOption) {
+      base = fullDayPrice * days;
+    } else if (selectedOption.type === "half_day") {
+      base = selectedOption.price;
+    } else if (selectedOption.type.startsWith("slot_")) {
+      base = (selectedOption as any).price;
+    } else if (selectedOption.type === "per_hour") {
+      base = (selectedOption as any).pricePerHour * selectedHours;
+    } else {
+      base = fullDayPrice * days;
     }
-    if (!isOneDay || !selectedOption) return fullDayPrice * days;
-    if (selectedOption.type === "half_day") return selectedOption.price;
-    if (selectedOption.type.startsWith("slot_")) return (selectedOption as any).price;
-    if (selectedOption.type === "per_hour") return (selectedOption as any).pricePerHour * selectedHours;
-    return fullDayPrice * days;
-  }, [hasTimeSlots, selectedTimeSlot, listing, isOneDay, selectedOption, fullDayPrice, days, selectedHours]);
+    return base * selectedQuantity;
+  }, [hasTimeSlots, selectedTimeSlot, listing, isOneDay, selectedOption, fullDayPrice, days, selectedHours, selectedQuantity]);
   const deposit = listing?.depositAmount ? parseFloat(String(listing.depositAmount)) : 0;
   const addonsSubtotal = useMemo(() => {
     return availableAddons
@@ -1325,7 +1397,7 @@ export default function StorefrontBook() {
           endDate: format(dateRange!.to!, "yyyy-MM-dd"),
           pickupTime,
           dropoffTime,
-          quantity: 1,
+          quantity: selectedQuantity,
           notes: notes || undefined,
           source: isKiosk ? "kiosk" : "online",
           addons: selectedAddons,
@@ -1550,13 +1622,43 @@ export default function StorefrontBook() {
                         mode="range"
                         selected={dateRange}
                         onSelect={setDateRange}
-                        disabled={{ before: new Date() }}
+                        disabled={typeof fullyBookedDates === "function" ? fullyBookedDates : { before: new Date() }}
                         defaultMonth={dateRange?.from}
                         numberOfMonths={1}
                         className="[--cell-size:1.9rem] sm:[--cell-size:2.5rem] w-full"
                         classNames={{ root: "w-full" }}
                       />
                     </div>
+                    {/* ── Quantity picker (kiosk) — shown when listing has multiple units ── */}
+                    {listingTotalQty > 1 && dateRange?.from && dateRange?.to && (
+                      <div className="bg-background rounded-xl border p-4 flex items-center justify-between gap-4">
+                        <div>
+                          <p className="text-sm font-semibold">Quantity</p>
+                          <p className="text-xs text-muted-foreground">
+                            {availableQtyForRange} of {listingTotalQty} available
+                          </p>
+                        </div>
+                        <div className="flex items-center gap-3">
+                          <button
+                            type="button"
+                            onClick={() => setSelectedQuantity(q => Math.max(1, q - 1))}
+                            disabled={selectedQuantity <= 1}
+                            className="w-9 h-9 rounded-full border flex items-center justify-center hover:bg-muted transition-colors disabled:opacity-30"
+                          >
+                            <Minus className="w-4 h-4" />
+                          </button>
+                          <span className="text-xl font-bold w-6 text-center">{selectedQuantity}</span>
+                          <button
+                            type="button"
+                            onClick={() => setSelectedQuantity(q => Math.min(availableQtyForRange, q + 1))}
+                            disabled={selectedQuantity >= availableQtyForRange}
+                            className="w-9 h-9 rounded-full border flex items-center justify-center hover:bg-muted transition-colors disabled:opacity-30"
+                          >
+                            <Plus className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </div>
+                    )}
                     {dateRange?.from && dateRange?.to && (
                       hasTimeSlots ? (
                         /* ── Time Slot Picker (kiosk) ── */
@@ -2262,13 +2364,43 @@ export default function StorefrontBook() {
                         mode="range"
                         selected={dateRange}
                         onSelect={setDateRange}
-                        disabled={{ before: new Date() }}
+                        disabled={typeof fullyBookedDates === "function" ? fullyBookedDates : { before: new Date() }}
                         defaultMonth={dateRange?.from}
                         numberOfMonths={1}
                         className="[--cell-size:1.9rem] sm:[--cell-size:2.5rem] w-full"
                         classNames={{ root: "w-full" }}
                       />
                     </div>
+                    {/* ── Quantity picker (online) — shown when listing has multiple units ── */}
+                    {listingTotalQty > 1 && dateRange?.from && dateRange?.to && (
+                      <div className="mt-3 bg-muted/40 rounded-xl border p-4 flex items-center justify-between gap-4">
+                        <div>
+                          <p className="text-sm font-semibold">Quantity</p>
+                          <p className="text-xs text-muted-foreground">
+                            {availableQtyForRange} of {listingTotalQty} available for your dates
+                          </p>
+                        </div>
+                        <div className="flex items-center gap-3">
+                          <button
+                            type="button"
+                            onClick={() => setSelectedQuantity(q => Math.max(1, q - 1))}
+                            disabled={selectedQuantity <= 1}
+                            className="w-9 h-9 rounded-full border flex items-center justify-center hover:bg-muted transition-colors disabled:opacity-30"
+                          >
+                            <Minus className="w-4 h-4" />
+                          </button>
+                          <span className="text-xl font-bold w-6 text-center">{selectedQuantity}</span>
+                          <button
+                            type="button"
+                            onClick={() => setSelectedQuantity(q => Math.min(availableQtyForRange, q + 1))}
+                            disabled={selectedQuantity >= availableQtyForRange}
+                            className="w-9 h-9 rounded-full border flex items-center justify-center hover:bg-muted transition-colors disabled:opacity-30"
+                          >
+                            <Plus className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </div>
+                    )}
                     {dateRange?.from && dateRange?.to && (
                       hasTimeSlots ? (
                         /* ── Time Slot Picker (online) ── */
