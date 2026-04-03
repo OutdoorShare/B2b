@@ -14,7 +14,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
 import { useToast } from "@/hooks/use-toast";
-import { ArrowLeft, CalendarDays, User, DollarSign, Package, Info, Hash, ShieldCheck, ShoppingBag, Tag, Plus, X } from "lucide-react";
+import { ArrowLeft, CalendarDays, User, DollarSign, Package, Info, Hash, ShieldCheck, ShoppingBag, Tag, Plus, X, CreditCard, Send, Link as LinkIcon, CheckCircle } from "lucide-react";
 import BundlePickerModal, { type BundleItem } from "@/components/bundle-picker-modal";
 import { format, addDays, differenceInDays } from "date-fns";
 
@@ -77,6 +77,14 @@ export default function AdminBookingForm() {
   const [availableUnits, setAvailableUnits] = useState<{ id: number; unitIdentifier: string; identifierType: string; label: string | null; status: string }[]>([]);
   // assignedSlots[i] = unitId string (from dropdown) or free-text identifier
   const [assignedSlots, setAssignedSlots] = useState<string[]>([""]);
+
+  // Payment options (new bookings only)
+  type PaymentMode = "none" | "send_link" | "charge_saved";
+  const [paymentMode, setPaymentMode] = useState<PaymentMode>("none");
+  const [savedCard, setSavedCard] = useState<{ brand: string; last4: string } | null>(null);
+  const [savedCardLoading, setSavedCardLoading] = useState(false);
+  const [paymentLinkUrl, setPaymentLinkUrl] = useState<string | null>(null);
+  const [paymentLinkCopied, setPaymentLinkCopied] = useState(false);
 
   const { data: listings } = useGetListings(
     {},
@@ -160,6 +168,25 @@ export default function AdminBookingForm() {
       })
       .catch(() => { setProtectionAddons([]); setSelectedProtectionId(null); });
   }, [form.listingId]);
+
+  // Look up saved card when customer email changes (new bookings only)
+  useEffect(() => {
+    if (isEditing) return;
+    const email = form.customerEmail.trim().toLowerCase();
+    if (!email || !email.includes("@")) { setSavedCard(null); return; }
+    const tid = setTimeout(() => {
+      setSavedCardLoading(true);
+      const slug = params.slug ?? "";
+      fetch(`${BASE}/api/admin/customer-saved-card?email=${encodeURIComponent(email)}`, {
+        headers: slug ? { "x-tenant-slug": slug } : {},
+      })
+        .then(r => r.json())
+        .then(d => { setSavedCard(d.hasCard ? { brand: d.brand, last4: d.last4 } : null); })
+        .catch(() => setSavedCard(null))
+        .finally(() => setSavedCardLoading(false));
+    }, 500);
+    return () => clearTimeout(tid);
+  }, [form.customerEmail, isEditing, params.slug]);
 
   // Fetch all listings + bundle discount from business profile
   useEffect(() => {
@@ -254,6 +281,9 @@ export default function AdminBookingForm() {
         ? [{ id: selectedProtection.id, name: selectedProtection.name, price: parseFloat(selectedProtection.price), pricingType: selectedProtection.pricingType, subtotal: protectionPrice }]
         : [];
 
+      // Force pending status when payment will be collected via link or card
+      const effectiveStatus = !isEditing && paymentMode !== "none" ? "pending" : form.status;
+
       const payload: any = {
         protectionPlanFee: platformProtectionFee > 0 ? String(platformProtectionFee) : (protectionPrice > 0 ? String(protectionPrice) : undefined),
         listingId: Number(form.listingId),
@@ -263,7 +293,7 @@ export default function AdminBookingForm() {
         startDate: form.startDate,
         endDate: form.endDate,
         quantity: Number(form.quantity),
-        status: form.status,
+        status: effectiveStatus,
         source: form.source,
         notes: form.notes || null,
         adminNotes: form.adminNotes || null,
@@ -286,11 +316,56 @@ export default function AdminBookingForm() {
       const data = await res.json();
       if (!res.ok) { setError(data.error || "Failed to save booking"); return; }
 
+      const newBookingId = data.id;
       queryClient.invalidateQueries({ queryKey: getGetBookingsQueryKey() });
       if (isEditing) queryClient.setQueryData(getGetBookingQueryKey(editId), data);
 
-      toast({ title: isEditing ? "Booking updated" : "Booking created", description: isEditing ? `Booking #${editId} has been updated.` : `Booking #${data.id} created for ${data.customerName}.` });
-      setLocation(isEditing ? adminPath(`/bookings/${editId}`) : adminPath(`/bookings/${data.id}`));
+      // Post-create payment action
+      if (!isEditing && paymentMode === "send_link") {
+        const plRes = await fetch(`${BASE}/api/stripe/admin-payment-link`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ bookingId: newBookingId }),
+        });
+        const plData = await plRes.json();
+        if (!plRes.ok) {
+          setError(plData.error || "Booking created but payment link failed. You can retry from the booking page.");
+        } else {
+          setPaymentLinkUrl(plData.url);
+          toast({
+            title: "Payment link sent!",
+            description: `Email sent to ${form.customerEmail}. Booking #${newBookingId} is pending payment.`,
+          });
+          queryClient.invalidateQueries({ queryKey: getGetBookingsQueryKey() });
+          setLocation(adminPath(`/bookings/${newBookingId}`));
+          return;
+        }
+      } else if (!isEditing && paymentMode === "charge_saved") {
+        const csRes = await fetch(`${BASE}/api/stripe/admin-charge-saved`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ bookingId: newBookingId }),
+        });
+        const csData = await csRes.json();
+        if (!csRes.ok) {
+          setError(csData.error || "Booking created but card charge failed.");
+        } else {
+          toast({
+            title: "Card charged!",
+            description: `${csData.brand ?? savedCard?.brand ?? "Card"} ••••${csData.last4 ?? savedCard?.last4} successfully charged $${estimatedTotal.toFixed(2)}. Booking confirmed.`,
+          });
+          queryClient.invalidateQueries({ queryKey: getGetBookingsQueryKey() });
+          setLocation(adminPath(`/bookings/${newBookingId}`));
+          return;
+        }
+      } else {
+        toast({
+          title: isEditing ? "Booking updated" : "Booking created",
+          description: isEditing ? `Booking #${editId} has been updated.` : `Booking #${newBookingId} created for ${data.customerName}.`,
+        });
+      }
+
+      setLocation(isEditing ? adminPath(`/bookings/${editId}`) : adminPath(`/bookings/${newBookingId}`));
     } catch {
       setError("Connection error. Please try again.");
     } finally { setSaving(false); }
@@ -662,7 +737,11 @@ export default function AdminBookingForm() {
               <CardTitle className="text-base">Booking Status</CardTitle>
             </CardHeader>
             <CardContent>
-              <Select value={form.status} onValueChange={v => handleChange("status", v)}>
+              <Select
+                value={!isEditing && paymentMode !== "none" ? "pending" : form.status}
+                onValueChange={v => handleChange("status", v)}
+                disabled={!isEditing && paymentMode !== "none"}
+              >
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="pending">Pending</SelectItem>
@@ -672,14 +751,129 @@ export default function AdminBookingForm() {
                   <SelectItem value="cancelled">Cancelled</SelectItem>
                 </SelectContent>
               </Select>
+              {!isEditing && paymentMode !== "none" && (
+                <p className="text-xs text-muted-foreground mt-2">Stays pending until payment is received.</p>
+              )}
             </CardContent>
           </Card>
+
+          {/* Payment Options — new bookings only */}
+          {!isEditing && (
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle className="flex items-center gap-2 text-base">
+                  <CreditCard className="w-4 h-4 text-primary" /> Payment Collection
+                </CardTitle>
+                <CardDescription className="text-xs">How will the renter pay for this booking?</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-2">
+                {/* Option: No payment / manual */}
+                <button
+                  type="button"
+                  onClick={() => setPaymentMode("none")}
+                  className={`w-full text-left rounded-lg border px-3.5 py-3 transition-colors ${paymentMode === "none" ? "border-primary bg-primary/5" : "border-border hover:bg-muted/50"}`}
+                >
+                  <div className="flex items-center gap-2.5">
+                    <div className={`w-4 h-4 rounded-full border-2 flex-shrink-0 flex items-center justify-center ${paymentMode === "none" ? "border-primary" : "border-muted-foreground/40"}`}>
+                      {paymentMode === "none" && <div className="w-2 h-2 rounded-full bg-primary" />}
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium">Record only</p>
+                      <p className="text-xs text-muted-foreground">Cash, check, or already collected</p>
+                    </div>
+                  </div>
+                </button>
+
+                {/* Option: Send payment link */}
+                <button
+                  type="button"
+                  onClick={() => setPaymentMode("send_link")}
+                  className={`w-full text-left rounded-lg border px-3.5 py-3 transition-colors ${paymentMode === "send_link" ? "border-primary bg-primary/5" : "border-border hover:bg-muted/50"}`}
+                >
+                  <div className="flex items-center gap-2.5">
+                    <div className={`w-4 h-4 rounded-full border-2 flex-shrink-0 flex items-center justify-center ${paymentMode === "send_link" ? "border-primary" : "border-muted-foreground/40"}`}>
+                      {paymentMode === "send_link" && <div className="w-2 h-2 rounded-full bg-primary" />}
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-1.5">
+                        <p className="text-sm font-medium">Send payment link</p>
+                        <Send className="w-3 h-3 text-primary" />
+                      </div>
+                      <p className="text-xs text-muted-foreground">Email a secure Stripe checkout link to the renter</p>
+                    </div>
+                  </div>
+                </button>
+
+                {/* Option: Charge saved card */}
+                <button
+                  type="button"
+                  onClick={() => { if (savedCard) setPaymentMode("charge_saved"); }}
+                  disabled={!savedCard && !savedCardLoading}
+                  className={`w-full text-left rounded-lg border px-3.5 py-3 transition-colors ${!savedCard && !savedCardLoading ? "opacity-40 cursor-not-allowed" : ""} ${paymentMode === "charge_saved" ? "border-primary bg-primary/5" : "border-border hover:bg-muted/50"}`}
+                >
+                  <div className="flex items-center gap-2.5">
+                    <div className={`w-4 h-4 rounded-full border-2 flex-shrink-0 flex items-center justify-center ${paymentMode === "charge_saved" ? "border-primary" : "border-muted-foreground/40"}`}>
+                      {paymentMode === "charge_saved" && <div className="w-2 h-2 rounded-full bg-primary" />}
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-1.5">
+                        <p className="text-sm font-medium">Charge saved card</p>
+                        <CreditCard className="w-3 h-3 text-primary" />
+                      </div>
+                      {savedCardLoading ? (
+                        <p className="text-xs text-muted-foreground">Checking for saved card…</p>
+                      ) : savedCard ? (
+                        <p className="text-xs text-emerald-600 font-medium capitalize">{savedCard.brand} ••••{savedCard.last4} on file — charge ${estimatedTotal.toFixed(2)} now</p>
+                      ) : (
+                        <p className="text-xs text-muted-foreground">No saved card — enter email above to check</p>
+                      )}
+                    </div>
+                  </div>
+                </button>
+
+                {/* Payment link display after creation */}
+                {paymentLinkUrl && (
+                  <div className="mt-2 rounded-lg bg-emerald-50 border border-emerald-200 p-3 space-y-2">
+                    <p className="text-xs font-semibold text-emerald-800 flex items-center gap-1.5">
+                      <CheckCircle className="w-3.5 h-3.5" /> Payment link created
+                    </p>
+                    <div className="flex items-center gap-2">
+                      <input
+                        readOnly
+                        value={paymentLinkUrl}
+                        className="text-xs flex-1 bg-white border border-emerald-200 rounded px-2 py-1 text-emerald-700 truncate"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => {
+                          navigator.clipboard.writeText(paymentLinkUrl);
+                          setPaymentLinkCopied(true);
+                          setTimeout(() => setPaymentLinkCopied(false), 2000);
+                        }}
+                        className="text-xs px-2 py-1 rounded bg-emerald-600 text-white hover:bg-emerald-700 flex items-center gap-1 shrink-0"
+                      >
+                        {paymentLinkCopied ? <CheckCircle className="w-3 h-3" /> : <LinkIcon className="w-3 h-3" />}
+                        {paymentLinkCopied ? "Copied!" : "Copy"}
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          )}
 
           {/* Actions */}
           <div className="space-y-3">
             {error && <p className="text-sm text-destructive font-medium">{error}</p>}
             <Button className="w-full" onClick={handleSubmit} disabled={saving}>
-              {saving ? "Saving…" : (isEditing ? "Save Changes" : "Create Booking")}
+              {saving ? (
+                paymentMode === "send_link" ? "Sending payment link…" :
+                paymentMode === "charge_saved" ? "Charging card…" : "Saving…"
+              ) : isEditing ? "Save Changes" : (
+                paymentMode === "send_link" ? "Create & Send Payment Link" :
+                paymentMode === "charge_saved" ? `Create & Charge ${savedCard ? `${savedCard.brand} ••••${savedCard.last4}` : "Card"}` :
+                "Create Booking"
+              )}
             </Button>
             <Button variant="outline" className="w-full" onClick={() => window.history.back()}>
               Cancel

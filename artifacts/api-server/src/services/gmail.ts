@@ -1578,3 +1578,55 @@ export async function sendStripeRestrictedAlertEmail(opts: {
     requestBody: { raw: makeRawEmail(adminEmail, subject, html, PLATFORM_FROM) },
   });
 }
+
+// ── Payment request email (sent to renter when admin creates a booking with payment link) ──
+export async function sendPaymentRequestEmail(opts: {
+  toEmail: string;
+  customerName: string;
+  paymentUrl: string;
+  listingTitle: string;
+  startDate: string;
+  endDate: string;
+  totalPrice: number;
+  companyName: string;
+  companyEmail?: string;
+}): Promise<void> {
+  const { toEmail, customerName, paymentUrl, listingTitle, startDate, endDate, totalPrice, companyName, companyEmail } = opts;
+  const fromHeader = companyEmail ? `${companyName} <${companyEmail}>` : undefined;
+  const subject = `[${companyName}] Complete your rental payment — ${listingTitle}`;
+  const preheader = `Your rental from ${companyName} is reserved. Complete payment to confirm your booking.`;
+
+  const tableRows = [
+    { label: "Equipment",    value: listingTitle },
+    { label: "Pickup Date",  value: startDate },
+    { label: "Return Date",  value: endDate },
+    { label: "Total Due",    value: `$${totalPrice.toFixed(2)}` },
+    { label: "Company",      value: companyName },
+  ];
+
+  const body = `
+    <p style="margin:0 0 8px;font-size:18px;font-weight:700;color:${BRAND_DARK};">Your rental is reserved — payment required</p>
+    <p style="margin:0 0 20px;font-size:15px;color:#374151;line-height:1.6;">
+      Hi <strong>${customerName}</strong>, <strong>${companyName}</strong> has created a rental booking for you.
+      Complete your secure payment below to confirm the reservation. Your booking will remain pending until payment is received.
+    </p>
+    ${infoTable(tableRows)}
+    <div style="background:#fffbeb;border:1px solid #fde68a;border-radius:8px;padding:14px 18px;margin:20px 0;">
+      <p style="margin:0;font-size:13px;color:#92400e;font-weight:600;">
+        🔒 Secure checkout powered by Stripe — your card details are never shared with us.
+      </p>
+    </div>
+    ${ctaButton("Complete Payment →", paymentUrl, BRAND_GREEN)}
+    <p style="margin:0;font-size:13px;color:#9ca3af;text-align:center;line-height:1.6;">
+      After payment you will receive a confirmation and instructions for your rental pickup.<br/>
+      Questions? Contact <strong>${companyName}</strong> directly.
+    </p>
+  `;
+
+  const html = emailShell({ preheader, badgeLabel: "Action Required — Complete Payment", badgeColor: BRAND_GREEN, body });
+  const gmail = await getUncachableGmailClient();
+  await gmail.users.messages.send({
+    userId: "me",
+    requestBody: { raw: makeRawEmail(toEmail, subject, html, fromHeader) },
+  });
+}

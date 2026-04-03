@@ -3,7 +3,7 @@ import { db } from "@workspace/db";
 import { tenantsTable, bookingsTable, customersTable, listingsTable, businessProfileTable } from "@workspace/db/schema";
 import { eq, desc, and, isNull, isNotNull } from "drizzle-orm";
 import { stripe, getStripeForTenant, PLATFORM_FEE_PERCENT } from "../services/stripe";
-import { sendStripeRestrictedAlertEmail } from "../services/gmail";
+import { sendStripeRestrictedAlertEmail, sendPaymentRequestEmail } from "../services/gmail";
 import type { Request } from "express";
 
 const router: IRouter = Router();
@@ -554,6 +554,23 @@ router.post("/stripe/webhook", async (req, res) => {
         }).where(eq(bookingsTable.stripePaymentIntentId, pi.id));
         break;
       }
+      case "checkout.session.completed": {
+        const session = event.data.object;
+        const bookingId = session.metadata?.booking_id;
+        if (bookingId) {
+          const piId = typeof session.payment_intent === "string"
+            ? session.payment_intent
+            : (session.payment_intent as any)?.id ?? null;
+          await db.update(bookingsTable).set({
+            status: "confirmed",
+            stripePaymentIntentId: piId ?? undefined,
+            stripePaymentStatus: "paid",
+            updatedAt: new Date(),
+          }).where(eq(bookingsTable.id, Number(bookingId)));
+          console.log(`[webhook] checkout.session.completed → booking #${bookingId} confirmed, pi=${piId}`);
+        }
+        break;
+      }
       case "account.updated": {
         const account = event.data.object;
         const meta = account.metadata as Record<string, string> | undefined;
@@ -895,6 +912,201 @@ router.post("/bookings/:id/deposit/capture", requireAdminAuth, async (req, res) 
   } catch (e: any) {
     console.error("[deposit/capture]", e.message);
     res.status(500).json({ error: e.message });
+  }
+});
+
+// ── Admin: create Stripe Checkout session + email payment link to renter ───────
+router.post("/stripe/admin-payment-link", requireAdminAuth, async (req, res) => {
+  try {
+    const tenantId = req.tenantId!;
+    const { bookingId } = req.body ?? {};
+    if (!bookingId) { res.status(400).json({ error: "bookingId required" }); return; }
+
+    const [booking] = await db.select().from(bookingsTable).where(
+      and(eq(bookingsTable.id, Number(bookingId)), eq(bookingsTable.tenantId, tenantId))
+    );
+    if (!booking) { res.status(404).json({ error: "Booking not found" }); return; }
+
+    const [tenant] = await db.select().from(tenantsTable).where(eq(tenantsTable.id, tenantId));
+    if (!tenant) { res.status(404).json({ error: "Tenant not found" }); return; }
+
+    const [listing] = await db.select().from(listingsTable).where(eq(listingsTable.id, booking.listingId));
+
+    const isTestMode = !!tenant.testMode;
+    const stripeClient = getStripeForTenant(isTestMode);
+
+    const feePercent = tenant.platformFeePercent != null
+      ? parseFloat(tenant.platformFeePercent) / 100
+      : PLATFORM_FEE_PERCENT;
+    const amountCents = Math.round(parseFloat(String(booking.totalPrice)) * 100);
+    const platformFeeAmount = Math.round(amountCents * feePercent);
+    const transferAmount = amountCents - platformFeeAmount;
+    const tenantConnected = !isTestMode && !!(tenant.stripeAccountId && tenant.stripeChargesEnabled);
+
+    const protocol = req.headers["x-forwarded-proto"] ?? "https";
+    const host = req.get("host");
+    const baseUrl = `${protocol}://${host}`;
+
+    const sessionParams: any = {
+      mode: "payment",
+      line_items: [{
+        price_data: {
+          currency: "usd",
+          product_data: {
+            name: listing?.title || "Rental Booking",
+            description: `Rental with ${tenant.name} · ${booking.startDate} to ${booking.endDate}`,
+          },
+          unit_amount: amountCents,
+        },
+        quantity: 1,
+      }],
+      customer_email: booking.customerEmail,
+      success_url: `${baseUrl}/${tenant.slug}?payment_success=1`,
+      cancel_url: `${baseUrl}/${tenant.slug}?payment_cancel=1`,
+      payment_intent_data: {
+        setup_future_usage: "off_session",
+        description: `Booking #${booking.id} — ${tenant.name}${isTestMode ? " [TEST]" : ""}`,
+        metadata: {
+          tenant_id: String(tenantId),
+          tenant_slug: tenant.slug,
+          booking_id: String(booking.id),
+          customer_name: booking.customerName,
+          test_mode: isTestMode ? "true" : "false",
+        },
+      },
+      metadata: {
+        booking_id: String(booking.id),
+        tenant_id: String(tenantId),
+      },
+    };
+
+    if (tenantConnected) {
+      sessionParams.payment_intent_data.transfer_data = { destination: tenant.stripeAccountId, amount: transferAmount };
+      sessionParams.payment_intent_data.application_fee_amount = platformFeeAmount;
+    }
+
+    const session = await stripeClient.checkout.sessions.create(sessionParams);
+
+    // Mark booking as payment-link-sent
+    await db.update(bookingsTable).set({
+      stripePaymentStatus: "awaiting_payment",
+      status: "pending",
+      updatedAt: new Date(),
+    }).where(eq(bookingsTable.id, booking.id));
+
+    // Email the renter — best-effort
+    try {
+      await sendPaymentRequestEmail({
+        toEmail: booking.customerEmail,
+        customerName: booking.customerName,
+        paymentUrl: session.url!,
+        listingTitle: listing?.title || "Rental",
+        startDate: booking.startDate,
+        endDate: booking.endDate,
+        totalPrice: parseFloat(String(booking.totalPrice)),
+        companyName: tenant.name,
+        companyEmail: tenant.email,
+      });
+    } catch (emailErr: any) {
+      console.warn("[admin-payment-link] Email send failed:", emailErr.message);
+    }
+
+    res.json({ url: session.url, sessionId: session.id, testMode: isTestMode });
+  } catch (e: any) {
+    console.error("[stripe/admin-payment-link]", e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ── Admin: charge a customer's saved card immediately (off-session) ────────────
+router.post("/stripe/admin-charge-saved", requireAdminAuth, async (req, res) => {
+  try {
+    const tenantId = req.tenantId!;
+    const { bookingId } = req.body ?? {};
+    if (!bookingId) { res.status(400).json({ error: "bookingId required" }); return; }
+
+    const [booking] = await db.select().from(bookingsTable).where(
+      and(eq(bookingsTable.id, Number(bookingId)), eq(bookingsTable.tenantId, tenantId))
+    );
+    if (!booking) { res.status(404).json({ error: "Booking not found" }); return; }
+
+    const [tenant] = await db.select().from(tenantsTable).where(eq(tenantsTable.id, tenantId));
+    if (!tenant) { res.status(404).json({ error: "Tenant not found" }); return; }
+
+    // Look up saved card from customers table
+    const [customer] = await db.select().from(customersTable).where(
+      eq(customersTable.email, booking.customerEmail.toLowerCase())
+    );
+    if (!customer?.stripeCustomerId) {
+      res.status(400).json({ error: "No saved payment method on file for this customer." }); return;
+    }
+
+    const isTestMode = !!tenant.testMode;
+    const stripeClient = getStripeForTenant(isTestMode);
+
+    // List saved payment methods and pick the most recently used card
+    const pms = await stripeClient.paymentMethods.list({
+      customer: customer.stripeCustomerId,
+      type: "card",
+    });
+    if (!pms.data.length) {
+      res.status(400).json({ error: "No saved card found for this customer in Stripe." }); return;
+    }
+    const pm = pms.data[0];
+
+    const feePercent = tenant.platformFeePercent != null
+      ? parseFloat(tenant.platformFeePercent) / 100
+      : PLATFORM_FEE_PERCENT;
+    const amountCents = Math.round(parseFloat(String(booking.totalPrice)) * 100);
+    const platformFeeAmount = Math.round(amountCents * feePercent);
+    const transferAmount = amountCents - platformFeeAmount;
+    const tenantConnected = !isTestMode && !!(tenant.stripeAccountId && tenant.stripeChargesEnabled);
+
+    const intentParams: any = {
+      amount: amountCents,
+      currency: "usd",
+      customer: customer.stripeCustomerId,
+      payment_method: pm.id,
+      confirm: true,
+      off_session: true,
+      description: `Admin charge — Booking #${booking.id} — ${tenant.name}${isTestMode ? " [TEST]" : ""}`,
+      metadata: {
+        tenant_id: String(tenantId),
+        tenant_slug: tenant.slug,
+        booking_id: String(booking.id),
+        customer_name: booking.customerName,
+        test_mode: isTestMode ? "true" : "false",
+      },
+    };
+
+    if (tenantConnected) {
+      intentParams.transfer_data = { destination: tenant.stripeAccountId, amount: transferAmount };
+      intentParams.application_fee_amount = platformFeeAmount;
+    }
+
+    const pi = await stripeClient.paymentIntents.create(intentParams);
+
+    if (pi.status === "succeeded") {
+      await db.update(bookingsTable).set({
+        status: "confirmed",
+        stripePaymentIntentId: pi.id,
+        stripePaymentStatus: "paid",
+        stripePlatformFee: String((platformFeeAmount / 100).toFixed(2)),
+        updatedAt: new Date(),
+      }).where(eq(bookingsTable.id, booking.id));
+
+      res.json({
+        success: true,
+        paymentIntentId: pi.id,
+        brand: pm.card?.brand ?? null,
+        last4: pm.card?.last4 ?? null,
+      });
+    } else {
+      res.status(400).json({ error: `Payment not completed (status: ${pi.status}).` });
+    }
+  } catch (e: any) {
+    console.error("[stripe/admin-charge-saved]", e.message);
+    res.status(400).json({ error: e.message || "Card charge failed." });
   }
 });
 

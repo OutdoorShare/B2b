@@ -475,4 +475,61 @@ router.put("/customers/:id", async (req, res) => {
   }
 });
 
+// ── Admin: look up a customer's saved card by email (for admin booking form) ───
+router.get("/admin/customer-saved-card", async (req, res) => {
+  try {
+    const email = (req.query.email as string | undefined)?.toLowerCase().trim();
+    if (!email) { res.status(400).json({ error: "email required" }); return; }
+
+    const [customer] = await db.select().from(customersTable).where(
+      eq(customersTable.email, email)
+    );
+
+    if (!customer?.stripeCustomerId) {
+      res.json({ hasCard: false, brand: null, last4: null, stripeCustomerId: null });
+      return;
+    }
+
+    // If we have card details stored locally, return them directly
+    if (customer.cardLastFour && customer.cardBrand) {
+      res.json({
+        hasCard: true,
+        brand: customer.cardBrand,
+        last4: customer.cardLastFour,
+        stripeCustomerId: customer.stripeCustomerId,
+      });
+      return;
+    }
+
+    // Otherwise query Stripe for saved payment methods
+    const tenantSlug = (req.headers["x-tenant-slug"] as string | undefined) ?? "";
+    const [tenant] = tenantSlug
+      ? await db.select().from(tenantsTable).where(eq(tenantsTable.slug, tenantSlug))
+      : [];
+    const isTestMode = !!(tenant?.testMode);
+    const stripeClient = getStripeForTenant(isTestMode);
+
+    const pms = await stripeClient.paymentMethods.list({
+      customer: customer.stripeCustomerId,
+      type: "card",
+    });
+
+    if (!pms.data.length) {
+      res.json({ hasCard: false, brand: null, last4: null, stripeCustomerId: customer.stripeCustomerId });
+      return;
+    }
+
+    const pm = pms.data[0];
+    res.json({
+      hasCard: true,
+      brand: pm.card?.brand ?? null,
+      last4: pm.card?.last4 ?? null,
+      stripeCustomerId: customer.stripeCustomerId,
+    });
+  } catch (e: any) {
+    console.error("[customer-saved-card]", e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
 export default router;
