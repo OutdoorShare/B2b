@@ -1413,3 +1413,84 @@ export async function sendReturnLinkEmail(opts: {
     requestBody: { raw: makeRawEmail(toEmail, subject, html, fromHeader) },
   });
 }
+
+// ── Stripe account restricted — action required alert ─────────────────────────
+export async function sendStripeRestrictedAlertEmail(opts: {
+  adminEmail: string;
+  companyName: string;
+  tenantSlug: string;
+  disabledReason?: string | null;
+  isReminder?: boolean;
+}): Promise<void> {
+  const { adminEmail, companyName, tenantSlug, disabledReason, isReminder } = opts;
+
+  const settingsUrl = `${APP_URL}/${tenantSlug}/admin/settings`;
+
+  const reasonMap: Record<string, string> = {
+    fields_needed: "Stripe requires updated business or identity information before payments can resume.",
+    listed: "Your account has been flagged for review by Stripe's compliance team.",
+    rejected_fraud: "Your account has been suspended for suspected fraudulent activity. Contact Stripe support.",
+    rejected_listed: "Your account has been suspended. Contact Stripe support for assistance.",
+    rejected_terms_of_service: "Your account was suspended for a terms of service violation. Contact Stripe support.",
+    under_review: "Your account is currently under review by Stripe. No action needed — we'll notify you when resolved.",
+    other: "Stripe has temporarily disabled payments on your account. Please update your account information.",
+  };
+  const reasonKey = disabledReason?.replace(/\./g, "_") ?? "other";
+  const reasonText = reasonMap[reasonKey] ?? reasonMap["other"];
+
+  const badgeLabel = isReminder ? "Reminder — Stripe Account Still Restricted" : "Action Required — Stripe Account Restricted";
+  const subject = isReminder
+    ? `[OutdoorShare] Reminder: your Stripe account is still restricted`
+    : `[OutdoorShare] Action required: your Stripe account has been restricted`;
+
+  const body = `
+    <p style="margin:0 0 8px;font-size:18px;font-weight:700;color:${BRAND_DARK};">
+      ${isReminder ? "Reminder: Stripe Payments Still Paused" : "Stripe Payments Have Been Paused"}
+    </p>
+    <p style="margin:0 0 20px;font-size:15px;color:#374151;line-height:1.6;">
+      Hi <strong>${companyName}</strong>,${isReminder ? " we wanted to follow up —" : ""} Stripe has <strong>temporarily paused payments</strong> on your account.
+      Renters will not be able to complete bookings until this is resolved.
+    </p>
+
+    <div style="background:#fef2f2;border:1px solid #fecaca;border-radius:8px;padding:16px;margin:0 0 24px;">
+      <p style="margin:0 0 6px;font-size:14px;font-weight:700;color:#991b1b;">⚠️ Why this happened</p>
+      <p style="margin:0;font-size:13px;color:#7f1d1d;line-height:1.6;">${reasonText}</p>
+    </div>
+
+    ${infoTable([
+      { label: "Account",   value: companyName },
+      { label: "Status",    value: "Restricted — payments paused", mono: false },
+      { label: "Reason",    value: disabledReason ?? "Unknown", mono: true },
+    ])}
+
+    <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:16px;margin:20px 0;">
+      <p style="margin:0 0 8px;font-size:14px;font-weight:700;color:#166534;">✅ How to fix it</p>
+      <ol style="margin:0;padding-left:20px;font-size:13px;color:#15803d;line-height:2.0;">
+        <li>Click <strong>"Update Stripe Account"</strong> below to open your settings.</li>
+        <li>In the <em>Payments</em> section, click <strong>"Update Account"</strong>.</li>
+        <li>Complete any outstanding requirements in the Stripe dashboard.</li>
+        <li>Once Stripe approves your updates, payments resume automatically.</li>
+      </ol>
+    </div>
+
+    ${ctaButton("Update Stripe Account →", settingsUrl, "#dc2626")}
+
+    <p style="margin:0;font-size:13px;color:#6b7280;text-align:center;line-height:1.6;">
+      Need help? Reply to this email or reach us at
+      <a href="mailto:contact.us@myoutdoorshare.com" style="color:#3ab549;">contact.us@myoutdoorshare.com</a>
+    </p>
+  `;
+
+  const html = emailShell({
+    preheader: `Action required — Stripe has paused payments on your ${companyName} account. Update your information to resume.`,
+    badgeLabel,
+    badgeColor: "#dc2626",
+    body,
+  });
+
+  const gmail = await getUncachableGmailClient();
+  await gmail.users.messages.send({
+    userId: "me",
+    requestBody: { raw: makeRawEmail(adminEmail, subject, html, PLATFORM_FROM) },
+  });
+}

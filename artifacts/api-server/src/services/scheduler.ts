@@ -18,6 +18,7 @@ import {
   sendPrePickupReminderRenterEmail,
   sendPrePickupReminderAdminEmail,
   sendReturnReminderRenterEmail,
+  sendStripeRestrictedAlertEmail,
 } from "./gmail";
 import { createNotification } from "./notifications";
 
@@ -243,11 +244,66 @@ async function sendReturnReminders() {
   }
 }
 
+// ── 3. Stripe restricted account reminders (weekly) ────────────────────────────
+//
+// Any tenant whose stripeAccountStatus is "restricted" and whose last alert was
+// sent more than 7 days ago (or was never sent) gets a follow-up email.
+// The webhook fires the FIRST alert instantly; this handles the ongoing reminders.
+async function alertRestrictedStripeAccounts() {
+  const ONE_WEEK_MS = 7 * 24 * 60 * 60 * 1000;
+  const cutoff = new Date(Date.now() - ONE_WEEK_MS);
+
+  // Fetch tenants that are currently restricted
+  const restrictedTenants = await db
+    .select({
+      id: tenantsTable.id,
+      email: tenantsTable.email,
+      slug: tenantsTable.slug,
+      stripeRestrictedAlertSentAt: tenantsTable.stripeRestrictedAlertSentAt,
+    })
+    .from(tenantsTable)
+    .where(
+      and(
+        sql`${tenantsTable.stripeAccountStatus} = 'restricted'`,
+        // Either never alerted OR last alert was > 7 days ago
+        or(
+          isNull(tenantsTable.stripeRestrictedAlertSentAt),
+          sql`${tenantsTable.stripeRestrictedAlertSentAt} < ${cutoff.toISOString()}`,
+        ),
+      )
+    );
+
+  for (const tenant of restrictedTenants) {
+    try {
+      const [biz] = await db.select({ name: businessProfileTable.name })
+        .from(businessProfileTable).where(eq(businessProfileTable.tenantId, tenant.id));
+      const companyName = biz?.name ?? tenant.slug ?? "Your Company";
+
+      await sendStripeRestrictedAlertEmail({
+        adminEmail: tenant.email,
+        companyName,
+        tenantSlug: tenant.slug,
+        isReminder: true,
+      });
+
+      await db.update(tenantsTable).set({
+        stripeRestrictedAlertSentAt: new Date(),
+        updatedAt: new Date(),
+      }).where(eq(tenantsTable.id, tenant.id));
+
+      console.log(`[scheduler] Stripe restriction reminder sent to ${tenant.email} (tenant ${tenant.id})`);
+    } catch (err: any) {
+      console.warn(`[scheduler] Stripe restriction reminder failed for tenant ${tenant.id}:`, err?.message);
+    }
+  }
+}
+
 // ── Main scheduler loop ────────────────────────────────────────────────────────
 async function runSchedulerCycle() {
   try {
     await sendPickupReminders();
     await sendReturnReminders();
+    await alertRestrictedStripeAccounts();
   } catch (err: any) {
     console.warn("[scheduler] Cycle error:", err?.message);
   }

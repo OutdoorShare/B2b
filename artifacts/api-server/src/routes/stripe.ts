@@ -1,8 +1,9 @@
 import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
-import { tenantsTable, bookingsTable, customersTable, listingsTable } from "@workspace/db/schema";
+import { tenantsTable, bookingsTable, customersTable, listingsTable, businessProfileTable } from "@workspace/db/schema";
 import { eq, desc, and, isNull, isNotNull } from "drizzle-orm";
 import { stripe, getStripeForTenant, PLATFORM_FEE_PERCENT } from "../services/stripe";
+import { sendStripeRestrictedAlertEmail } from "../services/gmail";
 import type { Request } from "express";
 
 const router: IRouter = Router();
@@ -528,19 +529,68 @@ router.post("/stripe/webhook", async (req, res) => {
         const meta = account.metadata as Record<string, string> | undefined;
         if (meta?.tenant_id) {
           const tenantId = parseInt(meta.tenant_id);
-          const [prevTenant] = await db.select({ stripeChargesEnabled: tenantsTable.stripeChargesEnabled })
-            .from(tenantsTable).where(eq(tenantsTable.id, tenantId));
+          const [prevTenant] = await db.select({
+            stripeChargesEnabled: tenantsTable.stripeChargesEnabled,
+            stripeAccountStatus: tenantsTable.stripeAccountStatus,
+            stripeRestrictedAlertSentAt: tenantsTable.stripeRestrictedAlertSentAt,
+            email: tenantsTable.email,
+            slug: tenantsTable.slug,
+          }).from(tenantsTable).where(eq(tenantsTable.id, tenantId));
+
+          // Determine the correct new status
+          const disabledReason = (account.requirements?.disabled_reason as string | null | undefined) ?? null;
+          const isNowRestricted = !account.charges_enabled && !!disabledReason;
+          const newStatus = account.charges_enabled
+            ? "active"
+            : isNowRestricted
+              ? "restricted"
+              : "onboarding";
+
           await db.update(tenantsTable).set({
             stripeChargesEnabled: account.charges_enabled,
             stripePayoutsEnabled: account.payouts_enabled,
-            stripeAccountStatus: account.charges_enabled ? "active" : "onboarding",
+            stripeAccountStatus: newStatus,
+            // Clear the alert timestamp when the account becomes active again
+            ...(account.charges_enabled ? { stripeRestrictedAlertSentAt: null } : {}),
             updatedAt: new Date(),
           }).where(eq(tenantsTable.id, tenantId));
+
           // Auto-sweep held funds when tenant first becomes active
           if (account.charges_enabled && !prevTenant?.stripeChargesEnabled) {
             sweepPendingPayouts(tenantId).then(r => {
               if (r.swept > 0) console.log(`[webhook] Auto-swept ${r.swept} bookings ($${(r.totalCents/100).toFixed(2)}) to tenant ${tenantId}`);
             }).catch(err => console.error("[webhook] sweep failed:", err.message));
+          }
+
+          // Fire restriction alert if account just became restricted (or is newly detected restricted)
+          if (isNowRestricted && !account.charges_enabled) {
+            const wasAlreadyRestricted = prevTenant?.stripeAccountStatus === "restricted";
+            const alreadyAlerted = !!prevTenant?.stripeRestrictedAlertSentAt;
+            if (!wasAlreadyRestricted || !alreadyAlerted) {
+              // Fetch business name for personalised email
+              const [biz] = await db.select({ name: businessProfileTable.name })
+                .from(businessProfileTable).where(eq(businessProfileTable.tenantId, tenantId));
+              const companyName = biz?.name ?? prevTenant?.slug ?? "Your Company";
+              const adminEmail = prevTenant?.email;
+              const tenantSlug = prevTenant?.slug ?? "";
+
+              if (adminEmail && tenantSlug) {
+                sendStripeRestrictedAlertEmail({
+                  adminEmail,
+                  companyName,
+                  tenantSlug,
+                  disabledReason,
+                  isReminder: false,
+                }).then(() => {
+                  // Record that we sent the alert
+                  db.update(tenantsTable).set({
+                    stripeRestrictedAlertSentAt: new Date(),
+                    updatedAt: new Date(),
+                  }).where(eq(tenantsTable.id, tenantId)).catch(() => {});
+                  console.log(`[webhook] Stripe restriction alert sent to ${adminEmail} (tenant ${tenantId})`);
+                }).catch(err => console.error("[webhook] Stripe restriction alert failed:", err.message));
+              }
+            }
           }
         }
         break;
