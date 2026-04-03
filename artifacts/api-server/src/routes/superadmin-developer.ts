@@ -12,6 +12,7 @@ import {
 } from "@workspace/db";
 import { eq, desc, sql, and, gte, lt, count, isNull } from "drizzle-orm";
 import os from "os";
+import v8 from "v8";
 
 const router = Router();
 
@@ -107,15 +108,18 @@ router.get("/superadmin/developer/health", requireSA, async (req, res) => {
     checks.push({ name: "Error Rate (1h)", status: "warn", message: "Could not check" });
   }
 
-  // 8. Memory usage
+  // 8. Memory usage — compare against the actual V8 heap limit, not heapTotal
+  // (heapTotal is the current allocation, not the ceiling; heapSizeLimit is the real cap)
   const usedMem = process.memoryUsage();
+  const heapStats = v8.getHeapStatistics();
   const heapUsedMB = Math.round(usedMem.heapUsed / 1024 / 1024);
+  const heapLimitMB = Math.round(heapStats.heap_size_limit / 1024 / 1024);
   const heapTotalMB = Math.round(usedMem.heapTotal / 1024 / 1024);
-  const heapPct = Math.round((usedMem.heapUsed / usedMem.heapTotal) * 100);
+  const heapPct = Math.round((usedMem.heapUsed / heapStats.heap_size_limit) * 100);
   checks.push({
     name: "Memory (Heap)",
     status: heapPct < 75 ? "ok" : heapPct < 90 ? "warn" : "error",
-    message: `${heapUsedMB}MB / ${heapTotalMB}MB (${heapPct}%)`,
+    message: `${heapUsedMB}MB used / ${heapLimitMB}MB limit (${heapPct}%) · allocated ${heapTotalMB}MB`,
   });
 
   // 9. Active tenants with no listings
@@ -316,6 +320,7 @@ router.get("/superadmin/developer/tenant-health", requireSA, async (_req, res) =
 // ── System Stats ──────────────────────────────────────────────────────────────
 router.get("/superadmin/developer/system", requireSA, async (_req, res) => {
   const mem = process.memoryUsage();
+  const heapStats = v8.getHeapStatistics();
   const cpuLoad = os.loadavg();
   const uptime = process.uptime();
 
@@ -356,9 +361,10 @@ router.get("/superadmin/developer/system", requireSA, async (_req, res) => {
     memory: {
       heapUsedMB: Math.round(mem.heapUsed / 1024 / 1024),
       heapTotalMB: Math.round(mem.heapTotal / 1024 / 1024),
+      heapLimitMB: Math.round(heapStats.heap_size_limit / 1024 / 1024),
       rssMB: Math.round(mem.rss / 1024 / 1024),
       externalMB: Math.round(mem.external / 1024 / 1024),
-      heapPercent: Math.round((mem.heapUsed / mem.heapTotal) * 100),
+      heapPercent: Math.round((mem.heapUsed / heapStats.heap_size_limit) * 100),
     },
     os: {
       hostname: os.hostname(),
