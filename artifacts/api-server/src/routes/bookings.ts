@@ -144,10 +144,10 @@ function formatBooking(b: typeof bookingsTable.$inferSelect, listingTitle: strin
     pickupPhotos: b.pickupPhotos ? JSON.parse(b.pickupPhotos) : [],
     pickupLinkSent: !!b.pickupToken,
     pickupCompletedAt: b.pickupCompletedAt ? b.pickupCompletedAt.toISOString() : null,
-    returnPhotos: (b as any).returnPhotos ? JSON.parse((b as any).returnPhotos) : [],
-    returnToken: (b as any).returnToken ?? null,
-    returnCompletedAt: (b as any).returnCompletedAt ? (b as any).returnCompletedAt.toISOString() : null,
-    inspectionResult: (b as any).inspectionResult ?? null,
+    returnPhotos: b.returnPhotos ? JSON.parse(b.returnPhotos) : [],
+    returnToken: b.returnToken ?? null,
+    returnCompletedAt: b.returnCompletedAt ? b.returnCompletedAt.toISOString() : null,
+    inspectionResult: b.inspectionResult ?? null,
     depositHoldIntentId: b.depositHoldIntentId ?? null,
     depositHoldStatus: b.depositHoldStatus ?? null,
     createdAt: b.createdAt.toISOString(),
@@ -657,6 +657,30 @@ router.put("/bookings/:id", async (req, res) => {
                 slug: tenantRow?.slug ?? "",
               });
             }
+
+            // Auto-send pickup link to renter on confirmation
+            if (updated.customerEmail) {
+              const pickupToken = updated.pickupToken ?? randomBytes(24).toString("hex");
+              if (!updated.pickupToken) {
+                await db.update(bookingsTable)
+                  .set({ pickupToken: pickupToken, updatedAt: new Date() })
+                  .where(eq(bookingsTable.id, updated.id));
+              }
+              const BASE = process.env.APP_URL || `https://${process.env.REPLIT_DEV_DOMAIN}`;
+              const pickupUrl = `${BASE}/${tenantRow?.slug ?? ""}/pickup/${pickupToken}`;
+              sendPickupLinkEmail({
+                toEmail: updated.customerEmail,
+                customerName: updated.customerName,
+                pickupUrl,
+                listingTitle: listingRow?.title ?? "Rental Equipment",
+                startDate: updated.startDate,
+                endDate: updated.endDate,
+                companyName,
+                companyEmail,
+                hostPickup: false,
+              }).then(() => appendEmailEvent(updated.id, "pickup_link", updated.customerEmail))
+                .catch(err => console.error("[auto pickup email]", err));
+            }
           } catch (e) {
             console.error("[bookings] contact card email error:", e);
           }
@@ -678,7 +702,7 @@ router.put("/bookings/:id", async (req, res) => {
         }).catch(() => {});
       }
 
-      // On check-in (active) → notify renter
+      // On check-in (active) → notify renter + auto-send return link
       if (body.status === "active" && updated.tenantId && updated.customerEmail) {
         createNotification({
           tenantId: updated.tenantId,
@@ -691,6 +715,51 @@ router.put("/bookings/:id", async (req, res) => {
           isActionRequired: false,
           relatedId: updated.id,
         }).catch(() => {});
+
+        (async () => {
+          try {
+            const [listingRow] = await db
+              .select({ title: listingsTable.title })
+              .from(listingsTable)
+              .where(eq(listingsTable.id, updated.listingId));
+
+            const [profileRow] = await db
+              .select({ name: businessProfileTable.name, email: businessProfileTable.email })
+              .from(businessProfileTable)
+              .where(eq(businessProfileTable.tenantId, updated.tenantId!));
+
+            const [tenantRow] = await db
+              .select({ slug: tenantsTable.slug, email: tenantsTable.email })
+              .from(tenantsTable)
+              .where(eq(tenantsTable.id, updated.tenantId!));
+
+            const companyName = profileRow?.name ?? tenantRow?.slug ?? "Your Rental Company";
+            const companyEmail = profileRow?.email ?? tenantRow?.email ?? undefined;
+
+            const returnToken = updated.returnToken ?? randomBytes(24).toString("hex");
+            if (!updated.returnToken) {
+              await db.update(bookingsTable)
+                .set({ returnToken: returnToken, updatedAt: new Date() })
+                .where(eq(bookingsTable.id, updated.id));
+            }
+            const BASE = process.env.APP_URL || `https://${process.env.REPLIT_DEV_DOMAIN}`;
+            const returnUrl = `${BASE}/${tenantRow?.slug ?? ""}/return/${returnToken}`;
+
+            await sendReturnLinkEmail({
+              toEmail: updated.customerEmail,
+              customerName: updated.customerName,
+              returnUrl,
+              listingTitle: listingRow?.title ?? "Rental Equipment",
+              startDate: updated.startDate,
+              endDate: updated.endDate,
+              companyName,
+              companyEmail,
+            });
+            await appendEmailEvent(updated.id, "return_link", updated.customerEmail);
+          } catch (e) {
+            console.error("[auto return email]", e);
+          }
+        })();
       }
     }
 
@@ -1030,7 +1099,7 @@ router.post("/bookings/:id/send-return-link", async (req, res) => {
 router.get("/return/:token", async (req, res) => {
   try {
     const { token } = req.params;
-    const [booking] = await db.select().from(bookingsTable).where(eq((bookingsTable as any).returnToken, token));
+    const [booking] = await db.select().from(bookingsTable).where(eq(bookingsTable.returnToken, token));
     if (!booking) { res.status(404).json({ error: "Return link not found or expired" }); return; }
 
     const [listing] = await db.select({ title: listingsTable.title, imageUrls: listingsTable.imageUrls }).from(listingsTable).where(eq(listingsTable.id, booking.listingId));
@@ -1051,8 +1120,8 @@ router.get("/return/:token", async (req, res) => {
       listingImage: Array.isArray(listing?.imageUrls) && listing.imageUrls.length > 0 ? listing.imageUrls[0] : null,
       companyName,
       logoUrl,
-      returnCompleted: !!(booking as any).returnCompletedAt,
-      returnPhotos: (booking as any).returnPhotos ? JSON.parse((booking as any).returnPhotos) : [],
+      returnCompleted: !!booking.returnCompletedAt,
+      returnPhotos: booking.returnPhotos ? JSON.parse(booking.returnPhotos) : [],
     });
   } catch (err) {
     req.log.error(err);
@@ -1065,21 +1134,21 @@ router.get("/return/:token", async (req, res) => {
 router.post("/return/:token/photos", pickupUpload.array("photos", 20), async (req, res) => {
   try {
     const { token } = req.params;
-    const [booking] = await db.select().from(bookingsTable).where(eq((bookingsTable as any).returnToken, token));
+    const [booking] = await db.select().from(bookingsTable).where(eq(bookingsTable.returnToken, token));
     if (!booking) { res.status(404).json({ error: "Return link not found" }); return; }
 
     const files = req.files as Express.Multer.File[];
     if (!files || files.length === 0) { res.status(400).json({ error: "No photos uploaded" }); return; }
 
-    const existing: string[] = (booking as any).returnPhotos ? JSON.parse((booking as any).returnPhotos) : [];
+    const existing: string[] = booking.returnPhotos ? JSON.parse(booking.returnPhotos) : [];
     const newUrls = files.map(f => `/api/uploads/${f.filename}`);
     const allPhotos = [...existing, ...newUrls];
 
     await db.update(bookingsTable).set({
       returnPhotos: JSON.stringify(allPhotos),
-      returnCompletedAt: (booking as any).returnCompletedAt ?? new Date(),
+      returnCompletedAt: booking.returnCompletedAt ?? new Date(),
       updatedAt: new Date(),
-    } as any).where(eq(bookingsTable.id, booking.id));
+    }).where(eq(bookingsTable.id, booking.id));
 
     res.json({ ok: true, photos: allPhotos, count: allPhotos.length });
   } catch (err) {
