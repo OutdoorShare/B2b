@@ -50,9 +50,9 @@ const NAV_GROUPS: NavGroup[] = [
   {
     group: "Operations",
     items: [
+      { name: "Bookings", path: "/bookings", icon: CalendarDays },
       { name: "Listings", path: "/listings", icon: Package },
       { name: "Inventory", path: "/inventory", icon: Warehouse },
-      { name: "Bookings", path: "/bookings", icon: CalendarDays },
       { name: "Quotes", path: "/quotes", icon: FileText },
       { name: "Claims", path: "/claims", icon: ShieldAlert },
     ],
