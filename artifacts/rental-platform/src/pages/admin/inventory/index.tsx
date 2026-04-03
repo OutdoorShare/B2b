@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import {
   Plus, Search, Package, Wrench, AlertTriangle, CheckCircle2,
-  Archive, Clock, ChevronRight, ImageIcon, Filter, Tag,
+  Archive, Clock, ChevronRight, ImageIcon, Filter, Tag, Upload,
 } from "lucide-react";
 
 type ProductStatus = "available" | "maintenance" | "damaged" | "reserved" | "out_of_service";
@@ -101,11 +101,18 @@ export default function AdminInventory() {
           <h2 className="text-3xl font-bold tracking-tight">Inventory</h2>
           <p className="text-muted-foreground mt-1">Track your physical equipment, maintenance, and availability</p>
         </div>
-        <Link href={adminPath("/inventory/new")}>
-          <Button className="gap-2">
-            <Plus className="w-4 h-4" /> Add Product
-          </Button>
-        </Link>
+        <div className="flex items-center gap-2">
+          <Link href={adminPath("/inventory/import")}>
+            <Button variant="outline" className="gap-2">
+              <Upload className="w-4 h-4" /> Import
+            </Button>
+          </Link>
+          <Link href={adminPath("/inventory/new")}>
+            <Button className="gap-2">
+              <Plus className="w-4 h-4" /> Add Product
+            </Button>
+          </Link>
+        </div>
       </div>
 
       {/* Summary cards */}

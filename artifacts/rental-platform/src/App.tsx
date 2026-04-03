@@ -73,6 +73,7 @@ import AdminContactCards from "@/pages/admin/contact-cards";
 import AdminInventory from "@/pages/admin/inventory/index";
 import AdminInventoryForm from "@/pages/admin/inventory/form";
 import AdminInventoryDetail from "@/pages/admin/inventory/detail";
+import AdminInventoryImport from "@/pages/admin/inventory/import";
 
 const queryClient = new QueryClient();
 
@@ -285,6 +286,9 @@ function Router() {
       </Route>
       <Route path="/:slug/admin/contact-cards">
         <AdminGuard><AdminLayout><AdminContactCards /></AdminLayout></AdminGuard>
+      </Route>
+      <Route path="/:slug/admin/inventory/import">
+        <AdminGuard><AdminLayout><AdminInventoryImport /></AdminLayout></AdminGuard>
       </Route>
       <Route path="/:slug/admin/inventory/new">
         <AdminGuard><AdminLayout><AdminInventoryForm /></AdminLayout></AdminGuard>

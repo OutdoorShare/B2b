@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
-import { productsTable, maintenanceLogsTable, listingsTable } from "@workspace/db/schema";
+import { productsTable, maintenanceLogsTable, listingsTable, categoriesTable } from "@workspace/db/schema";
 import { eq, and, desc } from "drizzle-orm";
 import { requireTenant } from "../middleware/admin-auth";
 
@@ -231,6 +231,86 @@ router.post("/products/:id/maintenance", requireTenant as any, async (req, res) 
   } catch (err) {
     req.log.error(err);
     res.status(500).json({ error: "Failed to add maintenance log" });
+  }
+});
+
+// ── Bulk import: POST /api/products/bulk ────────────────────────────────────
+router.post("/products/bulk", requireTenant as any, async (req, res) => {
+  try {
+    const rows: any[] = Array.isArray(req.body) ? req.body : [];
+    if (rows.length === 0) {
+      res.status(400).json({ error: "No rows provided" });
+      return;
+    }
+    if (rows.length > 500) {
+      res.status(400).json({ error: "Maximum 500 rows per import" });
+      return;
+    }
+
+    // Build category name → id map for this tenant
+    const cats = await db
+      .select()
+      .from(categoriesTable)
+      .where(eq(categoriesTable.tenantId, req.tenantId!));
+    const catByName: Record<string, number> = {};
+    for (const c of cats) {
+      catByName[c.name.toLowerCase()] = c.id;
+      catByName[c.slug.toLowerCase()] = c.id;
+    }
+
+    const created: any[] = [];
+    const errors: { row: number; error: string }[] = [];
+
+    const validStatus = ["available", "maintenance", "damaged", "reserved", "out_of_service"];
+
+    for (let i = 0; i < rows.length; i++) {
+      const row = rows[i];
+      const rowNum = i + 1;
+
+      if (!row.name?.trim()) {
+        errors.push({ row: rowNum, error: "Name is required" });
+        continue;
+      }
+
+      let categoryId: number | null = null;
+      if (row.category) {
+        categoryId = catByName[String(row.category).toLowerCase().trim()] ?? null;
+      }
+
+      const status = validStatus.includes(row.status) ? row.status : "available";
+      const quantity = row.quantity != null ? parseInt(row.quantity) || 1 : 1;
+      const nextMaintenanceDate = row.nextMaintenanceDate?.trim() || null;
+
+      try {
+        const [newProduct] = await db
+          .insert(productsTable)
+          .values({
+            tenantId: req.tenantId!,
+            name: row.name.trim(),
+            sku: row.sku?.trim() || null,
+            categoryId,
+            description: row.description?.trim() || null,
+            status,
+            quantity,
+            imageUrls: [],
+            brand: row.brand?.trim() || null,
+            model: row.model?.trim() || null,
+            specs: row.specs?.trim() || null,
+            notes: row.notes?.trim() || null,
+            nextMaintenanceDate,
+            updatedAt: new Date(),
+          })
+          .returning();
+        created.push(newProduct);
+      } catch (rowErr: any) {
+        errors.push({ row: rowNum, error: rowErr?.message ?? "Insert failed" });
+      }
+    }
+
+    res.status(207).json({ created: created.length, errors, total: rows.length });
+  } catch (err) {
+    req.log.error(err);
+    res.status(500).json({ error: "Bulk import failed" });
   }
 });
 
