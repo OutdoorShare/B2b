@@ -267,9 +267,9 @@ export function AdminLayout({ children }: { children: React.ReactNode }) {
   }, []);
 
   return (
-    <div className="min-h-[100dvh] flex flex-col md:flex-row bg-background">
+    <div className="h-[100dvh] flex flex-col md:flex-row bg-background overflow-hidden">
       {/* Sidebar */}
-      <aside className="w-full md:w-60 border-r border-border bg-sidebar flex-shrink-0 flex flex-col">
+      <aside className="w-full md:w-60 md:h-full border-r border-border bg-sidebar flex-shrink-0 flex flex-col overflow-hidden">
         {/* Logo / brand header */}
         <div className="h-[60px] flex items-center px-4 border-b border-border/60 bg-gradient-to-b from-sidebar-accent/30 to-transparent shrink-0">
           <Link href={adminBase} className="flex items-center gap-2.5 min-w-0">
@@ -376,7 +376,7 @@ export function AdminLayout({ children }: { children: React.ReactNode }) {
       </aside>
 
       {/* Main Content */}
-      <main className="flex-1 flex flex-col min-w-0 overflow-hidden">
+      <main className="flex-1 flex flex-col min-w-0 min-h-0 overflow-hidden">
         <TrialStatusBanner />
 
         <header className="h-14 flex items-center justify-between px-6 border-b border-border/70 bg-background/80 backdrop-blur-sm sticky top-0 z-10">
