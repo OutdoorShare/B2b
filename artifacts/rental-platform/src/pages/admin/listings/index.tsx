@@ -20,7 +20,8 @@ import {
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, Search, Edit, Trash2, Package, ChevronRight, Upload } from "lucide-react";
+import { Plus, Search, Edit, Trash2, Package, ChevronRight, Upload, Link2, Check } from "lucide-react";
+import { getAdminSlug } from "@/lib/admin-nav";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -35,8 +36,18 @@ import {
 
 export default function AdminListings() {
   const [search, setSearch] = useState("");
+  const [copiedId, setCopiedId] = useState<number | null>(null);
   const [, setLocation] = useLocation();
   const { toast } = useToast();
+  const slug = getAdminSlug();
+
+  const copyListingLink = (id: number) => {
+    const url = `${window.location.origin}/${slug}/listings/${id}`;
+    navigator.clipboard.writeText(url).then(() => {
+      setCopiedId(id);
+      setTimeout(() => setCopiedId(null), 2000);
+    });
+  };
   const queryClient = useQueryClient();
 
   const { data: listings, isLoading } = useGetListings(
@@ -144,6 +155,15 @@ export default function AdminListings() {
                     </TableCell>
                     <TableCell className="text-right" onClick={e => e.stopPropagation()}>
                       <div className="flex justify-end gap-1 items-center">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          title="Copy listing link"
+                          onClick={() => copyListingLink(listing.id)}
+                          className={copiedId === listing.id ? "text-green-600" : ""}
+                        >
+                          {copiedId === listing.id ? <Check className="w-4 h-4" /> : <Link2 className="w-4 h-4" />}
+                        </Button>
                         <Link href={adminPath(`/listings/${listing.id}/edit`)}>
                           <Button variant="ghost" size="icon" title="Edit">
                             <Edit className="w-4 h-4" />

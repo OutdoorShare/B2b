@@ -13,7 +13,7 @@ import { Calendar } from "@/components/ui/calendar";
 import {
   ArrowLeft, Check, Shield, MapPin, AlertTriangle,
   Tag, ChevronRight, Package, ShieldCheck, Umbrella, Zap, Lock,
-  CalendarDays, ChevronRight as ArrowRight, ClipboardList
+  CalendarDays, ChevronRight as ArrowRight, ClipboardList, Link2
 } from "lucide-react";
 import { differenceInDays, format, isWithinInterval, startOfDay, addDays, isBefore, isAfter, isSameDay } from "date-fns";
 
@@ -48,6 +48,7 @@ export default function StorefrontGearDetail() {
   const id = idParam ? parseInt(idParam) : 0;
 
   const [activeImage, setActiveImage] = useState(0);
+  const [linkCopied, setLinkCopied] = useState(false);
   const [addons, setAddons] = useState<Addon[]>([]);
   const [platformProtectionPlan, setPlatformProtectionPlan] = useState<{
     enabled: boolean; feeAmount: string; feePer: string;
@@ -265,7 +266,25 @@ export default function StorefrontGearDetail() {
                 )}
               </div>
 
-              <h1 className="text-3xl font-black tracking-tight mb-3 leading-tight">{listing.title}</h1>
+              <div className="flex items-start justify-between gap-3">
+                <h1 className="text-3xl font-black tracking-tight mb-2 leading-tight">{listing.title}</h1>
+                <button
+                  onClick={() => {
+                    navigator.clipboard.writeText(window.location.href).then(() => {
+                      setLinkCopied(true);
+                      setTimeout(() => setLinkCopied(false), 2000);
+                    });
+                  }}
+                  className="shrink-0 flex items-center gap-1.5 text-xs font-medium px-2.5 py-1.5 rounded-lg border border-border bg-background hover:bg-muted transition-colors mt-1"
+                  title="Copy listing link"
+                >
+                  {linkCopied ? (
+                    <><Check className="w-3.5 h-3.5 text-green-600" /><span className="text-green-600">Copied!</span></>
+                  ) : (
+                    <><Link2 className="w-3.5 h-3.5 text-muted-foreground" /><span className="text-muted-foreground">Copy Link</span></>
+                  )}
+                </button>
+              </div>
 
               <div className="flex items-baseline gap-1.5">
                 <span className="text-4xl font-black">${parseFloat(String(listing.pricePerDay)).toFixed(0)}</span>
