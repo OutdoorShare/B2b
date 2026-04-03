@@ -479,6 +479,14 @@ function BookingsTab({ tenantId }: { tenantId: number }) {
   const [saving, setSaving] = useState(false);
   type SAVerifData = { found: boolean; identityVerificationStatus?: string; identityVerificationSessionId?: string | null; identityVerifiedAt?: string | null };
   const [verifData, setVerifData] = useState<SAVerifData | null>(null);
+  const [bizPolicy, setBizPolicy] = useState<{ cancellationPolicy?: string; rentalTerms?: string } | null>(null);
+
+  useEffect(() => {
+    sa(`/superadmin/tenants/${tenantId}/business`)
+      .then(r => r.json())
+      .then(d => setBizPolicy({ cancellationPolicy: d.cancellationPolicy, rentalTerms: d.rentalTerms }))
+      .catch(() => {});
+  }, [tenantId]);
 
   const load = useCallback(async () => {
     const r = await sa(`/superadmin/tenants/${tenantId}/bookings?limit=100`);
@@ -598,6 +606,27 @@ function BookingsTab({ tenantId }: { tenantId: number }) {
                   </div>
                 );
               })()}
+              {/* Cancellation policy — visible to super admin during booking review */}
+              {bizPolicy && (
+                <div className="space-y-1.5">
+                  <Label className="text-slate-400 text-xs uppercase tracking-wide">Cancellation Policy</Label>
+                  {bizPolicy.cancellationPolicy ? (
+                    <div className="bg-amber-950/40 border border-amber-700/50 rounded-lg px-3 py-2">
+                      <p className="text-amber-200 text-xs leading-relaxed whitespace-pre-wrap">{bizPolicy.cancellationPolicy}</p>
+                    </div>
+                  ) : (
+                    <p className="text-slate-600 text-xs italic">No cancellation policy set.</p>
+                  )}
+                  {bizPolicy.rentalTerms && (
+                    <details>
+                      <summary className="text-slate-500 text-xs cursor-pointer hover:text-slate-400 select-none mt-1">View rental terms ›</summary>
+                      <div className="mt-2 bg-slate-800/60 border border-slate-700 rounded-lg px-3 py-2">
+                        <p className="text-slate-400 text-xs leading-relaxed whitespace-pre-wrap">{bizPolicy.rentalTerms}</p>
+                      </div>
+                    </details>
+                  )}
+                </div>
+              )}
               <div className="space-y-1.5">
                 <Label className="text-slate-300 text-xs">Status</Label>
                 <Select value={newStatus} onValueChange={setNewStatus}>

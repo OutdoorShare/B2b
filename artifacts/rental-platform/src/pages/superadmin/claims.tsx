@@ -62,6 +62,10 @@ export default function SuperAdminClaims() {
   const [typeFilter, setTypeFilter] = useState("all");
   const [selected, setSelected] = useState<Claim | null>(null);
 
+  // cancellation policy fetched for the selected claim's tenant
+  const [claimPolicy, setClaimPolicy] = useState<{ cancellationPolicy?: string; rentalTerms?: string } | null>(null);
+  const [policyLoading, setPolicyLoading] = useState(false);
+
   // edit state for detail panel
   const [editStatus, setEditStatus] = useState("");
   const [editNotes, setEditNotes] = useState("");
@@ -91,6 +95,15 @@ export default function SuperAdminClaims() {
     setEditNotes(c.adminNotes ?? "");
     setEditSettled(c.settledAmount != null ? String(c.settledAmount) : "");
     setSaveError("");
+    setClaimPolicy(null);
+    if (c.tenantId) {
+      setPolicyLoading(true);
+      apiFetch(`/superadmin/tenants/${c.tenantId}/business`)
+        .then(r => r.json())
+        .then(d => setClaimPolicy({ cancellationPolicy: d.cancellationPolicy, rentalTerms: d.rentalTerms }))
+        .catch(() => setClaimPolicy(null))
+        .finally(() => setPolicyLoading(false));
+    }
   }
 
   async function saveClaim() {
@@ -316,6 +329,39 @@ export default function SuperAdminClaims() {
               <p className="text-slate-500 text-xs font-semibold uppercase tracking-wide mb-1.5">Description</p>
               <p className="text-slate-300 text-sm leading-relaxed bg-slate-800 rounded-lg p-3">{selected.description}</p>
             </div>
+
+            {/* Cancellation Policy */}
+            {(policyLoading || claimPolicy?.cancellationPolicy) && (
+              <div>
+                <p className="text-slate-500 text-xs font-semibold uppercase tracking-wide mb-1.5">
+                  Cancellation Policy
+                  {selected.companyName && <span className="normal-case font-normal ml-1 text-slate-600">— {selected.companyName}</span>}
+                </p>
+                {policyLoading ? (
+                  <p className="text-slate-500 text-xs italic">Loading…</p>
+                ) : claimPolicy?.cancellationPolicy ? (
+                  <div className="bg-amber-950/40 border border-amber-700/50 rounded-lg p-3">
+                    <p className="text-amber-200 text-xs leading-relaxed whitespace-pre-wrap">{claimPolicy.cancellationPolicy}</p>
+                  </div>
+                ) : null}
+                {!policyLoading && claimPolicy?.rentalTerms && (
+                  <details className="mt-2">
+                    <summary className="text-slate-500 text-xs cursor-pointer hover:text-slate-400 select-none">
+                      View rental terms ›
+                    </summary>
+                    <div className="mt-2 bg-slate-800/60 border border-slate-700 rounded-lg p-3">
+                      <p className="text-slate-400 text-xs leading-relaxed whitespace-pre-wrap">{claimPolicy.rentalTerms}</p>
+                    </div>
+                  </details>
+                )}
+              </div>
+            )}
+            {!policyLoading && claimPolicy && !claimPolicy.cancellationPolicy && (
+              <div>
+                <p className="text-slate-500 text-xs font-semibold uppercase tracking-wide mb-1.5">Cancellation Policy</p>
+                <p className="text-slate-600 text-xs italic">No cancellation policy set by this company.</p>
+              </div>
+            )}
 
             {/* Evidence */}
             {selected.evidenceUrls && (() => {
