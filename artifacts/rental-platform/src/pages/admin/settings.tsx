@@ -2,7 +2,6 @@ import { useState, useEffect, useRef } from "react";
 import { useParams } from "wouter";
 import {
   useGetBusinessProfile,
-  useUpdateBusinessProfile,
   getGetBusinessProfileQueryKey
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
@@ -54,7 +53,7 @@ export default function AdminSettings() {
     query: { queryKey: ["/api/business", urlSlug] }
   });
 
-  const updateProfile = useUpdateBusinessProfile();
+  const [saving, setSaving] = useState(false);
   const [formData, setFormData] = useState<any>({});
 
   useEffect(() => {
@@ -90,36 +89,43 @@ export default function AdminSettings() {
     applyBrandColors(preset.primary, preset.accent);
   };
 
-  const doSave = (retrying = false) => {
-    updateProfile.mutate(
-      { data: formData },
-      {
-        onSuccess: (data) => {
-          queryClient.setQueryData(["/api/business", urlSlug], data);
-          queryClient.setQueryData(getGetBusinessProfileQueryKey(), data);
-          applyBrandColors(data.primaryColor, data.accentColor);
-          toast({ title: "Settings saved" });
-        },
-        onError: (err: any) => {
-          const status: number = err?.status ?? 0;
-          // Network failure (e.g. API rebuilding) — retry once automatically
-          if (!retrying && (status === 0 || !status)) {
-            setTimeout(() => doSave(true), 1500);
-            toast({ title: "Saving…", description: "Connection blip — retrying in a moment." });
-            return;
-          }
-          if (status === 401) {
-            redirectToLogin("Your session has expired. Redirecting you to log in…");
-            return;
-          }
-          const msg =
-            status === 403 ? "You don't have permission to save settings." :
-            status >= 500 ? "Server error — please try again." :
-            err?.message || "Could not save settings.";
-          toast({ title: "Save failed", description: msg, variant: "destructive" });
-        }
+  const doSave = async (retrying = false) => {
+    if (saving) return;
+    setSaving(true);
+    try {
+      const res = await fetch(`${BASE}/api/business`, {
+        method: "PUT",
+        headers: { ...adminHeaders(), "Content-Type": "application/json" },
+        body: JSON.stringify(formData),
+      });
+      if (res.status === 401) {
+        redirectToLogin("Your session has expired. Redirecting you to log in…");
+        return;
       }
-    );
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        const msg =
+          res.status === 403 ? "You don't have permission to save settings." :
+          res.status >= 500 ? "Server error — please try again." :
+          (data as any)?.error || "Could not save settings.";
+        toast({ title: "Save failed", description: msg, variant: "destructive" });
+        return;
+      }
+      const data = await res.json();
+      queryClient.setQueryData(["/api/business", urlSlug], data);
+      queryClient.setQueryData(getGetBusinessProfileQueryKey(), data);
+      applyBrandColors(data.primaryColor, data.accentColor);
+      toast({ title: "Settings saved" });
+    } catch {
+      if (!retrying) {
+        toast({ title: "Saving…", description: "Connection blip — retrying in a moment." });
+        setTimeout(() => doSave(true), 1500);
+      } else {
+        toast({ title: "Save failed", description: "Connection error — please try again.", variant: "destructive" });
+      }
+    } finally {
+      setSaving(false);
+    }
   };
 
   const handleSave = (e: React.FormEvent) => {
@@ -881,8 +887,8 @@ export default function AdminSettings() {
           </TabsContent>
 
           <div className="mt-8 flex justify-end">
-            <Button type="submit" size="lg" disabled={updateProfile.isPending}>
-              {updateProfile.isPending ? "Saving..." : "Save Settings"}
+            <Button type="submit" size="lg" disabled={saving}>
+              {saving ? "Saving..." : "Save Settings"}
             </Button>
           </div>
         </form>
