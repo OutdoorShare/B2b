@@ -358,12 +358,20 @@ export function StorefrontLayout({ children }: { children: React.ReactNode }) {
 
     // ── apply tenant branding ─────────────────────────────────────────
     document.title = title;
+
+    // All favicon / app-icon links
     setFavicon(image);
+    setLink('link[rel="shortcut icon"]',    image);
     setLink('link[rel="apple-touch-icon"]', image);
 
+    // Primary SEO meta
+    setMeta('meta[name="description"]',                  "content", description);
     setMeta('meta[name="theme-color"]',                  "content", primaryColor);
+    setMeta('meta[name="msapplication-TileColor"]',      "content", primaryColor);
+    setMeta('meta[name="msapplication-TileImage"]',      "content", image);
     setMeta('meta[name="apple-mobile-web-app-title"]',   "content", companyName);
 
+    // Open Graph
     setMeta('meta[property="og:title"]',                 "content", title);
     setMeta('meta[property="og:description"]',           "content", description);
     setMeta('meta[property="og:url"]',                   "content", url);
@@ -372,6 +380,7 @@ export function StorefrontLayout({ children }: { children: React.ReactNode }) {
     setMeta('meta[property="og:site_name"]',             "content", companyName);
     setMeta('meta[property="og:image:alt"]',             "content", `${companyName} logo`);
 
+    // Twitter / X
     setMeta('meta[name="twitter:title"]',                "content", title);
     setMeta('meta[name="twitter:description"]',          "content", description);
     setMeta('meta[name="twitter:image"]',                "content", image);
@@ -381,9 +390,13 @@ export function StorefrontLayout({ children }: { children: React.ReactNode }) {
     return () => {
       document.title = origTitle;
       setFavicon("/outdoorshare-logo.png");
+      setLink('link[rel="shortcut icon"]',    "/outdoorshare-logo.png");
       setLink('link[rel="apple-touch-icon"]', "/outdoorshare-logo.png");
 
+      setMeta('meta[name="description"]',                "content", "Launch your outdoor rental business online in minutes. OutdoorShare gives you a white-label branded storefront, online booking engine, analytics dashboard, and more.");
       setMeta('meta[name="theme-color"]',                "content", "#3ab549");
+      setMeta('meta[name="msapplication-TileColor"]',    "content", "#1a2332");
+      setMeta('meta[name="msapplication-TileImage"]',    "content", "/outdoorshare-logo.png");
       setMeta('meta[name="apple-mobile-web-app-title"]', "content", "OutdoorShare");
 
       const OS_TITLE = "OutdoorShare — Rental Management Software for Outdoor Equipment Businesses";

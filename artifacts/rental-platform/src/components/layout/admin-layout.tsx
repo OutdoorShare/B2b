@@ -187,22 +187,48 @@ export function AdminLayout({ children }: { children: React.ReactNode }) {
       let link = document.querySelector<HTMLLinkElement>("link#favicon");
       if (!link) {
         link = document.createElement("link");
-        link.id = "favicon";
-        link.rel = "icon";
+        link.id = "favicon"; link.rel = "icon";
         document.head.appendChild(link);
       }
       link.type = href.endsWith(".svg") ? "image/svg+xml" : "image/png";
       link.href = href;
     };
+    const setLink = (sel: string, href: string) => {
+      const el = document.querySelector<HTMLLinkElement>(sel);
+      if (el) el.href = href;
+    };
+    const setMeta = (sel: string, value: string) => {
+      const el = document.querySelector<HTMLMetaElement>(sel);
+      if (el) el.content = value;
+    };
+
+    const origTitle = document.title;
 
     if (companyLogoUrl) {
       setFavicon(companyLogoUrl);
+      setLink('link[rel="shortcut icon"]',    companyLogoUrl);
+      setLink('link[rel="apple-touch-icon"]', companyLogoUrl);
+      setMeta('meta[name="msapplication-TileImage"]', companyLogoUrl);
+      setMeta('meta[property="og:image"]',            companyLogoUrl);
+      setMeta('meta[property="og:image:secure_url"]', companyLogoUrl);
+      setMeta('meta[name="twitter:image"]',           companyLogoUrl);
+    }
+    if (companyName) {
+      const adminTitle = `${companyName} — Admin Dashboard`;
+      document.title = adminTitle;
+      setMeta('meta[name="apple-mobile-web-app-title"]', companyName);
+      setMeta('meta[property="og:site_name"]',           companyName);
+      setMeta('meta[property="og:title"]',               adminTitle);
+      setMeta('meta[name="twitter:title"]',              adminTitle);
     }
 
     return () => {
+      document.title = origTitle;
       setFavicon("/outdoorshare-logo.png");
+      setLink('link[rel="shortcut icon"]',    "/outdoorshare-logo.png");
+      setLink('link[rel="apple-touch-icon"]', "/outdoorshare-logo.png");
     };
-  }, [companyLogoUrl]);
+  }, [companyLogoUrl, companyName]);
 
   const activeItem = NAV_ITEMS.find(item => {
     const href = `${adminBase}${item.path}`;
