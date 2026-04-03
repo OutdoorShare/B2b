@@ -1,4 +1,4 @@
-import { adminPath } from "@/lib/admin-nav";
+import { adminPath, getAdminSession } from "@/lib/admin-nav";
 import { useState, useEffect } from "react";
 import { useLocation, useParams } from "wouter";
 import {
@@ -74,10 +74,14 @@ export default function AdminOnboarding() {
   const saveBranding = async () => {
     if (!branding.name.trim()) { toast({ title: "Company name is required", variant: "destructive" }); return false; }
     setSaving(true);
+    const token = getAdminSession()?.token;
     try {
       const res = await fetch(`${BASE}/api/business`, {
         method: "PUT",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { "x-admin-token": token } : {}),
+        },
         body: JSON.stringify({
           name: branding.name.trim(),
           tagline: branding.tagline || undefined,
@@ -103,10 +107,14 @@ export default function AdminOnboarding() {
       toast({ title: "Enter a valid price", variant: "destructive" }); return false;
     }
     setSaving(true);
+    const token = getAdminSession()?.token;
     try {
       const res = await fetch(`${BASE}/api/listings`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { "x-admin-token": token } : {}),
+        },
         body: JSON.stringify({
           title: listing.title.trim(),
           description: listing.description || "",
