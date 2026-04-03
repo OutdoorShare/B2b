@@ -5,7 +5,7 @@ import multer from "multer";
 import { randomBytes } from "crypto";
 import { db } from "@workspace/db";
 import { bookingsTable, listingsTable, businessProfileTable, tenantsTable, contactCardsTable } from "@workspace/db/schema";
-import { eq, and, gte, lte, isNull, or } from "drizzle-orm";
+import { eq, and, gte, lte, isNull, or, sql } from "drizzle-orm";
 import { generateAgreementPdf } from "../lib/generate-agreement-pdf";
 import {
   sendPickupLinkEmail,
@@ -219,6 +219,9 @@ router.post("/bookings", async (req, res) => {
       ruleInitials: ruleInitialsJson ?? null,
       protectionPlanFee: protectionPlanFee > 0 ? String(protectionPlanFee) : null,
       ...(autoConfirm ? { status: "confirmed" } : {}),
+      // Online bookings are unseen by admin until they open them
+      seenByAdmin: restBody.source === "online" ? false : true,
+      seenByRenter: true,
     }).returning();
 
     // Generate and save agreement PDF in the background
@@ -367,6 +370,31 @@ router.post("/bookings", async (req, res) => {
   }
 });
 
+// ── Unseen count for admin red dot ────────────────────────────────────────────
+router.get("/bookings/unseen-count", async (req, res) => {
+  try {
+    if (!req.tenantId) { res.json({ count: 0 }); return; }
+    const [row] = await db
+      .select({ count: sql<number>`count(*)::int` })
+      .from(bookingsTable)
+      .where(and(eq(bookingsTable.tenantId, req.tenantId), eq(bookingsTable.seenByAdmin, false)));
+    res.json({ count: row?.count ?? 0 });
+  } catch { res.json({ count: 0 }); }
+});
+
+// ── Mark booking as seen by admin or renter ────────────────────────────────────
+router.patch("/bookings/:id/seen", async (req, res) => {
+  try {
+    const bookingId = Number(req.params.id);
+    const { viewer } = req.body as { viewer: "admin" | "renter" };
+    const updateField = viewer === "admin" ? { seenByAdmin: true } : { seenByRenter: true };
+    const conditions = [eq(bookingsTable.id, bookingId)];
+    if (req.tenantId) conditions.push(eq(bookingsTable.tenantId, req.tenantId));
+    await db.update(bookingsTable).set(updateField).where(and(...conditions));
+    res.json({ ok: true });
+  } catch { res.status(500).json({ error: "Failed to mark seen" }); }
+});
+
 router.get("/bookings/:id", async (req, res) => {
   try {
     const bookingId = Number(req.params.id);
@@ -435,7 +463,13 @@ router.put("/bookings/:id", async (req, res) => {
     const bookingId = Number(req.params.id);
     const updateData: Record<string, any> = { updatedAt: new Date() };
 
-    if (body.status !== undefined) updateData.status = body.status;
+    if (body.status !== undefined) {
+      updateData.status = body.status;
+      // Status change → renter needs to see the new status
+      updateData.seenByRenter = false;
+    }
+    // Any admin action on a booking marks it seen by admin
+    updateData.seenByAdmin = true;
     if (body.adminNotes !== undefined) updateData.adminNotes = body.adminNotes;
     if (body.depositPaid !== undefined) updateData.depositPaid = body.depositPaid != null ? String(body.depositPaid) : null;
     if (body.customerName !== undefined) updateData.customerName = body.customerName;

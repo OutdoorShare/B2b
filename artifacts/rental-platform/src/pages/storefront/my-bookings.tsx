@@ -232,14 +232,22 @@ function BookingCard({ booking, base, showRebook }: { booking: any; base: string
     setLocation(`${base}/book?listingId=${booking.listingId}`);
   };
 
+  const hasUpdate = (booking as any).seenByRenter === false;
+
   return (
     <Link href={`${base}/my-bookings/${booking.id}`}>
-      <div className="group rounded-2xl border bg-background hover:border-primary/40 hover:shadow-sm transition-all cursor-pointer p-5">
+      <div className={`group rounded-2xl border hover:shadow-sm transition-all cursor-pointer p-5 ${hasUpdate ? "bg-blue-50/40 border-blue-200 dark:bg-blue-950/20 dark:border-blue-800" : "bg-background hover:border-primary/40"}`}>
+        {hasUpdate && (
+          <div className="flex items-center gap-1.5 mb-2.5">
+            <span className="w-2 h-2 rounded-full bg-blue-500 animate-pulse" />
+            <span className="text-xs font-semibold text-blue-600 dark:text-blue-400">New update on your booking</span>
+          </div>
+        )}
         <div className="flex items-start justify-between gap-3">
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
               <StatusIcon status={booking.status} />
-              <span className="font-semibold truncate">{booking.listingTitle ?? "Rental"}</span>
+              <span className={`truncate ${hasUpdate ? "font-bold" : "font-semibold"}`}>{booking.listingTitle ?? "Rental"}</span>
               <span className={`inline-flex items-center text-xs font-medium px-2 py-0.5 rounded-full border ${color}`}>
                 {label}
               </span>

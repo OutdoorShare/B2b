@@ -352,11 +352,23 @@ export default function AdminBookings() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {displayed.map(booking => (
-                      <TableRow key={booking.id}>
-                        <TableCell className="font-mono text-xs text-muted-foreground">#{booking.id}</TableCell>
+                    {displayed.map(booking => {
+                      const isUnseen = (booking as any).seenByAdmin === false;
+                      return (
+                      <TableRow
+                        key={booking.id}
+                        className={isUnseen ? "bg-amber-50/60 dark:bg-amber-950/20" : ""}
+                      >
+                        <TableCell className="font-mono text-xs text-muted-foreground">
+                          <div className="flex items-center gap-1.5">
+                            {isUnseen && (
+                              <span className="w-2 h-2 rounded-full bg-red-500 shrink-0" title="New — not yet opened" />
+                            )}
+                            #{booking.id}
+                          </div>
+                        </TableCell>
                         <TableCell>
-                          <div className="font-medium">{booking.customerName}</div>
+                          <div className={`font-medium ${isUnseen ? "font-semibold" : ""}`}>{booking.customerName}</div>
                           <div className="text-xs text-muted-foreground">{booking.customerEmail}</div>
                         </TableCell>
                         <TableCell className="font-medium">{booking.listingTitle}</TableCell>
@@ -446,7 +458,7 @@ export default function AdminBookings() {
                           </div>
                         </TableCell>
                       </TableRow>
-                    ))}
+                    ); })}
                   </TableBody>
                 </Table>
                 {/* Footer count */}

@@ -213,18 +213,25 @@ export function AdminLayout({ children }: { children: React.ReactNode }) {
 
   // Live unread chat count for Messages badge
   const [chatUnread, setChatUnread] = useState(0);
+  // Live unseen bookings count for Bookings red dot
+  const [bookingsUnseen, setBookingsUnseen] = useState(0);
   useEffect(() => {
     const session = getAdminSession();
     if (!session?.token) return;
     const base = import.meta.env.BASE_URL.replace(/\/+$/, "");
-    const fetchUnread = () => {
-      fetch(`${base}/api/chat/unread-count`, { headers: { "x-admin-token": session.token } })
+    const token = session.token;
+    const fetchCounts = () => {
+      fetch(`${base}/api/chat/unread-count`, { headers: { "x-admin-token": token } })
         .then(r => r.ok ? r.json() : { count: 0 })
         .then(d => setChatUnread(d.count ?? 0))
         .catch(() => {});
+      fetch(`${base}/api/bookings/unseen-count`, { headers: { "x-admin-token": token } })
+        .then(r => r.ok ? r.json() : { count: 0 })
+        .then(d => setBookingsUnseen(d.count ?? 0))
+        .catch(() => {});
     };
-    fetchUnread();
-    const interval = setInterval(fetchUnread, 15000);
+    fetchCounts();
+    const interval = setInterval(fetchCounts, 15000);
     return () => clearInterval(interval);
   }, []);
 
@@ -298,6 +305,12 @@ export function AdminLayout({ children }: { children: React.ReactNode }) {
                           )}>
                             {chatUnread > 9 ? "9+" : chatUnread}
                           </span>
+                        )}
+                        {item.name === "Bookings" && bookingsUnseen > 0 && (
+                          <span className={cn(
+                            "w-2 h-2 rounded-full shrink-0",
+                            isActive ? "bg-white" : "bg-red-500",
+                          )} title={`${bookingsUnseen} new booking${bookingsUnseen > 1 ? "s" : ""}`} />
                         )}
                       </Link>
                     );

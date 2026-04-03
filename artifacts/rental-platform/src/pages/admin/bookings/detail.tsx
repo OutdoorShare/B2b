@@ -47,6 +47,19 @@ export default function AdminBookingDetail() {
     query: { enabled: !!id, queryKey: getGetBookingQueryKey(id) }
   });
 
+  // Mark booking as seen by admin when it loads
+  useEffect(() => {
+    if (!id || !(booking as any)?.id) return;
+    const base = import.meta.env.BASE_URL.replace(/\/+$/, "");
+    const session = getAdminSession();
+    if (!session?.token) return;
+    fetch(`${base}/api/bookings/${id}/seen`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json", "x-admin-token": session.token },
+      body: JSON.stringify({ viewer: "admin" }),
+    }).catch(() => {});
+  }, [id, (booking as any)?.id]);
+
   const updateBooking = useUpdateBooking();
   const [adminNotes, setAdminNotes] = useState("");
   const [agreementExpanded, setAgreementExpanded] = useState(false);

@@ -112,6 +112,14 @@ export default function MyBookingDetail() {
           return;
         }
         setBooking(data);
+        // Mark as seen by renter if there's an update
+        if (data.seenByRenter === false) {
+          fetch(`${BASE}/api/bookings/${id}/seen`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json", "x-tenant-slug": slug ?? "" },
+            body: JSON.stringify({ viewer: "renter" }),
+          }).catch(() => {});
+        }
         // Initialize photo state from existing booking data
         if (Array.isArray(data.pickupPhotos) && data.pickupPhotos.length > 0) {
           setSavedPhotos(data.pickupPhotos);
