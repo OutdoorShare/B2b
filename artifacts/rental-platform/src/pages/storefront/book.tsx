@@ -1599,7 +1599,7 @@ export default function StorefrontBook() {
                                 <SelectTrigger className="pl-8 h-8 text-xs font-medium">
                                   <SelectValue />
                                 </SelectTrigger>
-                                <SelectContent position="item-aligned">
+                                <SelectContent position="popper" side="bottom" sideOffset={4}>
                                   {TIME_OPTIONS.map(t => (
                                     <SelectItem key={t} value={t} className="text-xs">{t}</SelectItem>
                                   ))}
@@ -1616,7 +1616,7 @@ export default function StorefrontBook() {
                                 <SelectTrigger className="pl-8 h-8 text-xs font-medium">
                                   <SelectValue />
                                 </SelectTrigger>
-                                <SelectContent position="item-aligned">
+                                <SelectContent position="popper" side="bottom" sideOffset={4}>
                                   {TIME_OPTIONS.map(t => (
                                     <SelectItem key={t} value={t} className="text-xs">{t}</SelectItem>
                                   ))}
@@ -2311,7 +2311,7 @@ export default function StorefrontBook() {
                                 <SelectTrigger className="pl-8 h-8 text-xs font-medium">
                                   <SelectValue />
                                 </SelectTrigger>
-                                <SelectContent position="item-aligned">
+                                <SelectContent position="popper" side="bottom" sideOffset={4}>
                                   {TIME_OPTIONS.map(t => (
                                     <SelectItem key={t} value={t} className="text-xs">{t}</SelectItem>
                                   ))}
@@ -2328,7 +2328,7 @@ export default function StorefrontBook() {
                                 <SelectTrigger className="pl-8 h-8 text-xs font-medium">
                                   <SelectValue />
                                 </SelectTrigger>
-                                <SelectContent position="item-aligned">
+                                <SelectContent position="popper" side="bottom" sideOffset={4}>
                                   {TIME_OPTIONS.map(t => (
                                     <SelectItem key={t} value={t} className="text-xs">{t}</SelectItem>
                                   ))}
