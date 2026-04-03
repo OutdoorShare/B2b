@@ -1,4 +1,4 @@
-import { useEffect, useState, type ComponentType } from "react";
+import React, { useEffect, useState, type ComponentType } from "react";
 
 import { modules as discoveredModules } from "./.generated/mockup-components";
 
@@ -137,6 +137,25 @@ function App() {
         componentPath={previewPath}
         modules={discoveredModules}
       />
+    );
+  }
+
+  const path = window.location.pathname;
+  if (path.includes('/video/getting-started')) {
+    const GettingStartedVideo = React.lazy(() => import('./components/video/GettingStartedVideo'));
+    return (
+      <React.Suspense fallback={<div>Loading...</div>}>
+        <GettingStartedVideo />
+      </React.Suspense>
+    );
+  }
+
+  if (path.includes('/video/protection-plan')) {
+    const ProtectionPlanVideo = React.lazy(() => import('./components/video/ProtectionPlanVideo'));
+    return (
+      <React.Suspense fallback={<div>Loading...</div>}>
+        <ProtectionPlanVideo />
+      </React.Suspense>
     );
   }
 
