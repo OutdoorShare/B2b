@@ -55,7 +55,10 @@ router.post("/admin/auth/owner-login", async (req, res) => {
       .limit(1);
 
     if (slug && tenant && tenant.slug !== slug) {
-      res.status(401).json({ error: "These credentials are not authorized for this admin panel." });
+      res.status(401).json({
+        error: "These credentials belong to a different company admin panel.",
+        correctSlug: tenant.slug,
+      });
       return;
     }
 

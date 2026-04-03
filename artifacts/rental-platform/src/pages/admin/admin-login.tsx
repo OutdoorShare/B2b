@@ -19,10 +19,11 @@ export default function AdminLoginPage({ slug }: Props) {
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
+  const [redirectSlug, setRedirectSlug] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
   const handleOwnerLogin = async () => {
-    setError("");
+    setError(""); setRedirectSlug(null);
     if (!email || !password) { setError("Email and password are required."); return; }
     setLoading(true);
     try {
@@ -32,9 +33,18 @@ export default function AdminLoginPage({ slug }: Props) {
         body: JSON.stringify({ email, password, slug }),
       });
       const data = await res.json();
-      if (!res.ok) { setError(data.error || "Login failed."); return; }
+      if (!res.ok) {
+        if (data.correctSlug) {
+          setError("These credentials belong to a different company.");
+          setRedirectSlug(data.correctSlug);
+        } else {
+          setError(data.error || "Login failed.");
+        }
+        return;
+      }
       if (data.tenantSlug !== slug) {
-        setError("These credentials are not authorized for this admin panel.");
+        setError("These credentials belong to a different company.");
+        setRedirectSlug(data.tenantSlug);
         return;
       }
       localStorage.setItem("admin_session", JSON.stringify({
@@ -147,7 +157,19 @@ export default function AdminLoginPage({ slug }: Props) {
               </div>
             </div>
 
-            {error && <p className="text-sm text-destructive font-medium">{error}</p>}
+            {error && (
+              <div className="text-sm text-destructive font-medium space-y-1">
+                <p>{error}</p>
+                {redirectSlug && (
+                  <a
+                    href={`${BASE}/${redirectSlug}/admin`}
+                    className="inline-flex items-center gap-1 text-primary underline underline-offset-2 hover:opacity-80"
+                  >
+                    → Sign in to /{redirectSlug}/admin
+                  </a>
+                )}
+              </div>
+            )}
 
             <Button type="submit" className="w-full h-11 font-bold" disabled={loading}>
               {loading ? "Signing in…" : "Sign In to Dashboard"}
