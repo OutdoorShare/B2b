@@ -1613,7 +1613,7 @@ export default function StorefrontBook() {
 
         <div className={`grid grid-cols-1 gap-8 ${completePhase !== "confirmed" ? "xl:grid-cols-5" : ""}`}>
           {/* Main content */}
-          <div className={`min-w-0 ${completePhase !== "confirmed" ? "order-1 xl:order-1 xl:col-span-3" : ""}`}>
+          <div className={`min-w-0 ${completePhase !== "confirmed" ? "order-2 xl:order-1 xl:col-span-3" : ""}`}>
 
             {/* ════════════════════════════════════════
                 SCREEN 1: DETAILS & PAYMENT
@@ -3257,7 +3257,7 @@ export default function StorefrontBook() {
 
           {/* ── SIDEBAR SUMMARY ── */}
           {completePhase !== "confirmed" && (
-            <div className="min-w-0 order-2 xl:order-2 xl:col-span-2">
+            <div className="min-w-0 order-1 xl:order-2 xl:col-span-2">
               <div className="sticky top-32 space-y-4">
                 {dateRange?.from && dateRange?.to && (
                   <div className="bg-background rounded-2xl border shadow-sm p-5 space-y-3">
