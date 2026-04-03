@@ -1988,12 +1988,27 @@ export default function StorefrontBook() {
                       })}
 
                       {regularAddons.length > 0 && (
-                        <div className="bg-background rounded-2xl border shadow-sm p-6 space-y-4">
-                          <div>
-                            <h2 className="font-bold text-base">Add-ons & Extras</h2>
-                            <p className="text-sm text-muted-foreground mt-0.5">Enhance your rental with optional upgrades.</p>
+                        <div className="rounded-2xl overflow-hidden border-2 border-primary/20 shadow-md">
+                          {/* Section header */}
+                          <div className="bg-primary/10 px-5 py-3.5 flex items-center justify-between border-b border-primary/20">
+                            <div className="flex items-center gap-2.5">
+                              <div className="w-7 h-7 rounded-full bg-primary/20 flex items-center justify-center">
+                                <Plus className="w-4 h-4 text-primary" />
+                              </div>
+                              <div>
+                                <h2 className="font-bold text-sm text-foreground">Enhance Your Rental</h2>
+                                <p className="text-[11px] text-muted-foreground leading-none mt-0.5">Optional add-ons — tap to include</p>
+                              </div>
+                            </div>
+                            {selectedAddonIds.size > 0 && regularAddons.some(a => selectedAddonIds.has(a.id)) && (
+                              <span className="text-[11px] font-bold bg-primary text-primary-foreground px-2.5 py-1 rounded-full">
+                                {regularAddons.filter(a => selectedAddonIds.has(a.id)).length} added
+                              </span>
+                            )}
                           </div>
-                          <div className="space-y-3">
+
+                          {/* Add-on cards */}
+                          <div className="bg-background divide-y divide-border">
                             {regularAddons.map(addon => {
                               const selected = selectedAddonIds.has(addon.id);
                               const addonPrice = addon.priceType === "per_day" ? addon.price * days : addon.price;
@@ -2003,28 +2018,42 @@ export default function StorefrontBook() {
                                   type="button"
                                   disabled={addon.isRequired}
                                   onClick={() => toggleAddon(addon.id, false, addon.isRequired)}
-                                  className={`w-full flex items-start gap-4 border-2 rounded-xl p-4 text-left transition-all
-                                    ${selected ? "border-primary bg-primary/5" : "border-border hover:border-primary/50 hover:bg-muted/30"}
+                                  className={`w-full flex items-center gap-4 px-5 py-4 text-left transition-all duration-150
+                                    ${selected ? "bg-primary/5" : "hover:bg-muted/40"}
                                     ${addon.isRequired ? "cursor-default" : "cursor-pointer"}`}
                                 >
-                                  <div className={`w-5 h-5 rounded border-2 shrink-0 mt-0.5 flex items-center justify-center transition-colors
-                                    ${selected ? "bg-primary border-primary" : "border-muted-foreground/40"}`}>
-                                    {selected && (
-                                      <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 12 12">
-                                        <path d="M2 6l3 3 5-5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                                      </svg>
-                                    )}
+                                  {/* Toggle indicator */}
+                                  <div className={`w-11 h-6 rounded-full shrink-0 relative transition-all duration-200 border-2
+                                    ${selected ? "bg-primary border-primary" : "bg-muted border-border"}`}>
+                                    <div className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow-sm transition-all duration-200
+                                      ${selected ? "left-[calc(100%-18px)]" : "left-0.5"}`} />
                                   </div>
+
+                                  {/* Content */}
                                   <div className="flex-1 min-w-0">
                                     <div className="flex items-center gap-2 flex-wrap">
-                                      <span className="font-semibold text-sm">{addon.name}</span>
-                                      {addon.isRequired && <span className="text-[10px] font-bold bg-amber-100 text-amber-800 px-1.5 py-0.5 rounded-full">Required</span>}
+                                      <span className={`font-semibold text-sm ${selected ? "text-primary" : "text-foreground"}`}>{addon.name}</span>
+                                      {addon.isRequired && (
+                                        <span className="text-[10px] font-bold bg-amber-100 text-amber-800 px-1.5 py-0.5 rounded-full">Required</span>
+                                      )}
                                     </div>
-                                    {addon.description && <p className="text-xs text-muted-foreground mt-0.5">{addon.description}</p>}
+                                    {addon.description && (
+                                      <p className="text-xs text-muted-foreground mt-0.5 leading-snug">{addon.description}</p>
+                                    )}
                                   </div>
-                                  <div className="text-right shrink-0">
-                                    <p className="font-bold text-sm text-primary">+${addonPrice.toFixed(2)}</p>
-                                    <p className="text-xs text-muted-foreground">{addon.priceType === "per_day" ? `$${addon.price.toFixed(2)}/day` : "flat fee"}</p>
+
+                                  {/* Price + CTA */}
+                                  <div className="shrink-0 text-right">
+                                    <p className={`font-black text-base ${selected ? "text-primary" : "text-foreground"}`}>
+                                      +${addonPrice % 1 === 0 ? addonPrice.toFixed(0) : addonPrice.toFixed(2)}
+                                    </p>
+                                    <p className="text-[11px] text-muted-foreground leading-tight">
+                                      {addon.priceType === "per_day" ? `$${addon.price}/day` : "flat fee"}
+                                    </p>
+                                    <span className={`inline-block mt-1.5 text-[11px] font-bold px-2.5 py-0.5 rounded-full transition-colors
+                                      ${selected ? "bg-primary/15 text-primary" : "bg-muted text-muted-foreground"}`}>
+                                      {selected ? "✓ Added" : "+ Add"}
+                                    </span>
                                   </div>
                                 </button>
                               );

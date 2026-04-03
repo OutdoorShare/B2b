@@ -13,7 +13,7 @@ import { Calendar } from "@/components/ui/calendar";
 import {
   ArrowLeft, Check, Shield, MapPin, AlertTriangle,
   Tag, ChevronRight, Package, ShieldCheck, Umbrella, Zap, Lock, Clock,
-  CalendarDays, ChevronRight as ArrowRight, ClipboardList, Link2
+  CalendarDays, ChevronRight as ArrowRight, ClipboardList, Link2, Plus
 } from "lucide-react";
 import { differenceInDays, format, isWithinInterval, startOfDay, addDays, isBefore, isAfter, isSameDay } from "date-fns";
 
@@ -670,15 +670,30 @@ export default function StorefrontGearDetail() {
               <div className="space-y-3">
                 {/* Regular add-ons — selectable */}
                 {addons.filter(a => !a.name.toLowerCase().includes("protection")).length > 0 && (
-                  <>
-                    <div className="flex items-center gap-2">
-                      <Tag className="w-4 h-4 text-primary" />
-                      <h3 className="font-semibold">Add-ons</h3>
+                  <div className="rounded-2xl overflow-hidden border-2 border-primary/20 shadow-md">
+                    {/* Section header */}
+                    <div className="bg-primary/10 px-4 py-3 flex items-center justify-between border-b border-primary/20">
+                      <div className="flex items-center gap-2.5">
+                        <div className="w-7 h-7 rounded-full bg-primary/20 flex items-center justify-center">
+                          <Plus className="w-4 h-4 text-primary" />
+                        </div>
+                        <div>
+                          <h3 className="font-bold text-sm text-foreground">Enhance Your Rental</h3>
+                          <p className="text-[11px] text-muted-foreground leading-none mt-0.5">Optional add-ons — tap to include</p>
+                        </div>
+                      </div>
+                      {addons.filter(a => !a.name.toLowerCase().includes("protection") && selectedAddonIds.has(a.id)).length > 0 && (
+                        <span className="text-[11px] font-bold bg-primary text-primary-foreground px-2.5 py-1 rounded-full">
+                          {addons.filter(a => !a.name.toLowerCase().includes("protection") && selectedAddonIds.has(a.id)).length} added
+                        </span>
+                      )}
                     </div>
-                    <div className="space-y-2">
+
+                    {/* Add-on rows */}
+                    <div className="bg-background divide-y divide-border">
                       {addons.filter(a => !a.name.toLowerCase().includes("protection")).map(addon => {
-                        const unitLabel = addon.priceType === "per_day" ? "/day" : "flat";
                         const selected = selectedAddonIds.has(addon.id);
+                        const addonPrice = addon.priceType === "per_day" ? addon.price * days : addon.price;
                         const isClickable = !addon.isRequired;
                         return (
                           <button
@@ -686,34 +701,42 @@ export default function StorefrontGearDetail() {
                             type="button"
                             onClick={() => toggleAddon(addon)}
                             disabled={!isClickable}
-                            className={`w-full text-left flex items-center gap-3 rounded-xl border px-4 py-3 transition-all ${
-                              selected
-                                ? "border-primary bg-primary/5 shadow-sm"
-                                : "border-border bg-muted/30 hover:border-primary/40 hover:bg-muted/50"
-                            } ${!isClickable ? "cursor-default" : "cursor-pointer"}`}
+                            className={`w-full flex items-center gap-4 px-4 py-3.5 text-left transition-all duration-150
+                              ${selected ? "bg-primary/5" : "hover:bg-muted/40"}
+                              ${!isClickable ? "cursor-default" : "cursor-pointer"}`}
                           >
-                            {/* Checkbox indicator */}
-                            <div className={`shrink-0 w-5 h-5 rounded-full border-2 flex items-center justify-center transition-colors ${
-                              selected ? "border-primary bg-primary" : "border-muted-foreground/40"
-                            }`}>
-                              {selected && <Check className="w-3 h-3 text-white" />}
+                            {/* Toggle switch */}
+                            <div className={`w-11 h-6 rounded-full shrink-0 relative transition-all duration-200 border-2
+                              ${selected ? "bg-primary border-primary" : "bg-muted border-border"}`}>
+                              <div className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow-sm transition-all duration-200
+                                ${selected ? "left-[calc(100%-18px)]" : "left-0.5"}`} />
                             </div>
+
                             <div className="flex-1 min-w-0">
                               <div className="flex items-center gap-1.5">
-                                <span className="font-semibold text-sm">{addon.name}</span>
+                                <span className={`font-semibold text-sm ${selected ? "text-primary" : "text-foreground"}`}>{addon.name}</span>
                                 {addon.isRequired && <span className="text-[10px] font-bold bg-amber-100 text-amber-800 px-1.5 py-0.5 rounded-full">Required</span>}
                               </div>
                               {addon.description && <p className="text-xs text-muted-foreground mt-0.5 leading-snug">{addon.description}</p>}
                             </div>
-                            <div className="text-right shrink-0">
-                              <p className="font-bold text-sm text-primary">+${addon.price.toFixed(2)}</p>
-                              <p className="text-xs text-muted-foreground">{unitLabel}</p>
+
+                            <div className="shrink-0 text-right">
+                              <p className={`font-black text-base ${selected ? "text-primary" : "text-foreground"}`}>
+                                +${addonPrice % 1 === 0 ? addonPrice.toFixed(0) : addonPrice.toFixed(2)}
+                              </p>
+                              <p className="text-[11px] text-muted-foreground leading-tight">
+                                {addon.priceType === "per_day" ? `$${addon.price}/day` : "flat fee"}
+                              </p>
+                              <span className={`inline-block mt-1 text-[11px] font-bold px-2.5 py-0.5 rounded-full transition-colors
+                                ${selected ? "bg-primary/15 text-primary" : "bg-muted text-muted-foreground"}`}>
+                                {selected ? "✓ Added" : "+ Add"}
+                              </span>
                             </div>
                           </button>
                         );
                       })}
                     </div>
-                  </>
+                  </div>
                 )}
 
               </div>
