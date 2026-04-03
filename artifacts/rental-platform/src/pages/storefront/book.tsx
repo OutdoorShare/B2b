@@ -1635,7 +1635,7 @@ export default function StorefrontBook() {
                         disabled={typeof fullyBookedDates === "function" ? fullyBookedDates : { before: new Date() }}
                         defaultMonth={dateRange?.from}
                         numberOfMonths={1}
-                        className="[--cell-size:1.9rem] sm:[--cell-size:2.5rem] w-full"
+                        className="[--cell-size:2.8rem] md:[--cell-size:3.2rem] w-full"
                         classNames={{ root: "w-full" }}
                       />
                     </div>
@@ -2377,7 +2377,7 @@ export default function StorefrontBook() {
                         disabled={typeof fullyBookedDates === "function" ? fullyBookedDates : { before: new Date() }}
                         defaultMonth={dateRange?.from}
                         numberOfMonths={1}
-                        className="[--cell-size:1.9rem] sm:[--cell-size:2.5rem] w-full"
+                        className="[--cell-size:2.2rem] sm:[--cell-size:2.6rem] w-full"
                         classNames={{ root: "w-full" }}
                       />
                     </div>
