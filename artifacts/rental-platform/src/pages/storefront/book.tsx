@@ -1297,6 +1297,7 @@ export default function StorefrontBook() {
                                   <span className="text-[10px] font-bold tracking-widest uppercase" style={{ color: "#3ab549" }}>by OutdoorShare</span>
                                 </div>
                               </div>
+                              <img src="/outdoorshare-logo.png" alt="OutdoorShare" className="h-5 opacity-80 object-contain" />
                               <span className="text-white text-xs font-bold px-2.5 py-1 rounded-full flex items-center gap-1 border" style={{ background: "rgba(58,181,73,0.15)", borderColor: "#3ab549", color: "#3ab549" }}>
                                 <Lock className="w-3 h-3" /> Required
                               </span>
@@ -2452,8 +2453,8 @@ export default function StorefrontBook() {
                       ))}
                       {platformProtectionFee > 0 && (
                         <div className="flex justify-between text-blue-700 font-medium">
-                          <span className="flex items-center gap-1">
-                            <ShieldCheck className="w-3 h-3" />
+                          <span className="flex items-center gap-1.5">
+                            <img src="/outdoorshare-logo.png" alt="OutdoorShare" className="h-3.5 object-contain opacity-80" />
                             Protection Plan (${platformProtectionRate.toFixed(0)}/day × {days} day{days !== 1 ? "s" : ""})
                           </span>
                           <span>+${platformProtectionFee.toFixed(2)}</span>

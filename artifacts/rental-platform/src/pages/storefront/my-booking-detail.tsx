@@ -599,8 +599,8 @@ export default function MyBookingDetail() {
           ))}
           {protectionPlanFee > 0 && (
             <div className="flex justify-between">
-              <span className="text-blue-700 flex items-center gap-1">
-                <ShieldCheck className="w-3 h-3" />
+              <span className="text-blue-700 flex items-center gap-1.5">
+                <img src="/outdoorshare-logo.png" alt="OutdoorShare" className="h-3.5 object-contain opacity-80" />
                 <a href="https://myoutdoorshare.com/protection-plan" target="_blank" rel="noopener noreferrer" className="underline hover:text-blue-900">
                   Protection Plan
                 </a>

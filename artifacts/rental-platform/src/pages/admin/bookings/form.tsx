@@ -472,7 +472,7 @@ export default function AdminBookingForm() {
                   {protectionAddons.length > 0 && (
                     <div className="pt-1 pb-1 space-y-2">
                       <Label className="text-xs flex items-center gap-1.5 text-muted-foreground font-medium">
-                        <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" /> Protection Plan
+                        <img src="/outdoorshare-logo.png" alt="OutdoorShare" className="h-3.5 object-contain opacity-75" /> Protection Plan
                       </Label>
                       {protectionAddons.map(addon => {
                         const ppu = parseFloat(addon.price);

@@ -1221,7 +1221,7 @@ export default function AdminBookingDetail() {
                     {protectionAddons.map((addon, i) => (
                       <div key={i} className="flex justify-between text-sm">
                         <span className="flex items-center gap-1.5 text-muted-foreground">
-                          <Shield className="w-3.5 h-3.5 text-emerald-600" />
+                          <img src="/outdoorshare-logo.png" alt="OutdoorShare" className="h-3.5 object-contain opacity-75" />
                           {addon.name}
                         </span>
                         <span className="font-medium text-emerald-700">+${(addon.subtotal ?? addon.price ?? 0).toFixed(2)}</span>
