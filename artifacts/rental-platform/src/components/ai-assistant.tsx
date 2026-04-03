@@ -110,7 +110,7 @@ export function AIAssistant({ role, tenantSlug, companyName, adminToken, saToken
     if (open && messages.length === 0) {
       const greeting = role === "admin"
         ? `Hi! I'm OutdoorBot — I can help you manage ${companyName ?? "your rentals"}, answer questions about the platform, and make changes on your behalf. What can I help with?`
-        : `Hi there! I'm here to help you with your rental experience at ${companyName ?? "this store"}. Ask me anything about gear, bookings, the protection plan, or pickup and return.`;
+        : `Hi there! I'm the renter assistant for ${companyName ?? "this store"}. I can help with your booking, pickup and return, the protection plan, and general rental questions. For anything account or business related, please contact the company directly.`;
       setMessages([{ id: "0", role: "assistant", content: greeting }]);
     }
   }, [open]);
