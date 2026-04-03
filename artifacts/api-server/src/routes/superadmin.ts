@@ -158,15 +158,21 @@ export async function seedDemoTenant() {
       .limit(1);
     if (!tenant) return; // demo tenant doesn't exist yet — nothing to seed
 
-    const pinnedDesign = {
+    // Identity fields pinned on every restart — preserves company name/logo for the demo.
+    // Colors are intentionally excluded so admins can demo the branding customization feature.
+    const pinnedIdentity = {
       name:          "OutdoorShare Demo",
       tagline:       "Rent Smarter. Explore More.",
       description:   "Experience the full OutdoorShare rental platform live. This is an interactive demo site.",
-      primaryColor:  "#3ab549",
-      accentColor:   "#1a2332",
       logoUrl:       "/outdoorshare-logo.png",
       coverImageUrl: (null as string | null),
       updatedAt:     new Date(),
+    };
+
+    // Color defaults only applied when creating the profile for the first time.
+    const defaultColors = {
+      primaryColor: "#3ab549",
+      accentColor:  "#1a2332",
     };
 
     const [existing] = await db.select({ id: businessProfileTable.id })
@@ -176,10 +182,10 @@ export async function seedDemoTenant() {
 
     if (existing) {
       await db.update(businessProfileTable)
-        .set(pinnedDesign)
+        .set(pinnedIdentity)
         .where(eq(businessProfileTable.id, existing.id));
     } else {
-      await db.insert(businessProfileTable).values({ ...pinnedDesign, tenantId: tenant.id });
+      await db.insert(businessProfileTable).values({ ...pinnedIdentity, ...defaultColors, tenantId: tenant.id });
     }
 
     console.log("[demo] Business profile pinned to OutdoorShare Demo branding");

@@ -8,7 +8,7 @@ const RESERVED_SLUGS = new Set(["admin", "superadmin", "get-started", "signup", 
 // Slugs that must never be auto-rewritten by the name→slug sync (e.g. platform demo sites)
 const SLUG_LOCK = new Set(["demo-outdoorshare"]);
 // Design fields that are permanently pinned for slug-locked tenants (prevents accidental overwrites from admin UI)
-const DESIGN_LOCKED_FIELDS = new Set(["name", "tagline", "description", "logoUrl", "coverImageUrl", "primaryColor", "accentColor"]);
+const DESIGN_LOCKED_FIELDS = new Set(["name", "tagline", "description", "logoUrl", "coverImageUrl"]);
 
 function slugify(name: string): string {
   return name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 40);
