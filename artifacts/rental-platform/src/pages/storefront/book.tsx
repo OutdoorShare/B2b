@@ -2642,7 +2642,7 @@ export default function StorefrontBook() {
                         {confirmedBooking && <p className="text-green-700 text-sm mt-0.5">Reference #{confirmedBooking.id} · {listing.title}</p>}
                         {isKiosk ? (
                           <p className="text-green-700/80 text-sm mt-1">
-                            A confirmation has been sent to <strong>{email}</strong> with a link to create your account and view your booking anytime.
+                            A confirmation has been sent to <strong>{email}</strong>. Scan below to access your renter portal on your phone.
                           </p>
                         ) : (
                           <p className="text-green-700/80 text-sm mt-1">
@@ -2651,6 +2651,69 @@ export default function StorefrontBook() {
                         )}
                       </div>
                     </div>
+
+                    {/* ── KIOSK: Portal QR code panel ── */}
+                    {isKiosk && (() => {
+                      const portalUrl = `${window.location.origin}${sfBase}/my-bookings`;
+                      return (
+                        <div className="bg-background rounded-2xl border shadow-sm overflow-hidden">
+                          <div className="bg-gradient-to-br from-primary/8 to-primary/4 px-6 py-5 border-b flex items-center gap-3">
+                            <div className="w-9 h-9 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
+                              <Smartphone className="w-5 h-5 text-primary" />
+                            </div>
+                            <div>
+                              <p className="font-bold text-foreground">Take Your Booking With You</p>
+                              <p className="text-xs text-muted-foreground mt-0.5">Scan to open your renter portal on your phone</p>
+                            </div>
+                          </div>
+                          <div className="p-6 flex flex-col sm:flex-row gap-8 items-center sm:items-start">
+                            {/* QR code */}
+                            <div className="shrink-0 flex flex-col items-center gap-2">
+                              <div className="bg-white rounded-2xl p-3 border shadow-sm">
+                                <QRCodeSVG value={portalUrl} size={160} level="M" includeMargin={false} />
+                              </div>
+                              <p className="text-[11px] text-muted-foreground text-center max-w-[160px]">Point your phone camera at this code</p>
+                            </div>
+                            {/* Benefits */}
+                            <div className="flex-1 space-y-4">
+                              <p className="text-sm text-muted-foreground">
+                                Your renter portal lets you manage everything about your rental — right from your phone. Log in with the email you provided and you'll find:
+                              </p>
+                              <ul className="space-y-2.5">
+                                {[
+                                  { icon: CalendarIcon, text: "View all your past and upcoming bookings" },
+                                  { icon: FileText,     text: "Download your signed rental agreement as a PDF" },
+                                  { icon: RefreshCw,    text: "Request changes or cancellations" },
+                                  { icon: QrCode,       text: "Chat directly with the rental company" },
+                                  { icon: ShieldCheck,  text: "Check the status of your booking in real time" },
+                                ].map(({ icon: Icon, text }, i) => (
+                                  <li key={i} className="flex items-start gap-2.5 text-sm">
+                                    <div className="mt-0.5 w-5 h-5 rounded-md bg-primary/10 flex items-center justify-center shrink-0">
+                                      <Icon className="w-3 h-3 text-primary" />
+                                    </div>
+                                    <span className="text-foreground/80">{text}</span>
+                                  </li>
+                                ))}
+                              </ul>
+                              <p className="text-xs text-muted-foreground pt-1">
+                                A confirmation email with your portal link has also been sent to <strong className="text-foreground">{email}</strong>.
+                              </p>
+                            </div>
+                          </div>
+                          <div className="px-6 pb-6">
+                            <Button
+                              size="lg"
+                              variant="outline"
+                              className="w-full font-semibold"
+                              onClick={() => setLocation(sfBase || "/")}
+                            >
+                              <ArrowLeft className="w-4 h-4 mr-2" />
+                              Return to Kiosk
+                            </Button>
+                          </div>
+                        </div>
+                      );
+                    })()}
 
                     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                       <div className="lg:col-span-1 space-y-4">
