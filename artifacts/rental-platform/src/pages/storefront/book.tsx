@@ -1164,6 +1164,66 @@ export default function StorefrontBook() {
               <div className="space-y-8">
                 <h1 className="text-2xl font-bold">Book {listing.title}</h1>
 
+                {/* ── Kiosk: date picker at the very top, next to Order Summary ── */}
+                {isKiosk && (
+                  <div className="bg-muted/40 rounded-2xl border p-4 space-y-3">
+                    <div>
+                      <h2 className="text-base font-semibold mb-0.5">Select Rental Dates</h2>
+                      <p className="text-xs text-muted-foreground">Choose your pickup and return dates to get started.</p>
+                    </div>
+                    <div className="bg-background rounded-2xl border shadow-sm p-3">
+                      <Calendar
+                        mode="range"
+                        selected={dateRange}
+                        onSelect={setDateRange}
+                        disabled={{ before: new Date() }}
+                        defaultMonth={dateRange?.from}
+                        numberOfMonths={1}
+                        className="[--cell-size:1.9rem] sm:[--cell-size:2.5rem] w-full"
+                        classNames={{ root: "w-full" }}
+                      />
+                    </div>
+                    {dateRange?.from && dateRange?.to && (
+                      <div className="grid grid-cols-2 gap-3">
+                        <div className="bg-background rounded-xl border p-3">
+                          <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider mb-1">Pickup</p>
+                          <p className="font-semibold text-sm mb-2">{format(dateRange.from, "EEE, MMM d")}</p>
+                          <div className="relative">
+                            <Clock className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none z-10" />
+                            <Select value={pickupTime} onValueChange={setPickupTime}>
+                              <SelectTrigger className="pl-8 h-8 text-xs font-medium">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {TIME_OPTIONS.map(t => (
+                                  <SelectItem key={t} value={t} className="text-xs">{t}</SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                        </div>
+                        <div className="bg-background rounded-xl border p-3">
+                          <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider mb-1">Return</p>
+                          <p className="font-semibold text-sm mb-2">{format(dateRange.to, "EEE, MMM d")}</p>
+                          <div className="relative">
+                            <Clock className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none z-10" />
+                            <Select value={dropoffTime} onValueChange={setDropoffTime}>
+                              <SelectTrigger className="pl-8 h-8 text-xs font-medium">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {TIME_OPTIONS.map(t => (
+                                  <SelectItem key={t} value={t} className="text-xs">{t}</SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+
                 <div className="space-y-2">
                   <Label htmlFor="notes">Notes (optional)</Label>
                   <Textarea id="notes" value={notes} onChange={e => setNotes(e.target.value)} placeholder="Any special requests?" rows={2} />
@@ -1463,67 +1523,6 @@ export default function StorefrontBook() {
                     </div>
                   )}
                 </div>
-
-                {/* ── Kiosk: date selection shown ABOVE payment ── */}
-                {isKiosk && (
-                  <>
-                    <Separator />
-                    <div>
-                      <h2 className="text-lg font-semibold mb-1">Select Rental Dates</h2>
-                      <p className="text-sm text-muted-foreground mb-4">Choose your pickup and return dates before proceeding to payment.</p>
-                      <div className="bg-background rounded-2xl border shadow-sm p-3 sm:p-4">
-                        <Calendar
-                          mode="range"
-                          selected={dateRange}
-                          onSelect={setDateRange}
-                          disabled={{ before: new Date() }}
-                          defaultMonth={dateRange?.from}
-                          numberOfMonths={1}
-                          className="[--cell-size:1.9rem] sm:[--cell-size:2.5rem] w-full"
-                          classNames={{ root: "w-full" }}
-                        />
-                      </div>
-                      {dateRange?.from && dateRange?.to && (
-                        <div className="grid grid-cols-2 gap-3 mt-3">
-                          <div className="bg-background rounded-xl border p-3">
-                            <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider mb-1">Pickup</p>
-                            <p className="font-semibold text-sm mb-2">{format(dateRange.from, "EEE, MMM d")}</p>
-                            <div className="relative">
-                              <Clock className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none z-10" />
-                              <Select value={pickupTime} onValueChange={setPickupTime}>
-                                <SelectTrigger className="pl-8 h-8 text-xs font-medium">
-                                  <SelectValue />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  {TIME_OPTIONS.map(t => (
-                                    <SelectItem key={t} value={t} className="text-xs">{t}</SelectItem>
-                                  ))}
-                                </SelectContent>
-                              </Select>
-                            </div>
-                          </div>
-                          <div className="bg-background rounded-xl border p-3">
-                            <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider mb-1">Return</p>
-                            <p className="font-semibold text-sm mb-2">{format(dateRange.to, "EEE, MMM d")}</p>
-                            <div className="relative">
-                              <Clock className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none z-10" />
-                              <Select value={dropoffTime} onValueChange={setDropoffTime}>
-                                <SelectTrigger className="pl-8 h-8 text-xs font-medium">
-                                  <SelectValue />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  {TIME_OPTIONS.map(t => (
-                                    <SelectItem key={t} value={t} className="text-xs">{t}</SelectItem>
-                                  ))}
-                                </SelectContent>
-                              </Select>
-                            </div>
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  </>
-                )}
 
                 <Separator />
 
