@@ -146,6 +146,11 @@ router.get("/listings", async (req, res) => {
 router.post("/listings", async (req, res) => {
   try {
     const body = req.body;
+    const depositNum = body.depositAmount != null ? parseFloat(body.depositAmount) : null;
+    if (!depositNum || depositNum <= 0) {
+      res.status(400).json({ error: "A security deposit greater than $0 is required for all listings." });
+      return;
+    }
     const [created] = await db.insert(listingsTable).values({
       ...body,
       tenantId: req.tenantId ?? null,

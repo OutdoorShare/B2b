@@ -79,7 +79,7 @@ function usePickupAddresses() {
 }
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
-const OPTIONAL_NUMERIC = new Set(['pricePerWeek', 'pricePerHour', 'depositAmount', 'ageRestriction']);
+const OPTIONAL_NUMERIC = new Set(['pricePerWeek', 'pricePerHour', 'ageRestriction']);
 
 export default function AdminListingsForm() {
   const contactCards = useContactCards();
@@ -378,6 +378,7 @@ export default function AdminListingsForm() {
     { key: "description", label: "Description",        done: formData.description.trim().length > 0 },
     { key: "category",    label: "Category",           done: !!formData.categoryId },
     { key: "price",       label: "Price per day > $0", done: formData.pricePerDay > 0 },
+    { key: "deposit",     label: "Security deposit > $0", done: (formData.depositAmount ?? 0) > 0 },
     { key: "location",    label: "Pickup address",     done: formData.location.trim().length > 0 },
     { key: "photos",      label: "At least one photo", done: formData.imageUrls.length > 0 },
   ];
@@ -388,6 +389,16 @@ export default function AdminListingsForm() {
     e.preventDefault();
 
     const statusToSave = publishIntent ? "active" : formData.status;
+
+    // Deposit is always required regardless of draft/published state
+    if (!formData.depositAmount || formData.depositAmount <= 0) {
+      toast({
+        title: "Security deposit required",
+        description: "Please enter a deposit amount greater than $0.",
+        variant: "destructive",
+      });
+      return;
+    }
 
     // Validate before publishing
     if (statusToSave === "active" && publishChecks.some(c => !c.done)) {
@@ -694,7 +705,7 @@ export default function AdminListingsForm() {
                   </div>
                   <div className="space-y-2">
                     <div className="flex items-center gap-1.5">
-                      <Label htmlFor="depositAmount">Deposit ($)</Label>
+                      <Label htmlFor="depositAmount">Deposit ($) <span className="text-destructive">*</span></Label>
                       <Popover>
                         <PopoverTrigger asChild>
                           <button type="button" className="text-muted-foreground hover:text-foreground transition-colors">
@@ -718,7 +729,7 @@ export default function AdminListingsForm() {
                         </PopoverContent>
                       </Popover>
                     </div>
-                    <Input id="depositAmount" name="depositAmount" type="number" min="0" step="0.01" value={formData.depositAmount || ''} onChange={handleChange} />
+                    <Input id="depositAmount" name="depositAmount" type="number" min="0.01" step="0.01" placeholder="e.g. 200" value={formData.depositAmount || ''} onChange={handleChange} required />
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="quantity">Total Quantity <span className="text-destructive">*</span></Label>
