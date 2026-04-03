@@ -201,7 +201,7 @@ export default function StorefrontHome() {
             <img src={(profile as any).coverImageUrl} alt="Cover" className="w-full h-full object-cover" />
           </div>
         ) : (
-          <div className="absolute inset-0 z-0 bg-gradient-to-b from-slate-900 via-slate-800 to-slate-900" />
+          <div className="absolute inset-0 z-0 bg-gradient-to-br from-slate-900 via-primary/80 to-slate-900" />
         )}
 
         <div className="relative z-20 w-full max-w-5xl mx-auto px-4 py-16 text-center">
@@ -300,10 +300,15 @@ export default function StorefrontHome() {
       {/* ── LISTINGS ─────────────────────────────────────────── */}
       <section className="max-w-6xl mx-auto px-4 py-12">
         <div className="mb-6 flex items-center justify-between">
-          <h2 className="text-2xl font-bold tracking-tight">
-            {activeCategory ? categories?.find(c => c.id === activeCategory)?.name : "Available Now"}
-          </h2>
-          <span className="text-sm text-muted-foreground">{listings?.length || 0} available</span>
+          <div>
+            <p className="text-xs font-bold uppercase tracking-widest text-primary mb-1">
+              {activeCategory ? "Filtered results" : "Browse all"}
+            </p>
+            <h2 className="text-2xl font-bold tracking-tight">
+              {activeCategory ? categories?.find(c => c.id === activeCategory)?.name : "Available Now"}
+            </h2>
+          </div>
+          <span className="text-sm font-medium text-muted-foreground bg-muted/60 px-3 py-1 rounded-full">{listings?.length || 0} available</span>
         </div>
 
         {isLoading ? (
@@ -337,12 +342,12 @@ export default function StorefrontHome() {
                     )}
                     {listing.condition === "excellent" && (
                       <div className="absolute top-3 right-3">
-                        <Badge className="bg-white/90 text-black hover:bg-white border-0 shadow-sm text-xs font-semibold">Like New</Badge>
+                        <Badge className="bg-emerald-500 text-white hover:bg-emerald-600 border-0 shadow-sm text-xs font-semibold">Like New</Badge>
                       </div>
                     )}
                     {listing.categoryName && (
                       <div className="absolute top-3 left-3">
-                        <span className="text-[10px] font-bold uppercase tracking-widest bg-black/60 text-white px-2 py-1 rounded-full backdrop-blur">
+                        <span className="text-[10px] font-bold uppercase tracking-widest bg-primary/90 text-primary-foreground px-2.5 py-1 rounded-full shadow-sm">
                           {listing.categoryName}
                         </span>
                       </div>
@@ -361,13 +366,13 @@ export default function StorefrontHome() {
                         Protection Plan
                       </div>
                     )}
-                    <div className="mt-auto pt-3 border-t border-border flex items-end justify-between">
-                      <div>
-                        <span className="text-xl font-bold tracking-tight">${listing.pricePerDay}</span>
-                        <span className="text-xs text-muted-foreground">/day</span>
+                    <div className="mt-auto pt-3 border-t border-border flex items-center justify-between">
+                      <div className="flex items-baseline gap-0.5">
+                        <span className="text-xl font-bold tracking-tight text-primary">${listing.pricePerDay}</span>
+                        <span className="text-xs text-muted-foreground font-medium">/day</span>
                       </div>
-                      <div className="w-7 h-7 rounded-full bg-primary/10 flex items-center justify-center group-hover:bg-primary group-hover:text-primary-foreground transition-colors">
-                        <ArrowRight className="w-3.5 h-3.5" />
+                      <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center group-hover:bg-primary group-hover:text-primary-foreground transition-all group-hover:scale-110 group-hover:shadow-md">
+                        <ArrowRight className="w-4 h-4" />
                       </div>
                     </div>
                   </div>
@@ -398,8 +403,13 @@ export default function StorefrontHome() {
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
             {HOW_IT_WORKS.map((item, i) => (
-              <div key={i} className="relative bg-background rounded-2xl border border-border shadow-sm p-7">
-                <div className="text-5xl font-black text-primary/10 leading-none mb-4">{item.step}</div>
+              <div key={i} className="relative bg-background rounded-2xl border border-border shadow-sm p-7 overflow-hidden">
+                {/* Subtle colored top accent */}
+                <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-primary/60 via-primary to-primary/60 rounded-t-2xl" />
+                {/* Step circle indicator */}
+                <div className="w-11 h-11 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-center mb-5">
+                  <span className="text-base font-black text-primary">{item.step}</span>
+                </div>
                 <h3 className="font-bold text-lg mb-2 leading-snug">{item.title}</h3>
                 <p className="text-sm text-muted-foreground leading-relaxed mb-4">{item.description}</p>
                 <ul className="space-y-1.5">
@@ -411,7 +421,7 @@ export default function StorefrontHome() {
                   ))}
                 </ul>
                 {i < HOW_IT_WORKS.length - 1 && (
-                  <div className="hidden md:block absolute -right-4 top-1/2 -translate-y-1/2 z-10 w-8 h-8 rounded-full bg-background border border-border flex items-center justify-center shadow-sm">
+                  <div className="hidden md:flex absolute -right-4 top-1/2 -translate-y-1/2 z-10 w-8 h-8 rounded-full bg-primary/10 border border-primary/20 items-center justify-center shadow-sm">
                     <ArrowRight className="w-4 h-4 text-primary" />
                   </div>
                 )}

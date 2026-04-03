@@ -349,7 +349,7 @@ export default function StorefrontGearDetail() {
               </div>
 
               <div className="flex items-baseline gap-1.5">
-                <span className="text-4xl font-black">${parseFloat(String(listing.pricePerDay)).toFixed(0)}</span>
+                <span className="text-4xl font-black text-primary">${parseFloat(String(listing.pricePerDay)).toFixed(0)}</span>
                 <span className="text-muted-foreground font-medium text-lg">/ day</span>
               </div>
             </div>
@@ -363,9 +363,11 @@ export default function StorefrontGearDetail() {
             <div className="rounded-2xl border bg-background shadow-sm overflow-hidden">
 
               {/* Calendar header */}
-              <div className="bg-muted/40 px-5 py-3.5 border-b flex items-center justify-between">
+              <div className="bg-gradient-to-r from-primary/8 to-primary/4 px-5 py-3.5 border-b flex items-center justify-between">
                 <div className="flex items-center gap-2">
-                  <CalendarDays className="w-4 h-4 text-primary" />
+                  <div className="w-6 h-6 rounded-md bg-primary/15 flex items-center justify-center">
+                    <CalendarDays className="w-3.5 h-3.5 text-primary" />
+                  </div>
                   <span className="font-semibold text-sm">Check Availability</span>
                 </div>
                 <div className="flex items-center gap-3 text-xs text-muted-foreground">
