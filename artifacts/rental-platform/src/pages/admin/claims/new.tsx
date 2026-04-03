@@ -7,8 +7,12 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { useToast } from "@/hooks/use-toast";
-import { ArrowLeft, ShieldAlert, AlertTriangle, Search, X, CalendarDays, User, Zap, BookOpen, DollarSign } from "lucide-react";
+import { ArrowLeft, ShieldAlert, AlertTriangle, Search, X, CalendarDays, User, Zap, BookOpen, DollarSign, Shield } from "lucide-react";
 import { format, parseISO } from "date-fns";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
@@ -33,6 +37,12 @@ type Booking = {
   status: string;
 };
 
+type DepositInfo = {
+  depositHoldStatus: string | null;
+  depositHoldIntentId: string | null;
+  depositAmount: number | null;
+};
+
 export default function AdminClaimsNew() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
@@ -52,8 +62,14 @@ export default function AdminClaimsNew() {
   const [selectedRuleId, setSelectedRuleId] = useState<string>("");
   const [activeShortcut, setActiveShortcut] = useState<"rule" | "cancellation" | null>(null);
 
+  // Deposit info for linked booking
+  const [depositInfo, setDepositInfo] = useState<DepositInfo | null>(null);
+
   // Business profile for cancellation policy
   const [cancellationPolicy, setCancellationPolicy] = useState<string | null>(null);
+
+  // Confirmation dialog
+  const [showConfirm, setShowConfirm] = useState(false);
 
   // Booking search
   const [allBookings, setAllBookings] = useState<Booking[]>([]);
@@ -120,6 +136,22 @@ export default function AdminClaimsNew() {
     ).slice(0, 10);
   })();
 
+  async function fetchDepositInfo(bid: number) {
+    try {
+      const s = getAdminSession();
+      const headers: Record<string, string> = {};
+      if (s?.token) headers["x-admin-token"] = s.token;
+      const r = await fetch(`${BASE}/api/bookings/${bid}`, { headers });
+      if (!r.ok) return;
+      const d = await r.json();
+      setDepositInfo({
+        depositHoldStatus: d.depositHoldStatus ?? null,
+        depositHoldIntentId: d.depositHoldIntentId ?? null,
+        depositAmount: d.depositAmount ?? null,
+      });
+    } catch { /* non-fatal */ }
+  }
+
   function selectBooking(b: Booking) {
     setSelectedBooking(b);
     setBookingId(String(b.id));
@@ -128,9 +160,10 @@ export default function AdminClaimsNew() {
     setCustomerEmail(b.customerEmail ?? "");
     setBookingSearch("");
     setShowDropdown(false);
-    // Reset shortcut selection when booking changes
     setActiveShortcut(null);
     setSelectedRuleId("");
+    setDepositInfo(null);
+    fetchDepositInfo(b.id);
   }
 
   function clearBooking() {
@@ -139,6 +172,7 @@ export default function AdminClaimsNew() {
     setListingId("");
     setActiveShortcut(null);
     setSelectedRuleId("");
+    setDepositInfo(null);
   }
 
   // Fetch listing rules when listing ID is known
@@ -170,12 +204,20 @@ export default function AdminClaimsNew() {
   }
 
   const showShortcuts = selectedBooking && (listingRules.length > 0 || cancellationPolicy);
+  const hasAuthorizedHold = depositInfo?.depositHoldStatus === "authorized" && !!depositInfo.depositHoldIntentId;
+  const depositDisplay = depositInfo?.depositAmount != null ? `$${depositInfo.depositAmount.toFixed(2)}` : "security deposit";
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  // Show confirmation dialog on submit
+  const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!customerName || !customerEmail || !description) {
       toast({ title: "Customer name, email, and description are required", variant: "destructive" }); return;
     }
+    setShowConfirm(true);
+  };
+
+  const confirmAndFile = async () => {
+    setShowConfirm(false);
     setSaving(true);
     try {
       const s = getAdminSession();
@@ -196,7 +238,16 @@ export default function AdminClaimsNew() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
-      toast({ title: "Claim created" });
+
+      if (data.depositCaptured) {
+        toast({
+          title: "Claim filed & deposit charged",
+          description: `The security deposit of $${data.depositCapturedAmount?.toFixed(2)} has been captured.`,
+        });
+      } else {
+        toast({ title: "Claim created" });
+      }
+
       setLocation(adminPath(`/claims/${data.id}`));
     } catch (err: any) {
       toast({ title: err?.message || "Failed to create claim", variant: "destructive" });
@@ -214,6 +265,55 @@ export default function AdminClaimsNew() {
 
   return (
     <div className="p-6 max-w-2xl mx-auto space-y-6">
+      {/* Confirmation Dialog */}
+      <AlertDialog open={showConfirm} onOpenChange={setShowConfirm}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2">
+              <Shield className="w-5 h-5 text-primary" />
+              File this claim?
+            </AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <div className="space-y-3">
+                <p>
+                  You're about to file a <strong className="capitalize">{type.replace("_", " ")}</strong> claim
+                  {selectedBooking ? ` against Booking #${selectedBooking.id} (${selectedBooking.customerName})` : ""}.
+                  {claimedAmount ? ` Claimed amount: $${parseFloat(claimedAmount).toFixed(2)}.` : ""}
+                </p>
+                {hasAuthorizedHold ? (
+                  <div className="rounded-lg bg-amber-50 border border-amber-200 px-4 py-3 space-y-1">
+                    <p className="font-semibold text-amber-900 text-sm flex items-center gap-1.5">
+                      <DollarSign className="w-4 h-4 text-amber-600" />
+                      Security deposit will be charged
+                    </p>
+                    <p className="text-sm text-amber-800">
+                      The renter's {depositDisplay} security deposit hold will be immediately converted to a charge and transferred to your account.
+                    </p>
+                  </div>
+                ) : selectedBooking && depositInfo && !hasAuthorizedHold ? (
+                  <div className="rounded-lg bg-muted px-4 py-3">
+                    <p className="text-sm text-muted-foreground">
+                      {depositInfo.depositHoldStatus === "captured"
+                        ? "The security deposit for this booking was already captured."
+                        : depositInfo.depositHoldStatus === "released"
+                          ? "The security deposit for this booking was released."
+                          : "No security deposit hold found for this booking."}
+                    </p>
+                  </div>
+                ) : null}
+                <p className="text-sm text-muted-foreground">This action cannot be undone. The claim will be opened immediately.</p>
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmAndFile} className={hasAuthorizedHold ? "bg-amber-600 hover:bg-amber-700 text-white" : ""}>
+              {hasAuthorizedHold ? `Yes, File & Charge ${depositDisplay}` : "Yes, File Claim"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
       <div className="flex items-center gap-3">
         <Button
           variant="ghost" size="icon"
@@ -237,6 +337,20 @@ export default function AdminClaimsNew() {
         </div>
       )}
 
+      {/* Deposit hold notice */}
+      {hasAuthorizedHold && (
+        <div className="flex items-start gap-2.5 bg-amber-50 border border-amber-300 rounded-xl px-4 py-3 text-sm text-amber-900">
+          <DollarSign className="w-4 h-4 shrink-0 text-amber-600 mt-0.5" />
+          <div>
+            <p className="font-semibold">Security deposit on hold</p>
+            <p className="text-amber-700 mt-0.5">
+              This booking has an authorized security deposit hold of <strong>{depositDisplay}</strong>.
+              Filing this claim will immediately convert it to a charge.
+            </p>
+          </div>
+        </div>
+      )}
+
       <form onSubmit={handleSubmit} className="space-y-5">
         {/* Rental Reference — booking search */}
         <Card>
@@ -253,6 +367,11 @@ export default function AdminClaimsNew() {
                     <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium capitalize ${statusColor(selectedBooking.status)}`}>
                       {selectedBooking.status}
                     </span>
+                    {hasAuthorizedHold && (
+                      <span className="text-[10px] px-1.5 py-0.5 rounded-full font-medium bg-amber-100 text-amber-800 flex items-center gap-0.5">
+                        <DollarSign className="w-2.5 h-2.5" /> Deposit hold: {depositDisplay}
+                      </span>
+                    )}
                   </div>
                   <p className="text-sm font-medium truncate">{selectedBooking.listingTitle ?? "—"}</p>
                   <div className="flex items-center gap-3 text-xs text-muted-foreground flex-wrap">
@@ -474,7 +593,7 @@ export default function AdminClaimsNew() {
         <div className="flex justify-end gap-3">
           <Button type="button" variant="outline" onClick={() => setLocation(adminPath("/claims"))}>Cancel</Button>
           <Button type="submit" disabled={saving}>
-            {saving ? "Creating…" : "File Claim"}
+            {saving ? "Filing…" : "Review & File Claim"}
           </Button>
         </div>
       </form>

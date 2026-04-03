@@ -415,7 +415,7 @@ router.get("/bookings/:id", async (req, res) => {
     if (!booking) { res.status(404).json({ error: "Not found" }); return; }
 
     const [listing] = await db
-      .select({ title: listingsTable.title, contactCardId: listingsTable.contactCardId })
+      .select({ title: listingsTable.title, contactCardId: listingsTable.contactCardId, depositAmount: listingsTable.depositAmount })
       .from(listingsTable)
       .where(eq(listingsTable.id, booking.listingId));
 
@@ -426,7 +426,9 @@ router.get("/bookings/:id", async (req, res) => {
       contactCard = cc ?? null;
     }
 
-    res.json({ ...formatBooking(booking, listing?.title ?? "Unknown"), contactCard });
+    const depositAmount = listing?.depositAmount ? parseFloat(String(listing.depositAmount)) : null;
+
+    res.json({ ...formatBooking(booking, listing?.title ?? "Unknown"), contactCard, depositAmount });
   } catch (err) {
     req.log.error(err);
     res.status(500).json({ error: "Failed to fetch booking" });
