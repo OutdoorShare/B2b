@@ -70,6 +70,7 @@ import DocsAdminPage from "@/pages/superadmin/docs-admin";
 import AdminFeedback from "@/pages/admin/feedback";
 import AdminMessages from "@/pages/admin/messages";
 import AdminContactCards from "@/pages/admin/contact-cards";
+import AdminContacts from "@/pages/admin/contacts";
 import AdminInventory from "@/pages/admin/inventory/index";
 import AdminInventoryForm from "@/pages/admin/inventory/form";
 import AdminInventoryDetail from "@/pages/admin/inventory/detail";
@@ -283,6 +284,9 @@ function Router() {
       </Route>
       <Route path="/:slug/admin/feedback">
         <AdminGuard><AdminLayout><AdminFeedback /></AdminLayout></AdminGuard>
+      </Route>
+      <Route path="/:slug/admin/contacts">
+        <AdminGuard><AdminLayout><AdminContacts /></AdminLayout></AdminGuard>
       </Route>
       <Route path="/:slug/admin/contact-cards">
         <AdminGuard><AdminLayout><AdminContactCards /></AdminLayout></AdminGuard>

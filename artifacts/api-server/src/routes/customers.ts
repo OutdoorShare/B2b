@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
-import { customersTable, bookingsTable, tenantsTable, businessProfileTable } from "@workspace/db/schema";
+import { customersTable, bookingsTable, tenantsTable, businessProfileTable, listingsTable } from "@workspace/db/schema";
 import { eq, and, desc } from "drizzle-orm";
 import { scrypt, randomBytes, timingSafeEqual } from "crypto";
 import { promisify } from "util";
@@ -339,6 +339,111 @@ router.post("/customers/:id/save-payment-method", async (req, res) => {
   } catch (err: any) {
     req.log.error(err);
     res.status(500).json({ error: err.message ?? "Failed to save payment method" });
+  }
+});
+
+// ── Admin: list all unique renters for this tenant (aggregated from bookings) ──
+router.get("/admin/renters", async (req, res) => {
+  if (!req.tenantId) { res.status(401).json({ error: "Unauthorized" }); return; }
+  try {
+    const rows = await db
+      .select({
+        email: bookingsTable.customerEmail,
+        name: bookingsTable.customerName,
+        phone: bookingsTable.customerPhone,
+        totalPrice: bookingsTable.totalPrice,
+        status: bookingsTable.status,
+        createdAt: bookingsTable.createdAt,
+      })
+      .from(bookingsTable)
+      .where(eq(bookingsTable.tenantId, req.tenantId))
+      .orderBy(desc(bookingsTable.createdAt));
+
+    // Aggregate by email
+    const map = new Map<string, {
+      name: string;
+      email: string;
+      phone: string | null;
+      bookingCount: number;
+      lifetimeValue: number;
+      firstBooking: string;
+      lastBooking: string;
+    }>();
+
+    for (const row of rows) {
+      const key = row.email.toLowerCase().trim();
+      const price = row.status === "cancelled" ? 0 : parseFloat(String(row.totalPrice) || "0");
+      const ts = row.createdAt.toISOString();
+      const existing = map.get(key);
+      if (existing) {
+        existing.bookingCount++;
+        existing.lifetimeValue += price;
+        if (ts < existing.firstBooking) existing.firstBooking = ts;
+        if (ts > existing.lastBooking) existing.lastBooking = ts;
+      } else {
+        map.set(key, {
+          name: row.name,
+          email: key,
+          phone: row.phone ?? null,
+          bookingCount: 1,
+          lifetimeValue: price,
+          firstBooking: ts,
+          lastBooking: ts,
+        });
+      }
+    }
+
+    res.json([...map.values()]);
+  } catch (err) {
+    req.log.error(err);
+    res.status(500).json({ error: "Failed to fetch renters" });
+  }
+});
+
+// ── Admin: full booking history for a specific renter email ───────────────────
+router.get("/admin/renters/:email/bookings", async (req, res) => {
+  if (!req.tenantId) { res.status(401).json({ error: "Unauthorized" }); return; }
+  try {
+    const email = decodeURIComponent(req.params.email).toLowerCase().trim();
+    const rows = await db
+      .select({
+        id: bookingsTable.id,
+        listingId: bookingsTable.listingId,
+        startDate: bookingsTable.startDate,
+        endDate: bookingsTable.endDate,
+        totalPrice: bookingsTable.totalPrice,
+        status: bookingsTable.status,
+        createdAt: bookingsTable.createdAt,
+        customerName: bookingsTable.customerName,
+        customerEmail: bookingsTable.customerEmail,
+        customerPhone: bookingsTable.customerPhone,
+        source: bookingsTable.source,
+      })
+      .from(bookingsTable)
+      .where(and(
+        eq(bookingsTable.tenantId, req.tenantId),
+        eq(bookingsTable.customerEmail, email),
+      ))
+      .orderBy(desc(bookingsTable.createdAt));
+
+    // Fetch listing titles
+    const listingIds = [...new Set(rows.map(r => r.listingId))];
+    const listings = listingIds.length
+      ? await db.select({ id: listingsTable.id, title: listingsTable.title })
+          .from(listingsTable)
+          .where(eq(listingsTable.tenantId, req.tenantId))
+      : [];
+    const listingMap = Object.fromEntries(listings.map(l => [l.id, l.title]));
+
+    res.json(rows.map(r => ({
+      ...r,
+      totalPrice: String(r.totalPrice),
+      createdAt: r.createdAt.toISOString(),
+      listingTitle: listingMap[r.listingId] ?? `Listing #${r.listingId}`,
+    })));
+  } catch (err) {
+    req.log.error(err);
+    res.status(500).json({ error: "Failed to fetch renter bookings" });
   }
 });
 

@@ -60,6 +60,7 @@ const NAV_GROUPS: NavGroup[] = [
   {
     group: "Customers",
     items: [
+      { name: "Contacts", path: "/contacts", icon: Users },
       { name: "Messages", path: "/messages", icon: MessageCircle },
       { name: "Communications", path: "/communications", icon: MessageSquare },
       { name: "Contact Cards", path: "/contact-cards", icon: IdCard },
