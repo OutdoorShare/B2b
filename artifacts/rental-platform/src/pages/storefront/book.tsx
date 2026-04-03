@@ -59,6 +59,44 @@ function currentTimeSlot(): string {
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
+// Default rental agreement shown when the superadmin hasn't configured one yet.
+// Uses the same {{variable}} tokens as the custom agreement editor.
+const DEFAULT_AGREEMENT = `RENTAL AGREEMENT
+
+This Rental Agreement ("Agreement") is entered into between {{company_name}} ("Owner") and {{renter_name}} ("Renter") on {{start_date}}.
+
+RENTAL DETAILS
+
+Item Rented: {{listing_title}}
+Rental Period: {{start_date}} through {{end_date}} ({{rental_days}} days)
+Daily Rate: {{price_per_day}}
+Total Rental Fee: {{total_price}}
+Security Deposit: {{deposit_amount}}
+
+RENTER ACKNOWLEDGMENT & RESPONSIBILITIES
+
+Renter confirms they are at least 18 years of age and hold a valid driver's license or other required credentials for the rented item. Renter agrees to return the item in the same condition it was received, normal wear and tear excepted. Any damage, loss, or theft of the rental item will be the sole financial responsibility of the Renter.
+
+PROHIBITED USE
+
+Renter agrees not to use the rented item in any illegal manner, in any reckless or unsafe way, or in any manner not consistent with its intended purpose. Renter agrees not to sub-rent or lend the item to any third party without prior written consent from the Owner.
+
+FUEL & CONDITION
+
+Unless otherwise stated, the item must be returned with the same fuel level as at pickup. Renter is responsible for all fuel used during the rental period.
+
+CANCELLATION & REFUND POLICY
+
+Cancellations made more than 48 hours before the rental start date may be eligible for a full refund at the Owner's discretion. Cancellations made within 48 hours of the rental start date may be subject to a cancellation fee.
+
+LIMITATION OF LIABILITY
+
+Owner shall not be liable for any indirect, incidental, or consequential damages arising out of the use of the rental item. Renter assumes all risks associated with the use of the rented item and agrees to indemnify and hold harmless Owner from any claims, damages, or expenses arising from Renter's use.
+
+AGREEMENT
+
+By signing below, Renter confirms they have read, understood, and agree to all terms and conditions of this Rental Agreement. Renter acknowledges receipt of the rental item in satisfactory condition.`;
+
 // Two screens: "book" (dates+info+payment) and "complete" (agreement→verification→confirmation)
 type Step = "book" | "complete";
 
@@ -393,7 +431,7 @@ export default function StorefrontBook() {
 
   // Agreement
   const [agreeChecked, setAgreeChecked] = useState(false);
-  const [agreementText, setAgreementText] = useState("");
+  const [agreementText, setAgreementText] = useState(DEFAULT_AGREEMENT);
   const [customFieldValues, setCustomFieldValues] = useState<Record<string, string>>({});
   const [contractFields, setContractFields] = useState<Array<{
     id: string; label: string; key: string;
@@ -438,7 +476,7 @@ export default function StorefrontBook() {
   const [savedPhotos, setSavedPhotos] = useState<string[]>([]);
   const [uploadingPhotos, setUploadingPhotos] = useState(false);
 
-  // Fetch agreement + fields
+  // Fetch agreement + fields; fall back to DEFAULT_AGREEMENT if none is configured
   useEffect(() => {
     const catSlug = (listing as any)?.categorySlug;
     const url = catSlug
@@ -448,9 +486,12 @@ export default function StorefrontBook() {
       fetch(url).then(r => r.json()),
       fetch(`${BASE}/api/platform/agreement/fields`).then(r => r.json()),
     ]).then(([d, f]) => {
-      if (d.value) setAgreementText(d.value);
+      setAgreementText(d.value || DEFAULT_AGREEMENT);
       if (f.fields) setContractFields(f.fields);
-    }).catch(() => {});
+    }).catch(() => {
+      // Network failure — still show the default so the flow isn't blocked
+      setAgreementText(DEFAULT_AGREEMENT);
+    });
   }, [(listing as any)?.categorySlug]);
 
   // Fetch platform protection plan for this listing's category
@@ -2187,7 +2228,12 @@ export default function StorefrontBook() {
                       <Separator />
                       {agreementText
                         ? agreementText.split("\n\n").filter(Boolean).map((para, i) => renderAgreementParagraph(para, i))
-                        : <p className="text-muted-foreground italic">Loading agreement…</p>
+                        : (
+                          <div className="flex items-center gap-2 text-muted-foreground italic py-4">
+                            <Loader2 className="w-4 h-4 animate-spin shrink-0" />
+                            <span>Loading agreement…</span>
+                          </div>
+                        )
                       }
                       <p className="text-xs italic">By signing below, you confirm you have read, understood, and agree to all terms in this rental agreement.</p>
                     </div>
