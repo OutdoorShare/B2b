@@ -7,6 +7,7 @@ import {
   useGetBusinessProfile,
   getGetBusinessProfileQueryKey,
 } from "@workspace/api-client-react";
+import BundlePickerModal, { type BundleItem } from "@/components/bundle-picker-modal";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -688,6 +689,12 @@ export default function StorefrontBook() {
   const [availableAddons, setAvailableAddons] = useState<Addon[]>([]);
   const [selectedAddonIds, setSelectedAddonIds] = useState<Set<number>>(new Set());
 
+  // Bundle items
+  const [bundleItems, setBundleItems] = useState<BundleItem[]>([]);
+  const [bundlePickerOpen, setBundlePickerOpen] = useState(false);
+  const [allListings, setAllListings] = useState<any[]>([]);
+  const [bundleDiscountPercent, setBundleDiscountPercent] = useState(0);
+
   // Quantity selection (multi-unit listings)
   const [selectedQuantity, setSelectedQuantity] = useState(1);
   const [availabilityData, setAvailabilityData] = useState<{
@@ -734,6 +741,26 @@ export default function StorefrontBook() {
       .then(d => setPlatformProtectionPlan(d))
       .catch(() => {});
   }, [(listing as any)?.categorySlug]);
+
+  // Fetch all active listings for bundle picker + bundle discount from business profile
+  useEffect(() => {
+    const tenantSlug = slug ?? "";
+    const headers: Record<string, string> = tenantSlug ? { "x-tenant-slug": tenantSlug } : {};
+    Promise.all([
+      fetch(`${BASE}/api/listings?status=active`, { headers }).then(r => r.json()).catch(() => []),
+      fetch(`${BASE}/api/business`, { headers }).then(r => r.json()).catch(() => ({})),
+    ]).then(([ls, biz]) => {
+      if (Array.isArray(ls)) setAllListings(ls);
+      if (typeof biz?.bundleDiscountPercent === "number") setBundleDiscountPercent(biz.bundleDiscountPercent);
+    });
+  }, [slug]);
+
+  // Re-calculate bundle item subtotals when days change
+  useEffect(() => {
+    if (bundleItems.length === 0) return;
+    setBundleItems(items => items.map(i => ({ ...i, days, subtotal: i.pricePerDay * i.qty * days })));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [days]);
 
   // Fetch booked-dates availability for multi-quantity logic
   useEffect(() => {
@@ -1028,7 +1055,15 @@ export default function StorefrontBook() {
       .filter(a => selectedAddonIds.has(a.id) && !(platformProtectionFee > 0 && a.name.toLowerCase().includes("protection")))
       .reduce((sum, a) => sum + (a.priceType === "per_day" ? a.price * days : a.price), 0);
   }, [availableAddons, selectedAddonIds, days, platformProtectionFee]);
-  const total = subtotal + addonsSubtotal + platformProtectionFee;
+
+  const bundleItemsTotal = useMemo(() => bundleItems.reduce((s, i) => s + i.subtotal, 0), [bundleItems]);
+  const bundleDiscountAmount = useMemo(() => {
+    if (bundleItems.length === 0 || bundleDiscountPercent === 0) return 0;
+    const allBeforeDiscount = subtotal + bundleItemsTotal + addonsSubtotal + platformProtectionFee;
+    return allBeforeDiscount * (bundleDiscountPercent / 100);
+  }, [bundleItems, bundleDiscountPercent, subtotal, bundleItemsTotal, addonsSubtotal, platformProtectionFee]);
+
+  const total = subtotal + bundleItemsTotal + addonsSubtotal + platformProtectionFee - bundleDiscountAmount;
   const promoDiscount = appliedPromo ? Math.min(appliedPromo.discountAmount, total) : 0;
   const discountedTotal = Math.max(0.50, total - promoDiscount);
 
@@ -1428,6 +1463,8 @@ export default function StorefrontBook() {
           notes: notes || undefined,
           source: isKiosk ? "kiosk" : "online",
           addons: selectedAddons,
+          bundleItems: bundleItems.length > 0 ? bundleItems : undefined,
+          bundleDiscountPct: bundleItems.length > 0 ? bundleDiscountPercent : undefined,
           agreementSignerName: name.trim(),
           agreementText: agreementText ? resolveAgreementText(agreementText) : undefined,
           agreementSignatureDataUrl: signatureDataUrl,
@@ -1586,6 +1623,7 @@ export default function StorefrontBook() {
     : 3;
 
   return (
+    <>
     <div className="min-h-screen bg-muted/20">
       {/* Slim 2-step progress bar */}
       <div className="sticky top-16 z-10 bg-background border-b shadow-sm">
@@ -2079,6 +2117,81 @@ export default function StorefrontBook() {
                     </>
                   );
                 })()}
+
+                {/* ── Bundle Builder ── */}
+                {allListings.filter(l => l.id !== (listing?.id ?? 0) && l.status === "active").length > 0 && (
+                  <>
+                    <Separator />
+                    <div>
+                      <div className="flex items-center justify-between mb-3">
+                        <div>
+                          <h2 className="text-lg font-semibold flex items-center gap-2">
+                            <ShoppingBag className="w-5 h-5 text-primary" />
+                            Build a Bundle
+                          </h2>
+                          <p className="text-sm text-muted-foreground mt-0.5">
+                            Add more gear to your order{bundleDiscountPercent > 0 && ` and save ${bundleDiscountPercent}%`}
+                          </p>
+                        </div>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setBundlePickerOpen(true)}
+                          className="shrink-0"
+                        >
+                          <Plus className="w-4 h-4 mr-1" />
+                          {bundleItems.length > 0 ? `${bundleItems.length} item${bundleItems.length > 1 ? "s" : ""} added` : "Add items"}
+                        </Button>
+                      </div>
+                      {bundleItems.length > 0 && (
+                        <div className="rounded-xl border border-primary/20 bg-primary/5 divide-y divide-primary/10">
+                          {bundleItems.map(item => (
+                            <div key={item.listingId} className="flex items-center gap-3 px-4 py-3">
+                              {item.imageUrl && (
+                                <img src={item.imageUrl} alt={item.title} className="w-10 h-10 rounded-lg object-cover shrink-0" />
+                              )}
+                              <div className="flex-1 min-w-0">
+                                <p className="font-medium text-sm truncate">{item.title}</p>
+                                <p className="text-xs text-muted-foreground">
+                                  ${item.pricePerDay.toFixed(2)}/day × {item.qty} × {item.days} day{item.days !== 1 ? "s" : ""}
+                                </p>
+                              </div>
+                              <div className="text-right shrink-0">
+                                <p className="font-bold text-sm">${item.subtotal.toFixed(2)}</p>
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => setBundleItems(prev => prev.filter(i => i.listingId !== item.listingId))}
+                                className="p-1 text-muted-foreground hover:text-destructive transition-colors"
+                              >
+                                <X className="w-4 h-4" />
+                              </button>
+                            </div>
+                          ))}
+                          {bundleDiscountAmount > 0 && (
+                            <div className="flex justify-between items-center px-4 py-2.5 bg-green-50/80 text-green-800 text-sm font-semibold">
+                              <span className="flex items-center gap-1.5">
+                                <Tag className="w-3.5 h-3.5" />
+                                Bundle discount ({bundleDiscountPercent}% off)
+                              </span>
+                              <span>-${bundleDiscountAmount.toFixed(2)}</span>
+                            </div>
+                          )}
+                          <div className="flex justify-end px-4 py-2">
+                            <button
+                              type="button"
+                              onClick={() => setBundlePickerOpen(true)}
+                              className="text-xs text-primary hover:underline"
+                            >
+                              Edit bundle
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </>
+                )}
 
                 <Separator />
 
@@ -3497,6 +3610,21 @@ export default function StorefrontBook() {
                           <span>+${platformProtectionFee.toFixed(2)}</span>
                         </div>
                       )}
+                      {bundleItems.map(item => (
+                        <div key={item.listingId} className="flex justify-between text-muted-foreground">
+                          <span className="truncate mr-2">{item.title}{item.qty > 1 ? ` ×${item.qty}` : ""}</span>
+                          <span>+${item.subtotal.toFixed(2)}</span>
+                        </div>
+                      ))}
+                      {bundleDiscountAmount > 0 && (
+                        <div className="flex justify-between text-green-600 font-medium">
+                          <span className="flex items-center gap-1">
+                            <Tag className="w-3 h-3" />
+                            Bundle {bundleDiscountPercent}% off
+                          </span>
+                          <span>-${bundleDiscountAmount.toFixed(2)}</span>
+                        </div>
+                      )}
                       {appliedPromo && (
                         <div className="flex justify-between text-green-600 font-medium">
                           <span className="flex items-center gap-1">
@@ -3552,5 +3680,18 @@ export default function StorefrontBook() {
         </div>
       </div>
     </div>
+
+    {/* Bundle Picker Modal */}
+    <BundlePickerModal
+      isOpen={bundlePickerOpen}
+      onClose={() => setBundlePickerOpen(false)}
+      listings={allListings}
+      excludeListingId={listing?.id ?? 0}
+      days={days}
+      bundleItems={bundleItems}
+      onChange={setBundleItems}
+      bundleDiscountPercent={bundleDiscountPercent}
+    />
+    </>
   );
 }

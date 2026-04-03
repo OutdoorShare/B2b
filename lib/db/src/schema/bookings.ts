@@ -19,6 +19,8 @@ export const bookingsTable = pgTable("bookings", {
   adminNotes: text("admin_notes"),
   source: text("source", { enum: ["online", "kiosk", "phone", "walkin"] }).notNull().default("online"),
   addonsData: text("addons_data"),
+  bundleItems: text("bundle_items"),       // JSON: [{listingId, title, qty, pricePerDay, days, subtotal}]
+  bundleDiscountPct: text("bundle_discount_pct"), // snapshot of the discount % at time of booking
   assignedUnitIds: text("assigned_unit_ids"),
   agreementSignerName: text("agreement_signer_name"),
   agreementSignedAt: timestamp("agreement_signed_at"),

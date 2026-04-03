@@ -24,6 +24,7 @@ export const businessProfileTable = pgTable("business_profile", {
   socialInstagram: text("social_instagram"),
   socialFacebook: text("social_facebook"),
   socialTwitter: text("social_twitter"),
+  bundleDiscountPercent: decimal("bundle_discount_percent", { precision: 5, scale: 2 }).notNull().default("0"),
   depositRequired: boolean("deposit_required").notNull().default(true),
   depositPercent: decimal("deposit_percent", { precision: 5, scale: 2 }).notNull().default("25"),
   cancellationPolicy: text("cancellation_policy").notNull().default("Full refund if cancelled 48 hours before start date."),

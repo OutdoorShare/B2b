@@ -14,7 +14,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
 import { useToast } from "@/hooks/use-toast";
-import { ArrowLeft, CalendarDays, User, DollarSign, Package, Info, Hash, ShieldCheck } from "lucide-react";
+import { ArrowLeft, CalendarDays, User, DollarSign, Package, Info, Hash, ShieldCheck, ShoppingBag, Tag, Plus, X } from "lucide-react";
+import BundlePickerModal, { type BundleItem } from "@/components/bundle-picker-modal";
 import { format, addDays, differenceInDays } from "date-fns";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
@@ -54,6 +55,12 @@ export default function AdminBookingForm() {
   // Listing-level protection plan addons (suppressed when platform plan is active)
   const [protectionAddons, setProtectionAddons] = useState<Array<{ id: number; name: string; price: string; pricingType: string; priceType?: string }>>([]);
   const [selectedProtectionId, setSelectedProtectionId] = useState<number | null>(null);
+
+  // Bundle items
+  const [bundleItems, setBundleItems] = useState<BundleItem[]>([]);
+  const [bundlePickerOpen, setBundlePickerOpen] = useState(false);
+  const [allListings, setAllListings] = useState<any[]>([]);
+  const [bundleDiscountPercent, setBundleDiscountPercent] = useState(0);
 
   // Per-unit assignment (VIN / HIN / serial)
   const [availableUnits, setAvailableUnits] = useState<{ id: number; unitIdentifier: string; identifierType: string; label: string | null; status: string }[]>([]);
@@ -143,6 +150,26 @@ export default function AdminBookingForm() {
       .catch(() => { setProtectionAddons([]); setSelectedProtectionId(null); });
   }, [form.listingId]);
 
+  // Fetch all listings + bundle discount from business profile
+  useEffect(() => {
+    const slug = params.slug ?? "";
+    const headers: Record<string, string> = slug ? { "x-tenant-slug": slug } : {};
+    Promise.all([
+      fetch(`${BASE}/api/listings?status=active`, { headers }).then(r => r.json()).catch(() => []),
+      fetch(`${BASE}/api/business`, { headers }).then(r => r.json()).catch(() => ({})),
+    ]).then(([ls, biz]) => {
+      if (Array.isArray(ls)) setAllListings(ls);
+      if (typeof biz?.bundleDiscountPercent === "number") setBundleDiscountPercent(biz.bundleDiscountPercent);
+    });
+  }, [params.slug]);
+
+  // Recalculate bundle item subtotals when days change
+  useEffect(() => {
+    if (bundleItems.length === 0) return;
+    setBundleItems(items => items.map(i => ({ ...i, days, subtotal: i.pricePerDay * i.qty * days })));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [days]);
+
   // Keep assignedSlots array length in sync with quantity
   useEffect(() => {
     const qty = Math.max(1, Number(form.quantity) || 1);
@@ -186,7 +213,14 @@ export default function AdminBookingForm() {
     return ppu * Number(form.quantity || 1);
   }, [selectedProtection, days, form.quantity]);
 
-  const estimatedTotal = basePrice + deposit + platformProtectionFee + protectionPrice;
+  const bundleItemsTotal = useMemo(() => bundleItems.reduce((s, i) => s + i.subtotal, 0), [bundleItems]);
+  const bundleDiscountAmount = useMemo(() => {
+    if (bundleItems.length === 0 || bundleDiscountPercent === 0) return 0;
+    const allBefore = basePrice + bundleItemsTotal + platformProtectionFee + protectionPrice;
+    return allBefore * (bundleDiscountPercent / 100);
+  }, [bundleItems, bundleDiscountPercent, basePrice, bundleItemsTotal, platformProtectionFee, protectionPrice]);
+
+  const estimatedTotal = basePrice + bundleItemsTotal + deposit + platformProtectionFee + protectionPrice - bundleDiscountAmount;
 
   const handleChange = (field: string, value: string) => {
     setForm(f => ({ ...f, [field]: value }));
@@ -224,6 +258,8 @@ export default function AdminBookingForm() {
         depositPaid: form.depositPaid ? Number(form.depositPaid) : null,
         assignedUnitIds: filledSlots.length > 0 ? filledSlots : [],
         addonsData: JSON.stringify(addonsPayload),
+        bundleItems: bundleItems.length > 0 ? bundleItems : undefined,
+        bundleDiscountPct: bundleItems.length > 0 ? bundleDiscountPercent : undefined,
         totalPrice: estimatedTotal,
       };
 
@@ -253,6 +289,7 @@ export default function AdminBookingForm() {
   }
 
   return (
+    <>
     <div className="space-y-8 max-w-4xl mx-auto pb-12">
       {/* Header */}
       <div className="flex items-center gap-4">
@@ -553,6 +590,38 @@ export default function AdminBookingForm() {
                       )}
                     </div>
                   )}
+                  {/* Bundle items */}
+                  {bundleItems.map(item => (
+                    <div key={item.listingId} className="flex justify-between text-sm">
+                      <span className="text-muted-foreground flex items-center gap-1">
+                        <ShoppingBag className="w-3 h-3" />
+                        {item.title}{item.qty > 1 ? ` ×${item.qty}` : ""}
+                      </span>
+                      <span>+${item.subtotal.toFixed(2)}</span>
+                    </div>
+                  ))}
+                  {bundleDiscountAmount > 0 && (
+                    <div className="flex justify-between text-sm text-green-600 font-medium">
+                      <span className="flex items-center gap-1">
+                        <Tag className="w-3 h-3" />
+                        Bundle {bundleDiscountPercent}% off
+                      </span>
+                      <span>-${bundleDiscountAmount.toFixed(2)}</span>
+                    </div>
+                  )}
+                  <div className="pt-1">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="w-full gap-1.5 text-xs h-8"
+                      onClick={() => setBundlePickerOpen(true)}
+                      disabled={!form.listingId}
+                    >
+                      <Plus className="w-3 h-3" />
+                      {bundleItems.length > 0 ? `Edit bundle (${bundleItems.length} item${bundleItems.length > 1 ? "s" : ""})` : "Add bundle items"}
+                    </Button>
+                  </div>
                   <Separator />
                   <div className="flex justify-between font-bold">
                     <span>Estimated Total</span>
@@ -607,5 +676,17 @@ export default function AdminBookingForm() {
         </div>
       </div>
     </div>
+
+    <BundlePickerModal
+      isOpen={bundlePickerOpen}
+      onClose={() => setBundlePickerOpen(false)}
+      listings={allListings}
+      excludeListingId={Number(form.listingId)}
+      days={days}
+      bundleItems={bundleItems}
+      onChange={setBundleItems}
+      bundleDiscountPercent={bundleDiscountPercent}
+    />
+    </>
   );
 }

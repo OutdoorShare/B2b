@@ -221,10 +221,32 @@ router.post("/bookings", async (req, res) => {
     // Platform protection plan fee (passed from frontend, already validated against the category)
     const protectionPlanFee = body.protectionPlanFee ? parseFloat(body.protectionPlanFee) : 0;
 
-    const totalPrice = basePrice + addonsTotal + protectionPlanFee;
-    const addonsData = addons.length > 0 ? JSON.stringify(addons) : null;
+    // Bundle items — additional listings included in this booking
+    type BundleItem = { listingId: number; title: string; qty: number; pricePerDay: number; days: number; subtotal: number };
+    const bundleItems: BundleItem[] = body.bundleItems ?? [];
+    const bundleItemsTotal = bundleItems.reduce((sum, bi) => sum + (bi.subtotal ?? 0), 0);
 
-    const { addons: _addons, assignedUnitIds: rawUnitIds, agreementSignedAt: _ignoredTs, agreementSignatureDataUrl, ruleInitials: ruleInitialsJson, protectionPlanFee: _ppf, ...restBody } = body;
+    // Bundle discount — fetch from business profile if not provided by caller
+    let bundleDiscountPct = 0;
+    if (bundleItems.length > 0) {
+      const explicitPct = body.bundleDiscountPct !== undefined ? parseFloat(body.bundleDiscountPct) : null;
+      if (explicitPct !== null && !isNaN(explicitPct)) {
+        bundleDiscountPct = explicitPct;
+      } else if (req.tenantId) {
+        const [biz] = await db.select({ pct: businessProfileTable.bundleDiscountPercent })
+          .from(businessProfileTable)
+          .where(eq(businessProfileTable.tenantId, req.tenantId));
+        bundleDiscountPct = parseFloat(biz?.pct ?? "0") || 0;
+      }
+    }
+
+    const preDiscountTotal = basePrice + bundleItemsTotal + addonsTotal + protectionPlanFee;
+    const bundleDiscountAmount = bundleItems.length > 0 ? preDiscountTotal * (bundleDiscountPct / 100) : 0;
+    const totalPrice = preDiscountTotal - bundleDiscountAmount;
+    const addonsData = addons.length > 0 ? JSON.stringify(addons) : null;
+    const bundleItemsJson = bundleItems.length > 0 ? JSON.stringify(bundleItems) : null;
+
+    const { addons: _addons, bundleItems: _bi, assignedUnitIds: rawUnitIds, agreementSignedAt: _ignoredTs, agreementSignatureDataUrl, ruleInitials: ruleInitialsJson, protectionPlanFee: _ppf, ...restBody } = body;
     const assignedUnitIds = Array.isArray(rawUnitIds) && rawUnitIds.length > 0 ? JSON.stringify(rawUnitIds) : null;
     // Set agreementSignedAt server-side when the customer provides their signature
     const agreementSignedAt = restBody.agreementSignerName ? new Date() : null;
@@ -243,6 +265,8 @@ router.post("/bookings", async (req, res) => {
       tenantId: req.tenantId ?? null,
       totalPrice: String(totalPrice),
       addonsData,
+      bundleItems: bundleItemsJson,
+      bundleDiscountPct: bundleItems.length > 0 ? String(bundleDiscountPct) : null,
       assignedUnitIds,
       agreementSignedAt,
       agreementSignature: agreementSignatureDataUrl ?? null,

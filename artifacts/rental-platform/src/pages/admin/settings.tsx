@@ -800,6 +800,45 @@ export default function AdminSettings() {
                 )}
               </CardContent>
             </Card>
+            {/* Bundle Discount */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Bundle Discount</CardTitle>
+                <CardDescription>
+                  Offer a percentage discount when renters add multiple items to their order.
+                  Set to 0 to disable bundle discounts.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="bundleDiscountPercent">Bundle Discount (%)</Label>
+                  <div className="flex items-center gap-3">
+                    <Input
+                      id="bundleDiscountPercent"
+                      name="bundleDiscountPercent"
+                      type="number"
+                      min="0"
+                      max="50"
+                      step="1"
+                      value={formData.bundleDiscountPercent ?? 0}
+                      onChange={handleChange}
+                      className="max-w-[120px]"
+                    />
+                    <span className="text-sm text-muted-foreground">
+                      {formData.bundleDiscountPercent > 0
+                        ? `${formData.bundleDiscountPercent}% off when renter bundles multiple items`
+                        : "No bundle discount currently active"}
+                    </span>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Applied to the entire order (primary item + bundle items) when the renter adds extra gear.
+                  </p>
+                </div>
+                <Button onClick={doSave} disabled={saving} size="sm">
+                  {saving ? <><RefreshCw className="w-3.5 h-3.5 mr-2 animate-spin" />Saving…</> : "Save Bundle Settings"}
+                </Button>
+              </CardContent>
+            </Card>
           </TabsContent>
 
           {/* ── INTEGRATION ── */}
