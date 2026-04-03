@@ -35,9 +35,18 @@ function formatListing(l: typeof listingsTable.$inferSelect, categoryName?: stri
     categoryName: categoryName ?? null,
     categorySlug: categorySlug ?? null,
     pricePerDay: parseFloat(l.pricePerDay ?? "0"),
+    weekendPrice: l.weekendPrice ? parseFloat(l.weekendPrice) : null,
+    holidayPrice: l.holidayPrice ? parseFloat(l.holidayPrice) : null,
     pricePerWeek: l.pricePerWeek ? parseFloat(l.pricePerWeek) : null,
     pricePerHour: l.pricePerHour ? parseFloat(l.pricePerHour) : null,
     depositAmount: l.depositAmount ? parseFloat(l.depositAmount) : null,
+    halfDayEnabled: l.halfDayEnabled ?? false,
+    halfDayDurationHours: l.halfDayDurationHours ?? null,
+    halfDayRate: l.halfDayRate ? parseFloat(l.halfDayRate) : null,
+    hourlyEnabled: l.hourlyEnabled ?? false,
+    hourlySlots: Array.isArray(l.hourlySlots) ? l.hourlySlots : [],
+    hourlyPerHourEnabled: l.hourlyPerHourEnabled ?? false,
+    hourlyMinimumHours: l.hourlyMinimumHours ?? null,
     availableQuantity: l.quantity,
     imageUrls: Array.isArray(l.imageUrls) ? l.imageUrls : [],
     includedItems: Array.isArray(l.includedItems) ? l.includedItems : [],
@@ -455,9 +464,12 @@ router.put("/listings/:id", async (req, res) => {
     const body = req.body;
     const updateData: Record<string, any> = { ...body, updatedAt: new Date() };
     if (body.pricePerDay !== undefined) updateData.pricePerDay = String(body.pricePerDay);
+    if (body.weekendPrice !== undefined) updateData.weekendPrice = body.weekendPrice != null ? String(body.weekendPrice) : null;
+    if (body.holidayPrice !== undefined) updateData.holidayPrice = body.holidayPrice != null ? String(body.holidayPrice) : null;
     if (body.pricePerWeek !== undefined) updateData.pricePerWeek = body.pricePerWeek != null ? String(body.pricePerWeek) : null;
     if (body.pricePerHour !== undefined) updateData.pricePerHour = body.pricePerHour != null ? String(body.pricePerHour) : null;
     if (body.depositAmount !== undefined) updateData.depositAmount = body.depositAmount != null ? String(body.depositAmount) : null;
+    if (body.halfDayRate !== undefined) updateData.halfDayRate = body.halfDayRate != null ? String(body.halfDayRate) : null;
 
     const whereConditions = [eq(listingsTable.id, Number(req.params.id))];
     if (req.tenantId) whereConditions.push(eq(listingsTable.tenantId, req.tenantId));

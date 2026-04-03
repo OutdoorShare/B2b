@@ -322,6 +322,8 @@ export default function StorefrontBook() {
   const urlStart = searchParams.get("startDate");
   const urlEnd = searchParams.get("endDate");
   const isKiosk = searchParams.get("kiosk") === "1";
+  const urlPricingType = searchParams.get("pricingType");
+  const urlHours = searchParams.get("hours");
 
   const { data: listing, isLoading } = useGetListing(listingId, {
     query: { enabled: !!listingId, queryKey: getGetListingQueryKey(listingId) }
@@ -573,7 +575,70 @@ export default function StorefrontBook() {
     return diff > 0 ? diff : 1;
   }, [dateRange]);
 
-  const subtotal = (listing?.pricePerDay ? parseFloat(String(listing.pricePerDay)) : 0) * days;
+  // ── Sub-day pricing ──────────────────────────────────────────────────────────
+  type SubDayOption =
+    | { type: "half_day"; label: string; price: number; hours: number }
+    | { type: `slot_${number}`; label: string; price: number; hours: number }
+    | { type: "per_hour"; label: string; pricePerHour: number; minHours: number };
+
+  const subDayOptions = useMemo<SubDayOption[]>(() => {
+    if (!listing) return [];
+    const opts: SubDayOption[] = [];
+    if ((listing as any).halfDayEnabled && (listing as any).halfDayRate) {
+      opts.push({
+        type: "half_day",
+        label: `Half Day (${(listing as any).halfDayDurationHours || 4} hrs)`,
+        price: parseFloat(String((listing as any).halfDayRate)),
+        hours: (listing as any).halfDayDurationHours || 4,
+      });
+    }
+    if ((listing as any).hourlyEnabled) {
+      ((listing as any).hourlySlots ?? []).forEach((slot: { label: string; hours: number; price: number }, idx: number) => {
+        opts.push({ type: `slot_${idx}` as `slot_${number}`, label: slot.label, price: slot.price, hours: slot.hours });
+      });
+      if ((listing as any).hourlyPerHourEnabled && listing.pricePerHour) {
+        opts.push({
+          type: "per_hour",
+          label: "Per Hour",
+          pricePerHour: parseFloat(String(listing.pricePerHour)),
+          minHours: (listing as any).hourlyMinimumHours ?? 1,
+        });
+      }
+    }
+    return opts;
+  }, [listing]);
+
+  const hasSubDayOptions = subDayOptions.length > 0;
+  const isOneDay = days === 1;
+
+  // selectedPricingType: null = full day, or a sub-day type (can be pre-set from URL)
+  const [selectedPricingType, setSelectedPricingType] = useState<string | null>(urlPricingType ?? null);
+  const [selectedHours, setSelectedHours] = useState<number>(() => {
+    if (urlHours) return parseInt(urlHours) || 1;
+    return listing ? ((listing as any).hourlyMinimumHours ?? 1) : 1;
+  });
+
+  // Reset to full day when multi-day selected
+  useEffect(() => {
+    if (!isOneDay) setSelectedPricingType(null);
+  }, [isOneDay]);
+
+  // Sync min hours when listing loads
+  useEffect(() => {
+    if (listing) setSelectedHours((listing as any).hourlyMinimumHours ?? 1);
+  }, [listing]);
+
+  const selectedOption = subDayOptions.find(o => o.type === selectedPricingType) ?? null;
+
+  const fullDayPrice = listing?.pricePerDay ? parseFloat(String(listing.pricePerDay)) : 0;
+
+  const subtotal = useMemo(() => {
+    if (!isOneDay || !selectedOption) return fullDayPrice * days;
+    if (selectedOption.type === "half_day") return selectedOption.price;
+    if (selectedOption.type.startsWith("slot_")) return (selectedOption as any).price;
+    if (selectedOption.type === "per_hour") return (selectedOption as any).pricePerHour * selectedHours;
+    return fullDayPrice * days;
+  }, [isOneDay, selectedOption, fullDayPrice, days, selectedHours]);
   const deposit = listing?.depositAmount ? parseFloat(String(listing.depositAmount)) : 0;
   const addonsSubtotal = useMemo(() => {
     return availableAddons
@@ -1221,6 +1286,90 @@ export default function StorefrontBook() {
                         </div>
                       </div>
                     )}
+                  </div>
+                )}
+
+                {/* ── Sub-Day Pricing Selector ── */}
+                {hasSubDayOptions && isOneDay && (
+                  <div className="rounded-2xl border p-4 space-y-3">
+                    <div>
+                      <p className="font-semibold text-sm mb-0.5">Rental Type</p>
+                      <p className="text-xs text-muted-foreground">Choose how long you need it for this day.</p>
+                    </div>
+                    <div className="grid gap-2">
+                      {/* Full Day option */}
+                      <button
+                        type="button"
+                        onClick={() => setSelectedPricingType(null)}
+                        className={`flex items-center justify-between rounded-xl border px-4 py-3 text-left transition-colors ${
+                          selectedPricingType === null
+                            ? "border-primary bg-primary/5 ring-1 ring-primary"
+                            : "hover:bg-muted/50"
+                        }`}
+                      >
+                        <div>
+                          <p className="text-sm font-medium">Full Day</p>
+                        </div>
+                        <p className="text-sm font-bold">${fullDayPrice.toFixed(2)}</p>
+                      </button>
+
+                      {subDayOptions.map(opt => (
+                        <button
+                          key={opt.type}
+                          type="button"
+                          onClick={() => {
+                            setSelectedPricingType(opt.type);
+                            if (opt.type === "per_hour") setSelectedHours((opt as any).minHours ?? 1);
+                          }}
+                          className={`flex items-center justify-between rounded-xl border px-4 py-3 text-left transition-colors ${
+                            selectedPricingType === opt.type
+                              ? "border-primary bg-primary/5 ring-1 ring-primary"
+                              : "hover:bg-muted/50"
+                          }`}
+                        >
+                          <div>
+                            <p className="text-sm font-medium">{opt.label}</p>
+                            {opt.type !== "per_hour" && (opt as any).hours && (
+                              <p className="text-xs text-muted-foreground">{(opt as any).hours} hr{(opt as any).hours !== 1 ? "s" : ""}</p>
+                            )}
+                          </div>
+                          <p className="text-sm font-bold">
+                            {opt.type === "per_hour"
+                              ? `$${(opt as any).pricePerHour.toFixed(2)}/hr`
+                              : `$${(opt as any).price.toFixed(2)}`}
+                          </p>
+                        </button>
+                      ))}
+                    </div>
+
+                    {/* Per-hour selector */}
+                    {selectedPricingType === "per_hour" && (() => {
+                      const opt = selectedOption as { type: "per_hour"; pricePerHour: number; minHours: number } | null;
+                      if (!opt) return null;
+                      return (
+                        <div className="border-t pt-3 space-y-2">
+                          <div className="flex items-center justify-between">
+                            <p className="text-sm font-medium">Number of Hours</p>
+                            <p className="text-xs text-muted-foreground">Min: {opt.minHours} hr{opt.minHours !== 1 ? "s" : ""}</p>
+                          </div>
+                          <div className="flex items-center gap-3">
+                            <button
+                              type="button"
+                              onClick={() => setSelectedHours(h => Math.max(opt.minHours, h - 1))}
+                              className="w-8 h-8 rounded-full border flex items-center justify-center text-lg font-bold hover:bg-muted transition-colors disabled:opacity-30"
+                              disabled={selectedHours <= opt.minHours}
+                            >−</button>
+                            <span className="font-bold text-lg w-12 text-center">{selectedHours}</span>
+                            <button
+                              type="button"
+                              onClick={() => setSelectedHours(h => h + 1)}
+                              className="w-8 h-8 rounded-full border flex items-center justify-center text-lg font-bold hover:bg-muted transition-colors"
+                            >+</button>
+                            <span className="text-sm text-muted-foreground">× ${opt.pricePerHour.toFixed(2)}/hr = <span className="font-bold text-foreground">${(opt.pricePerHour * selectedHours).toFixed(2)}</span></span>
+                          </div>
+                        </div>
+                      );
+                    })()}
                   </div>
                 )}
 
@@ -2442,7 +2591,15 @@ export default function StorefrontBook() {
                         </div>
                       </div>
                       <div className="flex justify-between text-muted-foreground">
-                        <span>${listing.pricePerDay}/day × {days} day{days > 1 ? "s" : ""}</span>
+                        {selectedOption && isOneDay ? (
+                          <span>
+                            {selectedOption.type === "per_hour"
+                              ? `${selectedHours} hr${selectedHours !== 1 ? "s" : ""} × $${(selectedOption as any).pricePerHour.toFixed(2)}/hr`
+                              : selectedOption.label}
+                          </span>
+                        ) : (
+                          <span>${fullDayPrice.toFixed(2)}/day × {days} day{days > 1 ? "s" : ""}</span>
+                        )}
                         <span>${subtotal.toFixed(2)}</span>
                       </div>
                       {availableAddons.filter(a => selectedAddonIds.has(a.id)).map(a => (

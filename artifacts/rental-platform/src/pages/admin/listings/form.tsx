@@ -16,8 +16,9 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { ArrowLeft, Upload, X, CheckCircle2, AlertCircle, CircleDashed, ImagePlus, Loader2, IdCard, Sparkles, ChevronDown, ChevronUp, RefreshCw, Info } from "lucide-react";
+import { ArrowLeft, Upload, X, CheckCircle2, AlertCircle, CircleDashed, ImagePlus, Loader2, IdCard, Sparkles, ChevronDown, ChevronUp, RefreshCw, Info, Plus, Trash2 } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Checkbox } from "@/components/ui/checkbox";
 import { AddonManager } from "@/components/addon-manager";
 import { UnitIdentifiersManager } from "@/components/unit-identifiers-manager";
 import { getAdminSession } from "@/lib/admin-nav";
@@ -114,9 +115,18 @@ export default function AdminListingsForm() {
     categoryId: null as number | null,
     status: 'draft' as any,
     pricePerDay: 0,
+    weekendPrice: null as number | null,
+    holidayPrice: null as number | null,
     pricePerWeek: null as number | null,
     pricePerHour: null as number | null,
     depositAmount: null as number | null,
+    halfDayEnabled: false,
+    halfDayDurationHours: 4 as number | null,
+    halfDayRate: null as number | null,
+    hourlyEnabled: false,
+    hourlySlots: [] as { label: string; hours: number; price: number }[],
+    hourlyPerHourEnabled: false,
+    hourlyMinimumHours: 1 as number | null,
     quantity: 1,
     imageUrls: [] as string[],
     location: '',
@@ -133,6 +143,18 @@ export default function AdminListingsForm() {
 
   const [includedItemInput, setIncludedItemInput] = useState('');
   const [imageUrlInput, setImageUrlInput] = useState('');
+  const [slotDraft, setSlotDraft] = useState<{ label: string; hours: string; price: string }>({ label: '', hours: '', price: '' });
+
+  const addHourlySlot = () => {
+    const hours = parseFloat(slotDraft.hours);
+    const price = parseFloat(slotDraft.price);
+    if (!slotDraft.label.trim() || isNaN(hours) || hours <= 0 || isNaN(price) || price < 0) return;
+    setFormData(prev => ({ ...prev, hourlySlots: [...prev.hourlySlots, { label: slotDraft.label.trim(), hours, price }] }));
+    setSlotDraft({ label: '', hours: '', price: '' });
+  };
+  const removeHourlySlot = (idx: number) => {
+    setFormData(prev => ({ ...prev, hourlySlots: prev.hourlySlots.filter((_, i) => i !== idx) }));
+  };
 
   // AI description generator state
   const [aiPanelOpen, setAiPanelOpen] = useState(false);
@@ -185,9 +207,18 @@ export default function AdminListingsForm() {
         categoryId: listing.categoryId || null,
         status: listing.status,
         pricePerDay: listing.pricePerDay,
+        weekendPrice: (listing as any).weekendPrice ?? null,
+        holidayPrice: (listing as any).holidayPrice ?? null,
         pricePerWeek: listing.pricePerWeek ?? null,
         pricePerHour: listing.pricePerHour ?? null,
         depositAmount: listing.depositAmount ?? null,
+        halfDayEnabled: (listing as any).halfDayEnabled ?? false,
+        halfDayDurationHours: (listing as any).halfDayDurationHours ?? 4,
+        halfDayRate: (listing as any).halfDayRate ?? null,
+        hourlyEnabled: (listing as any).hourlyEnabled ?? false,
+        hourlySlots: (listing as any).hourlySlots ?? [],
+        hourlyPerHourEnabled: (listing as any).hourlyPerHourEnabled ?? false,
+        hourlyMinimumHours: (listing as any).hourlyMinimumHours ?? 1,
         quantity: listing.quantity,
         imageUrls: listing.imageUrls || [],
         location: listing.location || '',
@@ -604,6 +635,184 @@ export default function AdminListingsForm() {
                           />
                         </div>
                       ))}
+                    </div>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* Sub-Day Pricing Options */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Pricing Options</CardTitle>
+                <CardDescription>Enable sub-day pricing for renters booking a single day. Options only appear to renters when applicable.</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-5">
+
+                {/* Toggle row */}
+                <div className="flex flex-wrap gap-5">
+                  <label className="flex items-center gap-2 cursor-pointer select-none">
+                    <Checkbox checked={true} disabled className="opacity-50" />
+                    <span className="text-sm font-medium text-muted-foreground">Full Day (always on)</span>
+                  </label>
+                  <label className="flex items-center gap-2 cursor-pointer select-none">
+                    <Checkbox
+                      checked={formData.halfDayEnabled}
+                      onCheckedChange={v => setFormData(prev => ({ ...prev, halfDayEnabled: !!v }))}
+                    />
+                    <span className="text-sm font-medium">Half Day Pricing</span>
+                  </label>
+                  <label className="flex items-center gap-2 cursor-pointer select-none">
+                    <Checkbox
+                      checked={formData.hourlyEnabled}
+                      onCheckedChange={v => setFormData(prev => ({ ...prev, hourlyEnabled: !!v }))}
+                    />
+                    <span className="text-sm font-medium">Hourly Pricing</span>
+                  </label>
+                </div>
+
+                {/* Full Day section — weekend & holiday */}
+                <div className="rounded-xl border p-4 space-y-3">
+                  <p className="text-sm font-semibold">Full Day Pricing</p>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <div className="space-y-1.5">
+                      <Label className="text-xs">Weekday Price ($) <span className="text-destructive">*</span></Label>
+                      <Input
+                        type="number" min="0" step="0.01"
+                        value={formData.pricePerDay || ''}
+                        onChange={e => setFormData(prev => ({ ...prev, pricePerDay: parseFloat(e.target.value) || 0 }))}
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label className="text-xs">Weekend Price ($)</Label>
+                      <Input
+                        type="number" min="0" step="0.01"
+                        placeholder="Same as weekday"
+                        value={formData.weekendPrice ?? ''}
+                        onChange={e => setFormData(prev => ({ ...prev, weekendPrice: e.target.value ? parseFloat(e.target.value) : null }))}
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label className="text-xs">Holiday Price ($)</Label>
+                      <Input
+                        type="number" min="0" step="0.01"
+                        placeholder="Same as weekday"
+                        value={formData.holidayPrice ?? ''}
+                        onChange={e => setFormData(prev => ({ ...prev, holidayPrice: e.target.value ? parseFloat(e.target.value) : null }))}
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Half Day section */}
+                {formData.halfDayEnabled && (
+                  <div className="rounded-xl border p-4 space-y-3">
+                    <p className="text-sm font-semibold">Half Day Pricing</p>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="space-y-1.5">
+                        <Label className="text-xs">Duration (hours)</Label>
+                        <Input
+                          type="number" min="1" step="1"
+                          placeholder="4"
+                          value={formData.halfDayDurationHours ?? ''}
+                          onChange={e => setFormData(prev => ({ ...prev, halfDayDurationHours: e.target.value ? parseInt(e.target.value) : null }))}
+                        />
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label className="text-xs">Flat Rate ($)</Label>
+                        <Input
+                          type="number" min="0" step="0.01"
+                          placeholder="0.00"
+                          value={formData.halfDayRate ?? ''}
+                          onChange={e => setFormData(prev => ({ ...prev, halfDayRate: e.target.value ? parseFloat(e.target.value) : null }))}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Hourly section */}
+                {formData.hourlyEnabled && (
+                  <div className="rounded-xl border p-4 space-y-4">
+                    <p className="text-sm font-semibold">Hourly Pricing</p>
+
+                    {/* Named slots */}
+                    <div className="space-y-2">
+                      <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Available Hour Options</p>
+                      {formData.hourlySlots.length > 0 && (
+                        <div className="space-y-2">
+                          {formData.hourlySlots.map((slot, idx) => (
+                            <div key={idx} className="flex items-center gap-2 bg-muted/30 rounded-lg px-3 py-2">
+                              <span className="flex-1 text-sm font-medium">{slot.label}</span>
+                              <span className="text-xs text-muted-foreground">{slot.hours} hr{slot.hours !== 1 ? "s" : ""}</span>
+                              <span className="text-xs font-semibold">${slot.price.toFixed(2)}</span>
+                              <button type="button" onClick={() => removeHourlySlot(idx)} className="text-muted-foreground hover:text-destructive transition-colors ml-1">
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                      {/* Add slot row */}
+                      <div className="flex gap-2">
+                        <Input
+                          className="flex-1 h-8 text-xs"
+                          placeholder="Label (e.g. Morning 8–12pm)"
+                          value={slotDraft.label}
+                          onChange={e => setSlotDraft(prev => ({ ...prev, label: e.target.value }))}
+                        />
+                        <Input
+                          className="w-20 h-8 text-xs"
+                          placeholder="Hrs"
+                          type="number" min="0.5" step="0.5"
+                          value={slotDraft.hours}
+                          onChange={e => setSlotDraft(prev => ({ ...prev, hours: e.target.value }))}
+                        />
+                        <Input
+                          className="w-20 h-8 text-xs"
+                          placeholder="$"
+                          type="number" min="0" step="0.01"
+                          value={slotDraft.price}
+                          onChange={e => setSlotDraft(prev => ({ ...prev, price: e.target.value }))}
+                        />
+                        <Button type="button" variant="secondary" size="sm" className="h-8 px-2 shrink-0" onClick={addHourlySlot}>
+                          <Plus className="w-3.5 h-3.5" />
+                        </Button>
+                      </div>
+                      <p className="text-[11px] text-muted-foreground">Renters choose one slot when booking a single day. Leave empty to not offer fixed slots.</p>
+                    </div>
+
+                    <div className="border-t pt-3 space-y-2">
+                      <label className="flex items-center gap-2 cursor-pointer select-none">
+                        <Checkbox
+                          checked={formData.hourlyPerHourEnabled}
+                          onCheckedChange={v => setFormData(prev => ({ ...prev, hourlyPerHourEnabled: !!v }))}
+                        />
+                        <span className="text-sm font-medium">Per Hourly Pricing</span>
+                      </label>
+                      {formData.hourlyPerHourEnabled && (
+                        <div className="grid grid-cols-2 gap-3 pt-1">
+                          <div className="space-y-1.5">
+                            <Label className="text-xs">Price per Hour ($)</Label>
+                            <Input
+                              type="number" min="0" step="0.01"
+                              placeholder="0.00"
+                              value={formData.pricePerHour ?? ''}
+                              onChange={e => setFormData(prev => ({ ...prev, pricePerHour: e.target.value ? parseFloat(e.target.value) : null }))}
+                            />
+                          </div>
+                          <div className="space-y-1.5">
+                            <Label className="text-xs">Minimum Hours</Label>
+                            <Input
+                              type="number" min="1" step="1"
+                              placeholder="1"
+                              value={formData.hourlyMinimumHours ?? ''}
+                              onChange={e => setFormData(prev => ({ ...prev, hourlyMinimumHours: e.target.value ? parseInt(e.target.value) : null }))}
+                            />
+                            <p className="text-[11px] text-muted-foreground">Renters must book at least this many hours.</p>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   </div>
                 )}
