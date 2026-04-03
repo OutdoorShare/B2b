@@ -1210,11 +1210,15 @@ export default function StorefrontBook() {
         {/* Back button — hide during verification, photos, and confirmed */}
         {completePhase !== "verification" && completePhase !== "photos" && completePhase !== "confirmed" && (
           <Button variant="ghost" className="mb-6 pl-0 hover:bg-transparent text-muted-foreground" onClick={() => {
-            if (step === "book") { window.history.back(); }
-            else { setStep("book"); window.scrollTo({ top: 0, behavior: "smooth" }); }
+            if (step === "book") {
+              if (isKiosk) { setLocation(sfBase || "/"); }
+              else { window.history.back(); }
+            } else {
+              setStep("book"); window.scrollTo({ top: 0, behavior: "smooth" });
+            }
           }}>
             <ArrowLeft className="w-4 h-4 mr-2" />
-            {step === "book" ? "Back to listing" : "Back"}
+            {step === "book" ? (isKiosk ? "Back to Listings" : "Back to listing") : "Back"}
           </Button>
         )}
 
