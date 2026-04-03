@@ -176,6 +176,8 @@ function RenterPanel({
       <div className="flex gap-2 p-4 border-b">
         <a
           href={`mailto:${renter.email}`}
+          target="_top"
+          rel="noopener noreferrer"
           className="flex-1 flex items-center justify-center gap-2 h-9 rounded-lg border bg-background hover:bg-muted transition-colors text-sm font-medium"
         >
           <Mail className="w-4 h-4" /> Email
@@ -183,6 +185,8 @@ function RenterPanel({
         {renter.phone && (
           <a
             href={`tel:${renter.phone}`}
+            target="_top"
+            rel="noopener noreferrer"
             className="flex-1 flex items-center justify-center gap-2 h-9 rounded-lg border bg-background hover:bg-muted transition-colors text-sm font-medium"
           >
             <Phone className="w-4 h-4" /> Call
