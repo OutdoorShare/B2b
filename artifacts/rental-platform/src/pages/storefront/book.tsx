@@ -367,6 +367,8 @@ export default function StorefrontBook() {
   const [paymentConfirmed, setPaymentConfirmed] = useState(false);
   const [isTestMode, setIsTestMode] = useState(false);
   const [showStripeForm, setShowStripeForm] = useState(false);
+  // Prevents the auto-create effect from firing again when email/name change after intent is already in flight
+  const intentFiredRef = useRef(false);
 
   // Kiosk QR-pay
   const [kioskPayMode, setKioskPayMode] = useState<"card" | "qr">("card");
@@ -897,16 +899,19 @@ export default function StorefrontBook() {
     }
   }, [slug, email, name, listingId, toast]);
 
-  // Auto-create payment intent for logged-in or kiosk users
-  // Kiosk: pre-create as soon as dates + total are ready (no name/email required yet — those are optional metadata)
-  // Logged-in: wait for email+name since they're pulled from session
+  // Auto-create payment intent for logged-in or kiosk users.
+  // Kiosk: fires as soon as dates + total are ready — no name/email needed yet.
+  // Logged-in: waits for session email+name.
+  // intentFiredRef prevents this from re-firing every time the user types in the email field,
+  // which would spam Stripe with partial/invalid emails on every keystroke.
   useEffect(() => {
     if (!session && !isKiosk) return;
-    if (clientSecret) return;
-    if (paymentConfirmed) return;
-    if (!isKiosk && (!email || !name)) return;   // logged-in path still needs session info
+    if (clientSecret || paymentConfirmed) return;
+    if (intentFiredRef.current) return;
+    if (!isKiosk && (!email || !name)) return;
     if (!dateRange?.from || !dateRange?.to) return;
     if (discountedTotal <= 0) return;
+    intentFiredRef.current = true;
     const cents = Math.round(discountedTotal * 100);
     setShowStripeForm(true);
     createPaymentIntent(cents);
