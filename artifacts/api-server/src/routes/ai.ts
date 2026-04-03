@@ -447,9 +447,9 @@ router.post("/ai/chat", async (req: Request, res: Response) => {
   res.end();
 });
 
-// ── POST /api/listings/generate-description ────────────────────────────────────
+// ── POST /api/ai/generate-description ─────────────────────────────────────────
 
-router.post("/listings/generate-description", async (req: Request, res: Response) => {
+router.post("/ai/generate-description", async (req: Request, res: Response) => {
   const auth = await requireAdminOrSuperAdmin(req);
   if (!auth) return res.status(401).json({ error: "Unauthorized" });
 

@@ -131,7 +131,7 @@ export default function AdminListingsForm() {
       const headers: Record<string, string> = { 'Content-Type': 'application/json' };
       if (s?.token) headers['x-admin-token'] = s.token;
       const categoryName = categories.find(c => c.id === formData.categoryId)?.name ?? '';
-      const res = await fetch(`${BASE}/api/listings/generate-description`, {
+      const res = await fetch(`${BASE}/api/ai/generate-description`, {
         method: 'POST',
         headers,
         body: JSON.stringify({
