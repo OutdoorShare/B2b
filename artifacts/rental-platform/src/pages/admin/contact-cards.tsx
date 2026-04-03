@@ -4,7 +4,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter
@@ -14,7 +13,10 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger
 } from "@/components/ui/alert-dialog";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, MapPin, Phone, Mail, FileText, Pencil, Trash2, IdCard, Info } from "lucide-react";
+import {
+  Plus, MapPin, Phone, Mail, FileText, Pencil, Trash2, IdCard, Info,
+  Shirt, ShoppingBag, Truck, Lightbulb, ChevronDown, ChevronUp
+} from "lucide-react";
 import { getAdminSession } from "@/lib/admin-nav";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
@@ -32,6 +34,10 @@ interface ContactCard {
   phone: string | null;
   email: string | null;
   specialInstructions: string | null;
+  prepWhatToWear: string | null;
+  prepWhatToBring: string | null;
+  prepVehicleTowRating: string | null;
+  prepAdditionalTips: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -42,13 +48,24 @@ interface CardFormData {
   phone: string;
   email: string;
   specialInstructions: string;
+  prepWhatToWear: string;
+  prepWhatToBring: string;
+  prepVehicleTowRating: string;
+  prepAdditionalTips: string;
 }
 
-const emptyForm: CardFormData = { name: "", address: "", phone: "", email: "", specialInstructions: "" };
+const emptyForm: CardFormData = {
+  name: "", address: "", phone: "", email: "", specialInstructions: "",
+  prepWhatToWear: "", prepWhatToBring: "", prepVehicleTowRating: "", prepAdditionalTips: "",
+};
 
 function authHeaders() {
   const s = getAdminSession();
   return s?.token ? { "x-admin-token": s.token, "Content-Type": "application/json" } : { "Content-Type": "application/json" };
+}
+
+function hasPrepGuide(card: ContactCard) {
+  return !!(card.prepWhatToWear || card.prepWhatToBring || card.prepVehicleTowRating || card.prepAdditionalTips);
 }
 
 export default function ContactCards() {
@@ -59,6 +76,7 @@ export default function ContactCards() {
   const [editingCard, setEditingCard] = useState<ContactCard | null>(null);
   const [form, setForm] = useState<CardFormData>(emptyForm);
   const [saving, setSaving] = useState(false);
+  const [prepExpanded, setPrepExpanded] = useState(false);
 
   const fetchCards = async () => {
     setLoading(true);
@@ -76,7 +94,13 @@ export default function ContactCards() {
 
   useEffect(() => { fetchCards(); }, []);
 
-  const openCreate = () => { setEditingCard(null); setForm(emptyForm); setDialogOpen(true); };
+  const openCreate = () => {
+    setEditingCard(null);
+    setForm(emptyForm);
+    setPrepExpanded(false);
+    setDialogOpen(true);
+  };
+
   const openEdit = (card: ContactCard) => {
     setEditingCard(card);
     setForm({
@@ -85,7 +109,12 @@ export default function ContactCards() {
       phone: card.phone ?? "",
       email: card.email ?? "",
       specialInstructions: card.specialInstructions ?? "",
+      prepWhatToWear: card.prepWhatToWear ?? "",
+      prepWhatToBring: card.prepWhatToBring ?? "",
+      prepVehicleTowRating: card.prepVehicleTowRating ?? "",
+      prepAdditionalTips: card.prepAdditionalTips ?? "",
     });
+    setPrepExpanded(hasPrepGuide(card));
     setDialogOpen(true);
   };
 
@@ -122,13 +151,16 @@ export default function ContactCards() {
     }
   };
 
+  const f = (key: keyof CardFormData) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
+    setForm(p => ({ ...p, [key]: e.target.value }));
+
   return (
     <div className="space-y-6">
       <div className="flex items-start justify-between">
         <div>
           <h2 className="text-3xl font-bold tracking-tight">Contact Cards</h2>
           <p className="text-muted-foreground mt-1">
-            Create reusable contact cards with pickup location, phone, email, and special instructions. Assign them to listings — when a booking is approved, the renter automatically receives the card by email.
+            Create reusable contact cards with pickup info and a rental preparation guide. Assign them to listings — renters see the card automatically at booking confirmation.
           </p>
         </div>
         <Button onClick={openCreate} className="gap-2 shrink-0">
@@ -137,14 +169,13 @@ export default function ContactCards() {
         </Button>
       </div>
 
-      {/* How it works banner */}
       <div className="rounded-xl border border-blue-200 bg-blue-50 dark:bg-blue-950/20 dark:border-blue-800 p-4 flex gap-3">
         <Info className="w-5 h-5 text-blue-600 dark:text-blue-400 shrink-0 mt-0.5" />
         <div className="text-sm text-blue-700 dark:text-blue-300 space-y-1">
           <p className="font-semibold">How contact cards work</p>
           <p>
-            When a booking is confirmed, the renter automatically receives an email containing the contact card assigned to that listing — including the pickup address, your phone number, email, and any special instructions.
-            You'll also receive a notification with the renter's contact details so you can coordinate pickup.
+            When a booking is confirmed online, the renter sees the contact card on the confirmation screen — including your pickup address, phone, email, special instructions, and a rental preparation guide (what to wear, what to bring, tow requirements, and more).
+            You'll also receive a notification with the renter's contact details for coordination.
           </p>
           <p className="text-xs text-blue-600 dark:text-blue-400">Assign a card to a listing by editing the listing and selecting a contact card at the bottom of the form.</p>
         </div>
@@ -227,10 +258,16 @@ export default function ContactCards() {
                 {card.specialInstructions && (
                   <div className="flex items-start gap-2 text-muted-foreground">
                     <FileText className="w-3.5 h-3.5 shrink-0 mt-0.5 text-primary" />
-                    <span className="line-clamp-3 text-xs leading-relaxed">{card.specialInstructions}</span>
+                    <span className="line-clamp-2 text-xs leading-relaxed">{card.specialInstructions}</span>
                   </div>
                 )}
-                {!card.address && !card.phone && !card.email && !card.specialInstructions && (
+                {hasPrepGuide(card) && (
+                  <div className="flex items-center gap-2 text-xs text-emerald-700 bg-emerald-50 dark:bg-emerald-950/30 dark:text-emerald-400 rounded-md px-2.5 py-1.5 mt-1">
+                    <Lightbulb className="w-3 h-3 shrink-0" />
+                    Preparation guide included
+                  </div>
+                )}
+                {!card.address && !card.phone && !card.email && !card.specialInstructions && !hasPrepGuide(card) && (
                   <p className="text-xs text-muted-foreground italic">No details added yet</p>
                 )}
               </CardContent>
@@ -241,81 +278,154 @@ export default function ContactCards() {
 
       {/* Create / Edit Dialog */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="sm:max-w-lg">
+        <DialogContent className="sm:max-w-xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>{editingCard ? "Edit Contact Card" : "New Contact Card"}</DialogTitle>
             <DialogDescription>
-              This information is sent to renters when their booking is confirmed. The address is included for renters; your internal notification omits it.
+              This information is displayed to renters on their booking confirmation screen and sent by email.
             </DialogDescription>
           </DialogHeader>
 
-          <div className="space-y-4 py-2">
+          <div className="space-y-5 py-2">
+            {/* Card name */}
             <div className="space-y-1.5">
               <Label htmlFor="cc-name">Card name <span className="text-destructive">*</span></Label>
               <Input
                 id="cc-name"
                 placeholder="e.g., Main Location, Trailhead Parking Lot"
                 value={form.name}
-                onChange={e => setForm(p => ({ ...p, name: e.target.value }))}
+                onChange={f("name")}
               />
-              <p className="text-xs text-muted-foreground">A label to identify this card (not shown to renters)</p>
+              <p className="text-xs text-muted-foreground">A label to identify this card internally (not shown to renters)</p>
             </div>
 
-            <div className="space-y-1.5">
-              <Label htmlFor="cc-address" className="flex items-center gap-1.5">
-                <MapPin className="w-3.5 h-3.5 text-primary" />
-                Pickup Address
-              </Label>
-              <Textarea
-                id="cc-address"
-                placeholder="123 Main St, Anytown, CA 90210"
-                rows={2}
-                value={form.address}
-                onChange={e => setForm(p => ({ ...p, address: e.target.value }))}
-              />
-            </div>
+            {/* Contact Info */}
+            <div className="space-y-4 rounded-xl border p-4">
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Contact Information</p>
 
-            <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
-                <Label htmlFor="cc-phone" className="flex items-center gap-1.5">
-                  <Phone className="w-3.5 h-3.5 text-primary" />
-                  Phone
+                <Label htmlFor="cc-address" className="flex items-center gap-1.5">
+                  <MapPin className="w-3.5 h-3.5 text-primary" />
+                  Pickup Address
                 </Label>
-                <Input
-                  id="cc-phone"
-                  type="tel"
-                  placeholder="(555) 123-4567"
-                  value={form.phone}
-                  onChange={e => setForm(p => ({ ...p, phone: e.target.value }))}
+                <Textarea
+                  id="cc-address"
+                  placeholder="123 Main St, Anytown, CA 90210"
+                  rows={2}
+                  value={form.address}
+                  onChange={f("address")}
                 />
               </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <Label htmlFor="cc-phone" className="flex items-center gap-1.5">
+                    <Phone className="w-3.5 h-3.5 text-primary" />
+                    Phone
+                  </Label>
+                  <Input id="cc-phone" type="tel" placeholder="(555) 123-4567" value={form.phone} onChange={f("phone")} />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="cc-email" className="flex items-center gap-1.5">
+                    <Mail className="w-3.5 h-3.5 text-primary" />
+                    Email
+                  </Label>
+                  <Input id="cc-email" type="email" placeholder="info@yourcompany.com" value={form.email} onChange={f("email")} />
+                </div>
+              </div>
+
               <div className="space-y-1.5">
-                <Label htmlFor="cc-email" className="flex items-center gap-1.5">
-                  <Mail className="w-3.5 h-3.5 text-primary" />
-                  Email
+                <Label htmlFor="cc-instructions" className="flex items-center gap-1.5">
+                  <FileText className="w-3.5 h-3.5 text-primary" />
+                  Special Instructions
                 </Label>
-                <Input
-                  id="cc-email"
-                  type="email"
-                  placeholder="info@yourcompany.com"
-                  value={form.email}
-                  onChange={e => setForm(p => ({ ...p, email: e.target.value }))}
+                <Textarea
+                  id="cc-instructions"
+                  placeholder="e.g., Call 30 minutes before arrival. Park in the gravel lot on the left."
+                  rows={3}
+                  value={form.specialInstructions}
+                  onChange={f("specialInstructions")}
                 />
               </div>
             </div>
 
-            <div className="space-y-1.5">
-              <Label htmlFor="cc-instructions" className="flex items-center gap-1.5">
-                <FileText className="w-3.5 h-3.5 text-primary" />
-                Special Instructions
-              </Label>
-              <Textarea
-                id="cc-instructions"
-                placeholder="e.g., Call 30 minutes before arrival. Park in the gravel lot on the left. Check in at the red barn."
-                rows={4}
-                value={form.specialInstructions}
-                onChange={e => setForm(p => ({ ...p, specialInstructions: e.target.value }))}
-              />
+            {/* Preparation Guide — collapsible */}
+            <div className="rounded-xl border overflow-hidden">
+              <button
+                type="button"
+                onClick={() => setPrepExpanded(v => !v)}
+                className="w-full flex items-center justify-between px-4 py-3 bg-muted/40 hover:bg-muted/60 transition-colors text-left"
+              >
+                <div className="flex items-center gap-2">
+                  <Lightbulb className="w-4 h-4 text-primary" />
+                  <span className="text-sm font-semibold">Rental Preparation Guide</span>
+                  <span className="text-xs text-muted-foreground ml-1">(optional)</span>
+                </div>
+                {prepExpanded ? <ChevronUp className="w-4 h-4 text-muted-foreground" /> : <ChevronDown className="w-4 h-4 text-muted-foreground" />}
+              </button>
+
+              {prepExpanded && (
+                <div className="p-4 space-y-4">
+                  <p className="text-xs text-muted-foreground">
+                    Shown to renters on their confirmation screen to help them prepare for pickup. Leave any field blank to hide it.
+                  </p>
+
+                  <div className="space-y-1.5">
+                    <Label htmlFor="cc-wear" className="flex items-center gap-1.5">
+                      <Shirt className="w-3.5 h-3.5 text-primary" />
+                      What to Wear
+                    </Label>
+                    <Textarea
+                      id="cc-wear"
+                      placeholder="e.g., Wear closed-toe shoes and weather-appropriate layers. Sun protection recommended."
+                      rows={2}
+                      value={form.prepWhatToWear}
+                      onChange={f("prepWhatToWear")}
+                    />
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <Label htmlFor="cc-bring" className="flex items-center gap-1.5">
+                      <ShoppingBag className="w-3.5 h-3.5 text-primary" />
+                      What to Bring
+                    </Label>
+                    <Textarea
+                      id="cc-bring"
+                      placeholder="e.g., Valid driver's license, water, snacks, sunscreen, a fully charged phone."
+                      rows={2}
+                      value={form.prepWhatToBring}
+                      onChange={f("prepWhatToBring")}
+                    />
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <Label htmlFor="cc-tow" className="flex items-center gap-1.5">
+                      <Truck className="w-3.5 h-3.5 text-primary" />
+                      Vehicle / Tow Rating Requirements
+                    </Label>
+                    <Input
+                      id="cc-tow"
+                      placeholder="e.g., Minimum 3,500 lb tow rating. Class III hitch required. 4WD recommended."
+                      value={form.prepVehicleTowRating}
+                      onChange={f("prepVehicleTowRating")}
+                    />
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <Label htmlFor="cc-tips" className="flex items-center gap-1.5">
+                      <Lightbulb className="w-3.5 h-3.5 text-primary" />
+                      Additional Tips
+                    </Label>
+                    <Textarea
+                      id="cc-tips"
+                      placeholder="e.g., Arrive 15 minutes early for a walkthrough. Download offline maps. Check weather before departure."
+                      rows={2}
+                      value={form.prepAdditionalTips}
+                      onChange={f("prepAdditionalTips")}
+                    />
+                  </div>
+                </div>
+              )}
             </div>
           </div>
 

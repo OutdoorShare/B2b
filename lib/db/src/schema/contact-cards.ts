@@ -8,6 +8,11 @@ export const contactCardsTable = pgTable("contact_cards", {
   phone: text("phone"),
   email: text("email"),
   specialInstructions: text("special_instructions"),
+  // Rental Preparation Guide
+  prepWhatToWear: text("prep_what_to_wear"),
+  prepWhatToBring: text("prep_what_to_bring"),
+  prepVehicleTowRating: text("prep_vehicle_tow_rating"),
+  prepAdditionalTips: text("prep_additional_tips"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });

@@ -20,7 +20,8 @@ import {
   Zap, AlertTriangle, Umbrella, Star, Loader2, BadgeCheck,
   ScanFace, RefreshCw, XCircle, Clock, Tag, Monitor, QrCode, Smartphone,
   ScanLine, X, Copy, Check, Upload, ImagePlus, Car, Mountain, BookOpen, Building2, Package,
-  Minus, Plus, LogIn, MapPin, Phone, Mail, IdCard, ExternalLink
+  Minus, Plus, LogIn, MapPin, Phone, Mail, IdCard, ExternalLink,
+  Shirt, ShoppingBag, Truck, Lightbulb
 } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { differenceInDays, format, addDays, eachDayOfInterval, parseISO, isBefore, isAfter, startOfDay } from "date-fns";
@@ -3134,44 +3135,114 @@ export default function StorefrontBook() {
 
                     {/* ── Contact Card + Copy Booking Link ── */}
                     {(() => {
-                      const cc = (listing as any)?.contactCard as { name: string; address?: string | null; phone?: string | null; email?: string | null; specialInstructions?: string | null } | null;
+                      type CC = {
+                        name: string;
+                        address?: string | null;
+                        phone?: string | null;
+                        email?: string | null;
+                        specialInstructions?: string | null;
+                        prepWhatToWear?: string | null;
+                        prepWhatToBring?: string | null;
+                        prepVehicleTowRating?: string | null;
+                        prepAdditionalTips?: string | null;
+                      };
+                      const cc = (listing as any)?.contactCard as CC | null;
+                      const bp = businessProfile as any;
                       const bookingDetailUrl = confirmedBooking
                         ? `${window.location.origin}${sfBase}/my-bookings/${confirmedBooking.id}`
                         : null;
+                      const hasPrepGuide = !!(cc?.prepWhatToWear || cc?.prepWhatToBring || cc?.prepVehicleTowRating || cc?.prepAdditionalTips);
                       return (
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                           {/* Contact Card */}
                           {cc && (
-                            <div className="bg-background rounded-2xl border shadow-sm overflow-hidden">
-                              <div className="bg-gradient-to-br from-primary/8 to-primary/4 px-5 py-4 border-b flex items-center gap-3">
-                                <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
-                                  <IdCard className="w-4 h-4 text-primary" />
-                                </div>
-                                <p className="font-bold text-sm text-foreground">Your Rental Contact</p>
-                              </div>
-                              <div className="p-5 space-y-3">
-                                <p className="font-semibold text-foreground">{cc.name}</p>
-                                {cc.address && (
-                                  <div className="flex items-start gap-2 text-sm text-muted-foreground">
-                                    <MapPin className="w-3.5 h-3.5 mt-0.5 shrink-0 text-primary/60" />
-                                    <span>{cc.address}</span>
+                            <div className="bg-background rounded-2xl border shadow-sm overflow-hidden sm:col-span-2">
+                              {/* Branded header */}
+                              <div className="bg-gradient-to-br from-primary/8 to-primary/4 px-5 py-4 border-b">
+                                <div className="flex items-center gap-3">
+                                  {bp?.logoUrl ? (
+                                    <img src={bp.logoUrl} alt={bp.name} className="h-9 w-auto max-w-[120px] object-contain rounded" />
+                                  ) : (
+                                    <div className="w-9 h-9 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
+                                      <IdCard className="w-5 h-5 text-primary" />
+                                    </div>
+                                  )}
+                                  <div>
+                                    {bp?.name && <p className="font-bold text-sm text-foreground leading-tight">{bp.name}</p>}
+                                    <p className="text-xs text-muted-foreground">Rental Contact Card</p>
                                   </div>
-                                )}
-                                {cc.phone && (
-                                  <a href={`tel:${cc.phone}`} className="flex items-center gap-2 text-sm text-muted-foreground hover:text-primary transition-colors">
-                                    <Phone className="w-3.5 h-3.5 shrink-0 text-primary/60" />
-                                    <span>{cc.phone}</span>
-                                  </a>
-                                )}
-                                {cc.email && (
-                                  <a href={`mailto:${cc.email}`} className="flex items-center gap-2 text-sm text-muted-foreground hover:text-primary transition-colors">
-                                    <Mail className="w-3.5 h-3.5 shrink-0 text-primary/60" />
-                                    <span>{cc.email}</span>
-                                  </a>
-                                )}
-                                {cc.specialInstructions && (
-                                  <div className="mt-2 text-xs text-muted-foreground bg-muted/50 rounded-lg px-3 py-2 leading-relaxed">
-                                    {cc.specialInstructions}
+                                </div>
+                              </div>
+
+                              <div className="grid grid-cols-1 md:grid-cols-2 divide-y md:divide-y-0 md:divide-x">
+                                {/* Contact details column */}
+                                <div className="p-5 space-y-3">
+                                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">Contact & Pickup</p>
+                                  {cc.address && (
+                                    <div className="flex items-start gap-2 text-sm text-muted-foreground">
+                                      <MapPin className="w-3.5 h-3.5 mt-0.5 shrink-0 text-primary/60" />
+                                      <span className="leading-snug">{cc.address}</span>
+                                    </div>
+                                  )}
+                                  {cc.phone && (
+                                    <a href={`tel:${cc.phone}`} className="flex items-center gap-2 text-sm text-muted-foreground hover:text-primary transition-colors">
+                                      <Phone className="w-3.5 h-3.5 shrink-0 text-primary/60" />
+                                      <span>{cc.phone}</span>
+                                    </a>
+                                  )}
+                                  {cc.email && (
+                                    <a href={`mailto:${cc.email}`} className="flex items-center gap-2 text-sm text-muted-foreground hover:text-primary transition-colors">
+                                      <Mail className="w-3.5 h-3.5 shrink-0 text-primary/60" />
+                                      <span className="truncate">{cc.email}</span>
+                                    </a>
+                                  )}
+                                  {cc.specialInstructions && (
+                                    <div className="mt-1 text-xs text-muted-foreground bg-muted/50 rounded-lg px-3 py-2 leading-relaxed">
+                                      {cc.specialInstructions}
+                                    </div>
+                                  )}
+                                </div>
+
+                                {/* Preparation guide column */}
+                                {hasPrepGuide && (
+                                  <div className="p-5 space-y-3">
+                                    <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">Rental Preparation Guide</p>
+                                    {cc.prepWhatToWear && (
+                                      <div className="space-y-0.5">
+                                        <div className="flex items-center gap-1.5 text-xs font-semibold text-foreground">
+                                          <Shirt className="w-3 h-3 text-primary" />
+                                          What to Wear
+                                        </div>
+                                        <p className="text-xs text-muted-foreground leading-relaxed pl-4">{cc.prepWhatToWear}</p>
+                                      </div>
+                                    )}
+                                    {cc.prepWhatToBring && (
+                                      <div className="space-y-0.5">
+                                        <div className="flex items-center gap-1.5 text-xs font-semibold text-foreground">
+                                          <ShoppingBag className="w-3 h-3 text-primary" />
+                                          What to Bring
+                                        </div>
+                                        <p className="text-xs text-muted-foreground leading-relaxed pl-4">{cc.prepWhatToBring}</p>
+                                      </div>
+                                    )}
+                                    {cc.prepVehicleTowRating && (
+                                      <div className="space-y-0.5">
+                                        <div className="flex items-center gap-1.5 text-xs font-semibold text-foreground">
+                                          <Truck className="w-3 h-3 text-primary" />
+                                          Vehicle / Tow Requirements
+                                        </div>
+                                        <p className="text-xs text-muted-foreground leading-relaxed pl-4">{cc.prepVehicleTowRating}</p>
+                                      </div>
+                                    )}
+                                    {cc.prepAdditionalTips && (
+                                      <div className="space-y-0.5">
+                                        <div className="flex items-center gap-1.5 text-xs font-semibold text-foreground">
+                                          <Lightbulb className="w-3 h-3 text-primary" />
+                                          Additional Tips
+                                        </div>
+                                        <p className="text-xs text-muted-foreground leading-relaxed pl-4">{cc.prepAdditionalTips}</p>
+                                      </div>
+                                    )}
                                   </div>
                                 )}
                               </div>

@@ -41,11 +41,22 @@ router.get("/contact-cards/:id", async (req, res) => {
 router.post("/contact-cards", async (req, res) => {
   if (!req.tenantId) { res.status(401).json({ error: "Unauthorized" }); return; }
   try {
-    const { name, address, phone, email, specialInstructions } = req.body;
+    const { name, address, phone, email, specialInstructions, prepWhatToWear, prepWhatToBring, prepVehicleTowRating, prepAdditionalTips } = req.body;
     if (!name?.trim()) { res.status(400).json({ error: "Name is required" }); return; }
     const [card] = await db
       .insert(contactCardsTable)
-      .values({ tenantId: req.tenantId, name: name.trim(), address: address?.trim() || null, phone: phone?.trim() || null, email: email?.trim() || null, specialInstructions: specialInstructions?.trim() || null })
+      .values({
+        tenantId: req.tenantId,
+        name: name.trim(),
+        address: address?.trim() || null,
+        phone: phone?.trim() || null,
+        email: email?.trim() || null,
+        specialInstructions: specialInstructions?.trim() || null,
+        prepWhatToWear: prepWhatToWear?.trim() || null,
+        prepWhatToBring: prepWhatToBring?.trim() || null,
+        prepVehicleTowRating: prepVehicleTowRating?.trim() || null,
+        prepAdditionalTips: prepAdditionalTips?.trim() || null,
+      })
       .returning();
     res.status(201).json(card);
   } catch (err) {
@@ -58,11 +69,22 @@ router.post("/contact-cards", async (req, res) => {
 router.put("/contact-cards/:id", async (req, res) => {
   if (!req.tenantId) { res.status(401).json({ error: "Unauthorized" }); return; }
   try {
-    const { name, address, phone, email, specialInstructions } = req.body;
+    const { name, address, phone, email, specialInstructions, prepWhatToWear, prepWhatToBring, prepVehicleTowRating, prepAdditionalTips } = req.body;
     if (!name?.trim()) { res.status(400).json({ error: "Name is required" }); return; }
     const [card] = await db
       .update(contactCardsTable)
-      .set({ name: name.trim(), address: address?.trim() || null, phone: phone?.trim() || null, email: email?.trim() || null, specialInstructions: specialInstructions?.trim() || null, updatedAt: new Date() })
+      .set({
+        name: name.trim(),
+        address: address?.trim() || null,
+        phone: phone?.trim() || null,
+        email: email?.trim() || null,
+        specialInstructions: specialInstructions?.trim() || null,
+        prepWhatToWear: prepWhatToWear?.trim() || null,
+        prepWhatToBring: prepWhatToBring?.trim() || null,
+        prepVehicleTowRating: prepVehicleTowRating?.trim() || null,
+        prepAdditionalTips: prepAdditionalTips?.trim() || null,
+        updatedAt: new Date(),
+      })
       .where(and(eq(contactCardsTable.id, Number(req.params.id)), eq(contactCardsTable.tenantId, req.tenantId)))
       .returning();
     if (!card) { res.status(404).json({ error: "Not found" }); return; }
