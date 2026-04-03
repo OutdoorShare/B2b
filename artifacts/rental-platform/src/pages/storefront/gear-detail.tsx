@@ -742,85 +742,112 @@ export default function StorefrontGearDetail() {
               </div>
             )}
 
-            {/* Specs */}
-            {hasSpecs && (
-              <div className="space-y-3">
-                <h3 className="font-semibold border-b pb-2">Specifications</h3>
-                <dl className="grid grid-cols-2 gap-x-4 gap-y-3 text-sm">
-                  {listing.brand && (
-                    <div>
-                      <dt className="text-muted-foreground text-xs uppercase tracking-wider font-medium">Brand</dt>
-                      <dd className="font-semibold mt-0.5">{listing.brand}</dd>
-                    </div>
-                  )}
-                  {listing.model && (
-                    <div>
-                      <dt className="text-muted-foreground text-xs uppercase tracking-wider font-medium">Model</dt>
-                      <dd className="font-semibold mt-0.5">{listing.model}</dd>
-                    </div>
-                  )}
-                  {listing.condition && (
-                    <div>
-                      <dt className="text-muted-foreground text-xs uppercase tracking-wider font-medium">Condition</dt>
-                      <dd className="font-semibold mt-0.5 capitalize">{CONDITION_LABEL[listing.condition] ?? listing.condition}</dd>
-                    </div>
-                  )}
-                  {listing.weight && (
-                    <div>
-                      <dt className="text-muted-foreground text-xs uppercase tracking-wider font-medium">Weight</dt>
-                      <dd className="font-semibold mt-0.5">{listing.weight}</dd>
-                    </div>
-                  )}
-                  {listing.dimensions && (
-                    <div className="col-span-2">
-                      <dt className="text-muted-foreground text-xs uppercase tracking-wider font-medium">Dimensions</dt>
-                      <dd className="font-semibold mt-0.5">{listing.dimensions}</dd>
-                    </div>
-                  )}
-                </dl>
-              </div>
-            )}
+          </div>
+        </div>
 
-            {/* What's included */}
-            {listing.includedItems && listing.includedItems.length > 0 && (
-              <div className="space-y-3">
-                <h3 className="font-semibold border-b pb-2">What's Included</h3>
-                <ul className="space-y-2">
-                  {listing.includedItems.map((item, i) => (
-                    <li key={i} className="flex items-start gap-2 text-sm">
-                      <Check className="w-4 h-4 text-primary mt-0.5 shrink-0" />
-                      <span>{item}</span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
+        {/* ── Below-the-fold Details: 2-column layout ── */}
+        {(hasSpecs || (listing.includedItems && listing.includedItems.length > 0) || listingRules.length > 0) && (
+          <div className="mt-10 grid grid-cols-1 md:grid-cols-2 gap-8">
 
-            {/* Listing Rules */}
-            {listingRules.length > 0 && (
-              <div className="space-y-3">
-                <h3 className="font-semibold border-b pb-2 flex items-center gap-2">
-                  <ClipboardList className="w-4 h-4 text-primary" />
-                  Rental Rules
-                </h3>
-                <ul className="space-y-2.5">
-                  {listingRules.map((rule) => (
-                    <li key={rule.id} className="flex items-start gap-3 bg-muted/30 rounded-xl border px-4 py-3">
-                      <span className="w-5 h-5 rounded-full bg-primary/10 text-primary flex items-center justify-center shrink-0 mt-0.5 text-[10px] font-black">!</span>
+            {/* Left column: Specs + What's Included */}
+            <div className="space-y-8">
+              {hasSpecs && (
+                <div className="space-y-3">
+                  <h3 className="font-semibold text-base border-b pb-2">Specifications</h3>
+                  <dl className="grid grid-cols-2 gap-x-6 gap-y-4 text-sm">
+                    {listing.brand && (
                       <div>
-                        <p className="text-sm font-semibold leading-snug">{rule.title}</p>
-                        {rule.description && (
-                          <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed">{rule.description}</p>
-                        )}
+                        <dt className="text-muted-foreground text-xs uppercase tracking-wider font-medium">Brand</dt>
+                        <dd className="font-semibold mt-0.5">{listing.brand}</dd>
                       </div>
-                    </li>
-                  ))}
-                </ul>
-                <p className="text-xs text-muted-foreground">You'll be asked to initial each rule during checkout.</p>
-              </div>
-            )}
+                    )}
+                    {listing.model && (
+                      <div>
+                        <dt className="text-muted-foreground text-xs uppercase tracking-wider font-medium">Model</dt>
+                        <dd className="font-semibold mt-0.5">{listing.model}</dd>
+                      </div>
+                    )}
+                    {listing.condition && (
+                      <div>
+                        <dt className="text-muted-foreground text-xs uppercase tracking-wider font-medium">Condition</dt>
+                        <dd className="font-semibold mt-0.5 capitalize">{CONDITION_LABEL[listing.condition] ?? listing.condition}</dd>
+                      </div>
+                    )}
+                    {listing.weight && (
+                      <div>
+                        <dt className="text-muted-foreground text-xs uppercase tracking-wider font-medium">Weight</dt>
+                        <dd className="font-semibold mt-0.5">{listing.weight}</dd>
+                      </div>
+                    )}
+                    {listing.dimensions && (
+                      <div className="col-span-2">
+                        <dt className="text-muted-foreground text-xs uppercase tracking-wider font-medium">Dimensions</dt>
+                        <dd className="font-semibold mt-0.5">{listing.dimensions}</dd>
+                      </div>
+                    )}
+                  </dl>
+                </div>
+              )}
 
-            {/* Requirements */}
+              {listing.includedItems && listing.includedItems.length > 0 && (
+                <div className="space-y-3">
+                  <h3 className="font-semibold text-base border-b pb-2">What's Included</h3>
+                  <ul className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-1 lg:grid-cols-2 gap-x-6 gap-y-2">
+                    {listing.includedItems.map((item, i) => (
+                      <li key={i} className="flex items-start gap-2 text-sm">
+                        <Check className="w-4 h-4 text-primary mt-0.5 shrink-0" />
+                        <span>{item}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </div>
+
+            {/* Right column: Rental Rules + Requirements */}
+            <div className="space-y-8">
+              {listingRules.length > 0 && (
+                <div className="space-y-3">
+                  <h3 className="font-semibold text-base border-b pb-2 flex items-center gap-2">
+                    <ClipboardList className="w-4 h-4 text-primary" />
+                    Rental Rules
+                  </h3>
+                  <ul className="space-y-2.5">
+                    {listingRules.map((rule) => (
+                      <li key={rule.id} className="flex items-start gap-3 bg-muted/30 rounded-xl border px-4 py-3">
+                        <span className="w-5 h-5 rounded-full bg-primary/10 text-primary flex items-center justify-center shrink-0 mt-0.5 text-[10px] font-black">!</span>
+                        <div>
+                          <p className="text-sm font-semibold leading-snug">{rule.title}</p>
+                          {rule.description && (
+                            <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed">{rule.description}</p>
+                          )}
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                  <p className="text-xs text-muted-foreground">You'll be asked to initial each rule during checkout.</p>
+                </div>
+              )}
+
+              {/* Requirements */}
+              <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 space-y-1.5">
+                <div className="flex items-center gap-2">
+                  <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
+                  <span className="font-semibold text-sm text-amber-800">Requirements</span>
+                </div>
+                <p className="text-sm text-amber-700">Must be <strong>21+</strong> years old to rent.</p>
+                {listing.requirements && (
+                  <p className="text-sm text-amber-700/90">{listing.requirements}</p>
+                )}
+              </div>
+            </div>
+
+          </div>
+        )}
+
+        {/* Requirements only (no other details) */}
+        {!hasSpecs && !(listing.includedItems && listing.includedItems.length > 0) && listingRules.length === 0 && (
+          <div className="mt-8 max-w-2xl">
             <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 space-y-1.5">
               <div className="flex items-center gap-2">
                 <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
@@ -832,7 +859,8 @@ export default function StorefrontGearDetail() {
               )}
             </div>
           </div>
-        </div>
+        )}
+
       </div>
     </div>
   );
