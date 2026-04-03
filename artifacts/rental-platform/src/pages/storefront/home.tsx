@@ -18,6 +18,7 @@ import {
   Package, Snowflake, CarFront, Gauge, SlidersHorizontal, ShieldCheck,
   Phone, Mail, ChevronDown, ChevronUp,
   CheckCircle2, Umbrella, Users, AlertTriangle,
+  Clock, Star, Layers, Gift,
 } from "lucide-react";
 
 const CATEGORY_ICONS: Record<string, React.ElementType> = {
@@ -312,73 +313,150 @@ export default function StorefrontHome() {
         </div>
 
         {isLoading ? (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
-            {[1, 2, 3, 4, 5, 6, 7, 8].map(i => (
-              <div key={i} className="animate-pulse rounded-2xl overflow-hidden">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+            {[1, 2, 3, 4, 5, 6].map(i => (
+              <div key={i} className="animate-pulse rounded-2xl overflow-hidden border border-border">
                 <div className="bg-muted aspect-[4/3]" />
-                <div className="p-4 space-y-2">
-                  <div className="bg-muted h-4 rounded w-2/3" />
-                  <div className="bg-muted h-5 rounded w-full" />
-                  <div className="bg-muted h-4 rounded w-1/2" />
+                <div className="p-4 space-y-2.5">
+                  <div className="bg-muted h-4 rounded w-3/4" />
+                  <div className="bg-muted h-3 rounded w-full" />
+                  <div className="bg-muted h-3 rounded w-4/5" />
+                  <div className="bg-muted h-3 rounded w-1/3" />
+                  <div className="mt-3 pt-3 border-t border-border/50 flex items-center justify-between">
+                    <div className="bg-muted h-6 rounded w-20" />
+                    <div className="bg-muted h-8 w-8 rounded-full" />
+                  </div>
                 </div>
               </div>
             ))}
           </div>
         ) : listings && listings.length > 0 ? (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
-            {listings.map(listing => (
-              <Link key={listing.id} href={`${sfBase}/listings/${listing.id}`}>
-                <div
-                  data-testid={`listing-card-${listing.id}`}
-                  className="group flex flex-col h-full bg-card rounded-2xl overflow-hidden border border-border hover:border-primary/50 transition-all shadow-sm hover:shadow-lg hover:-translate-y-0.5"
-                >
-                  <div className="aspect-[4/3] bg-muted relative overflow-hidden">
-                    {listing.imageUrls?.[0] ? (
-                      <img src={listing.imageUrls[0]} alt={listing.title} className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105" />
-                    ) : (
-                      <div className="w-full h-full flex items-center justify-center bg-muted">
-                        <Car className="w-12 h-12 opacity-20 text-muted-foreground" />
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+            {listings.map(listing => {
+              const l = listing as any;
+              const hasHalfDay = l.halfDayRate && l.halfDayRate > 0;
+              const hasWeekly  = l.pricePerWeek && l.pricePerWeek > 0;
+              const hasHourly  = l.pricePerHour && l.pricePerHour > 0;
+              const hasSlots   = Array.isArray(l.timeSlots) && l.timeSlots.length > 0;
+              const qty        = l.availableQuantity ?? l.quantity ?? 1;
+              const included   = Array.isArray(l.includedItems) ? l.includedItems as string[] : [];
+
+              return (
+                <Link key={listing.id} href={`${sfBase}/listings/${listing.id}`}>
+                  <div
+                    data-testid={`listing-card-${listing.id}`}
+                    className="group flex flex-col h-full bg-card rounded-2xl overflow-hidden border border-border hover:border-primary/50 transition-all shadow-sm hover:shadow-lg hover:-translate-y-0.5"
+                  >
+                    {/* ── Image ── */}
+                    <div className="aspect-[4/3] bg-muted relative overflow-hidden">
+                      {listing.imageUrls?.[0] ? (
+                        <img src={listing.imageUrls[0]} alt={listing.title} className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105" />
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center bg-muted">
+                          <Car className="w-12 h-12 opacity-20 text-muted-foreground" />
+                        </div>
+                      )}
+
+                      {/* Category pill — top left */}
+                      {listing.categoryName && (
+                        <div className="absolute top-3 left-3">
+                          <span className="text-[10px] font-bold uppercase tracking-widest bg-primary/90 text-primary-foreground px-2.5 py-1 rounded-full shadow-sm">
+                            {listing.categoryName}
+                          </span>
+                        </div>
+                      )}
+
+                      {/* Condition badge — top right */}
+                      {listing.condition === "excellent" && (
+                        <div className="absolute top-3 right-3">
+                          <Badge className="bg-emerald-500 text-white hover:bg-emerald-600 border-0 shadow-sm text-xs font-semibold">Like New</Badge>
+                        </div>
+                      )}
+                      {listing.condition === "good" && (
+                        <div className="absolute top-3 right-3">
+                          <Badge className="bg-sky-500 text-white hover:bg-sky-600 border-0 shadow-sm text-xs font-semibold">Good</Badge>
+                        </div>
+                      )}
+
+                      {/* Multi-unit badge — bottom left */}
+                      {qty > 1 && (
+                        <div className="absolute bottom-3 left-3">
+                          <span className="flex items-center gap-1 text-[10px] font-bold bg-black/60 backdrop-blur text-white px-2 py-1 rounded-full border border-white/10">
+                            <Layers className="w-3 h-3" />{qty} available
+                          </span>
+                        </div>
+                      )}
+
+                      {/* Time-slot badge — bottom right */}
+                      {hasSlots && (
+                        <div className="absolute bottom-3 right-3">
+                          <span className="flex items-center gap-1 text-[10px] font-bold bg-black/60 backdrop-blur text-white px-2 py-1 rounded-full border border-white/10">
+                            <Clock className="w-3 h-3" />{l.timeSlots.length} session{l.timeSlots.length !== 1 ? "s" : ""}
+                          </span>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* ── Card body ── */}
+                    <div className="p-4 flex-1 flex flex-col gap-2">
+
+                      {/* Title */}
+                      <h3 className="font-bold text-base leading-snug group-hover:text-primary transition-colors line-clamp-1">{listing.title}</h3>
+
+                      {/* Description snippet */}
+                      {listing.description && (
+                        <p className="text-xs text-muted-foreground leading-relaxed line-clamp-2">{listing.description}</p>
+                      )}
+
+                      {/* Location */}
+                      {listing.location && (
+                        <p className="text-xs text-muted-foreground flex items-center gap-1">
+                          <MapPin className="w-3 h-3 shrink-0" />{listing.location}
+                        </p>
+                      )}
+
+                      {/* Chips row — protection plan, included items */}
+                      <div className="flex flex-wrap gap-1.5">
+                        {(listing as any).hasProtectionPlan && (
+                          <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 rounded-full px-2 py-0.5">
+                            <ShieldCheck className="w-3 h-3" />Protection Plan
+                          </span>
+                        )}
+                        {included.length > 0 && (
+                          <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-violet-700 dark:text-violet-300 bg-violet-50 dark:bg-violet-950/40 border border-violet-200 dark:border-violet-700 rounded-full px-2 py-0.5">
+                            <Gift className="w-3 h-3" />Includes {included.length} item{included.length !== 1 ? "s" : ""}
+                          </span>
+                        )}
                       </div>
-                    )}
-                    {listing.condition === "excellent" && (
-                      <div className="absolute top-3 right-3">
-                        <Badge className="bg-emerald-500 text-white hover:bg-emerald-600 border-0 shadow-sm text-xs font-semibold">Like New</Badge>
-                      </div>
-                    )}
-                    {listing.categoryName && (
-                      <div className="absolute top-3 left-3">
-                        <span className="text-[10px] font-bold uppercase tracking-widest bg-primary/90 text-primary-foreground px-2.5 py-1 rounded-full shadow-sm">
-                          {listing.categoryName}
-                        </span>
-                      </div>
-                    )}
-                  </div>
-                  <div className="p-4 flex-1 flex flex-col">
-                    <h3 className="font-bold text-base leading-snug mb-1 group-hover:text-primary transition-colors line-clamp-2">{listing.title}</h3>
-                    {listing.location && (
-                      <p className="text-xs text-muted-foreground flex items-center gap-1 mb-3">
-                        <MapPin className="w-3 h-3 shrink-0" />{listing.location}
-                      </p>
-                    )}
-                    {(listing as any).hasProtectionPlan && (
-                      <div className="flex items-center gap-1.5 text-[10px] font-semibold text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 rounded-full px-2 py-0.5 w-fit mb-2">
-                        <img src="/outdoorshare-logo.png" alt="OutdoorShare" className="h-3 object-contain opacity-80" />
-                        Protection Plan
-                      </div>
-                    )}
-                    <div className="mt-auto pt-3 border-t border-border flex items-center justify-between">
-                      <div className="flex items-baseline gap-0.5">
-                        <span className="text-xl font-bold tracking-tight text-primary">${listing.pricePerDay}</span>
-                        <span className="text-xs text-muted-foreground font-medium">/day</span>
-                      </div>
-                      <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center group-hover:bg-primary group-hover:text-primary-foreground transition-all group-hover:scale-110 group-hover:shadow-md">
-                        <ArrowRight className="w-4 h-4" />
+
+                      {/* Price row */}
+                      <div className="mt-auto pt-3 border-t border-border">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <div className="flex items-baseline gap-0.5">
+                              <span className="text-xl font-bold tracking-tight text-primary">${listing.pricePerDay}</span>
+                              <span className="text-xs text-muted-foreground font-medium">/day</span>
+                            </div>
+                            {/* Secondary pricing hint */}
+                            {(hasHalfDay || hasWeekly || hasHourly) && (
+                              <p className="text-[10px] text-muted-foreground mt-0.5 leading-tight">
+                                {hasHalfDay && `Half-day $${l.halfDayRate}`}
+                                {hasHalfDay && hasWeekly && " · "}
+                                {hasWeekly && `Week $${l.pricePerWeek}`}
+                                {!hasHalfDay && !hasWeekly && hasHourly && `Hourly $${l.pricePerHour}/hr`}
+                              </p>
+                            )}
+                          </div>
+                          <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center group-hover:bg-primary group-hover:text-primary-foreground transition-all group-hover:scale-110 group-hover:shadow-md shrink-0">
+                            <ArrowRight className="w-4 h-4" />
+                          </div>
+                        </div>
                       </div>
                     </div>
                   </div>
-                </div>
-              </Link>
-            ))}
+                </Link>
+              );
+            })}
           </div>
         ) : (
           <div className="py-24 text-center border-2 border-dashed rounded-2xl">
