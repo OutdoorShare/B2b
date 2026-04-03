@@ -702,14 +702,28 @@ router.put("/bookings/:id", async (req, res) => {
   }
 });
 
+// ── Helper: find a booking for admin actions ───────────────────────────────────
+// Mirrors the two-stage lookup in GET /bookings/:id so admin action endpoints
+// (send email, copy link, etc.) succeed even when a booking's tenant_id is null
+// or was set under a slightly different tenant context.
+async function findBookingForAdmin(bookingId: number, tenantId?: number) {
+  let booking: typeof bookingsTable.$inferSelect | undefined;
+  if (tenantId) {
+    [booking] = await db.select().from(bookingsTable)
+      .where(and(eq(bookingsTable.id, bookingId), eq(bookingsTable.tenantId, tenantId)));
+  }
+  if (!booking) {
+    [booking] = await db.select().from(bookingsTable).where(eq(bookingsTable.id, bookingId));
+  }
+  return booking;
+}
+
 // ── GET /bookings/:id/pickup-link ──────────────────────────────────────────────
 // Admin: get existing pickup URL (no email sent); generates token if missing
 router.get("/bookings/:id/pickup-link", async (req, res) => {
   try {
     const bookingId = Number(req.params.id);
-    const conditions = [eq(bookingsTable.id, bookingId)];
-    if (req.tenantId) conditions.push(eq(bookingsTable.tenantId, req.tenantId));
-    const [booking] = await db.select().from(bookingsTable).where(and(...conditions));
+    const booking = await findBookingForAdmin(bookingId, req.tenantId);
     if (!booking) { res.status(404).json({ error: "Booking not found" }); return; }
 
     const token = booking.pickupToken ?? randomBytes(24).toString("hex");
@@ -734,10 +748,7 @@ router.post("/bookings/:id/send-pickup-link", async (req, res) => {
   try {
     const bookingId = Number(req.params.id);
     const { hostPickup } = req.body as { hostPickup?: boolean };
-    const conditions = [eq(bookingsTable.id, bookingId)];
-    if (req.tenantId) conditions.push(eq(bookingsTable.tenantId, req.tenantId));
-
-    const [booking] = await db.select().from(bookingsTable).where(and(...conditions));
+    const booking = await findBookingForAdmin(bookingId, req.tenantId);
     if (!booking) { res.status(404).json({ error: "Booking not found" }); return; }
 
     // Generate a token (or reuse existing one)
@@ -952,14 +963,12 @@ router.post("/pickup/:token/photos", pickupUpload.array("photos", 20), async (re
 router.get("/bookings/:id/return-link", async (req, res) => {
   try {
     const bookingId = Number(req.params.id);
-    const conditions = [eq(bookingsTable.id, bookingId)];
-    if (req.tenantId) conditions.push(eq(bookingsTable.tenantId, req.tenantId));
-    const [booking] = await db.select().from(bookingsTable).where(and(...conditions));
+    const booking = await findBookingForAdmin(bookingId, req.tenantId);
     if (!booking) { res.status(404).json({ error: "Booking not found" }); return; }
 
-    const token = (booking as any).returnToken ?? randomBytes(24).toString("hex");
-    if (!(booking as any).returnToken) {
-      await db.update(bookingsTable).set({ returnToken: token, updatedAt: new Date() } as any).where(eq(bookingsTable.id, bookingId));
+    const token = booking.returnToken ?? randomBytes(24).toString("hex");
+    if (!booking.returnToken) {
+      await db.update(bookingsTable).set({ returnToken: token, updatedAt: new Date() }).where(eq(bookingsTable.id, bookingId));
     }
 
     const BASE = process.env.APP_URL || `https://${process.env.REPLIT_DEV_DOMAIN}`;
@@ -977,14 +986,11 @@ router.get("/bookings/:id/return-link", async (req, res) => {
 router.post("/bookings/:id/send-return-link", async (req, res) => {
   try {
     const bookingId = Number(req.params.id);
-    const conditions = [eq(bookingsTable.id, bookingId)];
-    if (req.tenantId) conditions.push(eq(bookingsTable.tenantId, req.tenantId));
-
-    const [booking] = await db.select().from(bookingsTable).where(and(...conditions));
+    const booking = await findBookingForAdmin(bookingId, req.tenantId);
     if (!booking) { res.status(404).json({ error: "Booking not found" }); return; }
 
-    const token = (booking as any).returnToken ?? randomBytes(24).toString("hex");
-    await db.update(bookingsTable).set({ returnToken: token, updatedAt: new Date() } as any).where(eq(bookingsTable.id, bookingId));
+    const token = booking.returnToken ?? randomBytes(24).toString("hex");
+    await db.update(bookingsTable).set({ returnToken: token, updatedAt: new Date() }).where(eq(bookingsTable.id, bookingId));
 
     const [listing] = await db.select({ title: listingsTable.title }).from(listingsTable).where(eq(listingsTable.id, booking.listingId));
     let companyName = "OutdoorShare";
