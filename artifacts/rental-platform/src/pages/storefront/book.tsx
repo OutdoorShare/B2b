@@ -978,6 +978,16 @@ export default function StorefrontBook() {
     }
   }, [availableQtyForRange]);
 
+  // When quantity changes, invalidate any in-progress payment intent so it
+  // gets re-created with the correct (updated) total.
+  useEffect(() => {
+    if (paymentConfirmed) return; // already paid — don't reset
+    if (!clientSecret) return;    // no intent yet — nothing to reset
+    setClientSecret(null);
+    setShowStripeForm(false);
+    intentFiredRef.current = false;
+  }, [selectedQuantity]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const subtotal = useMemo(() => {
     // Time-slot rate overrides everything else when a slot is selected
     let base: number;
@@ -3185,13 +3195,16 @@ export default function StorefrontBook() {
                         {selectedOption && isOneDay ? (
                           <span>
                             {selectedOption.type === "per_hour"
-                              ? `${selectedHours} hr${selectedHours !== 1 ? "s" : ""} × $${(selectedOption as any).pricePerHour.toFixed(2)}/hr`
-                              : selectedOption.label}
+                              ? `${selectedHours} hr${selectedHours !== 1 ? "s" : ""} × $${(selectedOption as any).pricePerHour.toFixed(2)}/hr${selectedQuantity > 1 ? ` × ${selectedQuantity}` : ""}`
+                              : selectedOption.label}{selectedQuantity > 1 ? ` × ${selectedQuantity}` : ""}
                           </span>
                         ) : (
-                          <span>${fullDayPrice.toFixed(2)}/day × {days} day{days > 1 ? "s" : ""}</span>
+                          <span>
+                            ${fullDayPrice.toFixed(2)}/day × {days} day{days > 1 ? "s" : ""}
+                            {selectedQuantity > 1 && <span className="font-semibold text-foreground"> × {selectedQuantity}</span>}
+                          </span>
                         )}
-                        <span>${subtotal.toFixed(2)}</span>
+                        <span className="font-semibold text-foreground">${subtotal.toFixed(2)}</span>
                       </div>
                       {availableAddons.filter(a => selectedAddonIds.has(a.id)).map(a => (
                         <div key={a.id} className="flex justify-between text-muted-foreground">
