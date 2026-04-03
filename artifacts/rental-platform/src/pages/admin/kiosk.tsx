@@ -1,5 +1,5 @@
 import { adminPath, getAdminSession } from "@/lib/admin-nav";
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useLocation, useParams } from "wouter";
 import { QRCodeSVG } from "qrcode.react";
 import { 
@@ -14,7 +14,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { 
   ArrowLeft, Search, Car, Smartphone, Monitor, X, 
-  Clock, ChevronRight, Delete, Lock, ShieldAlert
+  Clock, ChevronRight, Delete, Lock, ShieldAlert, LogIn
 } from "lucide-react";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
@@ -42,6 +42,10 @@ export default function AdminKiosk() {
   const [activeCategory, setActiveCategory] = useState<number | null>(null);
   const [selected, setSelected] = useState<SelectedListing | null>(null);
   const [idleSeconds, setIdleSeconds] = useState(IDLE_RESET_SECONDS);
+
+  // Session validity state
+  const [sessionExpired, setSessionExpired] = useState(false);
+  const verifiedRef = useRef(false);
 
   // PIN exit state
   const [showExitPad, setShowExitPad] = useState(false);
@@ -90,6 +94,26 @@ export default function AdminKiosk() {
     };
   }, [selected, resetIdle]);
 
+  // Verify that the stored admin token is still valid on the server. When a new
+  // login from another device overwrites the token in the DB, existing kiosk
+  // sessions become stale — we detect this early so we don't show cross-tenant
+  // or empty listing states without explanation.
+  useEffect(() => {
+    if (verifiedRef.current) return;
+    verifiedRef.current = true;
+
+    const session = (() => {
+      try { return JSON.parse(localStorage.getItem("admin_session") || "null"); } catch { return null; }
+    })();
+    if (!session?.token) return; // No session at all — AdminGuard would have redirected
+
+    fetch(`${BASE}/api/admin/auth/verify`, {
+      headers: { "x-admin-token": session.token },
+    })
+      .then(r => { if (r.status === 401) setSessionExpired(true); })
+      .catch(() => { /* network error — don't flag as expired */ });
+  }, []);
+
   // PIN entry helpers
   function handlePinDigit(digit: string) {
     if (enteredPin.length >= 8) return;
@@ -122,6 +146,39 @@ export default function AdminKiosk() {
     setShowExitPad(false);
     setEnteredPin("");
     setPinError(false);
+  }
+
+  // Session has been invalidated (another login from a different device/browser)
+  if (sessionExpired) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center p-8">
+        <div className="bg-card rounded-3xl shadow-2xl w-full max-w-sm overflow-hidden">
+          <div className="bg-destructive/10 border-b border-destructive/20 px-8 py-8 text-center">
+            <div className="w-16 h-16 bg-destructive/15 rounded-full flex items-center justify-center mx-auto mb-4">
+              <ShieldAlert className="w-8 h-8 text-destructive" />
+            </div>
+            <h2 className="text-2xl font-bold">Session Expired</h2>
+            <p className="text-sm text-muted-foreground mt-2 leading-relaxed">
+              Your admin session is no longer valid. This usually happens when you sign in from another device.
+            </p>
+          </div>
+          <div className="p-8 space-y-3">
+            <Button
+              size="lg"
+              className="w-full h-14 text-base font-bold rounded-xl"
+              onClick={() => {
+                const dest = adminPath(""); // compute path before clearing session
+                localStorage.removeItem("admin_session");
+                setLocation(dest);
+              }}
+            >
+              <LogIn className="w-5 h-5 mr-2" />
+              Return to Login
+            </Button>
+          </div>
+        </div>
+      </div>
+    );
   }
 
   return (

@@ -119,6 +119,15 @@ router.post("/admin/auth/login", async (req, res) => {
   }
 });
 
+// GET /admin/auth/verify — lightweight session check; 200 = valid, 401 = expired/invalid
+router.get("/admin/auth/verify", async (req, res) => {
+  if (!req.tenantId) {
+    res.status(401).json({ error: "Session expired or invalid" });
+    return;
+  }
+  res.json({ valid: true, tenantId: req.tenantId });
+});
+
 // POST /admin/auth/logout
 router.post("/admin/auth/logout", async (req, res) => {
   try {

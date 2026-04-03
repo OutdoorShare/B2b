@@ -52,6 +52,13 @@ function formatListing(l: typeof listingsTable.$inferSelect, categoryName?: stri
 
 router.get("/listings", async (req, res) => {
   try {
+    // Require a resolved tenant context. Without it we would leak every tenant's
+    // listings to an unauthenticated (or token-expired) caller.
+    if (!req.tenantId) {
+      res.json([]);
+      return;
+    }
+
     const { categoryId, status, search, minPrice, maxPrice } = req.query;
 
     const conditions = [];
