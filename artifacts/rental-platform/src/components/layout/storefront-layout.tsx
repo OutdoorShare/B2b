@@ -584,13 +584,13 @@ export function StorefrontLayout({ children }: { children: React.ReactNode }) {
       {/* Fixed corner badge — only shown during trial */}
       {trialActive && <PoweredByBadge variant="fixed" />}
 
-      {/* Renter Chat Widget */}
-      {slug && customer && (
+      {/* Renter Chat Widget — available to all visitors, guests included */}
+      {slug && (
         <StorefrontChat
           slug={(profile as any)?.siteSlug ?? slug}
           companyName={profile?.name ?? "Support"}
-          customerEmail={customer.email}
-          customerName={customer.name}
+          customerEmail={customer?.email}
+          customerName={customer?.name}
           primaryColor={primaryColor}
           accentColor={accentColor}
         />
