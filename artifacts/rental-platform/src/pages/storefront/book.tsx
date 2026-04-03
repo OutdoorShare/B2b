@@ -2393,10 +2393,11 @@ export default function StorefrontBook() {
                             <div className="flex flex-wrap items-center justify-center gap-2 mb-5">
                               {/* OutdoorShare */}
                               <div className="flex items-center gap-1.5 bg-white/80 rounded-xl px-3 py-2 shadow-sm border border-primary/15">
-                                <div className="w-7 h-7 bg-primary rounded-lg flex items-center justify-center shrink-0">
-                                  <Mountain className="w-4 h-4 text-white" />
-                                </div>
-                                <span className="font-bold text-xs text-foreground whitespace-nowrap">OutdoorShare</span>
+                                <img
+                                  src="/outdoorshare-logo.png"
+                                  alt="OutdoorShare"
+                                  className="h-6 w-auto object-contain shrink-0"
+                                />
                               </div>
                               <span className="text-muted-foreground text-sm font-bold">+</span>
                               {/* Rental company */}
