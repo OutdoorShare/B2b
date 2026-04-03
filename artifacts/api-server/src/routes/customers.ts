@@ -5,6 +5,7 @@ import { eq, and, desc } from "drizzle-orm";
 import { scrypt, randomBytes, timingSafeEqual } from "crypto";
 import { promisify } from "util";
 import { sendCredentialsEmail } from "../services/gmail";
+import { getStripeForTenant } from "../services/stripe";
 
 const scryptAsync = promisify(scrypt);
 const router: IRouter = Router();
@@ -295,6 +296,49 @@ router.post("/customers/:id/change-password", async (req, res) => {
   } catch (err) {
     req.log.error(err);
     res.status(500).json({ error: "Failed to change password" });
+  }
+});
+
+// ── Save payment method details after a successful booking ────────────────────
+router.post("/customers/:id/save-payment-method", async (req, res) => {
+  try {
+    const customerId = Number(req.params.id);
+    const { paymentIntentId, tenantSlug } = req.body ?? {};
+    if (!paymentIntentId || !tenantSlug) {
+      res.status(400).json({ error: "paymentIntentId and tenantSlug required" });
+      return;
+    }
+
+    const [tenant] = await db.select().from(tenantsTable).where(eq(tenantsTable.slug, tenantSlug)).limit(1);
+    if (!tenant) { res.status(404).json({ error: "Tenant not found" }); return; }
+
+    const stripeClient = getStripeForTenant(!!tenant.testMode);
+
+    const pi = await stripeClient.paymentIntents.retrieve(paymentIntentId, {
+      expand: ["payment_method"],
+    });
+
+    const pm = pi.payment_method as import("stripe").Stripe.PaymentMethod | null;
+    const card = pm?.type === "card" ? pm.card : null;
+
+    const updateData: Record<string, any> = { updatedAt: new Date() };
+    if (pi.customer && typeof pi.customer === "string") {
+      updateData.stripeCustomerId = pi.customer;
+    }
+    if (card?.last4) updateData.cardLastFour = card.last4;
+    if (card?.brand) updateData.cardBrand = card.brand;
+
+    const [updated] = await db
+      .update(customersTable)
+      .set(updateData)
+      .where(eq(customersTable.id, customerId))
+      .returning();
+
+    if (!updated) { res.status(404).json({ error: "Customer not found" }); return; }
+    res.json(safeCustomer(updated));
+  } catch (err: any) {
+    req.log.error(err);
+    res.status(500).json({ error: err.message ?? "Failed to save payment method" });
   }
 });
 

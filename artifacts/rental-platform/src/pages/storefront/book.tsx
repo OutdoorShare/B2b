@@ -1209,9 +1209,17 @@ export default function StorefrontBook() {
     return () => clearInterval(interval);
   }, [qrPolling, qrSessionId, slug, toast]);
 
-  // Auto-advance to agreement as soon as payment is confirmed (all methods)
+  // Auto-advance to agreement as soon as payment is confirmed (all methods).
+  // Also save the payment method to the renter profile when a customer is logged in.
   useEffect(() => {
     if (!paymentConfirmed || step !== "book") return;
+    if (session?.id && paymentIntentId && slug) {
+      fetch(`${BASE}/api/customers/${session.id}/save-payment-method`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ paymentIntentId, tenantSlug: slug }),
+      }).catch(() => {});
+    }
     const timer = setTimeout(() => advanceToComplete(), 1500);
     return () => clearTimeout(timer);
   }, [paymentConfirmed, step]);
@@ -1227,6 +1235,7 @@ export default function StorefrontBook() {
           customerEmail: email,
           customerName: name,
           bookingMeta: { listing_id: String(listingId) },
+          customerId: session?.id ?? undefined,
         }),
       });
       if (!res.ok) {

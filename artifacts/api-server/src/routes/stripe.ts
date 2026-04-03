@@ -222,7 +222,7 @@ router.get("/stripe/connect/check/:slug", async (req, res) => {
 // If tenant has NOT connected → funds sit on OutdoorShare platform until they do.
 router.post("/stripe/payment-intent", async (req, res) => {
   try {
-    const { tenantSlug, amountCents, customerEmail, customerName, bookingMeta } = req.body ?? {};
+    const { tenantSlug, amountCents, customerEmail, customerName, bookingMeta, customerId } = req.body ?? {};
     console.log(`[payment-intent] slug="${tenantSlug}" amount=${amountCents} body-keys=${Object.keys(req.body ?? {}).join(",")}`);
     if (!tenantSlug || !amountCents || amountCents < 50) {
       res.status(400).json({ error: "tenantSlug and amountCents (min 50) required" });
@@ -247,6 +247,34 @@ router.post("/stripe/payment-intent", async (req, res) => {
     // In test mode, don't route to tenant's connected account (test ≠ live accounts)
     const tenantConnected = !isTestMode && !!(tenant.stripeAccountId && tenant.stripeChargesEnabled);
 
+    // ── Attach or create a Stripe Customer so the card is saved for future use ──
+    let stripeCustomerId: string | undefined;
+    if (customerId) {
+      const [dbCustomer] = await db
+        .select({ id: customersTable.id, email: customersTable.email, name: customersTable.name, stripeCustomerId: customersTable.stripeCustomerId })
+        .from(customersTable)
+        .where(eq(customersTable.id, Number(customerId)))
+        .limit(1);
+
+      if (dbCustomer) {
+        if (dbCustomer.stripeCustomerId) {
+          stripeCustomerId = dbCustomer.stripeCustomerId;
+        } else {
+          // Create a Stripe Customer for this renter and persist the ID
+          const sc = await stripeClient.customers.create({
+            email: dbCustomer.email,
+            name: dbCustomer.name ?? undefined,
+            metadata: { platform_customer_id: String(dbCustomer.id) },
+          });
+          stripeCustomerId = sc.id;
+          await db
+            .update(customersTable)
+            .set({ stripeCustomerId: sc.id, updatedAt: new Date() })
+            .where(eq(customersTable.id, dbCustomer.id));
+        }
+      }
+    }
+
     // Build payment intent — only route to tenant's account if they're connected
     const intentParams: any = {
       amount: amountCents,
@@ -265,6 +293,8 @@ router.post("/stripe/payment-intent", async (req, res) => {
         ...(bookingMeta ?? {}),
       },
     };
+
+    if (stripeCustomerId) intentParams.customer = stripeCustomerId;
 
     if (tenantConnected) {
       // Funds go directly to tenant; platform keeps its fee
