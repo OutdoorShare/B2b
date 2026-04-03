@@ -146,6 +146,48 @@ export async function seedOwnerAccount() {
   }
 }
 
+// ── Ensure demo tenant always has stable, professional branding ────────────────
+// Runs on every startup so the demo site's appearance never drifts due to code
+// changes or accidental admin edits (design fields are also API-locked in business.ts).
+export async function seedDemoTenant() {
+  try {
+    const DEMO_SLUG = "demo-outdoorshare";
+    const [tenant] = await db.select({ id: tenantsTable.id })
+      .from(tenantsTable)
+      .where(eq(tenantsTable.slug, DEMO_SLUG))
+      .limit(1);
+    if (!tenant) return; // demo tenant doesn't exist yet — nothing to seed
+
+    const pinnedDesign = {
+      name:          "OutdoorShare Demo",
+      tagline:       "Rent Smarter. Explore More.",
+      description:   "Experience the full OutdoorShare rental platform live. This is an interactive demo site.",
+      primaryColor:  "#3ab549",
+      accentColor:   "#1a2332",
+      logoUrl:       "/outdoorshare-logo.png",
+      coverImageUrl: (null as string | null),
+      updatedAt:     new Date(),
+    };
+
+    const [existing] = await db.select({ id: businessProfileTable.id })
+      .from(businessProfileTable)
+      .where(eq(businessProfileTable.tenantId, tenant.id))
+      .limit(1);
+
+    if (existing) {
+      await db.update(businessProfileTable)
+        .set(pinnedDesign)
+        .where(eq(businessProfileTable.id, existing.id));
+    } else {
+      await db.insert(businessProfileTable).values({ ...pinnedDesign, tenantId: tenant.id });
+    }
+
+    console.log("[demo] Business profile pinned to OutdoorShare Demo branding");
+  } catch (err) {
+    console.error("[demo] seedDemoTenant failed:", err);
+  }
+}
+
 // ── GET /superadmin/tenants ────────────────────────────────────────────────────
 router.get("/superadmin/tenants", requireSuperAdmin, async (_req, res) => {
   try {

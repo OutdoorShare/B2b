@@ -7,6 +7,8 @@ import { requireTenant } from "../middleware/admin-auth";
 const RESERVED_SLUGS = new Set(["admin", "superadmin", "get-started", "signup", "demo", "api"]);
 // Slugs that must never be auto-rewritten by the name→slug sync (e.g. platform demo sites)
 const SLUG_LOCK = new Set(["demo-outdoorshare"]);
+// Design fields that are permanently pinned for slug-locked tenants (prevents accidental overwrites from admin UI)
+const DESIGN_LOCKED_FIELDS = new Set(["name", "tagline", "description", "logoUrl", "coverImageUrl", "primaryColor", "accentColor"]);
 
 function slugify(name: string): string {
   return name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 40);
@@ -141,6 +143,15 @@ router.put("/business", requireTenant as any, async (req, res) => {
       ...(embedCode          !== undefined && { embedCode }),
       depositPercent: depositPercent !== undefined ? String(depositPercent) : undefined,
     };
+
+    // If this tenant is design-locked (e.g. the platform demo), strip design fields
+    // so the admin UI cannot accidentally overwrite the pinned branding.
+    if (req.tenantId) {
+      const [cur] = await db.select({ slug: tenantsTable.slug }).from(tenantsTable).where(eq(tenantsTable.id, req.tenantId)).limit(1);
+      if (cur && SLUG_LOCK.has(cur.slug)) {
+        for (const field of DESIGN_LOCKED_FIELDS) delete (safeBody as Record<string, unknown>)[field];
+      }
+    }
 
     if (profiles.length === 0) {
       const [created] = await db.insert(businessProfileTable).values({
