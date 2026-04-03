@@ -628,17 +628,48 @@ export default function StorefrontBook() {
     if (listing) setSelectedHours((listing as any).hourlyMinimumHours ?? 1);
   }, [listing]);
 
+  // Fixed time slots — replaces free-form time picker when defined
+  type TimeSlotDef = { label: string; startTime: string; endTime: string; rate: "full_day" | "half_day" };
+  const listingTimeSlots: TimeSlotDef[] = useMemo(() => {
+    if (!listing) return [];
+    const raw = (listing as any).timeSlots;
+    return Array.isArray(raw) ? raw : [];
+  }, [listing]);
+  const hasTimeSlots = listingTimeSlots.length > 0;
+  const [selectedTimeSlot, setSelectedTimeSlot] = useState<TimeSlotDef | null>(null);
+
+  // When a time slot is selected, auto-apply its start/end times
+  useEffect(() => {
+    if (selectedTimeSlot) {
+      setPickupTime(selectedTimeSlot.startTime);
+      setDropoffTime(selectedTimeSlot.endTime);
+    }
+  }, [selectedTimeSlot]);
+
+  // Reset slot selection when listing changes
+  useEffect(() => {
+    setSelectedTimeSlot(null);
+  }, [listing?.id]);
+
   const selectedOption = subDayOptions.find(o => o.type === selectedPricingType) ?? null;
 
   const fullDayPrice = listing?.pricePerDay ? parseFloat(String(listing.pricePerDay)) : 0;
 
   const subtotal = useMemo(() => {
+    // Time-slot rate overrides everything else when a slot is selected
+    if (hasTimeSlots && selectedTimeSlot) {
+      if (selectedTimeSlot.rate === "half_day") {
+        const hr = listing?.halfDayRate ? parseFloat(String(listing.halfDayRate)) : null;
+        if (hr) return hr;
+      }
+      return fullDayPrice; // fall back to full day price
+    }
     if (!isOneDay || !selectedOption) return fullDayPrice * days;
     if (selectedOption.type === "half_day") return selectedOption.price;
     if (selectedOption.type.startsWith("slot_")) return (selectedOption as any).price;
     if (selectedOption.type === "per_hour") return (selectedOption as any).pricePerHour * selectedHours;
     return fullDayPrice * days;
-  }, [isOneDay, selectedOption, fullDayPrice, days, selectedHours]);
+  }, [hasTimeSlots, selectedTimeSlot, listing, isOneDay, selectedOption, fullDayPrice, days, selectedHours]);
   const deposit = listing?.depositAmount ? parseFloat(String(listing.depositAmount)) : 0;
   const addonsSubtotal = useMemo(() => {
     return availableAddons
@@ -929,6 +960,9 @@ export default function StorefrontBook() {
     if (!name || !email || !phone) {
       toast({ title: "Please fill in your name, email, and phone first", variant: "destructive" }); return;
     }
+    if (hasTimeSlots && !selectedTimeSlot) {
+      toast({ title: "Please select a time slot", description: "Choose a pickup time slot to continue.", variant: "destructive" }); return;
+    }
     const cents = Math.round(discountedTotal * 100);
     createPaymentIntent(cents);
     setShowStripeForm(true);
@@ -939,6 +973,9 @@ export default function StorefrontBook() {
     setAuthError("");
     if (!name || !email || !phone) {
       toast({ title: "Please fill in your name, email, and phone", variant: "destructive" }); return;
+    }
+    if (hasTimeSlots && !selectedTimeSlot) {
+      toast({ title: "Please select a time slot", description: "Choose a pickup time slot to continue.", variant: "destructive" }); return;
     }
     if (password.length < 6) { setAuthError("Password must be at least 6 characters"); return; }
     if (password !== confirmPassword) { setAuthError("Passwords don't match"); return; }
@@ -1253,42 +1290,74 @@ export default function StorefrontBook() {
                       />
                     </div>
                     {dateRange?.from && dateRange?.to && (
-                      <div className="grid grid-cols-2 gap-3">
-                        <div className="bg-background rounded-xl border p-3">
-                          <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider mb-1">Pickup</p>
-                          <p className="font-semibold text-sm mb-2">{format(dateRange.from, "EEE, MMM d")}</p>
-                          <div className="relative">
-                            <Clock className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none z-10" />
-                            <Select value={pickupTime} onValueChange={setPickupTime}>
-                              <SelectTrigger className="pl-8 h-8 text-xs font-medium">
-                                <SelectValue />
-                              </SelectTrigger>
-                              <SelectContent>
-                                {TIME_OPTIONS.map(t => (
-                                  <SelectItem key={t} value={t} className="text-xs">{t}</SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
+                      hasTimeSlots ? (
+                        /* ── Time Slot Picker (kiosk) ── */
+                        <div className="space-y-2">
+                          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Select a Time Slot</p>
+                          {listingTimeSlots.map((slot, idx) => (
+                            <button
+                              key={idx}
+                              type="button"
+                              onClick={() => setSelectedTimeSlot(slot)}
+                              className={`w-full flex items-center gap-3 rounded-xl border px-4 py-3 text-left transition-colors ${
+                                selectedTimeSlot?.label === slot.label
+                                  ? "border-primary bg-primary/5 ring-1 ring-primary"
+                                  : "hover:bg-muted/50"
+                              }`}
+                            >
+                              <Clock className="w-4 h-4 text-muted-foreground shrink-0" />
+                              <div className="flex-1">
+                                <p className="text-sm font-semibold">{slot.label}</p>
+                                <p className="text-xs text-muted-foreground">{slot.startTime} – {slot.endTime}</p>
+                              </div>
+                              <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${
+                                slot.rate === "half_day"
+                                  ? "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300"
+                                  : "bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300"
+                              }`}>
+                                {slot.rate === "half_day" ? "Half Day" : "Full Day"}
+                              </span>
+                            </button>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="grid grid-cols-2 gap-3">
+                          <div className="bg-background rounded-xl border p-3">
+                            <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider mb-1">Pickup</p>
+                            <p className="font-semibold text-sm mb-2">{format(dateRange.from, "EEE, MMM d")}</p>
+                            <div className="relative">
+                              <Clock className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none z-10" />
+                              <Select value={pickupTime} onValueChange={setPickupTime}>
+                                <SelectTrigger className="pl-8 h-8 text-xs font-medium">
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  {TIME_OPTIONS.map(t => (
+                                    <SelectItem key={t} value={t} className="text-xs">{t}</SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            </div>
+                          </div>
+                          <div className="bg-background rounded-xl border p-3">
+                            <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider mb-1">Return</p>
+                            <p className="font-semibold text-sm mb-2">{format(dateRange.to, "EEE, MMM d")}</p>
+                            <div className="relative">
+                              <Clock className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none z-10" />
+                              <Select value={dropoffTime} onValueChange={setDropoffTime}>
+                                <SelectTrigger className="pl-8 h-8 text-xs font-medium">
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  {TIME_OPTIONS.map(t => (
+                                    <SelectItem key={t} value={t} className="text-xs">{t}</SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            </div>
                           </div>
                         </div>
-                        <div className="bg-background rounded-xl border p-3">
-                          <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider mb-1">Return</p>
-                          <p className="font-semibold text-sm mb-2">{format(dateRange.to, "EEE, MMM d")}</p>
-                          <div className="relative">
-                            <Clock className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none z-10" />
-                            <Select value={dropoffTime} onValueChange={setDropoffTime}>
-                              <SelectTrigger className="pl-8 h-8 text-xs font-medium">
-                                <SelectValue />
-                              </SelectTrigger>
-                              <SelectContent>
-                                {TIME_OPTIONS.map(t => (
-                                  <SelectItem key={t} value={t} className="text-xs">{t}</SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                          </div>
-                        </div>
-                      </div>
+                      )
                     )}
                   </div>
                 )}
@@ -1923,42 +1992,74 @@ export default function StorefrontBook() {
                       />
                     </div>
                     {dateRange?.from && dateRange?.to && (
-                      <div className="grid grid-cols-2 gap-3 mt-3">
-                        <div className="bg-background rounded-xl border p-3">
-                          <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider mb-1">Pickup</p>
-                          <p className="font-semibold text-sm mb-2">{format(dateRange.from, "EEE, MMM d")}</p>
-                          <div className="relative">
-                            <Clock className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none z-10" />
-                            <Select value={pickupTime} onValueChange={setPickupTime}>
-                              <SelectTrigger className="pl-8 h-8 text-xs font-medium">
-                                <SelectValue />
-                              </SelectTrigger>
-                              <SelectContent>
-                                {TIME_OPTIONS.map(t => (
-                                  <SelectItem key={t} value={t} className="text-xs">{t}</SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
+                      hasTimeSlots ? (
+                        /* ── Time Slot Picker (online) ── */
+                        <div className="mt-3 space-y-2">
+                          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Select a Time Slot</p>
+                          {listingTimeSlots.map((slot, idx) => (
+                            <button
+                              key={idx}
+                              type="button"
+                              onClick={() => setSelectedTimeSlot(slot)}
+                              className={`w-full flex items-center gap-3 rounded-xl border px-4 py-3 text-left transition-colors ${
+                                selectedTimeSlot?.label === slot.label
+                                  ? "border-primary bg-primary/5 ring-1 ring-primary"
+                                  : "hover:bg-muted/50"
+                              }`}
+                            >
+                              <Clock className="w-4 h-4 text-muted-foreground shrink-0" />
+                              <div className="flex-1">
+                                <p className="text-sm font-semibold">{slot.label}</p>
+                                <p className="text-xs text-muted-foreground">{slot.startTime} – {slot.endTime}</p>
+                              </div>
+                              <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${
+                                slot.rate === "half_day"
+                                  ? "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300"
+                                  : "bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300"
+                              }`}>
+                                {slot.rate === "half_day" ? "Half Day" : "Full Day"}
+                              </span>
+                            </button>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="grid grid-cols-2 gap-3 mt-3">
+                          <div className="bg-background rounded-xl border p-3">
+                            <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider mb-1">Pickup</p>
+                            <p className="font-semibold text-sm mb-2">{format(dateRange.from, "EEE, MMM d")}</p>
+                            <div className="relative">
+                              <Clock className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none z-10" />
+                              <Select value={pickupTime} onValueChange={setPickupTime}>
+                                <SelectTrigger className="pl-8 h-8 text-xs font-medium">
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  {TIME_OPTIONS.map(t => (
+                                    <SelectItem key={t} value={t} className="text-xs">{t}</SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            </div>
+                          </div>
+                          <div className="bg-background rounded-xl border p-3">
+                            <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider mb-1">Return</p>
+                            <p className="font-semibold text-sm mb-2">{format(dateRange.to, "EEE, MMM d")}</p>
+                            <div className="relative">
+                              <Clock className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none z-10" />
+                              <Select value={dropoffTime} onValueChange={setDropoffTime}>
+                                <SelectTrigger className="pl-8 h-8 text-xs font-medium">
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  {TIME_OPTIONS.map(t => (
+                                    <SelectItem key={t} value={t} className="text-xs">{t}</SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            </div>
                           </div>
                         </div>
-                        <div className="bg-background rounded-xl border p-3">
-                          <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider mb-1">Return</p>
-                          <p className="font-semibold text-sm mb-2">{format(dateRange.to, "EEE, MMM d")}</p>
-                          <div className="relative">
-                            <Clock className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none z-10" />
-                            <Select value={dropoffTime} onValueChange={setDropoffTime}>
-                              <SelectTrigger className="pl-8 h-8 text-xs font-medium">
-                                <SelectValue />
-                              </SelectTrigger>
-                              <SelectContent>
-                                {TIME_OPTIONS.map(t => (
-                                  <SelectItem key={t} value={t} className="text-xs">{t}</SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                          </div>
-                        </div>
-                      </div>
+                      )
                     )}
                   </div>
                 )}

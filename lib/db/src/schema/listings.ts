@@ -3,6 +3,7 @@ import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 
 export type HourlySlot = { label: string; hours: number; price: number };
+export type TimeSlot = { label: string; startTime: string; endTime: string; rate: "full_day" | "half_day" };
 
 export const listingsTable = pgTable("listings", {
   id: serial("id").primaryKey(),
@@ -24,6 +25,8 @@ export const listingsTable = pgTable("listings", {
   hourlySlots: json("hourly_slots").$type<HourlySlot[]>(),
   hourlyPerHourEnabled: boolean("hourly_per_hour_enabled").notNull().default(false),
   hourlyMinimumHours: integer("hourly_minimum_hours"),
+  // Fixed time slots — if any are defined, renter must pick one
+  timeSlots: json("time_slots").$type<TimeSlot[]>(),
   quantity: integer("quantity").notNull().default(1),
   imageUrls: json("image_urls").$type<string[]>().notNull().default([]),
   location: text("location"),

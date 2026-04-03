@@ -16,7 +16,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { ArrowLeft, Upload, X, CheckCircle2, AlertCircle, CircleDashed, ImagePlus, Loader2, IdCard, Sparkles, ChevronDown, ChevronUp, RefreshCw, Info, Plus, Trash2 } from "lucide-react";
+import { ArrowLeft, Upload, X, CheckCircle2, AlertCircle, CircleDashed, ImagePlus, Loader2, IdCard, Sparkles, ChevronDown, ChevronUp, RefreshCw, Info, Plus, Trash2, Clock } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Checkbox } from "@/components/ui/checkbox";
 import { AddonManager } from "@/components/addon-manager";
@@ -25,6 +25,21 @@ import { getAdminSession } from "@/lib/admin-nav";
 
 interface ContactCard { id: number; name: string; address?: string | null; phone?: string | null; email?: string | null; }
 interface Category { id: number; name: string; slug: string; icon?: string | null; }
+type TimeSlotDef = { label: string; startTime: string; endTime: string; rate: "full_day" | "half_day" };
+
+// 30-minute increments 6 AM – 10 PM
+const SLOT_TIMES: string[] = (() => {
+  const times: string[] = [];
+  for (let h = 6; h <= 22; h++) {
+    for (const m of [0, 30]) {
+      if (h === 22 && m === 30) break;
+      const ampm = h < 12 ? "AM" : "PM";
+      const h12 = h === 0 ? 12 : h > 12 ? h - 12 : h;
+      times.push(`${h12}:${m === 0 ? "00" : "30"} ${ampm}`);
+    }
+  }
+  return times;
+})();
 
 function useContactCards() {
   const [cards, setCards] = useState<ContactCard[]>([]);
@@ -127,6 +142,7 @@ export default function AdminListingsForm() {
     hourlySlots: [] as { label: string; hours: number; price: number }[],
     hourlyPerHourEnabled: false,
     hourlyMinimumHours: 1 as number | null,
+    timeSlots: [] as TimeSlotDef[],
     quantity: 1,
     imageUrls: [] as string[],
     location: '',
@@ -154,6 +170,20 @@ export default function AdminListingsForm() {
   };
   const removeHourlySlot = (idx: number) => {
     setFormData(prev => ({ ...prev, hourlySlots: prev.hourlySlots.filter((_, i) => i !== idx) }));
+  };
+
+  // Time slot (fixed start/end windows) draft + helpers
+  const [tsD, setTsD] = useState<{ label: string; startTime: string; endTime: string; rate: "full_day" | "half_day" }>({
+    label: '', startTime: SLOT_TIMES[4] ?? "8:00 AM", endTime: SLOT_TIMES[8] ?? "10:00 AM", rate: "full_day",
+  });
+  const addTimeSlot = () => {
+    if (!tsD.startTime || !tsD.endTime) return;
+    const label = tsD.label.trim() || `${tsD.startTime} – ${tsD.endTime}`;
+    setFormData(prev => ({ ...prev, timeSlots: [...prev.timeSlots, { label, startTime: tsD.startTime, endTime: tsD.endTime, rate: tsD.rate }] }));
+    setTsD(prev => ({ ...prev, label: '' }));
+  };
+  const removeTimeSlot = (idx: number) => {
+    setFormData(prev => ({ ...prev, timeSlots: prev.timeSlots.filter((_, i) => i !== idx) }));
   };
 
   // AI description generator state
@@ -219,6 +249,7 @@ export default function AdminListingsForm() {
         hourlySlots: (listing as any).hourlySlots ?? [],
         hourlyPerHourEnabled: (listing as any).hourlyPerHourEnabled ?? false,
         hourlyMinimumHours: (listing as any).hourlyMinimumHours ?? 1,
+        timeSlots: (listing as any).timeSlots ?? [],
         quantity: listing.quantity,
         imageUrls: listing.imageUrls || [],
         location: listing.location || '',
@@ -815,6 +846,120 @@ export default function AdminListingsForm() {
                       )}
                     </div>
                   </div>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* Available Time Slots */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Available Time Slots</CardTitle>
+                <CardDescription>
+                  Define specific start and end times renters must choose from. When slots are added, the time picker is replaced with this list and selection becomes required.
+                  Each slot can be priced at the full-day or half-day rate.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {/* Existing slots */}
+                {formData.timeSlots.length > 0 && (
+                  <div className="space-y-2">
+                    {formData.timeSlots.map((slot, idx) => (
+                      <div key={idx} className="flex items-center gap-3 bg-muted/30 rounded-lg px-3 py-2.5 border">
+                        <Clock className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-semibold truncate">{slot.label}</p>
+                          <p className="text-xs text-muted-foreground">{slot.startTime} – {slot.endTime}</p>
+                        </div>
+                        <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${
+                          slot.rate === "half_day"
+                            ? "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300"
+                            : "bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300"
+                        }`}>
+                          {slot.rate === "half_day" ? "Half Day Rate" : "Full Day Rate"}
+                        </span>
+                        <button type="button" onClick={() => removeTimeSlot(idx)} className="text-muted-foreground hover:text-destructive transition-colors ml-1 shrink-0">
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* Add slot form */}
+                <div className="rounded-xl border border-dashed p-4 space-y-3 bg-muted/10">
+                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Add a Time Slot</p>
+
+                  {/* Label */}
+                  <div className="space-y-1">
+                    <Label className="text-xs">Slot Label <span className="text-muted-foreground font-normal">(optional — defaults to start–end)</span></Label>
+                    <Input
+                      className="h-8 text-sm"
+                      placeholder='e.g. "Morning Slot" or "Full Day AM"'
+                      value={tsD.label}
+                      onChange={e => setTsD(prev => ({ ...prev, label: e.target.value }))}
+                    />
+                  </div>
+
+                  {/* Start + End times */}
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-1">
+                      <Label className="text-xs">Start Time <span className="text-destructive">*</span></Label>
+                      <Select value={tsD.startTime} onValueChange={v => setTsD(prev => ({ ...prev, startTime: v }))}>
+                        <SelectTrigger className="h-8 text-sm">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {SLOT_TIMES.map(t => <SelectItem key={t} value={t} className="text-sm">{t}</SelectItem>)}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-xs">End / Return Time <span className="text-destructive">*</span></Label>
+                      <Select value={tsD.endTime} onValueChange={v => setTsD(prev => ({ ...prev, endTime: v }))}>
+                        <SelectTrigger className="h-8 text-sm">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {SLOT_TIMES.map(t => <SelectItem key={t} value={t} className="text-sm">{t}</SelectItem>)}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+
+                  {/* Rate */}
+                  <div className="space-y-1.5">
+                    <Label className="text-xs">Rate Applied</Label>
+                    <div className="flex gap-3">
+                      {([["full_day", "Full Day Rate"], ["half_day", "Half Day Rate"]] as const).map(([val, label]) => (
+                        <label key={val} className={`flex items-center gap-2 cursor-pointer border rounded-lg px-3 py-2 text-sm transition-colors ${
+                          tsD.rate === val ? "border-primary bg-primary/5 font-medium" : "hover:bg-muted/50"
+                        }`}>
+                          <input
+                            type="radio"
+                            name="tsRate"
+                            value={val}
+                            checked={tsD.rate === val}
+                            onChange={() => setTsD(prev => ({ ...prev, rate: val }))}
+                            className="accent-primary"
+                          />
+                          {label}
+                        </label>
+                      ))}
+                    </div>
+                    {tsD.rate === "half_day" && !formData.halfDayEnabled && (
+                      <p className="text-xs text-amber-600 flex items-center gap-1">
+                        <Info className="w-3 h-3" /> Enable Half Day Pricing above to set a half-day rate.
+                      </p>
+                    )}
+                  </div>
+
+                  <Button type="button" size="sm" variant="outline" onClick={addTimeSlot} className="w-full gap-1.5">
+                    <Plus className="w-3.5 h-3.5" /> Add Time Slot
+                  </Button>
+                </div>
+
+                {formData.timeSlots.length === 0 && (
+                  <p className="text-xs text-muted-foreground text-center py-1">No time slots added — renters will use the standard time picker.</p>
                 )}
               </CardContent>
             </Card>

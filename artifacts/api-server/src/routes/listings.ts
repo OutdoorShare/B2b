@@ -47,6 +47,7 @@ function formatListing(l: typeof listingsTable.$inferSelect, categoryName?: stri
     hourlySlots: Array.isArray(l.hourlySlots) ? l.hourlySlots : [],
     hourlyPerHourEnabled: l.hourlyPerHourEnabled ?? false,
     hourlyMinimumHours: l.hourlyMinimumHours ?? null,
+    timeSlots: Array.isArray(l.timeSlots) ? l.timeSlots : [],
     availableQuantity: l.quantity,
     imageUrls: Array.isArray(l.imageUrls) ? l.imageUrls : [],
     includedItems: Array.isArray(l.includedItems) ? l.includedItems : [],

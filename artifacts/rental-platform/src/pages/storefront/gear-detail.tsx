@@ -12,7 +12,7 @@ import { Badge } from "@/components/ui/badge";
 import { Calendar } from "@/components/ui/calendar";
 import {
   ArrowLeft, Check, Shield, MapPin, AlertTriangle,
-  Tag, ChevronRight, Package, ShieldCheck, Umbrella, Zap, Lock,
+  Tag, ChevronRight, Package, ShieldCheck, Umbrella, Zap, Lock, Clock,
   CalendarDays, ChevronRight as ArrowRight, ClipboardList, Link2
 } from "lucide-react";
 import { differenceInDays, format, isWithinInterval, startOfDay, addDays, isBefore, isAfter, isSameDay } from "date-fns";
@@ -481,6 +481,38 @@ export default function StorefrontGearDetail() {
                       )}
                     </div>
                   )}
+
+                  {/* ── Available Time Slots (info display, not picker — picker is in book.tsx) ── */}
+                  {days > 0 && !rangeHasConflict && (() => {
+                    const slots: Array<{ label: string; startTime: string; endTime: string; rate: "full_day" | "half_day" }> =
+                      Array.isArray((listing as any).timeSlots) ? (listing as any).timeSlots : [];
+                    if (!slots.length) return null;
+                    return (
+                      <div className="space-y-1.5">
+                        <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide flex items-center gap-1">
+                          <Clock className="w-3.5 h-3.5" /> Available Time Slots
+                        </p>
+                        <div className="grid gap-1.5">
+                          {slots.map((slot, idx) => (
+                            <div key={idx} className="flex items-center gap-3 rounded-lg border bg-muted/20 px-3 py-2">
+                              <div className="flex-1">
+                                <p className="text-xs font-semibold">{slot.label}</p>
+                                <p className="text-[11px] text-muted-foreground">{slot.startTime} – {slot.endTime}</p>
+                              </div>
+                              <span className={`text-[11px] font-medium px-2 py-0.5 rounded-full shrink-0 ${
+                                slot.rate === "half_day"
+                                  ? "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300"
+                                  : "bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300"
+                              }`}>
+                                {slot.rate === "half_day" ? "Half Day" : "Full Day"}
+                              </span>
+                            </div>
+                          ))}
+                          <p className="text-[10px] text-muted-foreground text-center">Select your slot during checkout</p>
+                        </div>
+                      </div>
+                    );
+                  })()}
 
                   {/* Price breakdown */}
                   {days > 0 && !rangeHasConflict && (
