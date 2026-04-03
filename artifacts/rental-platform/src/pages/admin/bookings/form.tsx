@@ -163,13 +163,6 @@ export default function AdminBookingForm() {
     });
   }, [params.slug]);
 
-  // Recalculate bundle item subtotals when days change
-  useEffect(() => {
-    if (bundleItems.length === 0) return;
-    setBundleItems(items => items.map(i => ({ ...i, days, subtotal: i.pricePerDay * i.qty * days })));
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [days]);
-
   // Keep assignedSlots array length in sync with quantity
   useEffect(() => {
     const qty = Math.max(1, Number(form.quantity) || 1);
@@ -180,11 +173,19 @@ export default function AdminBookingForm() {
     });
   }, [form.quantity]);
 
+  // days must be declared before any useEffect that lists it as a dependency
   const days = useMemo(() => {
     try {
       return Math.max(1, differenceInDays(new Date(form.endDate), new Date(form.startDate)));
     } catch { return 1; }
   }, [form.startDate, form.endDate]);
+
+  // Recalculate bundle item subtotals when days change
+  useEffect(() => {
+    if (bundleItems.length === 0) return;
+    setBundleItems(items => items.map(i => ({ ...i, days, subtotal: i.pricePerDay * i.qty * days })));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [days]);
 
   const basePrice = useMemo(() => {
     if (!listingDetails) return 0;
