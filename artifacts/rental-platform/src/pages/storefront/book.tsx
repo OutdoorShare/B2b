@@ -2781,7 +2781,7 @@ export default function StorefrontBook() {
                               <div className="flex items-center gap-1.5 bg-white/80 rounded-xl px-3 py-2 shadow-sm border border-border">
                                 {(businessProfile as any)?.logoUrl ? (
                                   <img
-                                    src={`/api${(businessProfile as any).logoUrl}`}
+                                    src={(businessProfile as any).logoUrl}
                                     alt=""
                                     className="w-7 h-7 rounded-lg object-cover shrink-0"
                                   />
