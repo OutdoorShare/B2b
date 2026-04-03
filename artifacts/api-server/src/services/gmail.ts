@@ -1086,7 +1086,195 @@ export async function sendAdminBookingContactEmail(opts: {
   });
 }
 
-// ── Return link email (to renter) ─────────────────────────────────────────────
+// ── Pre-pickup reminder to RENTER (timed, ~12 hrs before pickup day) ──────────
+export async function sendPrePickupReminderRenterEmail(opts: {
+  customerName: string;
+  customerEmail: string;
+  bookingId: number;
+  listingTitle: string;
+  startDate: string;
+  endDate: string;
+  pickupTime?: string | null;
+  pickupAddress?: string | null;
+  companyName: string;
+  tenantSlug?: string;
+  adminEmail?: string;
+  contactPhone?: string | null;
+}): Promise<void> {
+  const { customerName, customerEmail, bookingId, listingTitle, startDate, endDate, pickupTime, pickupAddress, companyName, tenantSlug, adminEmail, contactPhone } = opts;
+  const fromHeader = `${companyName} <contact.us@myoutdoorshare.com>`;
+  const bookingUrl = tenantSlug ? `${APP_URL}/${tenantSlug}/my-bookings/${bookingId}` : null;
+
+  const body = `
+    <p style="margin:0 0 8px;font-size:18px;font-weight:700;color:${BRAND_DARK};">Your rental starts soon, ${customerName}!</p>
+    <p style="margin:0 0 20px;font-size:15px;color:#374151;line-height:1.6;">
+      This is a reminder that your <strong>${listingTitle}</strong> rental at <strong>${companyName}</strong> is coming up.
+    </p>
+
+    ${infoTable([
+      { label: "Booking #",    value: `#${bookingId}`, mono: true },
+      { label: "Item",         value: listingTitle },
+      { label: "Pickup Date",  value: startDate },
+      { label: "Return Date",  value: endDate },
+      ...(pickupTime ? [{ label: "Pickup Time", value: pickupTime }] : []),
+      ...(pickupAddress ? [{ label: "Pickup Address", value: pickupAddress }] : []),
+      ...(contactPhone ? [{ label: "Company Phone", value: contactPhone }] : []),
+    ])}
+
+    <div style="background:#fefce8;border:1px solid #fde047;border-radius:8px;padding:16px;margin:24px 0;">
+      <p style="margin:0 0 8px;font-size:14px;font-weight:700;color:#713f12;">📸 Step 2 when you arrive — upload photos</p>
+      <p style="margin:0 0 10px;font-size:13px;color:#92400e;line-height:1.6;">
+        After picking up your rental, you'll need to photograph the equipment condition before leaving. This protects you.
+      </p>
+      <ul style="margin:0;padding-left:20px;font-size:13px;color:#92400e;line-height:2;">
+        <li>1 Front</li><li>1 Left Side</li><li>1 Right Side</li><li>1 Rear</li><li>1 Interior / Detail</li>
+      </ul>
+      <p style="margin:10px 0 0;font-size:12px;color:#92400e;">A link to the photo portal will be in your confirmation or available in your booking page.</p>
+    </div>
+
+    ${bookingUrl ? ctaButton("View Your Booking", bookingUrl, BRAND_DARK) : ""}
+    <p style="margin:0;font-size:13px;color:#9ca3af;text-align:center;">Questions? Reply to this email — <strong>${companyName}</strong> will get back to you.</p>
+  `;
+
+  const html = emailShell({
+    preheader: `Reminder: Your ${listingTitle} rental starts on ${startDate} — see your pickup details inside.`,
+    badgeLabel: "Rental Reminder",
+    badgeColor: "#f59e0b",
+    body,
+  });
+
+  const gmail = await getUncachableGmailClient();
+  await gmail.users.messages.send({
+    userId: "me",
+    requestBody: { raw: makeRawEmail(customerEmail, `[${companyName}] Reminder — your rental starts soon 🚀`, html, fromHeader, adminEmail) },
+  });
+}
+
+// ── Pre-pickup reminder to ADMIN (timed, ~12 hrs before pickup day) ────────────
+export async function sendPrePickupReminderAdminEmail(opts: {
+  adminEmail: string;
+  customerName: string;
+  customerEmail: string;
+  customerPhone?: string | null;
+  bookingId: number;
+  listingTitle: string;
+  startDate: string;
+  endDate: string;
+  pickupTime?: string | null;
+  companyName: string;
+  tenantSlug: string;
+}): Promise<void> {
+  const { adminEmail, customerName, customerEmail, customerPhone, bookingId, listingTitle, startDate, endDate, pickupTime, companyName, tenantSlug } = opts;
+  const adminBookingUrl = `${APP_URL}/${tenantSlug}/admin/bookings/${bookingId}`;
+
+  const body = `
+    <p style="margin:0 0 8px;font-size:18px;font-weight:700;color:${BRAND_DARK};">Pickup arriving soon — action needed</p>
+    <p style="margin:0 0 20px;font-size:15px;color:#374151;line-height:1.6;">
+      <strong>${customerName}</strong> is picking up <strong>${listingTitle}</strong> tomorrow (${startDate}). Make sure they complete the photo documentation at pickup.
+    </p>
+
+    ${infoTable([
+      { label: "Booking #",   value: `#${bookingId}`, mono: true },
+      { label: "Customer",    value: customerName },
+      { label: "Email",       value: customerEmail },
+      ...(customerPhone ? [{ label: "Phone", value: customerPhone }] : []),
+      { label: "Item",        value: listingTitle },
+      { label: "Pickup",      value: `${startDate}${pickupTime ? ` at ${pickupTime}` : ""}` },
+      { label: "Return",      value: endDate },
+    ])}
+
+    <div style="background:#fff7ed;border:1px solid #fed7aa;border-radius:8px;padding:16px;margin:24px 0;">
+      <p style="margin:0 0 6px;font-size:14px;font-weight:700;color:#9a3412;">⚠️ What you must do at pickup</p>
+      <ol style="margin:0;padding-left:20px;font-size:13px;color:#c2410c;line-height:2;">
+        <li>Greet <strong>${customerName}</strong> at the agreed pickup time and address.</li>
+        <li>Send them the <strong>pickup photo link</strong> from their booking page so they can document equipment condition.</li>
+        <li>Do <strong>not</strong> hand over equipment until at least 5 photos are uploaded.</li>
+        <li>Their <strong>security deposit</strong> will be automatically held when photos are submitted.</li>
+      </ol>
+    </div>
+
+    ${ctaButton("Open Booking in Dashboard", adminBookingUrl, BRAND_DARK)}
+    <p style="margin:0;font-size:13px;color:#9ca3af;text-align:center;">This is an automated reminder sent ~12 hours before every pickup.</p>
+  `;
+
+  const html = emailShell({
+    preheader: `${customerName} picks up ${listingTitle} on ${startDate} — don't forget pickup photos!`,
+    badgeLabel: "⏰ Pickup Reminder — Action Needed",
+    badgeColor: "#f97316",
+    body,
+  });
+
+  const gmail = await getUncachableGmailClient();
+  await gmail.users.messages.send({
+    userId: "me",
+    requestBody: { raw: makeRawEmail(adminEmail, `[${companyName}] Pickup reminder — ${customerName} · ${listingTitle} tomorrow`, html) },
+  });
+}
+
+// ── Return reminder to RENTER (timed, ~24 hrs before return date) ─────────────
+export async function sendReturnReminderRenterEmail(opts: {
+  customerName: string;
+  customerEmail: string;
+  bookingId: number;
+  listingTitle: string;
+  startDate: string;
+  endDate: string;
+  companyName: string;
+  tenantSlug?: string;
+  adminEmail?: string;
+  depositNote?: string;
+}): Promise<void> {
+  const { customerName, customerEmail, bookingId, listingTitle, startDate, endDate, companyName, tenantSlug, adminEmail, depositNote } = opts;
+  const fromHeader = `${companyName} <contact.us@myoutdoorshare.com>`;
+  const bookingUrl = tenantSlug ? `${APP_URL}/${tenantSlug}/my-bookings/${bookingId}` : null;
+
+  const body = `
+    <p style="margin:0 0 8px;font-size:18px;font-weight:700;color:${BRAND_DARK};">Return reminder — due tomorrow, ${customerName}</p>
+    <p style="margin:0 0 20px;font-size:15px;color:#374151;line-height:1.6;">
+      Your <strong>${listingTitle}</strong> rental is due back to <strong>${companyName}</strong> tomorrow (<strong>${endDate}</strong>).
+      Please plan your return in advance to avoid any late fees.
+    </p>
+
+    ${infoTable([
+      { label: "Booking #",   value: `#${bookingId}`, mono: true },
+      { label: "Item",        value: listingTitle },
+      { label: "Rental Start", value: startDate },
+      { label: "Due Back",    value: endDate },
+      { label: "Company",     value: companyName },
+    ])}
+
+    ${depositNote ? `
+    <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;padding:14px;margin:20px 0;">
+      <p style="margin:0;font-size:13px;color:#1e40af;font-weight:600;">💰 Security Deposit</p>
+      <p style="margin:6px 0 0;font-size:13px;color:#1d4ed8;line-height:1.6;">${depositNote}</p>
+    </div>` : ""}
+
+    <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:14px;margin:20px 0;">
+      <p style="margin:0 0 6px;font-size:14px;font-weight:700;color:#166534;">📸 Return photos required</p>
+      <p style="margin:0;font-size:13px;color:#15803d;line-height:1.6;">
+        When you drop off the equipment your rental company will send you a return photo link.
+        Please photograph all sides of the equipment to protect yourself against any damage claims.
+      </p>
+    </div>
+
+    ${bookingUrl ? ctaButton("View Your Booking", bookingUrl, "#1d4ed8") : ""}
+    <p style="margin:0;font-size:13px;color:#9ca3af;text-align:center;">Questions about your return? Reply to this email — <strong>${companyName}</strong> will help.</p>
+  `;
+
+  const html = emailShell({
+    preheader: `Your ${listingTitle} is due back tomorrow (${endDate}) — return info inside.`,
+    badgeLabel: "Return Due Tomorrow",
+    badgeColor: "#3b82f6",
+    body,
+  });
+
+  const gmail = await getUncachableGmailClient();
+  await gmail.users.messages.send({
+    userId: "me",
+    requestBody: { raw: makeRawEmail(customerEmail, `[${companyName}] Return reminder — your rental is due back tomorrow`, html, fromHeader, adminEmail) },
+  });
+}
+
 export async function sendReturnLinkEmail(opts: {
   toEmail: string;
   customerName: string;

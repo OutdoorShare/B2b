@@ -49,6 +49,9 @@ export const bookingsTable = pgTable("bookings", {
   returnCompletedAt: timestamp("return_completed_at"),
   // AI inspection result (JSON from vision API)
   inspectionResult: text("inspection_result"),
+  // Scheduled reminder flags — set true once the timed email is sent
+  pickupReminderSent: boolean("pickup_reminder_sent").default(false),
+  returnReminderSent: boolean("return_reminder_sent").default(false),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
