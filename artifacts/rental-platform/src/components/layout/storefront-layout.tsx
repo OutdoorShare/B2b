@@ -413,15 +413,6 @@ export function StorefrontLayout({ children }: { children: React.ReactNode }) {
         />
       )}
 
-      {/* Subtle trial bar — shown while trial is still active */}
-      {trialActive && trialEndsAt && (
-        <TrialBanner trialEndsAt={trialEndsAt} />
-      )}
-
-      {/* Grace period warning — trial expired but storefront still online (3-day window) */}
-      {trialExpired && !isBlocked && graceEndsAt && (
-        <GraceBanner graceEndsAt={graceEndsAt} />
-      )}
 
       {/* ── Tenant header ── */}
       <header
