@@ -1013,13 +1013,15 @@ export default function StorefrontBook() {
     return base * selectedQuantity;
   }, [hasTimeSlots, selectedTimeSlot, listing, isOneDay, selectedOption, fullDayPrice, days, selectedHours, selectedQuantity]);
   const deposit = listing?.depositAmount ? parseFloat(String(listing.depositAmount)) : 0;
-  const addonsSubtotal = useMemo(() => {
-    return availableAddons
-      .filter(a => selectedAddonIds.has(a.id))
-      .reduce((sum, a) => sum + (a.priceType === "per_day" ? a.price * days : a.price), 0);
-  }, [availableAddons, selectedAddonIds, days]);
   const platformProtectionRate = platformProtectionPlan?.enabled ? parseFloat(platformProtectionPlan.feeAmount || "0") : 0;
   const platformProtectionFee = platformProtectionRate * days;
+  // When the platform protection plan is active, exclude listing addons named "protection"
+  // to avoid double-counting the same fee.
+  const addonsSubtotal = useMemo(() => {
+    return availableAddons
+      .filter(a => selectedAddonIds.has(a.id) && !(platformProtectionFee > 0 && a.name.toLowerCase().includes("protection")))
+      .reduce((sum, a) => sum + (a.priceType === "per_day" ? a.price * days : a.price), 0);
+  }, [availableAddons, selectedAddonIds, days, platformProtectionFee]);
   const total = subtotal + addonsSubtotal + platformProtectionFee;
   const promoDiscount = appliedPromo ? Math.min(appliedPromo.discountAmount, total) : 0;
   const discountedTotal = Math.max(0.50, total - promoDiscount);
@@ -1742,6 +1744,44 @@ export default function StorefrontBook() {
                   </div>
                 )}
 
+                {/* ── Kiosk: Inline price + protection summary ── */}
+                {isKiosk && dateRange?.from && dateRange?.to && (
+                  <div className="bg-background rounded-2xl border shadow-sm divide-y">
+                    <div className="px-4 py-3 flex items-center justify-between text-sm">
+                      <span className="text-muted-foreground">
+                        ${(listing as any)?.pricePerDay?.toFixed(2)}/day × {days} day{days !== 1 ? "s" : ""}
+                        {selectedQuantity > 1 && <span className="ml-1">× {selectedQuantity}</span>}
+                      </span>
+                      <span className="font-semibold">${subtotal.toFixed(2)}</span>
+                    </div>
+                    {platformProtectionFee > 0 && (
+                      <div className="px-4 py-3 flex items-center justify-between text-sm">
+                        <span className="flex items-center gap-2">
+                          <ShieldCheck className="w-4 h-4 shrink-0" style={{ color: "#3ab549" }} />
+                          <span>
+                            <span className="font-semibold" style={{ color: "#1a2332" }}>Protection Plan</span>
+                            <span className="ml-1 text-xs font-bold px-1.5 py-0.5 rounded-full" style={{ background: "rgba(58,181,73,0.12)", color: "#3ab549" }}>Required</span>
+                          </span>
+                          <span className="text-xs text-muted-foreground">${platformProtectionRate}/day × {days} day{days !== 1 ? "s" : ""}</span>
+                        </span>
+                        <span className="font-semibold text-blue-700">+${platformProtectionFee.toFixed(2)}</span>
+                      </div>
+                    )}
+                    {availableAddons
+                      .filter(a => selectedAddonIds.has(a.id) && !(platformProtectionFee > 0 && a.name.toLowerCase().includes("protection")))
+                      .map(a => (
+                        <div key={a.id} className="px-4 py-3 flex items-center justify-between text-sm text-muted-foreground">
+                          <span>{a.name}</span>
+                          <span>+${(a.priceType === "per_day" ? a.price * days : a.price).toFixed(2)}</span>
+                        </div>
+                      ))}
+                    <div className="px-4 py-3 flex items-center justify-between font-bold text-base">
+                      <span>Total due</span>
+                      <span>${discountedTotal.toFixed(2)}</span>
+                    </div>
+                  </div>
+                )}
+
                 {/* ── Sub-Day Pricing Selector ── */}
                 {hasSubDayOptions && isOneDay && (
                   <div className="rounded-2xl border p-4 space-y-3">
@@ -1884,6 +1924,9 @@ export default function StorefrontBook() {
                   return (
                     <>
                       {protectionAddons.map(addon => {
+                        // When the platform protection plan covers this category, suppress the
+                        // listing-level protection addon card — the platform plan is the canonical fee.
+                        if (platformProtectionFee > 0) return null;
                         const addonPrice = addon.priceType === "per_day" ? addon.price * days : addon.price;
                         return (
                           <div
@@ -3224,12 +3267,14 @@ export default function StorefrontBook() {
                         )}
                         <span className="font-semibold text-foreground">${subtotal.toFixed(2)}</span>
                       </div>
-                      {availableAddons.filter(a => selectedAddonIds.has(a.id)).map(a => (
-                        <div key={a.id} className="flex justify-between text-muted-foreground">
-                          <span className="truncate mr-2">{a.name}</span>
-                          <span>+${(a.priceType === "per_day" ? a.price * days : a.price).toFixed(2)}</span>
-                        </div>
-                      ))}
+                      {availableAddons
+                        .filter(a => selectedAddonIds.has(a.id) && !(platformProtectionFee > 0 && a.name.toLowerCase().includes("protection")))
+                        .map(a => (
+                          <div key={a.id} className="flex justify-between text-muted-foreground">
+                            <span className="truncate mr-2">{a.name}</span>
+                            <span>+${(a.priceType === "per_day" ? a.price * days : a.price).toFixed(2)}</span>
+                          </div>
+                        ))}
                       {platformProtectionFee > 0 && (
                         <div className="flex justify-between text-blue-700 font-medium">
                           <span className="flex items-center gap-1.5">
