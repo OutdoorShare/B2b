@@ -11,6 +11,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { useGetBusinessProfile } from "@workspace/api-client-react";
 import { PoweredByBadge } from "@/components/powered-by-badge";
+import { NotificationBell } from "@/components/notification-bell";
 import { applyBrandColors, saveBrandColors, loadBrandColors } from "@/lib/theme";
 
 // ── Demo Gate ────────────────────────────────────────────────────────────────
@@ -460,6 +461,16 @@ export function StorefrontLayout({ children }: { children: React.ReactNode }) {
             >
               Listings
             </Link>
+
+            {customer && (
+              <NotificationBell
+                mode="renter"
+                slug={slug}
+                customerEmail={customer.email}
+                navBase={base}
+                iconColor={headerTextMuted}
+              />
+            )}
 
             {customer ? (
               /* Logged-in state */

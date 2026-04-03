@@ -19,6 +19,7 @@ import {
   sendPrePickupReminderAdminEmail,
   sendReturnReminderRenterEmail,
 } from "./gmail";
+import { createNotification } from "./notifications";
 
 const APP_URL = process.env.APP_URL || `https://${process.env.REPLIT_DEV_DOMAIN}`;
 const INTERVAL_MS = 15 * 60 * 1000; // 15 minutes
@@ -117,6 +118,33 @@ async function sendPickupReminders() {
         });
       }
 
+      // In-app notifications for pickup due soon
+      if (booking.tenantId) {
+        if (booking.customerEmail) {
+          createNotification({
+            tenantId: booking.tenantId,
+            targetType: "renter",
+            targetEmail: booking.customerEmail,
+            type: "pickup_due_soon",
+            title: "Pickup coming up!",
+            body: `Your ${listingTitle} pickup is on ${booking.startDate}. Get ready for your adventure!`,
+            actionUrl: "/my-bookings",
+            isActionRequired: false,
+            relatedId: booking.id,
+          }).catch(() => {});
+        }
+        createNotification({
+          tenantId: booking.tenantId,
+          targetType: "admin",
+          type: "pickup_due_soon",
+          title: "Pickup due soon",
+          body: `${booking.customerName} is picking up ${listingTitle} on ${booking.startDate}.`,
+          actionUrl: `/bookings/${booking.id}`,
+          isActionRequired: false,
+          relatedId: booking.id,
+        }).catch(() => {});
+      }
+
       console.log(`[scheduler] Pickup reminder sent for booking #${booking.id}`);
     } catch (err: any) {
       console.warn(`[scheduler] Pickup reminder failed for booking #${booking.id}:`, err?.message);
@@ -176,6 +204,33 @@ async function sendReturnReminders() {
           adminEmail: ctx.adminEmail,
           depositNote,
         });
+      }
+
+      // In-app notifications for return due soon
+      if (booking.tenantId) {
+        if (booking.customerEmail) {
+          createNotification({
+            tenantId: booking.tenantId,
+            targetType: "renter",
+            targetEmail: booking.customerEmail,
+            type: "return_due_soon",
+            title: "Return due tomorrow",
+            body: `Your ${listingTitle} is due back on ${booking.endDate}. Please plan your return.`,
+            actionUrl: "/my-bookings",
+            isActionRequired: false,
+            relatedId: booking.id,
+          }).catch(() => {});
+        }
+        createNotification({
+          tenantId: booking.tenantId,
+          targetType: "admin",
+          type: "return_due_soon",
+          title: "Return due tomorrow",
+          body: `${booking.customerName}'s ${listingTitle} is due back on ${booking.endDate}.`,
+          actionUrl: `/bookings/${booking.id}`,
+          isActionRequired: false,
+          relatedId: booking.id,
+        }).catch(() => {});
       }
 
       console.log(`[scheduler] Return reminder sent for booking #${booking.id}`);

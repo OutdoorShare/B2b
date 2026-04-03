@@ -19,6 +19,7 @@ import {
 } from "../services/gmail";
 import { openai } from "@workspace/integrations-openai-ai-server";
 import { getStripeForTenant } from "../services/stripe";
+import { createNotification } from "../services/notifications";
 
 // ── Auto-trigger deposit at pickup ─────────────────────────────────────────────
 // Called on both pickup endpoints when isFirstCompletion is true.
@@ -345,6 +346,20 @@ router.post("/bookings", async (req, res) => {
       })();
     }
 
+    // Notify admin of new pending booking (action required if not auto-confirmed)
+    if (req.tenantId && created.status !== "confirmed") {
+      createNotification({
+        tenantId: req.tenantId,
+        targetType: "admin",
+        type: "new_booking",
+        title: "New booking request",
+        body: `${created.customerName} booked ${listing.title} — ${created.startDate} to ${created.endDate}`,
+        actionUrl: `/bookings/${created.id}`,
+        isActionRequired: true,
+        relatedId: created.id,
+      }).catch(() => {});
+    }
+
     res.status(201).json(formatBooking(created, listing.title));
   } catch (err) {
     req.log.error(err);
@@ -514,6 +529,21 @@ router.put("/bookings/:id", async (req, res) => {
             const companyName = profileRow?.name ?? tenantRow?.slug ?? "Your Rental Company";
             const companyEmail = profileRow?.email ?? tenantRow?.email ?? undefined;
 
+            // Notify renter: booking confirmed
+            if (updated.tenantId && updated.customerEmail) {
+              await createNotification({
+                tenantId: updated.tenantId,
+                targetType: "renter",
+                targetEmail: updated.customerEmail,
+                type: "booking_confirmed",
+                title: "Booking confirmed!",
+                body: `Your booking for ${listingRow?.title ?? "your rental"} from ${updated.startDate} to ${updated.endDate} has been confirmed by ${companyName}.`,
+                actionUrl: "/my-bookings",
+                isActionRequired: false,
+                relatedId: updated.id,
+              });
+            }
+
             // Send contact card to renter if card is assigned
             if (listingRow?.contactCardId) {
               const [card] = await db
@@ -555,6 +585,36 @@ router.put("/bookings/:id", async (req, res) => {
             console.error("[bookings] contact card email error:", e);
           }
         })();
+      }
+
+      // On cancellation → notify renter
+      if (body.status === "cancelled" && updated.tenantId && updated.customerEmail) {
+        createNotification({
+          tenantId: updated.tenantId,
+          targetType: "renter",
+          targetEmail: updated.customerEmail,
+          type: "booking_cancelled",
+          title: "Booking cancelled",
+          body: "Your booking has been cancelled. Please contact us if you have questions.",
+          actionUrl: "/my-bookings",
+          isActionRequired: false,
+          relatedId: updated.id,
+        }).catch(() => {});
+      }
+
+      // On check-in (active) → notify renter
+      if (body.status === "active" && updated.tenantId && updated.customerEmail) {
+        createNotification({
+          tenantId: updated.tenantId,
+          targetType: "renter",
+          targetEmail: updated.customerEmail,
+          type: "booking_active",
+          title: "You're checked in!",
+          body: "Your rental is now active. Enjoy your adventure!",
+          actionUrl: "/my-bookings",
+          isActionRequired: false,
+          relatedId: updated.id,
+        }).catch(() => {});
       }
     }
 

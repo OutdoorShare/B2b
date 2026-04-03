@@ -59,6 +59,7 @@ artifacts-monorepo/
 - `/admin/kiosk` — Full-screen kiosk mode with QR code overlay and idle auto-close
 
 ### Tools Available in Admin
+- **Notification Bell** — Real-time bell icon in admin header and storefront nav; polls every 30s; badge count for unread; action-required items highlighted amber with dot; dropdown panel with mark-read, mark-all-read; click navigates to related page
 - **Kiosk Mode** — Full-screen self-service booking for in-store iPad use; QR code for mobile completion
 - **Custom Quotes** — Build and send custom multi-item quotes with discounts
 - **Analytics** — Revenue over time, booking volume, renter locations (state/city), status breakdown, top performers

@@ -2,6 +2,7 @@ import { Link, useLocation } from "wouter";
 import { useEffect } from "react";
 import { AIAssistant } from "@/components/ai-assistant";
 import { getAdminSession } from "@/lib/admin-nav";
+import { NotificationBell } from "@/components/notification-bell";
 import { 
   LayoutDashboard, 
   Package, 
@@ -291,6 +292,12 @@ export function AdminLayout({ children }: { children: React.ReactNode }) {
             {activeItem?.name ?? "Dashboard"}
           </h1>
           <div className="flex items-center gap-3">
+            <NotificationBell
+              mode="admin"
+              slug={slug}
+              adminToken={getAdminSession()?.token}
+              navBase={adminBase}
+            />
             <Link
               href={`${adminBase}/bookings/new`}
               className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 transition-colors"

@@ -4,6 +4,7 @@ import { claimsTable, bookingsTable, listingsTable, tenantsTable } from "@worksp
 import { eq, desc, and, gte, lte } from "drizzle-orm";
 import { sendClaimAlertEmail, sendClaimStatusAlertEmail } from "../services/gmail";
 import { getStripeForTenant } from "../services/stripe";
+import { createNotification } from "../services/notifications";
 
 const router: IRouter = Router();
 
@@ -183,6 +184,20 @@ router.post("/claims", async (req, res) => {
           slug,
           bookingId: created.bookingId ?? null,
         });
+
+        // Notify admin in-app (action required)
+        if (created.tenantId) {
+          await createNotification({
+            tenantId: created.tenantId,
+            targetType: "admin",
+            type: "claim_submitted",
+            title: "New claim submitted",
+            body: `${created.customerName} submitted a ${created.type} claim${created.bookingId ? ` for booking #${created.bookingId}` : ""}: "${created.description.substring(0, 80)}${created.description.length > 80 ? "…" : ""}"`,
+            actionUrl: "/claims",
+            isActionRequired: true,
+            relatedId: created.id,
+          });
+        }
       } catch (e) {
         req.log.warn({ err: e }, "Failed to send claim alert email (non-fatal)");
       }
