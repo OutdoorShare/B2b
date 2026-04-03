@@ -47,7 +47,7 @@ export default function Home() {
             How can we help you?
           </h1>
           <p className="text-lg text-muted-foreground mb-8">
-            Search our guides, API references, and tutorials for OutdoorShare — the outdoor rental management platform built for adventure.
+            Everything you need to set up, manage, and grow your rental business with OutdoorShare.
           </p>
 
           <form onSubmit={handleSearch} className="relative max-w-2xl mx-auto">
@@ -66,7 +66,7 @@ export default function Home() {
 
           {/* Brand pill tags */}
           <div className="flex flex-wrap justify-center gap-2 mt-6">
-            {["Rental Management", "Stripe Connect", "Storefront Builder", "OutdoorBot AI", "Booking System"].map((tag) => (
+            {["Getting Started", "Operations", "Customers", "Tools", "Account"].map((tag) => (
               <span
                 key={tag}
                 className="text-xs font-medium px-3 py-1 rounded-full"
