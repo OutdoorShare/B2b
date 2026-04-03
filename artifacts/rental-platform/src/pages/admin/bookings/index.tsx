@@ -202,18 +202,62 @@ export default function AdminBookings() {
     return days;
   })();
 
-  const bookingsForDay = (day: Date) =>
-    allBookings.filter(b => {
-      try {
-        const s = startOfDay(parseISO(b.startDate));
-        const e = endOfDay(parseISO(b.endDate));
-        return isWithinInterval(day, { start: s, end: e });
-      } catch { return false; }
-    });
+  // Split into weeks of 7
+  const calendarWeeks: Date[][] = [];
+  for (let i = 0; i < calendarDays.length; i += 7) {
+    calendarWeeks.push(calendarDays.slice(i, i + 7));
+  }
 
-  const isStart = (b: any, day: Date) => {
-    try { return isSameDay(parseISO(b.startDate), day); } catch { return false; }
+  type BookingBar = {
+    booking: any;
+    startCol: number; // 1-based grid column start
+    endCol: number;   // 1-based grid column end (exclusive)
+    isStart: boolean;
+    isEnd: boolean;
   };
+  type Lane = BookingBar[];
+
+  function computeLanes(week: Date[]): Lane[] {
+    const weekStart = startOfDay(week[0]);
+    const weekEnd   = startOfDay(week[6]);
+
+    const weekBookings = allBookings
+      .filter(b => b.status !== "cancelled")
+      .filter(b => {
+        try {
+          const s = startOfDay(parseISO(b.startDate));
+          const e = startOfDay(parseISO(b.endDate));
+          return s <= weekEnd && e >= weekStart;
+        } catch { return false; }
+      })
+      .sort((a, b) => parseISO(a.startDate).getTime() - parseISO(b.startDate).getTime());
+
+    const lanes: Lane[] = [];
+
+    for (const b of weekBookings) {
+      const bStart = startOfDay(parseISO(b.startDate));
+      const bEnd   = startOfDay(parseISO(b.endDate));
+      const startCol = Math.max(0, differenceInDays(bStart, weekStart)) + 1;
+      const endCol   = Math.min(6, differenceInDays(bEnd, weekStart)) + 2;
+      const isStart  = bStart >= weekStart;
+      const isEnd    = bEnd <= weekEnd;
+
+      const entry: BookingBar = { booking: b, startCol, endCol, isStart, isEnd };
+
+      let placed = false;
+      for (const lane of lanes) {
+        const last = lane[lane.length - 1];
+        if (last.endCol <= startCol) {
+          lane.push(entry);
+          placed = true;
+          break;
+        }
+      }
+      if (!placed) lanes.push([entry]);
+    }
+
+    return lanes;
+  }
 
   const TABS: { key: TabKey; label: string }[] = [
     { key: "recent",    label: "Recent" },
@@ -510,52 +554,66 @@ export default function AdminBookings() {
             ))}
           </div>
 
-          {/* Calendar grid */}
+          {/* Calendar grid — week rows with spanning event bars */}
           {isLoading ? (
             <div className="py-20 text-center text-muted-foreground">Loading...</div>
           ) : (
-            <div className="grid grid-cols-7 divide-x divide-y">
-              {calendarDays.map((day, i) => {
-                const dayBookings = bookingsForDay(day);
-                const isToday = isSameDay(day, new Date());
-                const inMonth = isSameMonth(day, calendarMonth);
-
+            <div className="divide-y">
+              {calendarWeeks.map((week, wi) => {
+                const lanes = computeLanes(week);
                 return (
-                  <div
-                    key={i}
-                    className={`min-h-[110px] p-1.5 flex flex-col ${inMonth ? "bg-background" : "bg-muted/30"}`}
-                  >
-                    <span className={`self-end w-7 h-7 flex items-center justify-center rounded-full text-sm mb-1 font-medium ${
-                      isToday
-                        ? "bg-primary text-primary-foreground"
-                        : inMonth ? "text-foreground" : "text-muted-foreground"
-                    }`}>
-                      {format(day, "d")}
-                    </span>
-
-                    <div className="space-y-0.5 flex-1 overflow-hidden">
-                      {dayBookings.slice(0, 3).map(b => (
-                        <button
-                          key={b.id}
-                          onClick={() => setLocation(adminPath(`/bookings/${b.id}`))}
-                          title={`${b.listingTitle} — ${b.customerName}`}
-                          className={`w-full text-left text-[11px] font-medium px-1.5 py-0.5 rounded border truncate leading-tight transition-opacity hover:opacity-80 ${STATUS_COLORS[b.status] || "bg-gray-100 text-gray-700 border-gray-300"}`}
-                        >
-                          {isStart(b, day) ? (
-                            <span className="flex items-center gap-1">
-                              <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${STATUS_DOT[b.status] || "bg-gray-400"}`} />
-                              <span className="truncate">{b.listingTitle}</span>
+                  <div key={wi}>
+                    {/* Day-number row */}
+                    <div className="grid grid-cols-7 divide-x border-b border-border/40">
+                      {week.map((day, di) => {
+                        const isToday  = isSameDay(day, new Date());
+                        const inMonth  = isSameMonth(day, calendarMonth);
+                        return (
+                          <div key={di} className={`py-1.5 px-2 flex items-center justify-end ${inMonth ? "bg-background" : "bg-muted/30"}`}>
+                            <span className={`w-7 h-7 flex items-center justify-center rounded-full text-sm font-medium ${
+                              isToday ? "bg-primary text-primary-foreground" : inMonth ? "text-foreground" : "text-muted-foreground/50"
+                            }`}>
+                              {format(day, "d")}
                             </span>
-                          ) : (
-                            <span className="opacity-50 pl-2.5 truncate block">{b.listingTitle}</span>
-                          )}
-                        </button>
+                          </div>
+                        );
+                      })}
+                    </div>
+
+                    {/* Event lanes */}
+                    <div className={`pb-1.5 pt-1 ${isSameMonth(week[3], calendarMonth) ? "bg-background" : "bg-muted/20"}`}
+                      style={{ minHeight: `${Math.max(32, lanes.length * 24 + 8)}px` }}
+                    >
+                      {lanes.length === 0 && <div className="h-5" />}
+                      {lanes.map((lane, li) => (
+                        <div
+                          key={li}
+                          className="relative grid mb-0.5"
+                          style={{ gridTemplateColumns: "repeat(7, 1fr)", height: "22px" }}
+                        >
+                          {lane.map(({ booking: b, startCol, endCol, isStart: bIsStart, isEnd: bIsEnd }) => {
+                            const colorCls = STATUS_COLORS[b.status] ?? "bg-gray-100 text-gray-700 border-gray-200";
+                            const roundLeft  = bIsStart  ? "rounded-l-full pl-2" : "rounded-l-none pl-1";
+                            const roundRight = bIsEnd    ? "rounded-r-full pr-2" : "rounded-r-none pr-1";
+                            return (
+                              <button
+                                key={b.id}
+                                onClick={() => setLocation(adminPath(`/bookings/${b.id}`))}
+                                title={`${b.listingTitle} — ${b.customerName} (${b.startDate} → ${b.endDate})`}
+                                style={{ gridColumn: `${startCol} / ${endCol}` }}
+                                className={`h-full flex items-center gap-1 text-[11px] font-semibold border truncate transition-opacity hover:opacity-75 ${colorCls} ${roundLeft} ${roundRight} ${!bIsStart ? "border-l-0" : ""} ${!bIsEnd ? "border-r-0" : ""}`}
+                              >
+                                {bIsStart && (
+                                  <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${STATUS_DOT[b.status] ?? "bg-gray-400"}`} />
+                                )}
+                                <span className="truncate min-w-0">
+                                  {bIsStart ? b.listingTitle : ""}
+                                </span>
+                              </button>
+                            );
+                          })}
+                        </div>
                       ))}
-                      {dayBookings.length > 3 && (
-                        <p className="text-[10px] text-muted-foreground font-medium px-1">
-                          +{dayBookings.length - 3} more
-                        </p>
-                      )}
                     </div>
                   </div>
                 );
