@@ -182,7 +182,7 @@ export default function AdminListingDetail() {
           </div>
         </div>
         <div className="flex gap-2">
-          <Link href={`/listings/${listing.id}`}>
+          <Link href={`/${params.slug}/listings/${listing.id}`}>
             <Button variant="outline" size="sm" className="gap-1.5">
               <ExternalLink className="w-4 h-4" /> View on Storefront
             </Button>
