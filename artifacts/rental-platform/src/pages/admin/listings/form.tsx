@@ -176,6 +176,8 @@ export default function AdminListingsForm() {
   const [tsD, setTsD] = useState<{ label: string; startTime: string; endTime: string; rate: "full_day" | "half_day" }>({
     label: '', startTime: SLOT_TIMES[4] ?? "8:00 AM", endTime: SLOT_TIMES[8] ?? "10:00 AM", rate: "full_day",
   });
+  const [advancedPricingOpen, setAdvancedPricingOpen] = useState(false);
+  const [timeSlotsOpen, setTimeSlotsOpen] = useState(false);
   const addTimeSlot = () => {
     if (!tsD.startTime || !tsD.endTime) return;
     const label = tsD.label.trim() || `${tsD.startTime} – ${tsD.endTime}`;
@@ -263,6 +265,8 @@ export default function AdminListingsForm() {
         ageRestriction: 21,
         contactCardId: (listing as any).contactCardId ?? null,
       });
+      if ((listing as any).halfDayEnabled || (listing as any).hourlyEnabled) setAdvancedPricingOpen(true);
+      if (((listing as any).timeSlots ?? []).length > 0) setTimeSlotsOpen(true);
     }
   }, [isEditing, listing]);
 
@@ -439,8 +443,17 @@ export default function AdminListingsForm() {
 
   const isPending = createListing.isPending || updateListing.isPending;
 
+  function StepBadge({ n }: { n: number }) {
+    return (
+      <div className="w-8 h-8 rounded-full bg-primary/10 text-primary text-sm font-bold flex items-center justify-center shrink-0 border border-primary/20">
+        {n}
+      </div>
+    );
+  }
+
   return (
-    <div className="space-y-8 max-w-5xl mx-auto pb-12">
+    <div className="max-w-3xl mx-auto pb-12 space-y-6">
+      {/* Header */}
       <div className="flex items-center gap-4">
         <Button variant="ghost" size="icon" onClick={() => window.history.back()}>
           <ArrowLeft className="w-5 h-5" />
@@ -450,19 +463,22 @@ export default function AdminListingsForm() {
             {isEditing ? 'Edit Listing' : 'Create Listing'}
           </h2>
           <p className="text-muted-foreground mt-1">
-            {isEditing ? 'Update listing information and pricing.' : 'Add a new listing to your rental inventory.'}
+            {isEditing ? 'Update listing information and pricing.' : 'Fill in each section below to add a new rental listing.'}
           </p>
         </div>
       </div>
 
-      <form onSubmit={handleSubmit} className="space-y-8">
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          <div className="lg:col-span-2 space-y-8">
-            {/* Basic Info */}
+      <form onSubmit={handleSubmit} className="space-y-6">
+            {/* ── STEP 1: Basic Information ── */}
             <Card>
               <CardHeader>
-                <CardTitle>Basic Information</CardTitle>
-                <CardDescription>Title, category, and description for this listing.</CardDescription>
+                <div className="flex items-start gap-3">
+                  <StepBadge n={1} />
+                  <div>
+                    <CardTitle>Basic Information</CardTitle>
+                    <CardDescription>Name, category, and a description renters will see on the listing page.</CardDescription>
+                  </div>
+                </div>
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="space-y-2">
@@ -582,10 +598,89 @@ export default function AdminListingsForm() {
               </CardContent>
             </Card>
 
-            {/* Pricing & Inventory */}
+            {/* ── STEP 2: Photos ── */}
             <Card>
               <CardHeader>
-                <CardTitle>Pricing & Inventory</CardTitle>
+                <div className="flex items-start gap-3">
+                  <StepBadge n={2} />
+                  <div>
+                    <CardTitle>Photos <span className="text-destructive text-base">*</span></CardTitle>
+                    <CardDescription>Upload at least one photo — the first image becomes the cover shown on the storefront.</CardDescription>
+                  </div>
+                </div>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp,image/gif"
+                  multiple
+                  className="hidden"
+                  onChange={e => e.target.files && uploadFiles(e.target.files)}
+                />
+                <div
+                  onDragOver={e => { e.preventDefault(); setDragOver(true); }}
+                  onDragLeave={() => setDragOver(false)}
+                  onDrop={onDrop}
+                  onClick={() => fileInputRef.current?.click()}
+                  className={`flex flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed px-4 py-10 cursor-pointer transition-colors select-none ${
+                    dragOver
+                      ? "border-primary bg-primary/5 text-primary"
+                      : "border-muted-foreground/25 hover:border-primary/50 hover:bg-muted/40 text-muted-foreground"
+                  }`}
+                >
+                  {uploading ? (
+                    <><Loader2 className="w-8 h-8 animate-spin" /><p className="text-sm font-medium">Uploading…</p></>
+                  ) : (
+                    <><ImagePlus className="w-8 h-8" /><p className="text-sm font-medium">Drop photos here or click to browse</p><p className="text-xs">JPG, PNG, WebP, GIF — up to 5 MB each</p></>
+                  )}
+                </div>
+                <div className="flex gap-2">
+                  <Input
+                    value={imageUrlInput}
+                    onChange={(e) => setImageUrlInput(e.target.value)}
+                    placeholder="Or paste an image URL…"
+                    onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), addImageUrl())}
+                  />
+                  <Button type="button" variant="secondary" onClick={addImageUrl} title="Add URL">
+                    <Upload className="w-4 h-4" />
+                  </Button>
+                </div>
+                {formData.imageUrls.length > 0 && (
+                  <div className="grid grid-cols-3 gap-2 mt-2">
+                    {formData.imageUrls.map((url, idx) => (
+                      <div key={idx} className="relative group rounded-md overflow-hidden border aspect-[4/3]">
+                        <img src={url} alt={`Photo ${idx + 1}`} className="w-full h-full object-cover" />
+                        <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors" />
+                        <button
+                          type="button"
+                          onClick={() => removeImageUrl(idx)}
+                          className="absolute top-1.5 right-1.5 w-7 h-7 bg-black/60 hover:bg-black/80 text-white rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                        >
+                          <X className="w-3.5 h-3.5" />
+                        </button>
+                        {idx === 0 && (
+                          <span className="absolute bottom-1.5 left-1.5 text-[10px] font-bold bg-black/60 text-white px-1.5 py-0.5 rounded">
+                            Cover
+                          </span>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* ── STEP 3: Pricing & Inventory ── */}
+            <Card>
+              <CardHeader>
+                <div className="flex items-start gap-3">
+                  <StepBadge n={3} />
+                  <div>
+                    <CardTitle>Pricing & Inventory</CardTitle>
+                    <CardDescription>Set your daily rate, optional discount rates, security deposit, and how many units you have available.</CardDescription>
+                  </div>
+                </div>
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -672,370 +767,16 @@ export default function AdminListingsForm() {
               </CardContent>
             </Card>
 
-            {/* Sub-Day Pricing Options */}
+            {/* ── STEP 4: Pickup Location ── */}
             <Card>
               <CardHeader>
-                <CardTitle>Pricing Options</CardTitle>
-                <CardDescription>Enable sub-day pricing for renters booking a single day. Options only appear to renters when applicable.</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-5">
-
-                {/* Toggle row */}
-                <div className="flex flex-wrap gap-5">
-                  <label className="flex items-center gap-2 cursor-pointer select-none">
-                    <Checkbox checked={true} disabled className="opacity-50" />
-                    <span className="text-sm font-medium text-muted-foreground">Full Day (always on)</span>
-                  </label>
-                  <label className="flex items-center gap-2 cursor-pointer select-none">
-                    <Checkbox
-                      checked={formData.halfDayEnabled}
-                      onCheckedChange={v => setFormData(prev => ({ ...prev, halfDayEnabled: !!v }))}
-                    />
-                    <span className="text-sm font-medium">Half Day Pricing</span>
-                  </label>
-                  <label className="flex items-center gap-2 cursor-pointer select-none">
-                    <Checkbox
-                      checked={formData.hourlyEnabled}
-                      onCheckedChange={v => setFormData(prev => ({ ...prev, hourlyEnabled: !!v }))}
-                    />
-                    <span className="text-sm font-medium">Hourly Pricing</span>
-                  </label>
-                </div>
-
-                {/* Full Day section — weekend & holiday */}
-                <div className="rounded-xl border p-4 space-y-3">
-                  <p className="text-sm font-semibold">Full Day Pricing</p>
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                    <div className="space-y-1.5">
-                      <Label className="text-xs">Weekday Price ($) <span className="text-destructive">*</span></Label>
-                      <Input
-                        type="number" min="0" step="0.01"
-                        value={formData.pricePerDay || ''}
-                        onChange={e => setFormData(prev => ({ ...prev, pricePerDay: parseFloat(e.target.value) || 0 }))}
-                      />
-                    </div>
-                    <div className="space-y-1.5">
-                      <Label className="text-xs">Weekend Price ($)</Label>
-                      <Input
-                        type="number" min="0" step="0.01"
-                        placeholder="Same as weekday"
-                        value={formData.weekendPrice ?? ''}
-                        onChange={e => setFormData(prev => ({ ...prev, weekendPrice: e.target.value ? parseFloat(e.target.value) : null }))}
-                      />
-                    </div>
-                    <div className="space-y-1.5">
-                      <Label className="text-xs">Holiday Price ($)</Label>
-                      <Input
-                        type="number" min="0" step="0.01"
-                        placeholder="Same as weekday"
-                        value={formData.holidayPrice ?? ''}
-                        onChange={e => setFormData(prev => ({ ...prev, holidayPrice: e.target.value ? parseFloat(e.target.value) : null }))}
-                      />
-                    </div>
+                <div className="flex items-start gap-3">
+                  <StepBadge n={4} />
+                  <div>
+                    <CardTitle>Pickup Location <span className="text-destructive text-base">*</span></CardTitle>
+                    <CardDescription>Where renters pick up and return this item.</CardDescription>
                   </div>
                 </div>
-
-                {/* Half Day section */}
-                {formData.halfDayEnabled && (
-                  <div className="rounded-xl border p-4 space-y-3">
-                    <p className="text-sm font-semibold">Half Day Pricing</p>
-                    <div className="grid grid-cols-2 gap-3">
-                      <div className="space-y-1.5">
-                        <Label className="text-xs">Duration (hours)</Label>
-                        <Input
-                          type="number" min="1" step="1"
-                          placeholder="4"
-                          value={formData.halfDayDurationHours ?? ''}
-                          onChange={e => setFormData(prev => ({ ...prev, halfDayDurationHours: e.target.value ? parseInt(e.target.value) : null }))}
-                        />
-                      </div>
-                      <div className="space-y-1.5">
-                        <Label className="text-xs">Flat Rate ($)</Label>
-                        <Input
-                          type="number" min="0" step="0.01"
-                          placeholder="0.00"
-                          value={formData.halfDayRate ?? ''}
-                          onChange={e => setFormData(prev => ({ ...prev, halfDayRate: e.target.value ? parseFloat(e.target.value) : null }))}
-                        />
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                {/* Hourly section */}
-                {formData.hourlyEnabled && (
-                  <div className="rounded-xl border p-4 space-y-4">
-                    <p className="text-sm font-semibold">Hourly Pricing</p>
-
-                    {/* Named slots */}
-                    <div className="space-y-2">
-                      <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Available Hour Options</p>
-                      {formData.hourlySlots.length > 0 && (
-                        <div className="space-y-2">
-                          {formData.hourlySlots.map((slot, idx) => (
-                            <div key={idx} className="flex items-center gap-2 bg-muted/30 rounded-lg px-3 py-2">
-                              <span className="flex-1 text-sm font-medium">{slot.label}</span>
-                              <span className="text-xs text-muted-foreground">{slot.hours} hr{slot.hours !== 1 ? "s" : ""}</span>
-                              <span className="text-xs font-semibold">${slot.price.toFixed(2)}</span>
-                              <button type="button" onClick={() => removeHourlySlot(idx)} className="text-muted-foreground hover:text-destructive transition-colors ml-1">
-                                <Trash2 className="w-3.5 h-3.5" />
-                              </button>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                      {/* Add slot row */}
-                      <div className="flex gap-2">
-                        <Input
-                          className="flex-1 h-8 text-xs"
-                          placeholder="Label (e.g. Morning 8–12pm)"
-                          value={slotDraft.label}
-                          onChange={e => setSlotDraft(prev => ({ ...prev, label: e.target.value }))}
-                        />
-                        <Input
-                          className="w-20 h-8 text-xs"
-                          placeholder="Hrs"
-                          type="number" min="0.5" step="0.5"
-                          value={slotDraft.hours}
-                          onChange={e => setSlotDraft(prev => ({ ...prev, hours: e.target.value }))}
-                        />
-                        <Input
-                          className="w-20 h-8 text-xs"
-                          placeholder="$"
-                          type="number" min="0" step="0.01"
-                          value={slotDraft.price}
-                          onChange={e => setSlotDraft(prev => ({ ...prev, price: e.target.value }))}
-                        />
-                        <Button type="button" variant="secondary" size="sm" className="h-8 px-2 shrink-0" onClick={addHourlySlot}>
-                          <Plus className="w-3.5 h-3.5" />
-                        </Button>
-                      </div>
-                      <p className="text-[11px] text-muted-foreground">Renters choose one slot when booking a single day. Leave empty to not offer fixed slots.</p>
-                    </div>
-
-                    <div className="border-t pt-3 space-y-2">
-                      <label className="flex items-center gap-2 cursor-pointer select-none">
-                        <Checkbox
-                          checked={formData.hourlyPerHourEnabled}
-                          onCheckedChange={v => setFormData(prev => ({ ...prev, hourlyPerHourEnabled: !!v }))}
-                        />
-                        <span className="text-sm font-medium">Per Hourly Pricing</span>
-                      </label>
-                      {formData.hourlyPerHourEnabled && (
-                        <div className="grid grid-cols-2 gap-3 pt-1">
-                          <div className="space-y-1.5">
-                            <Label className="text-xs">Price per Hour ($)</Label>
-                            <Input
-                              type="number" min="0" step="0.01"
-                              placeholder="0.00"
-                              value={formData.pricePerHour ?? ''}
-                              onChange={e => setFormData(prev => ({ ...prev, pricePerHour: e.target.value ? parseFloat(e.target.value) : null }))}
-                            />
-                          </div>
-                          <div className="space-y-1.5">
-                            <Label className="text-xs">Minimum Hours</Label>
-                            <Input
-                              type="number" min="1" step="1"
-                              placeholder="1"
-                              value={formData.hourlyMinimumHours ?? ''}
-                              onChange={e => setFormData(prev => ({ ...prev, hourlyMinimumHours: e.target.value ? parseInt(e.target.value) : null }))}
-                            />
-                            <p className="text-[11px] text-muted-foreground">Renters must book at least this many hours.</p>
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-
-            {/* Available Time Slots */}
-            <Card>
-              <CardHeader>
-                <CardTitle>Available Time Slots</CardTitle>
-                <CardDescription>
-                  Define specific start and end times renters must choose from. When slots are added, the time picker is replaced with this list and selection becomes required.
-                  Each slot can be priced at the full-day or half-day rate.
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                {/* Existing slots */}
-                {formData.timeSlots.length > 0 && (
-                  <div className="space-y-2">
-                    {formData.timeSlots.map((slot, idx) => (
-                      <div key={idx} className="flex items-center gap-3 bg-muted/30 rounded-lg px-3 py-2.5 border">
-                        <Clock className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-semibold truncate">{slot.label}</p>
-                          <p className="text-xs text-muted-foreground">{slot.startTime} – {slot.endTime}</p>
-                        </div>
-                        <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${
-                          slot.rate === "half_day"
-                            ? "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300"
-                            : "bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300"
-                        }`}>
-                          {slot.rate === "half_day" ? "Half Day Rate" : "Full Day Rate"}
-                        </span>
-                        <button type="button" onClick={() => removeTimeSlot(idx)} className="text-muted-foreground hover:text-destructive transition-colors ml-1 shrink-0">
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                )}
-
-                {/* Add slot form */}
-                <div className="rounded-xl border border-dashed p-4 space-y-3 bg-muted/10">
-                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Add a Time Slot</p>
-
-                  {/* Label */}
-                  <div className="space-y-1">
-                    <Label className="text-xs">Slot Label <span className="text-muted-foreground font-normal">(optional — defaults to start–end)</span></Label>
-                    <Input
-                      className="h-8 text-sm"
-                      placeholder='e.g. "Morning Slot" or "Full Day AM"'
-                      value={tsD.label}
-                      onChange={e => setTsD(prev => ({ ...prev, label: e.target.value }))}
-                    />
-                  </div>
-
-                  {/* Start + End times */}
-                  <div className="grid grid-cols-2 gap-3">
-                    <div className="space-y-1">
-                      <Label className="text-xs">Start Time <span className="text-destructive">*</span></Label>
-                      <Select value={tsD.startTime} onValueChange={v => setTsD(prev => ({ ...prev, startTime: v }))}>
-                        <SelectTrigger className="h-8 text-sm">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {SLOT_TIMES.map(t => <SelectItem key={t} value={t} className="text-sm">{t}</SelectItem>)}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div className="space-y-1">
-                      <Label className="text-xs">End / Return Time <span className="text-destructive">*</span></Label>
-                      <Select value={tsD.endTime} onValueChange={v => setTsD(prev => ({ ...prev, endTime: v }))}>
-                        <SelectTrigger className="h-8 text-sm">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {SLOT_TIMES.map(t => <SelectItem key={t} value={t} className="text-sm">{t}</SelectItem>)}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  </div>
-
-                  {/* Rate */}
-                  <div className="space-y-1.5">
-                    <Label className="text-xs">Rate Applied</Label>
-                    <div className="flex gap-3">
-                      {([["full_day", "Full Day Rate"], ["half_day", "Half Day Rate"]] as const).map(([val, label]) => (
-                        <label key={val} className={`flex items-center gap-2 cursor-pointer border rounded-lg px-3 py-2 text-sm transition-colors ${
-                          tsD.rate === val ? "border-primary bg-primary/5 font-medium" : "hover:bg-muted/50"
-                        }`}>
-                          <input
-                            type="radio"
-                            name="tsRate"
-                            value={val}
-                            checked={tsD.rate === val}
-                            onChange={() => setTsD(prev => ({ ...prev, rate: val }))}
-                            className="accent-primary"
-                          />
-                          {label}
-                        </label>
-                      ))}
-                    </div>
-                    {tsD.rate === "half_day" && !formData.halfDayEnabled && (
-                      <p className="text-xs text-amber-600 flex items-center gap-1">
-                        <Info className="w-3 h-3" /> Enable Half Day Pricing above to set a half-day rate.
-                      </p>
-                    )}
-                  </div>
-
-                  <Button type="button" size="sm" variant="outline" onClick={addTimeSlot} className="w-full gap-1.5">
-                    <Plus className="w-3.5 h-3.5" /> Add Time Slot
-                  </Button>
-                </div>
-
-                {formData.timeSlots.length === 0 && (
-                  <p className="text-xs text-muted-foreground text-center py-1">No time slots added — renters will use the standard time picker.</p>
-                )}
-              </CardContent>
-            </Card>
-
-            {/* Details & Specs */}
-            <Card>
-              <CardHeader>
-                <CardTitle>Specifications</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="brand">Brand</Label>
-                    <Input id="brand" name="brand" value={formData.brand} onChange={handleChange} />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="model">Model</Label>
-                    <Input id="model" name="model" value={formData.model} onChange={handleChange} />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="weight">Weight</Label>
-                    <Input id="weight" name="weight" placeholder="e.g. 5 lbs" value={formData.weight} onChange={handleChange} />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="dimensions">Dimensions</Label>
-                    <Input id="dimensions" name="dimensions" placeholder="L x W x H" value={formData.dimensions} onChange={handleChange} />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Condition</Label>
-                    <Select value={formData.condition} onValueChange={(v) => handleSelectChange('condition', v)}>
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="excellent">Excellent / Like New</SelectItem>
-                        <SelectItem value="good">Good / Used</SelectItem>
-                        <SelectItem value="fair">Fair / Heavy Wear</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
-
-                <div className="space-y-2 pt-4">
-                  <Label>Included Items</Label>
-                  <div className="flex gap-2">
-                    <Input 
-                      value={includedItemInput} 
-                      onChange={(e) => setIncludedItemInput(e.target.value)}
-                      placeholder="e.g. Carry bag, 2 paddles"
-                      onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), addIncludedItem())}
-                    />
-                    <Button type="button" variant="secondary" onClick={addIncludedItem}>Add</Button>
-                  </div>
-                  {formData.includedItems.length > 0 && (
-                    <div className="flex flex-wrap gap-2 mt-3">
-                      {formData.includedItems.map((item, idx) => (
-                        <div key={idx} className="bg-muted px-3 py-1.5 rounded-full text-sm flex items-center gap-2">
-                          {item}
-                          <button type="button" onClick={() => removeIncludedItem(idx)} className="text-muted-foreground hover:text-foreground">
-                            <X className="w-3 h-3" />
-                          </button>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Pickup Address */}
-            <Card>
-              <CardHeader>
-                <CardTitle>
-                  Pickup Address <span className="text-destructive text-base">*</span>
-                </CardTitle>
-                <CardDescription>Where renters pick up and return this item.</CardDescription>
               </CardHeader>
               <CardContent className="space-y-3">
                 {pickupAddresses.businessAddress && (
@@ -1060,16 +801,13 @@ export default function AdminListingsForm() {
                     </label>
                   </div>
                 )}
-
                 <div className={useBusinessAddress ? "opacity-50 pointer-events-none" : ""}>
                   <Input
                     placeholder="e.g. 123 Main St, Denver, CO 80202"
                     value={formData.location}
                     onChange={e => setFormData(prev => ({ ...prev, location: e.target.value }))}
-                    className={!formData.location.trim() ? "border-muted" : ""}
                   />
                 </div>
-
                 {pickupAddresses.usedAddresses.filter(a => a !== formData.location).length > 0 && !useBusinessAddress && (
                   <div className="space-y-1.5">
                     <p className="text-xs text-muted-foreground">Previously used addresses — click to fill:</p>
@@ -1080,10 +818,7 @@ export default function AdminListingsForm() {
                           <button
                             key={addr}
                             type="button"
-                            onClick={() => {
-                              setFormData(prev => ({ ...prev, location: addr }));
-                              setUseBusinessAddress(false);
-                            }}
+                            onClick={() => { setFormData(prev => ({ ...prev, location: addr })); setUseBusinessAddress(false); }}
                             className="text-xs border rounded-full px-2.5 py-1 hover:bg-muted transition-colors truncate max-w-[220px]"
                             title={addr}
                           >
@@ -1095,207 +830,399 @@ export default function AdminListingsForm() {
                 )}
               </CardContent>
             </Card>
-          </div>
 
-          <div className="lg:col-span-1 space-y-8">
-            {/* Images */}
+            {/* ── STEP 5: Equipment Details ── */}
             <Card>
               <CardHeader>
-                <CardTitle>Photos</CardTitle>
-                <CardDescription>Upload photos or paste an image URL.</CardDescription>
+                <div className="flex items-start gap-3">
+                  <StepBadge n={5} />
+                  <div>
+                    <CardTitle>Equipment Details</CardTitle>
+                    <CardDescription>Optional specs and what's included — shown on the listing page to help renters know exactly what they're getting.</CardDescription>
+                  </div>
+                </div>
               </CardHeader>
-              <CardContent className="space-y-4">
+              <CardContent className="space-y-5">
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="brand">Brand</Label>
+                    <Input id="brand" name="brand" value={formData.brand} onChange={handleChange} />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="model">Model</Label>
+                    <Input id="model" name="model" value={formData.model} onChange={handleChange} />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="weight">Weight</Label>
+                    <Input id="weight" name="weight" placeholder="e.g. 5 lbs" value={formData.weight} onChange={handleChange} />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="dimensions">Dimensions</Label>
+                    <Input id="dimensions" name="dimensions" placeholder="L × W × H" value={formData.dimensions} onChange={handleChange} />
+                  </div>
+                  <div className="space-y-2 col-span-2 sm:col-span-1">
+                    <Label>Condition</Label>
+                    <Select value={formData.condition} onValueChange={(v) => handleSelectChange('condition', v)}>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="excellent">Excellent / Like New</SelectItem>
+                        <SelectItem value="good">Good / Used</SelectItem>
+                        <SelectItem value="fair">Fair / Heavy Wear</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
 
-                {/* Hidden file input */}
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept="image/jpeg,image/png,image/webp,image/gif"
-                  multiple
-                  className="hidden"
-                  onChange={e => e.target.files && uploadFiles(e.target.files)}
-                />
+                <div className="space-y-2">
+                  <Label>What's Included</Label>
+                  <p className="text-xs text-muted-foreground">List any items that come with the rental (e.g. paddles, carry bag, life jackets).</p>
+                  <div className="flex gap-2">
+                    <Input
+                      value={includedItemInput}
+                      onChange={(e) => setIncludedItemInput(e.target.value)}
+                      placeholder="e.g. Carry bag, 2 paddles"
+                      onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), addIncludedItem())}
+                    />
+                    <Button type="button" variant="secondary" onClick={addIncludedItem}>Add</Button>
+                  </div>
+                  {formData.includedItems.length > 0 && (
+                    <div className="flex flex-wrap gap-2 mt-2">
+                      {formData.includedItems.map((item, idx) => (
+                        <div key={idx} className="bg-muted px-3 py-1.5 rounded-full text-sm flex items-center gap-2">
+                          {item}
+                          <button type="button" onClick={() => removeIncludedItem(idx)} className="text-muted-foreground hover:text-foreground">
+                            <X className="w-3 h-3" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
 
-                {/* Drag & drop zone */}
-                <div
-                  onDragOver={e => { e.preventDefault(); setDragOver(true); }}
-                  onDragLeave={() => setDragOver(false)}
-                  onDrop={onDrop}
-                  onClick={() => fileInputRef.current?.click()}
-                  className={`flex flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed px-4 py-8 cursor-pointer transition-colors select-none ${
-                    dragOver
-                      ? "border-primary bg-primary/5 text-primary"
-                      : "border-muted-foreground/25 hover:border-primary/50 hover:bg-muted/40 text-muted-foreground"
-                  }`}
-                >
-                  {uploading ? (
-                    <>
-                      <Loader2 className="w-8 h-8 animate-spin" />
-                      <p className="text-sm font-medium">Uploading…</p>
-                    </>
-                  ) : (
-                    <>
-                      <ImagePlus className="w-8 h-8" />
-                      <p className="text-sm font-medium">Drop photos here or click to browse</p>
-                      <p className="text-xs">JPG, PNG, WebP, GIF — up to 5 MB each</p>
-                    </>
+            {/* ── STEP 6: Rental Settings ── */}
+            <Card>
+              <CardHeader>
+                <div className="flex items-start gap-3">
+                  <StepBadge n={6} />
+                  <div>
+                    <CardTitle>Rental Settings</CardTitle>
+                    <CardDescription>Requirements, sub-day pricing, time slots, and contact card assignment.</CardDescription>
+                  </div>
+                </div>
+              </CardHeader>
+              <CardContent className="space-y-6">
+
+                {/* Requirements */}
+                <div className="space-y-2">
+                  <Label htmlFor="requirements">Renter Requirements</Label>
+                  <p className="text-xs text-muted-foreground">
+                    Shown to renters on the listing page. The age requirement is always shown automatically — add any extra conditions (e.g. tow vehicle specs, license type).
+                  </p>
+                  <Textarea
+                    id="requirements"
+                    name="requirements"
+                    placeholder="e.g. Valid driver's license and proof of insurance required. Must have a tow vehicle with a 2-5/16 inch ball hitch."
+                    value={formData.requirements}
+                    onChange={handleChange}
+                    rows={3}
+                  />
+                </div>
+
+                {/* Sub-Day & Hourly Pricing (collapsible) */}
+                <div className="border rounded-xl overflow-hidden">
+                  <button
+                    type="button"
+                    onClick={() => setAdvancedPricingOpen(p => !p)}
+                    className="w-full flex items-center justify-between px-4 py-3 hover:bg-muted/40 transition-colors text-left"
+                  >
+                    <div>
+                      <p className="text-sm font-semibold">Sub-Day &amp; Hourly Pricing</p>
+                      <p className="text-xs text-muted-foreground mt-0.5">
+                        {formData.halfDayEnabled || formData.hourlyEnabled
+                          ? `Enabled: ${[formData.halfDayEnabled && "Half Day", formData.hourlyEnabled && "Hourly"].filter(Boolean).join(", ")}`
+                          : "Full Day only (default)"}
+                      </p>
+                    </div>
+                    {advancedPricingOpen ? <ChevronUp className="w-4 h-4 text-muted-foreground shrink-0" /> : <ChevronDown className="w-4 h-4 text-muted-foreground shrink-0" />}
+                  </button>
+                  {advancedPricingOpen && (
+                    <div className="px-4 pb-4 pt-1 space-y-4 border-t">
+                      {/* Toggles */}
+                      <div className="flex flex-wrap gap-5 pt-2">
+                        <label className="flex items-center gap-2 cursor-pointer select-none">
+                          <Checkbox checked={true} disabled className="opacity-50" />
+                          <span className="text-sm font-medium text-muted-foreground">Full Day (always on)</span>
+                        </label>
+                        <label className="flex items-center gap-2 cursor-pointer select-none">
+                          <Checkbox
+                            checked={formData.halfDayEnabled}
+                            onCheckedChange={v => setFormData(prev => ({ ...prev, halfDayEnabled: !!v }))}
+                          />
+                          <span className="text-sm font-medium">Half Day</span>
+                        </label>
+                        <label className="flex items-center gap-2 cursor-pointer select-none">
+                          <Checkbox
+                            checked={formData.hourlyEnabled}
+                            onCheckedChange={v => setFormData(prev => ({ ...prev, hourlyEnabled: !!v }))}
+                          />
+                          <span className="text-sm font-medium">Hourly</span>
+                        </label>
+                      </div>
+
+                      {/* Full Day — weekend & holiday rates */}
+                      <div className="rounded-lg border p-3 space-y-3">
+                        <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Full Day Rates</p>
+                        <div className="grid grid-cols-3 gap-3">
+                          <div className="space-y-1.5">
+                            <Label className="text-xs">Weekday ($) <span className="text-destructive">*</span></Label>
+                            <Input type="number" min="0" step="0.01" value={formData.pricePerDay || ''} onChange={e => setFormData(prev => ({ ...prev, pricePerDay: parseFloat(e.target.value) || 0 }))} />
+                          </div>
+                          <div className="space-y-1.5">
+                            <Label className="text-xs">Weekend ($)</Label>
+                            <Input type="number" min="0" step="0.01" placeholder="Same as weekday" value={formData.weekendPrice ?? ''} onChange={e => setFormData(prev => ({ ...prev, weekendPrice: e.target.value ? parseFloat(e.target.value) : null }))} />
+                          </div>
+                          <div className="space-y-1.5">
+                            <Label className="text-xs">Holiday ($)</Label>
+                            <Input type="number" min="0" step="0.01" placeholder="Same as weekday" value={formData.holidayPrice ?? ''} onChange={e => setFormData(prev => ({ ...prev, holidayPrice: e.target.value ? parseFloat(e.target.value) : null }))} />
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Half Day section */}
+                      {formData.halfDayEnabled && (
+                        <div className="rounded-lg border p-3 space-y-3">
+                          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Half Day Options</p>
+                          <div className="grid grid-cols-2 gap-3">
+                            <div className="space-y-1.5">
+                              <Label className="text-xs">Duration (hours)</Label>
+                              <Input type="number" min="1" step="1" placeholder="4" value={formData.halfDayDurationHours ?? ''} onChange={e => setFormData(prev => ({ ...prev, halfDayDurationHours: e.target.value ? parseInt(e.target.value) : null }))} />
+                            </div>
+                            <div className="space-y-1.5">
+                              <Label className="text-xs">Flat Rate ($)</Label>
+                              <Input type="number" min="0" step="0.01" placeholder="0.00" value={formData.halfDayRate ?? ''} onChange={e => setFormData(prev => ({ ...prev, halfDayRate: e.target.value ? parseFloat(e.target.value) : null }))} />
+                            </div>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Hourly section */}
+                      {formData.hourlyEnabled && (
+                        <div className="rounded-lg border p-3 space-y-3">
+                          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Hourly Options</p>
+                          {formData.hourlySlots.length > 0 && (
+                            <div className="space-y-1.5">
+                              {formData.hourlySlots.map((slot, idx) => (
+                                <div key={idx} className="flex items-center gap-2 bg-muted/30 rounded-lg px-3 py-2">
+                                  <span className="flex-1 text-sm font-medium">{slot.label}</span>
+                                  <span className="text-xs text-muted-foreground">{slot.hours} hr{slot.hours !== 1 ? "s" : ""}</span>
+                                  <span className="text-xs font-semibold">${slot.price.toFixed(2)}</span>
+                                  <button type="button" onClick={() => removeHourlySlot(idx)} className="text-muted-foreground hover:text-destructive transition-colors ml-1">
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                  </button>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                          <div className="flex gap-2">
+                            <Input className="flex-1 h-8 text-xs" placeholder="Label (e.g. Morning 4hrs)" value={slotDraft.label} onChange={e => setSlotDraft(prev => ({ ...prev, label: e.target.value }))} />
+                            <Input className="w-20 h-8 text-xs" placeholder="Hrs" type="number" min="0.5" step="0.5" value={slotDraft.hours} onChange={e => setSlotDraft(prev => ({ ...prev, hours: e.target.value }))} />
+                            <Input className="w-20 h-8 text-xs" placeholder="$" type="number" min="0" step="0.01" value={slotDraft.price} onChange={e => setSlotDraft(prev => ({ ...prev, price: e.target.value }))} />
+                            <Button type="button" variant="secondary" size="sm" className="h-8 px-2 shrink-0" onClick={addHourlySlot}><Plus className="w-3.5 h-3.5" /></Button>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <Checkbox checked={formData.hourlyPerHourEnabled} onCheckedChange={v => setFormData(prev => ({ ...prev, hourlyPerHourEnabled: !!v }))} />
+                            <span className="text-sm font-medium">Also offer per-hour pricing</span>
+                          </div>
+                          {formData.hourlyPerHourEnabled && (
+                            <div className="grid grid-cols-2 gap-3 pt-1">
+                              <div className="space-y-1.5">
+                                <Label className="text-xs">Price per Hour ($)</Label>
+                                <Input type="number" min="0" step="0.01" placeholder="0.00" value={formData.pricePerHour ?? ''} onChange={e => setFormData(prev => ({ ...prev, pricePerHour: e.target.value ? parseFloat(e.target.value) : null }))} />
+                              </div>
+                              <div className="space-y-1.5">
+                                <Label className="text-xs">Minimum Hours</Label>
+                                <Input type="number" min="1" step="1" placeholder="1" value={formData.hourlyMinimumHours ?? ''} onChange={e => setFormData(prev => ({ ...prev, hourlyMinimumHours: e.target.value ? parseInt(e.target.value) : null }))} />
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
                   )}
                 </div>
 
-                {/* URL fallback */}
-                <div className="flex gap-2">
-                  <Input
-                    value={imageUrlInput}
-                    onChange={(e) => setImageUrlInput(e.target.value)}
-                    placeholder="Or paste an image URL…"
-                    onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), addImageUrl())}
-                  />
-                  <Button type="button" variant="secondary" onClick={addImageUrl} title="Add URL">
-                    <Upload className="w-4 h-4" />
-                  </Button>
-                </div>
-
-                {/* Photo grid */}
-                {formData.imageUrls.length > 0 && (
-                  <div className="grid grid-cols-2 gap-2 mt-2">
-                    {formData.imageUrls.map((url, idx) => (
-                      <div key={idx} className="relative group rounded-md overflow-hidden border aspect-[4/3]">
-                        <img src={url} alt={`Photo ${idx + 1}`} className="w-full h-full object-cover" />
-                        <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors" />
-                        <button
-                          type="button"
-                          onClick={() => removeImageUrl(idx)}
-                          className="absolute top-1.5 right-1.5 w-7 h-7 bg-black/60 hover:bg-black/80 text-white rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
-                        >
-                          <X className="w-3.5 h-3.5" />
-                        </button>
-                        {idx === 0 && (
-                          <span className="absolute bottom-1.5 left-1.5 text-[10px] font-bold bg-black/60 text-white px-1.5 py-0.5 rounded">
-                            Cover
-                          </span>
+                {/* Available Time Slots (collapsible) */}
+                <div className="border rounded-xl overflow-hidden">
+                  <button
+                    type="button"
+                    onClick={() => setTimeSlotsOpen(p => !p)}
+                    className="w-full flex items-center justify-between px-4 py-3 hover:bg-muted/40 transition-colors text-left"
+                  >
+                    <div>
+                      <p className="text-sm font-semibold">Available Time Slots</p>
+                      <p className="text-xs text-muted-foreground mt-0.5">
+                        {formData.timeSlots.length > 0
+                          ? `${formData.timeSlots.length} slot${formData.timeSlots.length !== 1 ? "s" : ""} configured`
+                          : "Not configured — renters use the standard time picker"}
+                      </p>
+                    </div>
+                    {timeSlotsOpen ? <ChevronUp className="w-4 h-4 text-muted-foreground shrink-0" /> : <ChevronDown className="w-4 h-4 text-muted-foreground shrink-0" />}
+                  </button>
+                  {timeSlotsOpen && (
+                    <div className="px-4 pb-4 pt-1 space-y-3 border-t">
+                      <p className="text-xs text-muted-foreground pt-2">Define specific pickup/return windows. When slots are added, renters must select one when booking.</p>
+                      {formData.timeSlots.length > 0 && (
+                        <div className="space-y-2">
+                          {formData.timeSlots.map((slot, idx) => (
+                            <div key={idx} className="flex items-center gap-3 bg-muted/30 rounded-lg px-3 py-2.5 border">
+                              <Clock className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+                              <div className="flex-1 min-w-0">
+                                <p className="text-sm font-semibold truncate">{slot.label}</p>
+                                <p className="text-xs text-muted-foreground">{slot.startTime} – {slot.endTime}</p>
+                              </div>
+                              <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${slot.rate === "half_day" ? "bg-amber-100 text-amber-700" : "bg-blue-100 text-blue-700"}`}>
+                                {slot.rate === "half_day" ? "Half Day Rate" : "Full Day Rate"}
+                              </span>
+                              <button type="button" onClick={() => removeTimeSlot(idx)} className="text-muted-foreground hover:text-destructive transition-colors shrink-0">
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                      <div className="rounded-lg border border-dashed p-3 space-y-3 bg-muted/10">
+                        <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Add a Slot</p>
+                        <div className="space-y-1">
+                          <Label className="text-xs">Label <span className="text-muted-foreground font-normal">(optional)</span></Label>
+                          <Input className="h-8 text-sm" placeholder='e.g. "Morning Slot"' value={tsD.label} onChange={e => setTsD(prev => ({ ...prev, label: e.target.value }))} />
+                        </div>
+                        <div className="grid grid-cols-2 gap-3">
+                          <div className="space-y-1">
+                            <Label className="text-xs">Start Time <span className="text-destructive">*</span></Label>
+                            <Select value={tsD.startTime} onValueChange={v => setTsD(prev => ({ ...prev, startTime: v }))}>
+                              <SelectTrigger className="h-8 text-sm"><SelectValue /></SelectTrigger>
+                              <SelectContent>{SLOT_TIMES.map(t => <SelectItem key={t} value={t} className="text-sm">{t}</SelectItem>)}</SelectContent>
+                            </Select>
+                          </div>
+                          <div className="space-y-1">
+                            <Label className="text-xs">End / Return <span className="text-destructive">*</span></Label>
+                            <Select value={tsD.endTime} onValueChange={v => setTsD(prev => ({ ...prev, endTime: v }))}>
+                              <SelectTrigger className="h-8 text-sm"><SelectValue /></SelectTrigger>
+                              <SelectContent>{SLOT_TIMES.map(t => <SelectItem key={t} value={t} className="text-sm">{t}</SelectItem>)}</SelectContent>
+                            </Select>
+                          </div>
+                        </div>
+                        <div className="flex gap-3">
+                          {([["full_day", "Full Day Rate"], ["half_day", "Half Day Rate"]] as const).map(([val, lbl]) => (
+                            <label key={val} className={`flex items-center gap-2 cursor-pointer border rounded-lg px-3 py-2 text-sm transition-colors ${tsD.rate === val ? "border-primary bg-primary/5 font-medium" : "hover:bg-muted/50"}`}>
+                              <input type="radio" name="tsRate" value={val} checked={tsD.rate === val} onChange={() => setTsD(prev => ({ ...prev, rate: val }))} className="accent-primary" />
+                              {lbl}
+                            </label>
+                          ))}
+                        </div>
+                        {tsD.rate === "half_day" && !formData.halfDayEnabled && (
+                          <p className="text-xs text-amber-600 flex items-center gap-1"><Info className="w-3 h-3" /> Enable Half Day Pricing above to use this rate.</p>
                         )}
+                        <Button type="button" size="sm" variant="outline" onClick={addTimeSlot} className="w-full gap-1.5">
+                          <Plus className="w-3.5 h-3.5" /> Add Time Slot
+                        </Button>
                       </div>
-                    ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* Contact Card */}
+                <div className="space-y-3">
+                  <div className="flex items-center gap-2">
+                    <IdCard className="w-4 h-4 text-primary" />
+                    <Label className="text-sm font-semibold">Contact Card</Label>
                   </div>
-                )}
-              </CardContent>
-            </Card>
-            
-            <Card>
-              <CardHeader>
-                <CardTitle>Additional Settings</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="requirements">Additional Requirements</Label>
-                  <p className="text-xs text-muted-foreground">Shown to renters in the Requirements section on the listing page. The "Must be 21+ years old to rent" requirement is always displayed automatically — add any extra conditions here (e.g. tow vehicle specs, license type, gear requirements).</p>
-                  <Textarea id="requirements" name="requirements" placeholder="e.g. A valid driver's license and proof of insurance required. Must have appropriate tow vehicle with 2-5/16 inch ball hitch." value={formData.requirements} onChange={handleChange} rows={4} />
+                  <p className="text-xs text-muted-foreground">
+                    When a booking is confirmed, the assigned contact card is automatically emailed to the renter with your pickup address, phone, and instructions.
+                  </p>
+                  {contactCards.length === 0 ? (
+                    <div className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground text-center">
+                      No contact cards yet.{" "}
+                      <a href={adminPath("/contact-cards")} className="text-primary underline underline-offset-2">Create one</a>{" "}
+                      to auto-send pickup details when bookings are confirmed.
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      <Select
+                        value={formData.contactCardId?.toString() ?? "none"}
+                        onValueChange={v => setFormData(prev => ({ ...prev, contactCardId: v === "none" ? null : Number(v) }))}
+                      >
+                        <SelectTrigger><SelectValue placeholder="No contact card assigned" /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="none">— None —</SelectItem>
+                          {contactCards.map(c => (
+                            <SelectItem key={c.id} value={c.id.toString()}>
+                              {c.name}{c.address ? ` · ${c.address.split(",")[0]}` : ""}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      {formData.contactCardId && (() => {
+                        const selected = contactCards.find(c => c.id === formData.contactCardId);
+                        if (!selected) return null;
+                        return (
+                          <div className="rounded-lg bg-muted/50 p-3 text-sm space-y-1 border">
+                            <p className="font-semibold text-foreground">{selected.name}</p>
+                            {selected.address && <p className="text-muted-foreground text-xs">{selected.address}</p>}
+                            {selected.phone && <p className="text-muted-foreground text-xs">{selected.phone}</p>}
+                            {selected.email && <p className="text-muted-foreground text-xs">{selected.email}</p>}
+                          </div>
+                        );
+                      })()}
+                    </div>
+                  )}
                 </div>
               </CardContent>
             </Card>
 
-            {/* Publish checklist — shown any time to guide the admin */}
+            {/* ── Publish Checklist ── */}
             {(() => {
               const allDone = publishChecks.every(c => c.done);
-              const cardClass = publishBlocked
-                ? "border-destructive/50 bg-destructive/5"
-                : allDone
-                  ? "border-green-200 bg-green-50/40"
-                  : "border-border";
               return (
-            <Card className={cardClass}>
-              <CardHeader className="pb-3">
-                <CardTitle className="text-sm flex items-center gap-2">
-                  {publishBlocked
-                    ? <AlertCircle className="w-4 h-4 text-destructive" />
-                    : allDone
-                      ? <CheckCircle2 className="w-4 h-4 text-green-600" />
-                      : <CircleDashed className="w-4 h-4 text-muted-foreground" />}
-                  {publishBlocked ? "Complete to Publish" : allDone ? "Ready to Publish" : "Publish Checklist"}
-                </CardTitle>
-                {publishBlocked && (
-                  <CardDescription className="text-xs">
-                    Fill in the missing sections below to publish.
-                  </CardDescription>
-                )}
-                {!publishBlocked && !allDone && (
-                  <CardDescription className="text-xs">
-                    Complete all items to use <strong>Save & Publish</strong>.
-                  </CardDescription>
-                )}
-              </CardHeader>
-              <CardContent className="pt-0 space-y-1.5">
-                {publishChecks.map(c => (
-                  <div key={c.key} className="flex items-center gap-2 text-sm">
-                    {c.done
-                      ? <CheckCircle2 className="w-3.5 h-3.5 text-green-600 shrink-0" />
-                      : <CircleDashed className="w-3.5 h-3.5 text-muted-foreground shrink-0" />}
-                    <span className={c.done ? "text-foreground" : "text-muted-foreground"}>{c.label}</span>
-                    {!c.done && formData.status === "active" && (
-                      <span className="ml-auto text-[10px] font-semibold text-destructive bg-destructive/10 px-1.5 py-0.5 rounded-full">Required</span>
+                <Card className={publishBlocked ? "border-destructive/50 bg-destructive/5" : allDone ? "border-green-200 bg-green-50/40" : "border-border"}>
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-sm flex items-center gap-2">
+                      {publishBlocked
+                        ? <AlertCircle className="w-4 h-4 text-destructive" />
+                        : allDone
+                          ? <CheckCircle2 className="w-4 h-4 text-green-600" />
+                          : <CircleDashed className="w-4 h-4 text-muted-foreground" />}
+                      {publishBlocked ? "Complete to Publish" : allDone ? "Ready to Publish" : "Publish Checklist"}
+                    </CardTitle>
+                    {!allDone && (
+                      <CardDescription className="text-xs">
+                        {publishBlocked ? "Fill in the missing fields before publishing." : "Complete all items to use Save & Publish."}
+                      </CardDescription>
                     )}
-                  </div>
-                ))}
-              </CardContent>
-            </Card>
-            );})()}
-
-            {/* Contact Card */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2 text-lg">
-                  <IdCard className="w-5 h-5 text-primary" />
-                  Contact Card
-                </CardTitle>
-                <CardDescription>
-                  When a booking for this listing is confirmed, the assigned contact card is automatically emailed to the renter with your pickup address, phone, and special instructions.
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                {contactCards.length === 0 ? (
-                  <div className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground text-center">
-                    No contact cards yet.{" "}
-                    <a href={adminPath("/contact-cards")} className="text-primary underline underline-offset-2">Create one</a>{" "}
-                    to auto-send pickup details when bookings are confirmed.
-                  </div>
-                ) : (
-                  <div className="space-y-2">
-                    <Label>Assign contact card</Label>
-                    <Select
-                      value={formData.contactCardId?.toString() ?? "none"}
-                      onValueChange={v => setFormData(prev => ({ ...prev, contactCardId: v === "none" ? null : Number(v) }))}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="No contact card assigned" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="none">— None —</SelectItem>
-                        {contactCards.map(c => (
-                          <SelectItem key={c.id} value={c.id.toString()}>
-                            {c.name}
-                            {c.address ? ` · ${c.address.split(",")[0]}` : ""}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    {formData.contactCardId && (() => {
-                      const selected = contactCards.find(c => c.id === formData.contactCardId);
-                      if (!selected) return null;
-                      return (
-                        <div className="rounded-lg bg-muted/50 p-3 text-sm space-y-1 border">
-                          <p className="font-semibold text-foreground">{selected.name}</p>
-                          {selected.address && <p className="text-muted-foreground text-xs">{selected.address}</p>}
-                          {selected.phone && <p className="text-muted-foreground text-xs">{selected.phone}</p>}
-                          {selected.email && <p className="text-muted-foreground text-xs">{selected.email}</p>}
+                  </CardHeader>
+                  <CardContent className="pt-0">
+                    <div className="grid grid-cols-2 gap-x-4 gap-y-1.5">
+                      {publishChecks.map(c => (
+                        <div key={c.key} className="flex items-center gap-2 text-sm">
+                          {c.done
+                            ? <CheckCircle2 className="w-3.5 h-3.5 text-green-600 shrink-0" />
+                            : <CircleDashed className="w-3.5 h-3.5 text-muted-foreground shrink-0" />}
+                          <span className={c.done ? "text-foreground" : "text-muted-foreground"}>{c.label}</span>
+                          {!c.done && formData.status === "active" && (
+                            <span className="ml-auto text-[10px] font-semibold text-destructive bg-destructive/10 px-1.5 py-0.5 rounded-full">Required</span>
+                          )}
                         </div>
-                      );
-                    })()}
-                  </div>
-                )}
-              </CardContent>
-            </Card>
+                      ))}
+                    </div>
+                  </CardContent>
+                </Card>
+              );
+            })()}
 
-            <div className="flex justify-end gap-3">
+            {/* ── Action Buttons ── */}
+            <div className="flex justify-end gap-3 pt-2">
               <Button type="button" variant="outline" onClick={() => setLocation(adminPath("/listings"))}>
                 Cancel
               </Button>
@@ -1310,25 +1237,23 @@ export default function AdminListingsForm() {
               {formData.status !== "active" && (
                 <Button
                   type="submit"
-                  disabled={isPending}
+                  disabled={isPending || publishBlocked}
                   onClick={() => setPublishIntent(true)}
                 >
                   {isPending && publishIntent ? 'Publishing...' : 'Save & Publish'}
                 </Button>
               )}
             </div>
-          </div>
-        </div>
       </form>
 
       {/* Unit identifiers + add-ons — only available after listing is created */}
       {isEditing && id ? (
-        <div className="max-w-2xl mt-8 space-y-8">
+        <div className="mt-8 space-y-8">
           <UnitIdentifiersManager listingId={id} quantity={formData.quantity} />
           <AddonManager listingId={id} />
         </div>
       ) : (
-        <div className="max-w-2xl mt-6 p-4 border border-dashed rounded-xl text-sm text-muted-foreground text-center">
+        <div className="mt-6 p-4 border border-dashed rounded-xl text-sm text-muted-foreground text-center">
           Save the listing first, then you can register unit identifiers (VIN / HIN / serial #) and add optional add-ons.
         </div>
       )}
