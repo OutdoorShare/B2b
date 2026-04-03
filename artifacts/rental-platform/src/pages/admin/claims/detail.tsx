@@ -18,7 +18,7 @@ import { format } from "date-fns";
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
 type ClaimStatus = "open" | "reviewing" | "resolved" | "denied";
-type ClaimType = "damage" | "theft" | "overage" | "dispute" | "other";
+type ClaimType = "damage" | "theft" | "overage" | "dispute" | "policy_violation" | "other";
 
 interface Claim {
   id: number;
@@ -50,9 +50,10 @@ const STATUS_OPTIONS: { value: ClaimStatus; label: string; icon: any; color: str
 ];
 
 const TYPE_BADGE: Record<ClaimType, string> = {
-  damage:   "bg-orange-100 text-orange-800",
-  theft:    "bg-red-100 text-red-800",
-  overage:  "bg-purple-100 text-purple-800",
+  damage:           "bg-orange-100 text-orange-800",
+  theft:            "bg-red-100 text-red-800",
+  overage:          "bg-purple-100 text-purple-800",
+  policy_violation: "bg-amber-100 text-amber-800",
   dispute:  "bg-blue-100 text-blue-800",
   other:    "bg-muted text-muted-foreground",
 };
@@ -290,6 +291,7 @@ export default function AdminClaimDetail() {
                   <SelectItem value="theft">Theft</SelectItem>
                   <SelectItem value="overage">Overage</SelectItem>
                   <SelectItem value="dispute">Dispute</SelectItem>
+                  <SelectItem value="policy_violation">Policy Violation</SelectItem>
                   <SelectItem value="other">Other</SelectItem>
                 </SelectContent>
               </Select>

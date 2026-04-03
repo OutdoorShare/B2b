@@ -7,7 +7,7 @@ export const claimsTable = pgTable("claims", {
   listingId: integer("listing_id"),
   customerName: text("customer_name").notNull(),
   customerEmail: text("customer_email").notNull(),
-  type: text("type", { enum: ["damage", "theft", "overage", "dispute", "other"] })
+  type: text("type", { enum: ["damage", "theft", "overage", "dispute", "policy_violation", "other"] })
     .notNull()
     .default("damage"),
   description: text("description").notNull(),

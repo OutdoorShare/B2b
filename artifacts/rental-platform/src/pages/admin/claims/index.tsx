@@ -14,7 +14,7 @@ import { format } from "date-fns";
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
 type ClaimStatus = "open" | "reviewing" | "resolved" | "denied";
-type ClaimType = "damage" | "theft" | "overage" | "dispute" | "other";
+type ClaimType = "damage" | "theft" | "overage" | "dispute" | "policy_violation" | "other";
 
 interface Claim {
   id: number;
@@ -40,10 +40,11 @@ const STATUS_CONFIG: Record<ClaimStatus, { label: string; color: string; icon: a
 };
 
 const TYPE_CONFIG: Record<ClaimType, { label: string; color: string }> = {
-  damage:   { label: "Damage",   color: "bg-orange-100 text-orange-800" },
-  theft:    { label: "Theft",    color: "bg-red-100 text-red-800" },
-  overage:  { label: "Overage",  color: "bg-purple-100 text-purple-800" },
-  dispute:  { label: "Dispute",  color: "bg-blue-100 text-blue-800" },
+  damage:           { label: "Damage",           color: "bg-orange-100 text-orange-800" },
+  theft:            { label: "Theft",            color: "bg-red-100 text-red-800" },
+  overage:          { label: "Overage",          color: "bg-purple-100 text-purple-800" },
+  dispute:          { label: "Dispute",          color: "bg-blue-100 text-blue-800" },
+  policy_violation: { label: "Policy Violation", color: "bg-amber-100 text-amber-800" },
   other:    { label: "Other",    color: "bg-muted text-muted-foreground" },
 };
 
@@ -154,6 +155,7 @@ export default function AdminClaims() {
             <SelectItem value="theft">Theft</SelectItem>
             <SelectItem value="overage">Overage</SelectItem>
             <SelectItem value="dispute">Dispute</SelectItem>
+            <SelectItem value="policy_violation">Policy Violation</SelectItem>
             <SelectItem value="other">Other</SelectItem>
           </SelectContent>
         </Select>

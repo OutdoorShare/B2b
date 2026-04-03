@@ -48,11 +48,12 @@ const STATUS_CONFIG: Record<string, { label: string; color: string; icon: React.
 };
 
 const TYPE_LABELS: Record<string, string> = {
-  damage: "Damage", theft: "Theft", overage: "Overage", dispute: "Dispute", other: "Other",
+  damage: "Damage", theft: "Theft", overage: "Overage", dispute: "Dispute",
+  policy_violation: "Policy Violation", other: "Other",
 };
 
 const STATUSES = ["all", "open", "reviewing", "resolved", "denied"];
-const TYPES    = ["all", "damage", "theft", "overage", "dispute", "other"];
+const TYPES    = ["all", "damage", "theft", "overage", "dispute", "policy_violation", "other"];
 
 export default function SuperAdminClaims() {
   const [claims, setClaims] = useState<Claim[]>([]);

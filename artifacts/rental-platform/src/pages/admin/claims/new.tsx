@@ -8,12 +8,12 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
-import { ArrowLeft, ShieldAlert, AlertTriangle, Search, X, CalendarDays, User } from "lucide-react";
+import { ArrowLeft, ShieldAlert, AlertTriangle, Search, X, CalendarDays, User, Zap, BookOpen, DollarSign } from "lucide-react";
 import { format, parseISO } from "date-fns";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
-type ClaimType = "damage" | "theft" | "overage" | "dispute" | "other";
+type ClaimType = "damage" | "theft" | "overage" | "dispute" | "policy_violation" | "other";
 
 type ListingRule = {
   id: number;
@@ -50,6 +50,10 @@ export default function AdminClaimsNew() {
   const [claimedAmount, setClaimedAmount] = useState("");
   const [listingRules, setListingRules] = useState<ListingRule[]>([]);
   const [selectedRuleId, setSelectedRuleId] = useState<string>("");
+  const [activeShortcut, setActiveShortcut] = useState<"rule" | "cancellation" | null>(null);
+
+  // Business profile for cancellation policy
+  const [cancellationPolicy, setCancellationPolicy] = useState<string | null>(null);
 
   // Booking search
   const [allBookings, setAllBookings] = useState<Booking[]>([]);
@@ -69,6 +73,19 @@ export default function AdminClaimsNew() {
       .then(r => r.json())
       .then((data: Booking[]) => {
         if (Array.isArray(data)) setAllBookings(data);
+      })
+      .catch(() => {});
+  }, []);
+
+  // Fetch business profile for cancellation policy
+  useEffect(() => {
+    const s = getAdminSession();
+    const headers: Record<string, string> = {};
+    if (s?.token) headers["x-admin-token"] = s.token;
+    fetch(`${BASE}/api/business`, { headers })
+      .then(r => r.json())
+      .then((d: any) => {
+        if (d?.cancellationPolicy) setCancellationPolicy(d.cancellationPolicy);
       })
       .catch(() => {});
   }, []);
@@ -111,12 +128,17 @@ export default function AdminClaimsNew() {
     setCustomerEmail(b.customerEmail ?? "");
     setBookingSearch("");
     setShowDropdown(false);
+    // Reset shortcut selection when booking changes
+    setActiveShortcut(null);
+    setSelectedRuleId("");
   }
 
   function clearBooking() {
     setSelectedBooking(null);
     setBookingId("");
     setListingId("");
+    setActiveShortcut(null);
+    setSelectedRuleId("");
   }
 
   // Fetch listing rules when listing ID is known
@@ -129,14 +151,25 @@ export default function AdminClaimsNew() {
       .catch(() => {});
   }, [listingId]);
 
-  const handleRuleSelect = (ruleId: string) => {
-    setSelectedRuleId(ruleId);
-    const rule = listingRules.find(r => r.id === parseInt(ruleId));
-    if (rule) {
-      setClaimedAmount(rule.fee.toFixed(2));
-      if (!description) setDescription(`Violation of rule: "${rule.title}"`);
-    }
-  };
+  // Quick-file: listing rule violation
+  function quickFileRule(rule: ListingRule) {
+    setActiveShortcut("rule");
+    setSelectedRuleId(String(rule.id));
+    setType("policy_violation");
+    setClaimedAmount(rule.fee.toFixed(2));
+    setDescription(`Policy violation: "${rule.title}"${rule.description ? `\n\n${rule.description}` : ""}`);
+  }
+
+  // Quick-file: cancellation policy breach
+  function quickFileCancellation() {
+    setActiveShortcut("cancellation");
+    setSelectedRuleId("");
+    setType("policy_violation");
+    if (!claimedAmount) setClaimedAmount("");
+    setDescription(`Cancellation policy violation.\n\nPolicy: ${cancellationPolicy}`);
+  }
+
+  const showShortcuts = selectedBooking && (listingRules.length > 0 || cancellationPolicy);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -193,7 +226,7 @@ export default function AdminClaimsNew() {
           <h1 className="text-xl font-bold flex items-center gap-2">
             <ShieldAlert className="w-5 h-5 text-primary" /> New Claim
           </h1>
-          <p className="text-sm text-muted-foreground">File a new damage, theft, or dispute claim.</p>
+          <p className="text-sm text-muted-foreground">File a damage, theft, dispute, or policy violation claim.</p>
         </div>
       </div>
 
@@ -284,29 +317,75 @@ export default function AdminClaimsNew() {
           </CardContent>
         </Card>
 
-        {/* Violated rule (shown when a booking with listing rules is linked) */}
-        {listingRules.length > 0 && (
-          <Card className="border-amber-200 bg-amber-50/50">
+        {/* ⚡ Policy Violation Shortcuts — shown when booking linked and policies/rules exist */}
+        {showShortcuts && (
+          <Card className="border-amber-300 bg-amber-50/60">
             <CardHeader className="pb-3">
-              <CardTitle className="text-base flex items-center gap-2">
-                <AlertTriangle className="w-4 h-4 text-amber-600" />
-                Violated Rule (optional)
+              <CardTitle className="text-base flex items-center gap-2 text-amber-900">
+                <Zap className="w-4 h-4 text-amber-600" />
+                Policy Violation — Quick File
               </CardTitle>
-              <CardDescription>Select a rule to auto-fill the claimed amount.</CardDescription>
+              <CardDescription className="text-amber-700">
+                Select the policy that was broken to instantly configure this claim with the correct fee.
+              </CardDescription>
             </CardHeader>
-            <CardContent>
-              <Select value={selectedRuleId} onValueChange={handleRuleSelect}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Select a violated rule…" />
-                </SelectTrigger>
-                <SelectContent>
-                  {listingRules.map(rule => (
-                    <SelectItem key={rule.id} value={String(rule.id)}>
-                      {rule.title} — ${rule.fee.toFixed(2)} fee
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+            <CardContent className="space-y-3">
+              {/* Listing rule cards */}
+              {listingRules.length > 0 && (
+                <div className="space-y-2">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-amber-800">Rental Rules</p>
+                  <div className="grid gap-2">
+                    {listingRules.map(rule => (
+                      <button
+                        key={rule.id}
+                        type="button"
+                        onClick={() => quickFileRule(rule)}
+                        className={`w-full text-left rounded-lg border-2 px-4 py-3 transition-all ${
+                          activeShortcut === "rule" && selectedRuleId === String(rule.id)
+                            ? "border-amber-500 bg-amber-100 ring-1 ring-amber-400"
+                            : "border-amber-200 bg-white hover:border-amber-400 hover:bg-amber-50"
+                        }`}
+                      >
+                        <div className="flex items-center justify-between gap-3">
+                          <div className="flex items-center gap-2 min-w-0">
+                            <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
+                            <span className="font-semibold text-sm text-amber-900 truncate">{rule.title}</span>
+                          </div>
+                          <span className="flex items-center gap-1 text-sm font-bold text-amber-800 shrink-0 bg-amber-100 border border-amber-300 rounded-full px-2.5 py-0.5">
+                            <DollarSign className="w-3 h-3" />{rule.fee.toFixed(2)} fee
+                          </span>
+                        </div>
+                        {rule.description && (
+                          <p className="text-xs text-amber-700 mt-1 ml-6 line-clamp-2">{rule.description}</p>
+                        )}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Cancellation policy */}
+              {cancellationPolicy && (
+                <div className="space-y-2">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-amber-800">Cancellation Policy</p>
+                  <button
+                    type="button"
+                    onClick={quickFileCancellation}
+                    className={`w-full text-left rounded-lg border-2 px-4 py-3 transition-all ${
+                      activeShortcut === "cancellation"
+                        ? "border-amber-500 bg-amber-100 ring-1 ring-amber-400"
+                        : "border-amber-200 bg-white hover:border-amber-400 hover:bg-amber-50"
+                    }`}
+                  >
+                    <div className="flex items-center gap-2 mb-1.5">
+                      <BookOpen className="w-4 h-4 text-amber-600 shrink-0" />
+                      <span className="font-semibold text-sm text-amber-900">Cancellation Policy Breach</span>
+                    </div>
+                    <p className="text-xs text-amber-700 ml-6 line-clamp-3">{cancellationPolicy}</p>
+                    <p className="text-xs text-amber-500 ml-6 mt-1.5 italic">Claimed amount set manually below</p>
+                  </button>
+                </div>
+              )}
             </CardContent>
           </Card>
         )}
@@ -334,18 +413,28 @@ export default function AdminClaimsNew() {
         <Card>
           <CardHeader>
             <CardTitle className="text-base">Claim Details</CardTitle>
+            {type === "policy_violation" && (
+              <CardDescription className="flex items-center gap-1.5 text-amber-700 font-medium">
+                <Zap className="w-3.5 h-3.5" /> Policy violation selected — review the pre-filled amount and description below.
+              </CardDescription>
+            )}
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-1.5">
                 <Label>Claim Type</Label>
-                <Select value={type} onValueChange={(v: any) => setType(v)}>
+                <Select value={type} onValueChange={(v: any) => { setType(v); if (v !== "policy_violation") { setActiveShortcut(null); setSelectedRuleId(""); } }}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="damage">Damage</SelectItem>
                     <SelectItem value="theft">Theft</SelectItem>
                     <SelectItem value="overage">Overage</SelectItem>
                     <SelectItem value="dispute">Dispute</SelectItem>
+                    <SelectItem value="policy_violation">
+                      <span className="flex items-center gap-1.5">
+                        <Zap className="w-3.5 h-3.5 text-amber-600" /> Policy Violation
+                      </span>
+                    </SelectItem>
                     <SelectItem value="other">Other</SelectItem>
                   </SelectContent>
                 </Select>
@@ -362,6 +451,12 @@ export default function AdminClaimsNew() {
                     placeholder="0.00"
                   />
                 </div>
+                {type === "policy_violation" && activeShortcut === "rule" && selectedRuleId && (
+                  <p className="text-xs text-amber-600">Auto-filled from rule fee</p>
+                )}
+                {type === "policy_violation" && activeShortcut === "cancellation" && (
+                  <p className="text-xs text-amber-600">Enter the cancellation fee manually</p>
+                )}
               </div>
             </div>
             <div className="space-y-1.5">
@@ -370,7 +465,7 @@ export default function AdminClaimsNew() {
                 value={description}
                 onChange={e => setDescription(e.target.value)}
                 rows={5}
-                placeholder="Describe the incident, damage, or dispute in detail…"
+                placeholder={type === "policy_violation" ? "Describe the policy violation in detail…" : "Describe the incident, damage, or dispute in detail…"}
               />
             </div>
           </CardContent>
