@@ -49,6 +49,9 @@ export default function StorefrontGearDetail() {
 
   const [activeImage, setActiveImage] = useState(0);
   const [addons, setAddons] = useState<Addon[]>([]);
+  const [platformProtectionPlan, setPlatformProtectionPlan] = useState<{
+    enabled: boolean; feeAmount: string; feePer: string;
+  } | null>(null);
   const [selectedAddonIds, setSelectedAddonIds] = useState<Set<number>>(new Set());
   const [listingRules, setListingRules] = useState<ListingRule[]>([]);
   const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined);
@@ -87,6 +90,16 @@ export default function StorefrontGearDetail() {
       .then((data: ListingRule[]) => { if (Array.isArray(data)) setListingRules(data); })
       .catch(() => {});
   }, [id]);
+
+  // Fetch platform-level protection plan for this listing's category
+  useEffect(() => {
+    const catSlug = (listing as any)?.categorySlug;
+    if (!catSlug) return;
+    fetch(`${BASE}/api/protection-plan/${encodeURIComponent(catSlug)}`)
+      .then(r => r.json())
+      .then(d => setPlatformProtectionPlan(d))
+      .catch(() => {});
+  }, [(listing as any)?.categorySlug]);
 
   useEffect(() => {
     if (!id) return;
@@ -405,54 +418,71 @@ export default function StorefrontGearDetail() {
               </div>
             </div>
 
-            {/* Add-ons */}
-            {addons.length > 0 && (
-              <div className="space-y-3">
-                {/* Protection Plan — required card */}
-                {addons.filter(a => a.name.toLowerCase().includes("protection")).map(addon => (
-                  <div key={addon.id} className="rounded-2xl overflow-hidden shadow-md" style={{ border: "2px solid #3ab549" }}>
-                    {/* Header — OutdoorShare brand */}
-                    <div className="px-4 py-2.5 flex items-center justify-between" style={{ background: "#1a2332" }}>
-                      <div className="flex items-center gap-2">
-                        <ShieldCheck className="w-4 h-4" style={{ color: "#3ab549" }} />
-                        <div className="flex flex-col leading-tight">
-                          <span className="font-black text-white text-xs tracking-wide">Protection Plan</span>
-                          <span className="text-[9px] font-bold tracking-widest uppercase" style={{ color: "#3ab549" }}>by OutdoorShare</span>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <img src="/outdoorshare-logo.png" alt="OutdoorShare" className="h-4 opacity-80 object-contain" />
-                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1 border" style={{ background: "rgba(58,181,73,0.15)", borderColor: "#3ab549", color: "#3ab549" }}>
-                          <Lock className="w-2.5 h-2.5" /> Required
-                        </span>
+            {/* Protection Plan — always shown if addon plan or platform plan is enabled */}
+            {(() => {
+              const addonPlan = addons.find(a => a.name.toLowerCase().includes("protection"));
+              const hasPlatformPlan = platformProtectionPlan?.enabled && parseFloat(platformProtectionPlan.feeAmount || "0") > 0;
+              if (!addonPlan && !hasPlatformPlan) return null;
+
+              const priceLabel = addonPlan
+                ? `$${addonPlan.price.toFixed(0)}${addonPlan.priceType === "per_day" ? "/day" : " flat"}`
+                : hasPlatformPlan
+                  ? `$${parseFloat(platformProtectionPlan!.feeAmount).toFixed(0)}/${platformProtectionPlan!.feePer ?? "day"}`
+                  : null;
+
+              return (
+                <div className="rounded-2xl overflow-hidden shadow-md" style={{ border: "2px solid #3ab549" }}>
+                  {/* Header */}
+                  <div className="px-4 py-2.5 flex items-center justify-between" style={{ background: "#1a2332" }}>
+                    <div className="flex items-center gap-2">
+                      <ShieldCheck className="w-4 h-4" style={{ color: "#3ab549" }} />
+                      <div className="flex flex-col leading-tight">
+                        <span className="font-black text-white text-xs tracking-wide">Protection Plan</span>
+                        <span className="text-[9px] font-bold tracking-widest uppercase" style={{ color: "#3ab549" }}>by OutdoorShare</span>
                       </div>
                     </div>
-                    <div className="px-4 py-3 flex items-start justify-between gap-4" style={{ background: "#f0faf1" }}>
-                      <div className="flex-1">
-                        <p className="text-xs text-gray-700 mb-2">Included with every rental. A contractual protection offering (not insurance) covering accidental equipment damage — accidents, weather events, and mechanical breakdown. Renters are responsible for deductibles.{" "}<a href="https://myoutdoorshare.com/protection-plan" target="_blank" rel="noopener noreferrer" className="font-semibold underline" style={{ color: "#3ab549" }}>Learn more →</a></p>
-                        <div className="grid grid-cols-2 gap-x-3 gap-y-1">
-                          {[
-                            { icon: AlertTriangle, text: "Accident & collision" },
-                            { icon: Umbrella, text: "Weather & water" },
-                            { icon: Zap, text: "Mechanical breakdown" },
-                            { icon: ShieldCheck, text: "Disaster & fire" },
-                          ].map(({ icon: Icon, text }) => (
-                            <div key={text} className="flex items-center gap-1">
-                              <Icon className="w-3 h-3 shrink-0" style={{ color: "#3ab549" }} />
-                              <span className="text-[11px] text-gray-600">{text}</span>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                      <div className="text-right shrink-0">
-                        <p className="text-2xl font-black" style={{ color: "#1a2332" }}>${addon.price.toFixed(0)}</p>
-                        <p className="text-[10px] text-gray-500">flat fee</p>
-                        <p className="text-[10px] font-semibold mt-1" style={{ color: "#3ab549" }}>Included at checkout</p>
-                      </div>
+                    <div className="flex items-center gap-2">
+                      <img src="/outdoorshare-logo.png" alt="OutdoorShare" className="h-4 opacity-80 object-contain" />
+                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1 border" style={{ background: "rgba(58,181,73,0.15)", borderColor: "#3ab549", color: "#3ab549" }}>
+                        <Lock className="w-2.5 h-2.5" /> Required
+                      </span>
                     </div>
                   </div>
-                ))}
+                  {/* Body */}
+                  <div className="px-4 py-3 flex items-start justify-between gap-4" style={{ background: "#f0faf1" }}>
+                    <div className="flex-1">
+                      <p className="text-xs text-gray-700 mb-2">
+                        Included with every rental. A contractual protection offering (not insurance) covering accidental equipment damage — accidents, weather events, and mechanical breakdown. Renters are responsible for deductibles.{" "}
+                        <a href="https://myoutdoorshare.com/protection-plan" target="_blank" rel="noopener noreferrer" className="font-semibold underline" style={{ color: "#3ab549" }}>Learn more →</a>
+                      </p>
+                      <div className="grid grid-cols-2 gap-x-3 gap-y-1">
+                        {[
+                          { icon: AlertTriangle, text: "Accident & collision" },
+                          { icon: Umbrella, text: "Weather & water" },
+                          { icon: Zap, text: "Mechanical breakdown" },
+                          { icon: ShieldCheck, text: "Disaster & fire" },
+                        ].map(({ icon: Icon, text }) => (
+                          <div key={text} className="flex items-center gap-1">
+                            <Icon className="w-3 h-3 shrink-0" style={{ color: "#3ab549" }} />
+                            <span className="text-[11px] text-gray-600">{text}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                    {priceLabel && (
+                      <div className="text-right shrink-0">
+                        <p className="text-2xl font-black" style={{ color: "#1a2332" }}>{priceLabel}</p>
+                        <p className="text-[10px] font-semibold mt-1" style={{ color: "#3ab549" }}>Added at checkout</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              );
+            })()}
 
+            {/* Other Add-ons */}
+            {addons.length > 0 && (
+              <div className="space-y-3">
                 {/* Regular add-ons — selectable */}
                 {addons.filter(a => !a.name.toLowerCase().includes("protection")).length > 0 && (
                   <>

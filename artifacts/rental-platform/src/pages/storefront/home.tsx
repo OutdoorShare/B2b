@@ -356,8 +356,9 @@ export default function StorefrontHome() {
                       </p>
                     )}
                     {(listing as any).hasProtectionPlan && (
-                      <div className="flex items-center gap-1 text-[10px] font-semibold text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 rounded-full px-2 py-0.5 w-fit mb-2">
-                        <ShieldCheck className="w-3 h-3 shrink-0" />Protection Plan
+                      <div className="flex items-center gap-1.5 text-[10px] font-semibold text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 rounded-full px-2 py-0.5 w-fit mb-2">
+                        <img src="/outdoorshare-logo.png" alt="OutdoorShare" className="h-3 object-contain opacity-80" />
+                        Protection Plan
                       </div>
                     )}
                     <div className="mt-auto pt-3 border-t border-border flex items-end justify-between">
