@@ -544,32 +544,29 @@ export default function AdminKiosk() {
         </div>
       )}
 
-      {/* ── Fullscreen Prompt Overlay ── */}
+      {/* ── Fullscreen Prompt Banner ── */}
       {fsSupported && fsPrompt && !showExitPad && (
         <div
-          className="fixed inset-0 z-[200] bg-black/75 backdrop-blur-sm flex items-center justify-center cursor-pointer"
+          className="fixed top-0 left-0 right-0 z-[200] flex items-center justify-between gap-3 px-5 py-3 shadow-lg cursor-pointer"
+          style={{ background: "linear-gradient(90deg, #1a2332 0%, #0f1923 100%)" }}
           onClick={() => requestFs().catch(() => {})}
         >
-          <div className="bg-background rounded-3xl shadow-2xl w-full max-w-xs mx-4 overflow-hidden text-center">
-            <div className="bg-primary/5 border-b px-8 py-8">
-              <div className="w-16 h-16 bg-primary/10 rounded-full flex items-center justify-center mx-auto mb-4">
-                <Maximize2 className="w-8 h-8 text-primary" />
-              </div>
-              <h2 className="text-xl font-bold">Enter Full Screen</h2>
-              <p className="text-sm text-muted-foreground mt-2 leading-relaxed">
-                Tap anywhere to continue in kiosk mode
-              </p>
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center shrink-0">
+              <Maximize2 className="w-4 h-4 text-white" />
             </div>
-            <div className="p-6">
-              <button
-                className="w-full h-14 bg-primary text-primary-foreground rounded-xl text-base font-bold hover:bg-primary/90 active:scale-95 transition-all flex items-center justify-center gap-2"
-                onClick={e => { e.stopPropagation(); requestFs().catch(() => {}); }}
-              >
-                <Maximize className="w-5 h-5" />
-                Full Screen
-              </button>
+            <div>
+              <p className="text-white text-sm font-bold leading-none">Tap to enter full screen</p>
+              <p className="text-white/60 text-xs mt-0.5">For the best kiosk experience</p>
             </div>
           </div>
+          <button
+            className="shrink-0 h-9 px-4 rounded-lg bg-white/10 hover:bg-white/20 active:scale-95 text-white text-sm font-semibold transition-all flex items-center gap-2"
+            onClick={e => { e.stopPropagation(); requestFs().catch(() => {}); }}
+          >
+            <Maximize className="w-4 h-4" />
+            Full Screen
+          </button>
         </div>
       )}
 
