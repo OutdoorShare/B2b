@@ -897,12 +897,14 @@ export default function StorefrontBook() {
     }
   }, [slug, email, name, listingId, toast]);
 
-  // Auto-create payment intent for logged-in or kiosk users as soon as all info is ready
+  // Auto-create payment intent for logged-in or kiosk users
+  // Kiosk: pre-create as soon as dates + total are ready (no name/email required yet — those are optional metadata)
+  // Logged-in: wait for email+name since they're pulled from session
   useEffect(() => {
     if (!session && !isKiosk) return;
     if (clientSecret) return;
     if (paymentConfirmed) return;
-    if (!email || !name) return;
+    if (!isKiosk && (!email || !name)) return;   // logged-in path still needs session info
     if (!dateRange?.from || !dateRange?.to) return;
     if (discountedTotal <= 0) return;
     const cents = Math.round(discountedTotal * 100);
@@ -999,6 +1001,9 @@ export default function StorefrontBook() {
 
   // ── Final agreement submission ──
   const handleFinalSubmit = async () => {
+    if (!name || !email || !phone) {
+      toast({ title: "Please fill in your name, email, and phone", description: "Scroll up to complete your information before signing.", variant: "destructive" }); return;
+    }
     if (!sigHasContent) {
       toast({ title: "Please draw your signature to proceed", variant: "destructive" }); return;
     }
@@ -1922,6 +1927,16 @@ export default function StorefrontBook() {
                             <Button size="lg" className="w-full h-13 text-base font-bold rounded-xl" onClick={handleRegisterAndPay} disabled={isSubmitting}>
                               {isSubmitting ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Creating account…</> : <><ShieldCheck className="w-4 h-4 mr-2" />Create Account & Pay {appliedPromo ? `— $${discountedTotal.toFixed(2)}` : ""}</>}
                             </Button>
+                          ) : isKiosk && (!name || !email) ? (
+                            <div className="flex items-start gap-3 rounded-xl border border-dashed border-muted-foreground/30 bg-muted/30 px-4 py-4">
+                              <div className="mt-0.5 w-6 h-6 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
+                                <span className="text-primary font-bold text-xs">↓</span>
+                              </div>
+                              <div>
+                                <p className="text-sm font-semibold text-foreground">Almost there!</p>
+                                <p className="text-xs text-muted-foreground mt-0.5">Fill in your name and email below to unlock payment.</p>
+                              </div>
+                            </div>
                           ) : (
                             <div className="flex items-center justify-center py-6 gap-3 text-muted-foreground">
                               <Loader2 className="w-5 h-5 animate-spin" />
