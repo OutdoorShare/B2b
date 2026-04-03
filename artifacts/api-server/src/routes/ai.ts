@@ -447,4 +447,83 @@ router.post("/ai/chat", async (req: Request, res: Response) => {
   res.end();
 });
 
+// ── POST /api/listings/generate-description ────────────────────────────────────
+
+router.post("/listings/generate-description", async (req: Request, res: Response) => {
+  const auth = await requireAdminOrSuperAdmin(req);
+  if (!auth) return res.status(401).json({ error: "Unauthorized" });
+
+  const {
+    title = "",
+    category = "",
+    brand = "",
+    model = "",
+    condition = "",
+    location = "",
+    pricePerDay = "",
+    pricePerWeek = "",
+    includedItems = [],
+    requirements = "",
+    weight = "",
+    dimensions = "",
+    userHint = "",
+  } = req.body ?? {};
+
+  const conditionLabels: Record<string, string> = {
+    excellent: "Excellent – like new",
+    good: "Good – minimal wear",
+    fair: "Fair – noticeable wear but fully functional",
+    poor: "Poor – heavy wear, functional",
+  };
+  const conditionLabel = conditionLabels[condition] || condition;
+
+  const listingDetails = [
+    title && `Title: ${title}`,
+    category && `Category: ${category}`,
+    brand && `Brand: ${brand}`,
+    model && `Model: ${model}`,
+    conditionLabel && `Condition: ${conditionLabel}`,
+    location && `Pickup/Location: ${location}`,
+    pricePerDay && `Daily Rate: $${pricePerDay}/day`,
+    pricePerWeek && `Weekly Rate: $${pricePerWeek}/week`,
+    Array.isArray(includedItems) && includedItems.length > 0 && `Included Items: ${includedItems.join(", ")}`,
+    requirements && `Requirements/Rules: ${requirements}`,
+    weight && `Weight: ${weight}`,
+    dimensions && `Dimensions: ${dimensions}`,
+  ].filter(Boolean).join("\n");
+
+  const systemPrompt = `You are an enthusiastic outdoor adventure copywriter who writes irresistible rental listing descriptions. Your descriptions are fun, exciting, and informative. You use relevant emojis naturally throughout. You get people genuinely pumped to go outside and experience the gear.
+
+Rules:
+- 2–4 paragraphs, conversational and energetic
+- Open with a hook that sells the adventure/experience, not just the product
+- Mention key specs and what makes this particular item great
+- Close with a call-to-action that makes booking feel like a no-brainer
+- Use emojis naturally (not at the start of every sentence, but sprinkling them in)
+- DO NOT fabricate specific numbers or specs that weren't provided
+- DO NOT include pricing in the description
+- Output ONLY the listing description — no title, no headers, no labels`;
+
+  const userMessage = `Write an exciting rental listing description based on these details:
+
+${listingDetails}${userHint ? `\n\nAdditional direction from the owner: ${userHint}` : ""}`;
+
+  try {
+    const completion = await openai.chat.completions.create({
+      model: "gpt-5-mini",
+      max_completion_tokens: 600,
+      messages: [
+        { role: "system", content: systemPrompt },
+        { role: "user", content: userMessage },
+      ],
+    });
+
+    const description = completion.choices[0]?.message?.content?.trim() ?? "";
+    return res.json({ description });
+  } catch (err: any) {
+    console.error("[generate-description] error:", err);
+    return res.status(500).json({ error: err.message ?? "AI generation failed" });
+  }
+});
+
 export default router;

@@ -16,7 +16,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { ArrowLeft, Upload, X, CheckCircle2, AlertCircle, CircleDashed, ImagePlus, Loader2, IdCard } from "lucide-react";
+import { ArrowLeft, Upload, X, CheckCircle2, AlertCircle, CircleDashed, ImagePlus, Loader2, IdCard, Sparkles, ChevronDown, ChevronUp, RefreshCw } from "lucide-react";
 import { AddonManager } from "@/components/addon-manager";
 import { UnitIdentifiersManager } from "@/components/unit-identifiers-manager";
 import { getAdminSession } from "@/lib/admin-nav";
@@ -115,6 +115,49 @@ export default function AdminListingsForm() {
 
   const [includedItemInput, setIncludedItemInput] = useState('');
   const [imageUrlInput, setImageUrlInput] = useState('');
+
+  // AI description generator state
+  const [aiPanelOpen, setAiPanelOpen] = useState(false);
+  const [aiHint, setAiHint] = useState('');
+  const [aiGenerating, setAiGenerating] = useState(false);
+  const [aiPreview, setAiPreview] = useState('');
+
+  const generateAiDescription = useCallback(async () => {
+    setAiGenerating(true);
+    setAiPreview('');
+    try {
+      const s = getAdminSession();
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      if (s?.token) headers['x-admin-token'] = s.token;
+      const categoryName = categories.find(c => c.id === formData.categoryId)?.name ?? '';
+      const res = await fetch(`${BASE}/api/listings/generate-description`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          title: formData.title,
+          category: categoryName,
+          brand: formData.brand,
+          model: formData.model,
+          condition: formData.condition,
+          location: formData.location,
+          pricePerDay: formData.pricePerDay,
+          pricePerWeek: formData.pricePerWeek,
+          includedItems: formData.includedItems,
+          requirements: formData.requirements,
+          weight: formData.weight,
+          dimensions: formData.dimensions,
+          userHint: aiHint,
+        }),
+      });
+      if (!res.ok) throw new Error(await res.text());
+      const data = await res.json();
+      setAiPreview(data.description ?? '');
+    } catch (err: any) {
+      toast({ title: "AI generation failed", description: err.message, variant: "destructive" });
+    } finally {
+      setAiGenerating(false);
+    }
+  }, [formData, aiHint, categories, toast]);
 
   useEffect(() => {
     if (isEditing && listing) {
@@ -363,7 +406,83 @@ export default function AdminListingsForm() {
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="description">Description <span className="text-destructive">*</span></Label>
+                  <div className="flex items-center justify-between">
+                    <Label htmlFor="description">Description <span className="text-destructive">*</span></Label>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="h-7 gap-1.5 text-xs border-violet-200 text-violet-700 hover:bg-violet-50 hover:text-violet-800"
+                      onClick={() => { setAiPanelOpen(p => !p); setAiPreview(''); }}
+                    >
+                      <Sparkles className="h-3.5 w-3.5" />
+                      AI Suggest
+                      {aiPanelOpen ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+                    </Button>
+                  </div>
+
+                  {aiPanelOpen && (
+                    <div className="rounded-lg border border-violet-200 bg-violet-50/50 p-4 space-y-3">
+                      <p className="text-xs text-violet-700 font-medium">
+                        AI will use everything already filled in (title, brand, model, condition, location, included items, etc.) to craft an exciting description. Add any extra direction below.
+                      </p>
+                      <Textarea
+                        placeholder='Optional: give the AI direction — e.g. "emphasize the audio system and the spacious deck area" or "keep it short and punchy, mention it seats 8"'
+                        value={aiHint}
+                        onChange={e => setAiHint(e.target.value)}
+                        rows={2}
+                        className="text-sm bg-white border-violet-200 focus-visible:ring-violet-400 resize-none"
+                      />
+                      <Button
+                        type="button"
+                        size="sm"
+                        disabled={aiGenerating}
+                        className="bg-violet-600 hover:bg-violet-700 text-white gap-1.5"
+                        onClick={generateAiDescription}
+                      >
+                        {aiGenerating
+                          ? <><Loader2 className="h-3.5 w-3.5 animate-spin" />Generating…</>
+                          : <><Sparkles className="h-3.5 w-3.5" />Generate Description</>
+                        }
+                      </Button>
+
+                      {aiPreview && (
+                        <div className="space-y-2">
+                          <div className="rounded-md border border-violet-200 bg-white p-3 text-sm text-foreground whitespace-pre-wrap leading-relaxed max-h-48 overflow-y-auto">
+                            {aiPreview}
+                          </div>
+                          <div className="flex gap-2">
+                            <Button
+                              type="button"
+                              size="sm"
+                              className="bg-violet-600 hover:bg-violet-700 text-white gap-1.5"
+                              onClick={() => {
+                                setFormData(prev => ({ ...prev, description: aiPreview }));
+                                setAiPanelOpen(false);
+                                setAiPreview('');
+                                toast({ title: "Description applied!", description: "The AI description has been added. Review and save when ready." });
+                              }}
+                            >
+                              <CheckCircle2 className="h-3.5 w-3.5" />
+                              Use this description
+                            </Button>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              disabled={aiGenerating}
+                              className="gap-1.5 border-violet-200 text-violet-700 hover:bg-violet-50"
+                              onClick={generateAiDescription}
+                            >
+                              <RefreshCw className="h-3.5 w-3.5" />
+                              Try again
+                            </Button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
                   <Textarea id="description" name="description" value={formData.description} onChange={handleChange} rows={5} required />
                 </div>
               </CardContent>
