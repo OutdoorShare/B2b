@@ -65,6 +65,7 @@ import ProtectionPlansPage from "@/pages/superadmin/protection-plans";
 import SuperAdminAnalytics from "@/pages/superadmin/analytics";
 import SuperAdminFeedback from "@/pages/superadmin/feedback";
 import SuperAdminDeveloper from "@/pages/superadmin/developer";
+import DocsAdminPage from "@/pages/superadmin/docs-admin";
 import AdminFeedback from "@/pages/admin/feedback";
 import AdminContactCards from "@/pages/admin/contact-cards";
 import AdminInventory from "@/pages/admin/inventory/index";
@@ -226,6 +227,9 @@ function Router() {
       </Route>
       <Route path="/superadmin/feedback">
         <SuperAdminLayout><SuperAdminFeedback /></SuperAdminLayout>
+      </Route>
+      <Route path="/superadmin/docs">
+        <DocsAdminPage />
       </Route>
       <Route path="/superadmin/developer">
         <SuperAdminLayout><SuperAdminDeveloper /></SuperAdminLayout>

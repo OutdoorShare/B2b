@@ -1,5 +1,5 @@
 import { Link, useLocation } from "wouter";
-import { FolderTree, Layout, Star, Search, ShieldAlert, BookOpen, ExternalLink } from "lucide-react";
+import { FolderTree, Layout, Star, Search, BookOpen, ExternalLink } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 export function PublicLayout({ children }: { children: React.ReactNode }) {
@@ -59,19 +59,6 @@ export function PublicLayout({ children }: { children: React.ReactNode }) {
             );
           })}
 
-          <div className="pt-6">
-            <div className="text-xs font-semibold uppercase tracking-wider mb-3 px-3" style={{ color: "hsl(var(--sidebar-foreground))", opacity: 0.45 }}>
-              Internal
-            </div>
-            <Link
-              href="/admin"
-              className="flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium transition-colors hover:text-white"
-              style={{ color: "hsl(var(--sidebar-foreground))" }}
-            >
-              <ShieldAlert className="w-4 h-4 shrink-0" />
-              Admin Area
-            </Link>
-          </div>
         </nav>
 
         {/* Footer */}
