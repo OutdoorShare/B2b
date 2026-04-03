@@ -4,7 +4,7 @@ import {
   CheckCircle2, XCircle, AlertTriangle, RefreshCcw, Trash2,
   Server, Database, Cpu, MemoryStick, Activity, Bug,
   Shield, Clock, ChevronDown, ChevronUp, Wifi, WifiOff,
-  TrendingDown, TrendingUp, Eye, Filter, Building2
+  TrendingDown, TrendingUp, Eye, Filter, Building2, Copy, Check
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -13,6 +13,41 @@ import { cn } from "@/lib/utils";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 const OS_GREEN = "#3ab549";
+
+const ISSUE_DESCRIPTIONS: Record<string, { what: string; impact: string }> = {
+  "No Stripe Connect account": {
+    what: "This tenant has not connected a Stripe account to their business. Stripe is required to charge renters and collect payments.",
+    impact: "Renters cannot pay — all bookings will fail at checkout until Stripe is connected.",
+  },
+  "Stripe account is restricted": {
+    what: "Stripe has placed a restriction on this tenant's account. This is usually due to incomplete identity verification, a dispute, or suspicious activity flagged by Stripe.",
+    impact: "Payments are blocked. The tenant needs to log into their Stripe dashboard and resolve the restriction.",
+  },
+  "Stripe charges not yet enabled": {
+    what: "The tenant has connected a Stripe account, but Stripe has not yet enabled charges on it. This typically happens when the account is still under review.",
+    impact: "Payments cannot be collected until Stripe finishes reviewing and approves the account.",
+  },
+  "No listings created": {
+    what: "This tenant has not added any rental items to their inventory. Their storefront is completely empty.",
+    impact: "Customers visiting their storefront see nothing to rent. They need to add at least one listing.",
+  },
+  "No logo uploaded": {
+    what: "The tenant has not uploaded a logo for their business. Their storefront and emails will show a generic placeholder instead of their brand.",
+    impact: "Makes the storefront look unfinished. Low priority but affects customer trust.",
+  },
+  "No phone number set": {
+    what: "The tenant's business profile is missing a contact phone number. This is shown on their storefront and contact card.",
+    impact: "Customers have no phone number to call if they have questions about a rental.",
+  },
+  "Trial period expired": {
+    what: "This tenant was on a free trial that has now ended. They have not upgraded to a paid subscription plan.",
+    impact: "Depending on platform settings, their storefront may be restricted or locked until they upgrade.",
+  },
+  "Account suspended": {
+    what: "This tenant account has been manually suspended — either by the platform owner or automatically by a billing failure.",
+    impact: "The tenant cannot accept bookings, and their storefront may show as unavailable to customers.",
+  },
+};
 
 function getToken() { return localStorage.getItem("superadmin_token") ?? ""; }
 
@@ -126,6 +161,65 @@ function MemBar({ pct }: { pct: number }) {
   return (
     <div className="w-full h-1.5 rounded-full bg-slate-700 mt-1">
       <div className="h-full rounded-full transition-all" style={{ width: `${pct}%`, backgroundColor: color }} />
+    </div>
+  );
+}
+
+function IssueItem({ text, level }: { text: string; level: "error" | "warn" }) {
+  const [copied, setCopied] = useState(false);
+  const [open, setOpen] = useState(false);
+  const desc = ISSUE_DESCRIPTIONS[text];
+
+  function copyText() {
+    navigator.clipboard.writeText(text).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    });
+  }
+
+  return (
+    <div className={cn(
+      "rounded-lg border text-xs mt-1",
+      level === "error" ? "border-red-500/20 bg-red-500/5" : "border-yellow-500/20 bg-yellow-500/5"
+    )}>
+      <div className="flex items-center gap-2 px-3 py-2">
+        {level === "error"
+          ? <XCircle className="w-3.5 h-3.5 text-red-400 shrink-0" />
+          : <AlertTriangle className="w-3.5 h-3.5 text-yellow-400 shrink-0" />}
+        <span className={cn("flex-1 font-medium", level === "error" ? "text-red-300" : "text-yellow-300")}>
+          {text}
+        </span>
+        <div className="flex items-center gap-1 shrink-0">
+          {desc && (
+            <button
+              onClick={() => setOpen(v => !v)}
+              className="text-slate-400 hover:text-slate-200 transition-colors px-1.5 py-0.5 rounded hover:bg-slate-700"
+              title="What does this mean?"
+            >
+              {open ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+            </button>
+          )}
+          <button
+            onClick={copyText}
+            className="text-slate-400 hover:text-slate-200 transition-colors px-1.5 py-0.5 rounded hover:bg-slate-700"
+            title="Copy issue text"
+          >
+            {copied ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
+          </button>
+        </div>
+      </div>
+      {open && desc && (
+        <div className="px-3 pb-3 pt-0 space-y-2 border-t border-slate-700/50">
+          <div className="mt-2">
+            <p className="text-slate-400 uppercase tracking-wide text-[10px] font-semibold mb-1">What this means</p>
+            <p className="text-slate-300 leading-relaxed">{desc.what}</p>
+          </div>
+          <div>
+            <p className="text-slate-400 uppercase tracking-wide text-[10px] font-semibold mb-1">Impact</p>
+            <p className={cn("leading-relaxed", level === "error" ? "text-red-300" : "text-yellow-300")}>{desc.impact}</p>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -590,18 +684,12 @@ export default function DeveloperPage() {
                   </div>
 
                   {(t.issues.length > 0 || t.warnings.length > 0) && (
-                    <div className="mt-2.5 pl-7 space-y-1">
+                    <div className="mt-2 pl-7 space-y-1">
                       {t.issues.map(issue => (
-                        <div key={issue} className="flex items-center gap-1.5 text-xs text-red-400">
-                          <XCircle className="w-3 h-3 shrink-0" />
-                          {issue}
-                        </div>
+                        <IssueItem key={issue} text={issue} level="error" />
                       ))}
                       {t.warnings.map(warn => (
-                        <div key={warn} className="flex items-center gap-1.5 text-xs text-yellow-400">
-                          <AlertTriangle className="w-3 h-3 shrink-0" />
-                          {warn}
-                        </div>
+                        <IssueItem key={warn} text={warn} level="warn" />
                       ))}
                     </div>
                   )}
