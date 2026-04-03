@@ -52,6 +52,8 @@ export const bookingsTable = pgTable("bookings", {
   // Scheduled reminder flags — set true once the timed email is sent
   pickupReminderSent: boolean("pickup_reminder_sent").default(false),
   returnReminderSent: boolean("return_reminder_sent").default(false),
+  // Email activity log — JSON array of {type, sentAt, toEmail?}
+  emailEvents: text("email_events"),
   // Seen/read tracking — false means the viewer has not yet looked at this booking/update
   seenByAdmin: boolean("seen_by_admin").notNull().default(true),
   seenByRenter: boolean("seen_by_renter").notNull().default(true),

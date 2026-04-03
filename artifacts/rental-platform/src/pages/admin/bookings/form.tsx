@@ -406,19 +406,33 @@ export default function AdminBookingForm() {
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
+              {/* Email — most important: drives all automated notifications */}
+              <div className="space-y-1.5">
+                <Label htmlFor="customerEmail" className="flex items-center gap-1.5 text-sm font-semibold">
+                  Email Address <span className="text-destructive">*</span>
+                </Label>
+                <Input
+                  id="customerEmail"
+                  type="email"
+                  value={form.customerEmail}
+                  onChange={e => handleChange("customerEmail", e.target.value)}
+                  placeholder="jane@example.com"
+                  className="h-10"
+                  autoFocus={!isEditing}
+                />
+                <p className="text-xs text-muted-foreground leading-relaxed">
+                  Used for booking confirmation, pickup &amp; return photo links, and all automated notifications.
+                </p>
+              </div>
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-1.5">
                   <Label>Full Name <span className="text-destructive">*</span></Label>
                   <Input value={form.customerName} onChange={e => handleChange("customerName", e.target.value)} placeholder="Jane Smith" />
                 </div>
                 <div className="space-y-1.5">
-                  <Label>Email <span className="text-destructive">*</span></Label>
-                  <Input type="email" value={form.customerEmail} onChange={e => handleChange("customerEmail", e.target.value)} placeholder="jane@example.com" />
+                  <Label>Phone</Label>
+                  <Input type="tel" value={form.customerPhone} onChange={e => handleChange("customerPhone", e.target.value)} placeholder="+1 (555) 000-0000" />
                 </div>
-              </div>
-              <div className="space-y-1.5">
-                <Label>Phone</Label>
-                <Input type="tel" value={form.customerPhone} onChange={e => handleChange("customerPhone", e.target.value)} placeholder="+1 (555) 000-0000" />
               </div>
               <div className="space-y-1.5">
                 <Label>Customer Notes</Label>

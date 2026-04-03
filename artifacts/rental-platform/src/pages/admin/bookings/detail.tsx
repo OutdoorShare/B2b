@@ -16,7 +16,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { Link, useLocation } from "wouter";
-import { ArrowLeft, User, Phone, Mail, Calendar, Package, StickyNote, ShieldAlert, Pencil, FileSignature, FileText, ChevronDown, ChevronUp, Download, Camera, CheckCircle2, Loader2, ExternalLink, ImageIcon, Clock, ShieldCheck, ShieldX, Shield, AlertCircle, Copy, Send, UserCheck, Lock, LockOpen, DollarSign, PackageCheck, ScanSearch } from "lucide-react";
+import { ArrowLeft, User, Phone, Mail, Calendar, Package, StickyNote, ShieldAlert, Pencil, FileSignature, FileText, ChevronDown, ChevronUp, Download, Camera, CheckCircle2, Loader2, ExternalLink, ImageIcon, Clock, ShieldCheck, ShieldX, Shield, AlertCircle, Copy, Send, UserCheck, Lock, LockOpen, DollarSign, PackageCheck, ScanSearch, MailCheck, Link2, MailX, RefreshCw } from "lucide-react";
+import { Input } from "@/components/ui/input";
 import { format, differenceInDays, startOfDay } from "date-fns";
 
 const SOURCE_CONFIG: Record<string, { label: string; className: string }> = {
@@ -74,6 +75,10 @@ export default function AdminBookingDetail() {
   const [returnLinkSent, setReturnLinkSent] = useState(false);
   const [returnUrl, setReturnUrl] = useState<string | null>(null);
   const [copyReturnSuccess, setCopyReturnSuccess] = useState(false);
+  const [fetchingPickupLink, setFetchingPickupLink] = useState(false);
+  const [fetchingReturnLink, setFetchingReturnLink] = useState(false);
+  const [revealedPickupUrl, setRevealedPickupUrl] = useState<string | null>(null);
+  const [revealedReturnUrl, setRevealedReturnUrl] = useState<string | null>(null);
   const [inspecting, setInspecting] = useState(false);
   const [inspectionResult, setInspectionResult] = useState<any | null>(null);
 
@@ -129,22 +134,40 @@ export default function AdminBookingDetail() {
   };
 
   const copyPickupLink = async () => {
-    let url = pickupUrl;
+    let url = pickupUrl ?? revealedPickupUrl;
     if (!url) {
-      // Fetch the link without sending an email
+      setFetchingPickupLink(true);
       try {
         const r = await fetch(`${BASE}/api/bookings/${id}/pickup-link`, {
           headers: getAdminSession()?.token ? { "x-admin-token": getAdminSession()!.token } : {},
         });
         const data = await r.json();
-        if (data.pickupUrl) { url = data.pickupUrl; setPickupUrl(data.pickupUrl); }
-      } catch {}
+        if (data.pickupUrl) {
+          url = data.pickupUrl;
+          setPickupUrl(data.pickupUrl);
+          setRevealedPickupUrl(data.pickupUrl);
+        } else {
+          toast({ title: "Could not retrieve link", description: data.error ?? "Server returned no URL — try refreshing the page.", variant: "destructive" });
+          return;
+        }
+      } catch (err: any) {
+        toast({ title: "Network error", description: "Could not reach the server. Check your connection.", variant: "destructive" });
+        return;
+      } finally {
+        setFetchingPickupLink(false);
+      }
+    } else {
+      setRevealedPickupUrl(url);
     }
-    if (!url) { toast({ title: "Could not retrieve link", variant: "destructive" }); return; }
-    await navigator.clipboard.writeText(url);
-    setCopySuccess(true);
-    toast({ title: "Link copied!", description: "Paste it in a text message or email to the renter." });
-    setTimeout(() => setCopySuccess(false), 3000);
+    try {
+      await navigator.clipboard.writeText(url);
+      setCopySuccess(true);
+      toast({ title: "Link copied!", description: "Paste it in a text message or email to the renter." });
+      setTimeout(() => setCopySuccess(false), 3000);
+    } catch {
+      // Clipboard API unavailable (HTTP) — URL is shown inline so user can copy manually
+      toast({ title: "Link ready below", description: "Select and copy the link from the box below." });
+    }
   };
 
   const sendReturnLink = async () => {
@@ -165,21 +188,39 @@ export default function AdminBookingDetail() {
   };
 
   const copyReturnLink = async () => {
-    let url = returnUrl;
+    let url = returnUrl ?? revealedReturnUrl;
     if (!url) {
+      setFetchingReturnLink(true);
       try {
         const r = await fetch(`${BASE}/api/bookings/${id}/return-link`, {
           headers: getAdminSession()?.token ? { "x-admin-token": getAdminSession()!.token } : {},
         });
         const data = await r.json();
-        if (data.returnUrl) { url = data.returnUrl; setReturnUrl(data.returnUrl); }
-      } catch {}
+        if (data.returnUrl) {
+          url = data.returnUrl;
+          setReturnUrl(data.returnUrl);
+          setRevealedReturnUrl(data.returnUrl);
+        } else {
+          toast({ title: "Could not retrieve link", description: data.error ?? "Server returned no URL — try refreshing the page.", variant: "destructive" });
+          return;
+        }
+      } catch {
+        toast({ title: "Network error", description: "Could not reach the server. Check your connection.", variant: "destructive" });
+        return;
+      } finally {
+        setFetchingReturnLink(false);
+      }
+    } else {
+      setRevealedReturnUrl(url);
     }
-    if (!url) { toast({ title: "Could not retrieve link", variant: "destructive" }); return; }
-    await navigator.clipboard.writeText(url);
-    setCopyReturnSuccess(true);
-    toast({ title: "Return link copied!", description: "Paste it in a text message or email to the renter." });
-    setTimeout(() => setCopyReturnSuccess(false), 3000);
+    try {
+      await navigator.clipboard.writeText(url);
+      setCopyReturnSuccess(true);
+      toast({ title: "Return link copied!", description: "Paste it in a text message or email to the renter." });
+      setTimeout(() => setCopyReturnSuccess(false), 3000);
+    } catch {
+      toast({ title: "Link ready below", description: "Select and copy the link from the box below." });
+    }
   };
 
   const runInspection = async () => {
@@ -824,9 +865,9 @@ export default function AdminBookingDetail() {
                       </p>
                     )}
                     {/* Allow resending even when photos received */}
-                    <Button variant="ghost" size="sm" className="w-full text-muted-foreground gap-1.5" onClick={copyPickupLink}>
-                      {copySuccess ? <CheckCircle2 className="w-3.5 h-3.5 text-green-600" /> : <Copy className="w-3.5 h-3.5" />}
-                      {copySuccess ? "Copied!" : "Copy upload link"}
+                    <Button variant="ghost" size="sm" className="w-full text-muted-foreground gap-1.5" onClick={copyPickupLink} disabled={fetchingPickupLink}>
+                      {fetchingPickupLink ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : copySuccess ? <CheckCircle2 className="w-3.5 h-3.5 text-green-600" /> : <Copy className="w-3.5 h-3.5" />}
+                      {fetchingPickupLink ? "Getting link…" : copySuccess ? "Copied!" : "Copy upload link"}
                     </Button>
                   </>
                 ) : (booking as any).pickupLinkSent || pickupLinkSent ? (
@@ -848,10 +889,10 @@ export default function AdminBookingDetail() {
                         size="sm"
                         className="gap-1.5 border-blue-200 text-blue-700 hover:bg-blue-50"
                         onClick={copyPickupLink}
-                        disabled={copySuccess}
+                        disabled={copySuccess || fetchingPickupLink}
                       >
-                        {copySuccess ? <CheckCircle2 className="w-3.5 h-3.5 text-green-600" /> : <Copy className="w-3.5 h-3.5" />}
-                        {copySuccess ? "Copied!" : "Copy Link"}
+                        {fetchingPickupLink ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : copySuccess ? <CheckCircle2 className="w-3.5 h-3.5 text-green-600" /> : <Copy className="w-3.5 h-3.5" />}
+                        {fetchingPickupLink ? "Getting…" : copySuccess ? "Copied!" : "Copy Link"}
                       </Button>
                       <Button
                         variant="outline"
@@ -919,6 +960,31 @@ export default function AdminBookingDetail() {
                       Paste in a text message, WhatsApp, or chat
                     </p>
                   </>
+                )}
+
+                {/* ── Inline URL reveal — shown after copy attempt ── */}
+                {revealedPickupUrl && (
+                  <div className="mt-2 space-y-1.5">
+                    <p className="text-xs text-muted-foreground font-medium flex items-center gap-1.5">
+                      <Link2 className="w-3.5 h-3.5" /> Photo upload link — share via text or chat
+                    </p>
+                    <div className="flex gap-2">
+                      <Input
+                        readOnly
+                        value={revealedPickupUrl}
+                        className="font-mono text-xs h-8 bg-muted"
+                        onFocus={e => e.target.select()}
+                      />
+                      <button
+                        className="shrink-0 px-3 h-8 rounded-md bg-primary text-primary-foreground text-xs font-semibold hover:bg-primary/90 transition-colors"
+                        onClick={async () => {
+                          try { await navigator.clipboard.writeText(revealedPickupUrl); toast({ title: "Copied!" }); } catch {}
+                        }}
+                      >
+                        Copy
+                      </button>
+                    </div>
+                  </div>
                 )}
               </CardContent>
             </Card>
@@ -997,11 +1063,36 @@ export default function AdminBookingDetail() {
                       <span className="text-xs text-muted-foreground">or</span>
                       <div className="flex-1 border-t" />
                     </div>
-                    <Button variant="outline" size="sm" className="w-full gap-2" onClick={copyReturnLink}>
-                      {copyReturnSuccess ? <CheckCircle2 className="w-4 h-4 text-green-600" /> : <Copy className="w-4 h-4" />}
-                      {copyReturnSuccess ? "Copied to clipboard!" : "Copy link to share manually"}
+                    <Button variant="outline" size="sm" className="w-full gap-2" onClick={copyReturnLink} disabled={fetchingReturnLink}>
+                      {fetchingReturnLink ? <Loader2 className="w-4 h-4 animate-spin" /> : copyReturnSuccess ? <CheckCircle2 className="w-4 h-4 text-green-600" /> : <Copy className="w-4 h-4" />}
+                      {fetchingReturnLink ? "Getting link…" : copyReturnSuccess ? "Copied to clipboard!" : "Copy link to share manually"}
                     </Button>
                   </>
+                )}
+
+                {/* ── Inline URL reveal ── */}
+                {revealedReturnUrl && (
+                  <div className="mt-2 space-y-1.5">
+                    <p className="text-xs text-muted-foreground font-medium flex items-center gap-1.5">
+                      <Link2 className="w-3.5 h-3.5" /> Return photo link — share via text or chat
+                    </p>
+                    <div className="flex gap-2">
+                      <Input
+                        readOnly
+                        value={revealedReturnUrl}
+                        className="font-mono text-xs h-8 bg-muted"
+                        onFocus={e => e.target.select()}
+                      />
+                      <button
+                        className="shrink-0 px-3 h-8 rounded-md bg-primary text-primary-foreground text-xs font-semibold hover:bg-primary/90 transition-colors"
+                        onClick={async () => {
+                          try { await navigator.clipboard.writeText(revealedReturnUrl); toast({ title: "Copied!" }); } catch {}
+                        }}
+                      >
+                        Copy
+                      </button>
+                    </div>
+                  </div>
                 )}
               </CardContent>
             </Card>
@@ -1208,6 +1299,71 @@ export default function AdminBookingDetail() {
               </CardContent>
             </Card>
           )}
+
+          {/* ── Email Activity Log ── */}
+          {(() => {
+            const events: { type: string; sentAt: string; toEmail?: string }[] =
+              (() => { try { return JSON.parse((booking as any).emailEvents ?? "[]"); } catch { return []; } })();
+
+            const EVENT_CONFIG: Record<string, { label: string; icon: React.ReactNode; color: string }> = {
+              confirmation:     { label: "Booking confirmation", icon: <MailCheck className="w-3.5 h-3.5 text-blue-600" />, color: "text-blue-700" },
+              kiosk_setup:      { label: "Kiosk account setup", icon: <MailCheck className="w-3.5 h-3.5 text-purple-600" />, color: "text-purple-700" },
+              pickup_link:      { label: "Pickup photo link", icon: <MailCheck className="w-3.5 h-3.5 text-green-600" />, color: "text-green-700" },
+              return_link:      { label: "Return photo link", icon: <MailCheck className="w-3.5 h-3.5 text-teal-600" />, color: "text-teal-700" },
+              pickup_reminder:  { label: "Pickup reminder", icon: <MailCheck className="w-3.5 h-3.5 text-amber-600" />, color: "text-amber-700" },
+              return_reminder:  { label: "Return reminder", icon: <MailCheck className="w-3.5 h-3.5 text-orange-600" />, color: "text-orange-700" },
+              ready_to_adventure:{ label: "Ready to adventure", icon: <MailCheck className="w-3.5 h-3.5 text-emerald-600" />, color: "text-emerald-700" },
+              contact_card:     { label: "Contact card shared", icon: <MailCheck className="w-3.5 h-3.5 text-indigo-600" />, color: "text-indigo-700" },
+            };
+
+            const hasEmail = !!booking.customerEmail;
+
+            return (
+              <Card>
+                <CardHeader className="pb-3">
+                  <CardTitle className="flex items-center gap-2 text-base">
+                    <Mail className="w-4 h-4 text-primary" />
+                    Email Activity
+                    {events.length > 0 && (
+                      <span className="ml-auto text-xs text-muted-foreground font-normal">{events.length} sent</span>
+                    )}
+                  </CardTitle>
+                  <CardDescription className="text-xs">
+                    All emails sent to <strong>{booking.customerEmail || "—"}</strong>
+                    {!hasEmail && <span className="text-destructive ml-1">(no email on file)</span>}
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  {events.length === 0 ? (
+                    <div className="flex items-center gap-2 text-sm text-muted-foreground bg-muted/40 rounded-lg p-3 border">
+                      <MailX className="w-4 h-4 shrink-0" />
+                      {hasEmail
+                        ? "No emails sent yet. Create booking confirmation or send photo links above."
+                        : "No email address on file — edit the booking to add one."}
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      {events.map((ev, i) => {
+                        const cfg = EVENT_CONFIG[ev.type] ?? { label: ev.type, icon: <MailCheck className="w-3.5 h-3.5" />, color: "text-foreground" };
+                        return (
+                          <div key={i} className="flex items-center gap-2.5 py-1.5 border-b last:border-0">
+                            <div className="shrink-0">{cfg.icon}</div>
+                            <div className="flex-1 min-w-0">
+                              <p className={`text-xs font-semibold ${cfg.color}`}>{cfg.label}</p>
+                              {ev.toEmail && <p className="text-[10px] text-muted-foreground truncate">{ev.toEmail}</p>}
+                            </div>
+                            <div className="text-[10px] text-muted-foreground shrink-0">
+                              {format(new Date(ev.sentAt), "MMM d, h:mm a")}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            );
+          })()}
 
           <Card>
             <CardHeader>

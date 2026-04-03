@@ -104,6 +104,36 @@ const pickupUpload = multer({
 
 const router: IRouter = Router();
 
+// ── Email event logging ────────────────────────────────────────────────────────
+type EmailEventType =
+  | "confirmation"
+  | "pickup_link"
+  | "return_link"
+  | "pickup_reminder"
+  | "return_reminder"
+  | "ready_to_adventure"
+  | "kiosk_setup"
+  | "contact_card";
+
+async function appendEmailEvent(bookingId: number, type: EmailEventType, toEmail?: string) {
+  try {
+    const [row] = await db
+      .select({ emailEvents: bookingsTable.emailEvents })
+      .from(bookingsTable)
+      .where(eq(bookingsTable.id, bookingId));
+    if (!row) return;
+    const existing: { type: string; sentAt: string; toEmail?: string }[] =
+      JSON.parse(row.emailEvents ?? "[]");
+    existing.push({ type, sentAt: new Date().toISOString(), toEmail });
+    await db
+      .update(bookingsTable)
+      .set({ emailEvents: JSON.stringify(existing), updatedAt: new Date() })
+      .where(eq(bookingsTable.id, bookingId));
+  } catch {
+    // non-fatal — never block the main flow
+  }
+}
+
 function formatBooking(b: typeof bookingsTable.$inferSelect, listingTitle: string) {
   return {
     ...b,
@@ -293,6 +323,7 @@ router.post("/bookings", async (req, res) => {
             endDate: created.endDate,
             listingTitle: listing.title,
           });
+          appendEmailEvent(created.id, "kiosk_setup", created.customerEmail);
         } catch (emailErr) {
           req.log.warn(emailErr, "Failed to send kiosk account-setup email");
         }
@@ -330,6 +361,7 @@ router.post("/bookings", async (req, res) => {
             tenantSlug,
             adminEmail,
           });
+          appendEmailEvent(created.id, "confirmation", created.customerEmail);
           if (adminEmail && tenantSlug) {
             await sendAdminPickupReminderEmail({
               adminEmail,
@@ -729,7 +761,8 @@ router.post("/bookings/:id/send-pickup-link", async (req, res) => {
       companyName,
       companyEmail,
       hostPickup: !!hostPickup,
-    }).catch(err => console.error("[pickup email]", err));
+    }).then(() => appendEmailEvent(bookingId, "pickup_link", booking.customerEmail))
+      .catch(err => console.error("[pickup email]", err));
 
     res.json({ ok: true, token, pickupUrl });
   } catch (err) {
@@ -968,7 +1001,8 @@ router.post("/bookings/:id/send-return-link", async (req, res) => {
       endDate: booking.endDate,
       companyName,
       companyEmail,
-    }).catch(err => console.error("[return email]", err));
+    }).then(() => appendEmailEvent(bookingId, "return_link", booking.customerEmail))
+      .catch(err => console.error("[return email]", err));
 
     res.json({ ok: true, token, returnUrl });
   } catch (err) {
