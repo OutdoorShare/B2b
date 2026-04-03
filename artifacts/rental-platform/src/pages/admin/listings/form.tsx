@@ -16,7 +16,8 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { ArrowLeft, Upload, X, CheckCircle2, AlertCircle, CircleDashed, ImagePlus, Loader2, IdCard, Sparkles, ChevronDown, ChevronUp, RefreshCw } from "lucide-react";
+import { ArrowLeft, Upload, X, CheckCircle2, AlertCircle, CircleDashed, ImagePlus, Loader2, IdCard, Sparkles, ChevronDown, ChevronUp, RefreshCw, Info } from "lucide-react";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { AddonManager } from "@/components/addon-manager";
 import { UnitIdentifiersManager } from "@/components/unit-identifiers-manager";
 import { getAdminSession } from "@/lib/admin-nav";
@@ -504,7 +505,30 @@ export default function AdminListingsForm() {
                     <Input id="pricePerWeek" name="pricePerWeek" type="number" min="0" step="0.01" value={formData.pricePerWeek || ''} onChange={handleChange} />
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="depositAmount">Deposit ($)</Label>
+                    <div className="flex items-center gap-1.5">
+                      <Label htmlFor="depositAmount">Deposit ($)</Label>
+                      <Popover>
+                        <PopoverTrigger asChild>
+                          <button type="button" className="text-muted-foreground hover:text-foreground transition-colors">
+                            <Info className="h-3.5 w-3.5" />
+                            <span className="sr-only">How deposits work</span>
+                          </button>
+                        </PopoverTrigger>
+                        <PopoverContent side="top" className="w-80 text-sm space-y-2 p-4">
+                          <p className="font-semibold text-foreground">How Security Deposits Work</p>
+                          <p className="text-muted-foreground leading-relaxed">
+                            When a renter books, a hold is placed on their card for this amount — the money is <strong>not charged</strong> at that time.
+                          </p>
+                          <ul className="text-muted-foreground space-y-1 list-disc list-inside leading-relaxed">
+                            <li>If the gear is returned in good condition, the hold is <strong>released</strong> and the renter is never charged.</li>
+                            <li>If there is damage, you can <strong>capture</strong> all or part of the deposit from the Booking detail page.</li>
+                          </ul>
+                          <p className="text-muted-foreground leading-relaxed">
+                            Leave blank to skip the deposit for this listing.
+                          </p>
+                        </PopoverContent>
+                      </Popover>
+                    </div>
                     <Input id="depositAmount" name="depositAmount" type="number" min="0" step="0.01" value={formData.depositAmount || ''} onChange={handleChange} />
                   </div>
                   <div className="space-y-2">
