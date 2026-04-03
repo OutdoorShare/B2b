@@ -521,6 +521,10 @@ router.put("/bookings/:id", async (req, res) => {
         ? JSON.stringify(body.assignedUnitIds)
         : null;
     }
+    // Accept explicit protectionPlanFee from admin form
+    if (body.protectionPlanFee !== undefined) {
+      updateData.protectionPlanFee = body.protectionPlanFee != null ? String(body.protectionPlanFee) : null;
+    }
 
     // Recalculate total if dates/qty/listingId changed
     if (body.startDate !== undefined || body.endDate !== undefined || body.quantity !== undefined || body.listingId !== undefined) {
@@ -540,7 +544,11 @@ router.put("/bookings/:id", async (req, res) => {
         const qty = body.quantity ?? existing.quantity;
         const basePrice = parseFloat(listing.pricePerDay) * days * qty;
         const deposit = listing.depositAmount ? parseFloat(listing.depositAmount) : 0;
-        updateData.totalPrice = String(basePrice + deposit);
+        // Include protection plan fee in recalculated total (use new value if provided, otherwise keep existing)
+        const ppFee = body.protectionPlanFee != null
+          ? parseFloat(String(body.protectionPlanFee))
+          : (existing.protectionPlanFee ? parseFloat(existing.protectionPlanFee) : 0);
+        updateData.totalPrice = String(basePrice + deposit + ppFee);
       }
     }
 

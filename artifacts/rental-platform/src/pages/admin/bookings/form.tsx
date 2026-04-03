@@ -48,8 +48,11 @@ export default function AdminBookingForm() {
   const [error, setError] = useState("");
   const [listingDetails, setListingDetails] = useState<any | null>(null);
 
-  // Protection plan addons for the selected listing
-  const [protectionAddons, setProtectionAddons] = useState<Array<{ id: number; name: string; price: string; pricingType: string }>>([]);
+  // Platform-level protection plan (auto-applied when active for listing's category)
+  const [platformProtectionPlan, setPlatformProtectionPlan] = useState<{ enabled: boolean; feeAmount: string } | null>(null);
+
+  // Listing-level protection plan addons (suppressed when platform plan is active)
+  const [protectionAddons, setProtectionAddons] = useState<Array<{ id: number; name: string; price: string; pricingType: string; priceType?: string }>>([]);
   const [selectedProtectionId, setSelectedProtectionId] = useState<number | null>(null);
 
   // Per-unit assignment (VIN / HIN / serial)
@@ -114,7 +117,18 @@ export default function AdminBookingForm() {
       .catch(() => {});
   }, [form.listingId]);
 
-  // Fetch protection plan addons when listing changes
+  // Fetch platform protection plan when listing's category changes
+  useEffect(() => {
+    const catSlug = listingDetails?.categorySlug;
+    if (!catSlug) { setPlatformProtectionPlan(null); return; }
+    fetch(`${BASE}/api/protection-plan/${encodeURIComponent(catSlug)}`)
+      .then(r => r.json())
+      .then(d => setPlatformProtectionPlan(d))
+      .catch(() => setPlatformProtectionPlan(null));
+  }, [listingDetails?.categorySlug]);
+
+  // Fetch listing-level protection addons when listing changes
+  // (suppressed in UI when a platform plan is active)
   useEffect(() => {
     if (!form.listingId) { setProtectionAddons([]); setSelectedProtectionId(null); return; }
     fetch(`${BASE}/api/listings/${form.listingId}/addons`)
@@ -155,7 +169,16 @@ export default function AdminBookingForm() {
     return parseFloat(String(listingDetails.depositAmount));
   }, [listingDetails]);
 
-  const selectedProtection = useMemo(() => protectionAddons.find(a => a.id === selectedProtectionId) ?? null, [protectionAddons, selectedProtectionId]);
+  // Platform protection plan fee (auto-applied, per day × quantity)
+  const platformProtectionRate = platformProtectionPlan?.enabled ? parseFloat(platformProtectionPlan.feeAmount || "0") : 0;
+  const platformProtectionFee = platformProtectionRate * days * Number(form.quantity || 1);
+
+  // Listing-level protection addon — only shown/used when no platform plan is active
+  const showListingProtection = platformProtectionFee === 0;
+  const selectedProtection = useMemo(() => {
+    if (!showListingProtection) return null;
+    return protectionAddons.find(a => a.id === selectedProtectionId) ?? null;
+  }, [protectionAddons, selectedProtectionId, showListingProtection]);
   const protectionPrice = useMemo(() => {
     if (!selectedProtection) return 0;
     const ppu = parseFloat(selectedProtection.price);
@@ -163,7 +186,7 @@ export default function AdminBookingForm() {
     return ppu * Number(form.quantity || 1);
   }, [selectedProtection, days, form.quantity]);
 
-  const estimatedTotal = basePrice + deposit + protectionPrice;
+  const estimatedTotal = basePrice + deposit + platformProtectionFee + protectionPrice;
 
   const handleChange = (field: string, value: string) => {
     setForm(f => ({ ...f, [field]: value }));
@@ -186,6 +209,7 @@ export default function AdminBookingForm() {
         : [];
 
       const payload: any = {
+        protectionPlanFee: platformProtectionFee > 0 ? String(platformProtectionFee) : (protectionPrice > 0 ? String(protectionPrice) : undefined),
         listingId: Number(form.listingId),
         customerName: form.customerName.trim(),
         customerEmail: form.customerEmail.trim().toLowerCase(),
@@ -483,7 +507,19 @@ export default function AdminBookingForm() {
                       <span>${deposit.toFixed(2)}</span>
                     </div>
                   )}
-                  {protectionAddons.length > 0 && (
+                  {/* Platform-level protection plan — auto-applied, always in total */}
+                  {platformProtectionFee > 0 && (
+                    <div className="flex justify-between text-sm items-center">
+                      <span className="flex items-center gap-1.5 text-muted-foreground">
+                        <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
+                        Protection Plan
+                        <span className="text-xs opacity-70">(${platformProtectionRate.toFixed(0)}/day × {days}d × {form.quantity || 1})</span>
+                      </span>
+                      <span className="text-emerald-700 font-medium">+${platformProtectionFee.toFixed(2)}</span>
+                    </div>
+                  )}
+                  {/* Listing-level protection addons — only when no platform plan active */}
+                  {showListingProtection && protectionAddons.length > 0 && (
                     <div className="pt-1 pb-1 space-y-2">
                       <Label className="text-xs flex items-center gap-1.5 text-muted-foreground font-medium">
                         <img src="/outdoorshare-logo.png" alt="OutdoorShare" className="h-3.5 object-contain opacity-75" /> Protection Plan

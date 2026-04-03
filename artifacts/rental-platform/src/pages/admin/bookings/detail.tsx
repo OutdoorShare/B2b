@@ -1373,8 +1373,11 @@ export default function AdminBookingDetail() {
               {(() => {
                 let parsedAddons: Array<{ id?: number; name: string; price: number; subtotal?: number }> = [];
                 try { parsedAddons = (booking as any).addonsData ? JSON.parse((booking as any).addonsData) : []; } catch {}
+                const platformProtectionFee = Number((booking as any).protectionPlanFee ?? 0);
                 const addonsTotal = parsedAddons.reduce((s, a) => s + (a.subtotal ?? a.price ?? 0), 0);
-                const rentalFee = booking.totalPrice - addonsTotal;
+                // Rental fee = total minus addons minus platform protection fee (shown separately below)
+                const rentalFee = booking.totalPrice - addonsTotal - platformProtectionFee;
+                // Listing-level protection addons (shown with shield icon)
                 const protectionAddons = parsedAddons.filter(a => a.name.toLowerCase().includes("protection"));
                 const otherAddons = parsedAddons.filter(a => !a.name.toLowerCase().includes("protection"));
                 return (
@@ -1387,6 +1390,17 @@ export default function AdminBookingDetail() {
                       <span className="text-muted-foreground">Rental Fee</span>
                       <span className="font-medium">${rentalFee.toFixed(2)}</span>
                     </div>
+                    {/* Platform-level protection plan — stored in protectionPlanFee field */}
+                    {platformProtectionFee > 0 && (
+                      <div className="flex justify-between text-sm">
+                        <span className="flex items-center gap-1.5 text-muted-foreground">
+                          <Shield className="w-3.5 h-3.5 text-emerald-600" />
+                          Protection Plan
+                        </span>
+                        <span className="font-medium text-emerald-700">+${platformProtectionFee.toFixed(2)}</span>
+                      </div>
+                    )}
+                    {/* Listing-level protection addons (legacy / no platform plan) */}
                     {protectionAddons.map((addon, i) => (
                       <div key={i} className="flex justify-between text-sm">
                         <span className="flex items-center gap-1.5 text-muted-foreground">
