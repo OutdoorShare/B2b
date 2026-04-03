@@ -213,39 +213,47 @@ export default function StorefrontHome() {
             {(profile as any)?.description || "Find your perfect outdoor experience today."}
           </p>
 
-          {/* Category pills */}
-          <div className="flex flex-wrap justify-center gap-3 mb-10">
-            {(categories?.length ?? 0) >= 2 && (
-              <button
-                data-testid="category-all"
-                onClick={() => handleCategoryClick(null, null)}
-                className="flex flex-col items-center gap-1.5 group transition-all"
-              >
-                <div className={`w-14 h-14 rounded-full flex items-center justify-center transition-all ${activeCategory === null ? "bg-primary shadow-lg shadow-primary/40 scale-110" : "bg-black/60 backdrop-blur border border-white/10 hover:bg-black/80 hover:scale-105"}`}>
-                  <Gauge className="w-6 h-6 text-white" />
-                </div>
-                <span className="text-white text-xs font-semibold drop-shadow">All</span>
-              </button>
-            )}
+          {/* Category pills — only show categories that have at least one active listing */}
+          {(() => {
+            const activeCats = (categories ?? [])
+              .filter(cat => (cat as any).listingCount > 0)
+              .filter((cat, idx, arr) => arr.findIndex(c => c.slug === cat.slug) === idx);
+            if (activeCats.length === 0) return null;
+            return (
+              <div className="flex flex-wrap justify-center gap-3 mb-10">
+                {activeCats.length >= 2 && (
+                  <button
+                    data-testid="category-all"
+                    onClick={() => handleCategoryClick(null, null)}
+                    className="flex flex-col items-center gap-1.5 group transition-all"
+                  >
+                    <div className={`w-14 h-14 rounded-full flex items-center justify-center transition-all ${activeCategory === null ? "bg-primary shadow-lg shadow-primary/40 scale-110" : "bg-black/60 backdrop-blur border border-white/10 hover:bg-black/80 hover:scale-105"}`}>
+                      <Gauge className="w-6 h-6 text-white" />
+                    </div>
+                    <span className="text-white text-xs font-semibold drop-shadow">All</span>
+                  </button>
+                )}
 
-            {categories?.filter((cat, idx, arr) => arr.findIndex(c => c.slug === cat.slug) === idx).map(cat => {
-              const Icon = getCategoryIcon(cat.slug);
-              const isActive = activeCategory === cat.id;
-              return (
-                <button
-                  key={cat.id}
-                  data-testid={`category-${cat.slug}`}
-                  onClick={() => handleCategoryClick(cat.id, cat.slug)}
-                  className="flex flex-col items-center gap-1.5 group transition-all"
-                >
-                  <div className={`w-14 h-14 rounded-full flex items-center justify-center transition-all ${isActive ? "bg-primary shadow-lg shadow-primary/40 scale-110" : "bg-black/60 backdrop-blur border border-white/10 hover:bg-black/80 hover:scale-105"}`}>
-                    <Icon className="w-6 h-6 text-white" />
-                  </div>
-                  <span className="text-white text-xs font-semibold drop-shadow whitespace-nowrap">{cat.name}</span>
-                </button>
-              );
-            })}
-          </div>
+                {activeCats.map(cat => {
+                  const Icon = getCategoryIcon(cat.slug);
+                  const isActive = activeCategory === cat.id;
+                  return (
+                    <button
+                      key={cat.id}
+                      data-testid={`category-${cat.slug}`}
+                      onClick={() => handleCategoryClick(cat.id, cat.slug)}
+                      className="flex flex-col items-center gap-1.5 group transition-all"
+                    >
+                      <div className={`w-14 h-14 rounded-full flex items-center justify-center transition-all ${isActive ? "bg-primary shadow-lg shadow-primary/40 scale-110" : "bg-black/60 backdrop-blur border border-white/10 hover:bg-black/80 hover:scale-105"}`}>
+                        <Icon className="w-6 h-6 text-white" />
+                      </div>
+                      <span className="text-white text-xs font-semibold drop-shadow whitespace-nowrap">{cat.name}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            );
+          })()}
 
           {/* Search bar */}
           <div className="max-w-2xl mx-auto">
