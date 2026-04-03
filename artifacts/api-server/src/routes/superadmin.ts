@@ -222,7 +222,7 @@ router.put("/superadmin/tenants/:id", requireSuperAdmin, async (req, res) => {
   try {
     const id = parseInt(req.params.id);
     // Note: slug is intentionally excluded — it is permanent once set at creation.
-    const { name, email, password, plan, status, maxListings, contactName, phone, notes, platformFeePercent, testMode } = req.body;
+    const { name, email, password, plan, status, maxListings, contactName, phone, notes, platformFeePercent, testMode, trialEndsAt } = req.body;
     const updates: Partial<typeof tenantsTable.$inferInsert> & { updatedAt?: Date } = {
       updatedAt: new Date(),
     };
@@ -253,6 +253,7 @@ router.put("/superadmin/tenants/:id", requireSuperAdmin, async (req, res) => {
       updates.platformFeePercent = pct.toFixed(2);
     }
     if (testMode !== undefined) updates.testMode = !!testMode;
+    if ("trialEndsAt" in req.body) updates.trialEndsAt = trialEndsAt ? new Date(trialEndsAt) : null;
     const [updated] = await db.update(tenantsTable).set(updates).where(eq(tenantsTable.id, id)).returning();
     if (!updated) { res.status(404).json({ error: "Tenant not found" }); return; }
 

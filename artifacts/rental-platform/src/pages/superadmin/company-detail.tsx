@@ -35,7 +35,7 @@ async function sa(path: string, opts?: RequestInit) {
 }
 
 // ─── Types ───────────────────────────────────────────────────────────────────
-type Tenant = { id: number; name: string; slug: string; email: string; plan: string; status: string; maxListings: number; contactName?: string; phone?: string; notes?: string; createdAt: string; listingCount: number; bookingCount: number; platformFeePercent?: string | null; testMode?: boolean };
+type Tenant = { id: number; name: string; slug: string; email: string; plan: string; status: string; maxListings: number; contactName?: string; phone?: string; notes?: string; createdAt: string; listingCount: number; bookingCount: number; platformFeePercent?: string | null; testMode?: boolean; trialEndsAt?: string | null };
 type BizProfile = { name: string; tagline: string; description: string; logoUrl?: string; primaryColor: string; accentColor: string; email: string; phone: string; website?: string; location: string; address?: string; city?: string; state?: string; zipCode?: string; socialInstagram?: string; socialFacebook?: string; depositRequired: boolean; depositPercent: number; cancellationPolicy: string; rentalTerms?: string };
 type Listing = { id: number; title: string; description: string; pricePerDay: number; pricePerWeek?: number | null; quantity: number; status: string; brand?: string; model?: string; condition?: string; location?: string; requirements?: string; depositAmount?: number | null; createdAt: string };
 type Booking = { id: number; customerName: string; customerEmail: string; startDate: string; endDate: string; quantity: number; totalPrice: number; status: string; source: string; adminNotes?: string; createdAt: string; listingId: number };
@@ -50,7 +50,7 @@ function AccountTab({ tenant, tenantId, onSaved }: { tenant: Tenant; tenantId: n
   const { toast } = useToast();
   const [saving, setSaving] = useState(false);
   const [showPw, setShowPw] = useState(false);
-  const [form, setForm] = useState({ name: tenant.name, email: tenant.email, plan: tenant.plan, status: tenant.status, maxListings: String(tenant.maxListings), contactName: tenant.contactName ?? "", phone: tenant.phone ?? "", notes: tenant.notes ?? "", password: "", platformFeePercent: tenant.platformFeePercent != null ? String(tenant.platformFeePercent) : "5.00", testMode: !!tenant.testMode });
+  const [form, setForm] = useState({ name: tenant.name, email: tenant.email, plan: tenant.plan, status: tenant.status, maxListings: String(tenant.maxListings), contactName: tenant.contactName ?? "", phone: tenant.phone ?? "", notes: tenant.notes ?? "", password: "", platformFeePercent: tenant.platformFeePercent != null ? String(tenant.platformFeePercent) : "5.00", testMode: !!tenant.testMode, trialEndsAt: tenant.trialEndsAt ?? null });
   const set = (k: string, v: string) => setForm(f => ({ ...f, [k]: v }));
 
   const save = async () => {
@@ -62,7 +62,7 @@ function AccountTab({ tenant, tenantId, onSaved }: { tenant: Tenant; tenantId: n
         setSaving(false);
         return;
       }
-      const body: any = { name: form.name, email: form.email, plan: form.plan, status: form.status, maxListings: parseInt(form.maxListings), contactName: form.contactName || null, phone: form.phone || null, notes: form.notes || null, platformFeePercent: form.platformFeePercent, testMode: form.testMode };
+      const body: any = { name: form.name, email: form.email, plan: form.plan, status: form.status, maxListings: parseInt(form.maxListings), contactName: form.contactName || null, phone: form.phone || null, notes: form.notes || null, platformFeePercent: form.platformFeePercent, testMode: form.testMode, trialEndsAt: form.trialEndsAt };
       if (form.password) body.password = form.password;
       const res = await sa(`/superadmin/tenants/${tenantId}`, { method: "PUT", body: JSON.stringify(body) });
       if (!res.ok) { const d = await res.json(); toast({ title: d.error ?? "Save failed", variant: "destructive" }); return; }
@@ -157,6 +157,36 @@ function AccountTab({ tenant, tenantId, onSaved }: { tenant: Tenant; tenantId: n
             />
           </div>
         </div>
+        {/* Trial Period */}
+        <div className="col-span-2">
+          <div className={`flex items-center justify-between rounded-lg px-4 py-3 border ${form.trialEndsAt ? "bg-violet-950/30 border-violet-700/40" : "bg-slate-800/50 border-slate-700/50"}`}>
+            <div>
+              <p className="text-sm font-medium text-slate-200">Trial Period</p>
+              {form.trialEndsAt ? (
+                <p className="text-xs text-violet-400 mt-0.5">
+                  Expires {format(new Date(form.trialEndsAt), "MMM d, yyyy")}
+                  {new Date(form.trialEndsAt) < new Date() && <span className="text-red-400 ml-1">(expired)</span>}
+                </p>
+              ) : (
+                <p className="text-xs text-slate-500 mt-0.5">No trial — permanent access</p>
+              )}
+            </div>
+            {form.trialEndsAt ? (
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                onClick={() => setForm(f => ({ ...f, trialEndsAt: null }))}
+                className="border-violet-600 text-violet-300 hover:bg-violet-900/40 text-xs"
+              >
+                Make Permanent
+              </Button>
+            ) : (
+              <span className="text-xs text-green-400 font-medium">Permanent ✓</span>
+            )}
+          </div>
+        </div>
+
         <div className="col-span-2 space-y-1.5">
           <Label className="text-slate-300 text-xs">Internal Notes</Label>
           <Textarea value={form.notes} onChange={e => set("notes", e.target.value)} rows={2} className="bg-slate-800 border-slate-600 text-white resize-none" />
