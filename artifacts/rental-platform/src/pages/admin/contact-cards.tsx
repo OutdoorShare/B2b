@@ -77,6 +77,18 @@ export default function ContactCards() {
   const [form, setForm] = useState<CardFormData>(emptyForm);
   const [saving, setSaving] = useState(false);
   const [prepExpanded, setPrepExpanded] = useState(false);
+  const [businessAddress, setBusinessAddress] = useState<string | null>(null);
+  const [useBusinessAddr, setUseBusinessAddr] = useState(false);
+
+  useEffect(() => {
+    const s = getAdminSession();
+    const headers: Record<string, string> = {};
+    if (s?.token) headers["x-admin-token"] = s.token;
+    fetch(`${BASE}/api/business`, { headers })
+      .then(r => r.ok ? r.json() : null)
+      .then(data => { if (data?.address) setBusinessAddress(data.address); })
+      .catch(() => {});
+  }, []);
 
   const fetchCards = async () => {
     setLoading(true);
@@ -98,14 +110,16 @@ export default function ContactCards() {
     setEditingCard(null);
     setForm(emptyForm);
     setPrepExpanded(false);
+    setUseBusinessAddr(false);
     setDialogOpen(true);
   };
 
   const openEdit = (card: ContactCard) => {
     setEditingCard(card);
+    const addr = card.address ?? "";
     setForm({
       name: card.name,
-      address: card.address ?? "",
+      address: addr,
       phone: card.phone ?? "",
       email: card.email ?? "",
       specialInstructions: card.specialInstructions ?? "",
@@ -115,6 +129,8 @@ export default function ContactCards() {
       prepAdditionalTips: card.prepAdditionalTips ?? "",
     });
     setPrepExpanded(hasPrepGuide(card));
+    // Auto-check if address matches business address
+    setUseBusinessAddr(!!(businessAddress && addr.trim() === businessAddress.trim()));
     setDialogOpen(true);
   };
 
@@ -303,18 +319,42 @@ export default function ContactCards() {
             <div className="space-y-4 rounded-xl border p-4">
               <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Contact Information</p>
 
-              <div className="space-y-1.5">
-                <Label htmlFor="cc-address" className="flex items-center gap-1.5">
+              <div className="space-y-2">
+                <Label className="flex items-center gap-1.5">
                   <MapPin className="w-3.5 h-3.5 text-primary" />
                   Pickup Address
                 </Label>
-                <Textarea
-                  id="cc-address"
-                  placeholder="123 Main St, Anytown, CA 90210"
-                  rows={2}
-                  value={form.address}
-                  onChange={f("address")}
-                />
+
+                {/* Business address shortcut */}
+                {businessAddress && (
+                  <label className="flex items-start gap-2.5 cursor-pointer group">
+                    <input
+                      type="checkbox"
+                      className="mt-0.5 h-4 w-4 accent-primary cursor-pointer"
+                      checked={useBusinessAddr}
+                      onChange={e => {
+                        const checked = e.target.checked;
+                        setUseBusinessAddr(checked);
+                        setForm(p => ({ ...p, address: checked ? businessAddress : "" }));
+                      }}
+                    />
+                    <span className="text-sm leading-snug group-hover:text-foreground transition-colors">
+                      Use business address
+                      <span className="block text-xs text-muted-foreground mt-0.5">{businessAddress}</span>
+                    </span>
+                  </label>
+                )}
+
+                <div className={useBusinessAddr ? "opacity-50 pointer-events-none" : ""}>
+                  <Textarea
+                    id="cc-address"
+                    placeholder="123 Main St, Anytown, CA 90210"
+                    rows={2}
+                    value={form.address}
+                    onChange={f("address")}
+                    readOnly={useBusinessAddr}
+                  />
+                </div>
               </div>
 
               <div className="grid grid-cols-2 gap-3">
