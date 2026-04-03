@@ -8,7 +8,7 @@ import {
   Search, Users, Trophy, Phone, Mail, CalendarDays,
   ChevronRight, X, ExternalLink, Star, TrendingUp,
   ShieldCheck, Clock, Package, CreditCard, Hash,
-  ArrowUpDown, SortAsc,
+  ArrowUpDown, SortAsc, Copy, Check,
 } from "lucide-react";
 import { getAdminSession, adminPath } from "@/lib/admin-nav";
 
@@ -87,6 +87,14 @@ function RenterPanel({
 }) {
   const [bookings, setBookings] = useState<RenterBooking[]>([]);
   const [loading, setLoading] = useState(true);
+  const [copied, setCopied] = useState<"email" | "phone" | null>(null);
+
+  function copyToClipboard(text: string, type: "email" | "phone") {
+    navigator.clipboard.writeText(text).then(() => {
+      setCopied(type);
+      setTimeout(() => setCopied(null), 2000);
+    });
+  }
 
   useEffect(() => {
     setLoading(true);
@@ -112,9 +120,29 @@ function RenterPanel({
           </div>
           <div>
             <h2 className="text-xl font-black tracking-tight leading-none">{renter.name}</h2>
-            <p className="text-sm text-muted-foreground mt-1">{renter.email}</p>
+            <button
+              onClick={() => copyToClipboard(renter.email, "email")}
+              className="flex items-center gap-1.5 mt-1 group"
+              title="Copy email"
+            >
+              <span className="text-sm text-muted-foreground group-hover:text-foreground transition-colors">{renter.email}</span>
+              {copied === "email"
+                ? <Check className="w-3.5 h-3.5 text-green-500 shrink-0" />
+                : <Copy className="w-3.5 h-3.5 text-muted-foreground/50 opacity-0 group-hover:opacity-100 shrink-0 transition-opacity" />
+              }
+            </button>
             {renter.phone && (
-              <p className="text-sm text-muted-foreground">{renter.phone}</p>
+              <button
+                onClick={() => copyToClipboard(renter.phone!, "phone")}
+                className="flex items-center gap-1.5 mt-0.5 group"
+                title="Copy phone"
+              >
+                <span className="text-sm text-muted-foreground group-hover:text-foreground transition-colors">{renter.phone}</span>
+                {copied === "phone"
+                  ? <Check className="w-3.5 h-3.5 text-green-500 shrink-0" />
+                  : <Copy className="w-3.5 h-3.5 text-muted-foreground/50 opacity-0 group-hover:opacity-100 shrink-0 transition-opacity" />
+                }
+              </button>
             )}
           </div>
         </div>
