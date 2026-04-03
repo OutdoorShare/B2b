@@ -1601,7 +1601,7 @@ export default function StorefrontBook() {
           <Button variant="ghost" className="mb-6 pl-0 hover:bg-transparent text-muted-foreground" onClick={() => {
             if (step === "book") {
               if (isKiosk) { setLocation(`${sfBase}/admin/kiosk`); }
-              else { window.history.back(); }
+              else { setLocation(`${sfBase}/listings/${listingId}`); }
             } else {
               setStep("book"); window.scrollTo({ top: 0, behavior: "smooth" });
             }
