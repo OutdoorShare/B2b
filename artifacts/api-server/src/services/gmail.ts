@@ -1275,6 +1275,91 @@ export async function sendReturnReminderRenterEmail(opts: {
   });
 }
 
+// ── Chat: renter message → admin email ────────────────────────────────────────
+export async function sendChatMessageToAdminEmail(opts: {
+  adminEmail: string;
+  companyName: string;
+  customerName: string;
+  customerEmail: string;
+  messageBody: string;
+  threadId: number;
+  slug: string;
+}): Promise<void> {
+  const { adminEmail, companyName, customerName, customerEmail, messageBody, threadId, slug } = opts;
+  const chatUrl = `${APP_URL}/${slug}/admin/messages?thread=${threadId}`;
+
+  const body = `
+    <p style="margin:0 0 8px;font-size:18px;font-weight:700;color:${BRAND_DARK};">New message from ${customerName}</p>
+    <p style="margin:0 0 20px;font-size:15px;color:#374151;line-height:1.6;">
+      A renter has sent you a message through the chat system. Reply directly in your admin portal.
+    </p>
+
+    ${infoTable([
+      { label: "From",    value: `${customerName} (${customerEmail})` },
+      { label: "Message", value: messageBody },
+    ])}
+
+    ${ctaButton("View & Reply in Admin Portal", chatUrl, BRAND_GREEN)}
+  `;
+
+  const html = emailShell({
+    preheader: `${customerName} sent you a message: "${messageBody.substring(0, 60)}…"`,
+    badgeLabel: "New Customer Message",
+    badgeColor: BRAND_GREEN,
+    body,
+  });
+
+  const gmail = await getUncachableGmailClient();
+  await gmail.users.messages.send({
+    userId: "me",
+    requestBody: { raw: makeRawEmail(adminEmail, `[${companyName}] New message from ${customerName}`, html) },
+  });
+}
+
+// ── Chat: admin reply → renter email ─────────────────────────────────────────
+export async function sendChatReplyToRenterEmail(opts: {
+  renterEmail: string;
+  renterName: string;
+  companyName: string;
+  companyEmail?: string;
+  messageBody: string;
+  threadId: number;
+  slug: string;
+}): Promise<void> {
+  const { renterEmail, renterName, companyName, companyEmail, messageBody, threadId, slug } = opts;
+  const fromHeader = companyEmail
+    ? `${companyName} <${companyEmail}>`
+    : `${companyName} via OutdoorShare <contact.us@myoutdoorshare.com>`;
+  const chatUrl = `${APP_URL}/${slug}`;
+
+  const body = `
+    <p style="margin:0 0 8px;font-size:18px;font-weight:700;color:${BRAND_DARK};">You have a reply, ${renterName}!</p>
+    <p style="margin:0 0 20px;font-size:15px;color:#374151;line-height:1.6;">
+      ${companyName} replied to your message.
+    </p>
+
+    ${infoTable([
+      { label: "From",    value: companyName },
+      { label: "Message", value: messageBody },
+    ])}
+
+    ${ctaButton("View Conversation", chatUrl, BRAND_GREEN)}
+  `;
+
+  const html = emailShell({
+    preheader: `${companyName} replied: "${messageBody.substring(0, 60)}…"`,
+    badgeLabel: "Reply from the Team",
+    badgeColor: BRAND_GREEN,
+    body,
+  });
+
+  const gmail = await getUncachableGmailClient();
+  await gmail.users.messages.send({
+    userId: "me",
+    requestBody: { raw: makeRawEmail(renterEmail, `[${companyName}] You have a new reply`, html, fromHeader) },
+  });
+}
+
 export async function sendReturnLinkEmail(opts: {
   toEmail: string;
   customerName: string;

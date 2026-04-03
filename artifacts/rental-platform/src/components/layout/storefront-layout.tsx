@@ -1,5 +1,6 @@
 import { useState, useEffect, useLayoutEffect, useReducer } from "react";
 import { AIAssistant } from "@/components/ai-assistant";
+import { StorefrontChat } from "@/components/storefront-chat";
 import { Link, useParams, useLocation } from "wouter";
 import { Tent, Clock, Lock, User, LogOut, BookOpen, UserCircle, Eye, EyeOff } from "lucide-react";
 import {
@@ -569,6 +570,18 @@ export function StorefrontLayout({ children }: { children: React.ReactNode }) {
 
       {/* Fixed corner badge — only shown during trial */}
       {trialActive && <PoweredByBadge variant="fixed" />}
+
+      {/* Renter Chat Widget */}
+      {slug && customer && (
+        <StorefrontChat
+          slug={(profile as any)?.siteSlug ?? slug}
+          companyName={profile?.name ?? "Support"}
+          customerEmail={customer.email}
+          customerName={customer.name}
+          primaryColor={primaryColor}
+          accentColor={accentColor}
+        />
+      )}
 
       {/* AI Renter Assistant */}
       {slug && (

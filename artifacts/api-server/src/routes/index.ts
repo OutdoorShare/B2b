@@ -19,6 +19,7 @@ import feedbackRouter from "./feedback";
 import aiRouter from "./ai";
 import contactCardsRouter from "./contact-cards";
 import notificationsRouter from "./notifications";
+import chatRouter from "./chat";
 
 const router: IRouter = Router();
 
@@ -42,5 +43,6 @@ router.use(feedbackRouter);
 router.use(aiRouter);
 router.use(contactCardsRouter);
 router.use(notificationsRouter);
+router.use(chatRouter);
 
 export default router;

@@ -1,5 +1,5 @@
 import { Link, useLocation } from "wouter";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { AIAssistant } from "@/components/ai-assistant";
 import { getAdminSession } from "@/lib/admin-nav";
 import { NotificationBell } from "@/components/notification-bell";
@@ -14,6 +14,7 @@ import {
   ShieldAlert,
   Users,
   MessageSquare,
+  MessageCircle,
   AlertTriangle,
   FileSignature,
   Wallet,
@@ -56,6 +57,7 @@ const NAV_GROUPS: NavGroup[] = [
   {
     group: "Customers",
     items: [
+      { name: "Messages", path: "/messages", icon: MessageCircle },
       { name: "Communications", path: "/communications", icon: MessageSquare },
       { name: "Contact Cards", path: "/contact-cards", icon: IdCard },
       { name: "Waivers", path: "/waivers", icon: FileSignature },
@@ -209,6 +211,23 @@ export function AdminLayout({ children }: { children: React.ReactNode }) {
       : location === href || location.startsWith(href + "/") || location.startsWith(href + "?");
   });
 
+  // Live unread chat count for Messages badge
+  const [chatUnread, setChatUnread] = useState(0);
+  useEffect(() => {
+    const session = getAdminSession();
+    if (!session?.token) return;
+    const base = import.meta.env.BASE_URL.replace(/\/+$/, "");
+    const fetchUnread = () => {
+      fetch(`${base}/api/chat/unread-count`, { headers: { "x-admin-token": session.token } })
+        .then(r => r.ok ? r.json() : { count: 0 })
+        .then(d => setChatUnread(d.count ?? 0))
+        .catch(() => {});
+    };
+    fetchUnread();
+    const interval = setInterval(fetchUnread, 15000);
+    return () => clearInterval(interval);
+  }, []);
+
   return (
     <div className="min-h-[100dvh] flex flex-col md:flex-row bg-background">
       {/* Sidebar */}
@@ -271,7 +290,15 @@ export function AdminLayout({ children }: { children: React.ReactNode }) {
                         )}
                       >
                         <item.icon className="w-4 h-4 shrink-0" />
-                        {item.name}
+                        <span className="flex-1">{item.name}</span>
+                        {item.name === "Messages" && chatUnread > 0 && (
+                          <span className={cn(
+                            "min-w-[18px] h-[18px] rounded-full text-[10px] font-bold flex items-center justify-center px-1",
+                            isActive ? "bg-primary-foreground text-primary" : "bg-primary text-primary-foreground",
+                          )}>
+                            {chatUnread > 9 ? "9+" : chatUnread}
+                          </span>
+                        )}
                       </Link>
                     );
                   })}

@@ -68,6 +68,7 @@ import SuperAdminFeedback from "@/pages/superadmin/feedback";
 import SuperAdminDeveloper from "@/pages/superadmin/developer";
 import DocsAdminPage from "@/pages/superadmin/docs-admin";
 import AdminFeedback from "@/pages/admin/feedback";
+import AdminMessages from "@/pages/admin/messages";
 import AdminContactCards from "@/pages/admin/contact-cards";
 import AdminInventory from "@/pages/admin/inventory/index";
 import AdminInventoryForm from "@/pages/admin/inventory/form";
@@ -326,6 +327,9 @@ function Router() {
       </Route>
       <Route path="/:slug/admin/promo-codes">
         <AdminGuard><AdminLayout><AdminPromoCodes /></AdminLayout></AdminGuard>
+      </Route>
+      <Route path="/:slug/admin/messages">
+        <AdminGuard><AdminLayout><AdminMessages /></AdminLayout></AdminGuard>
       </Route>
       <Route path="/:slug/admin/communications">
         <AdminGuard><AdminCommunications /></AdminGuard>
