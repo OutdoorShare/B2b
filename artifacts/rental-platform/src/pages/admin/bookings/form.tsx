@@ -44,7 +44,18 @@ export default function AdminBookingForm() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
-  const [form, setForm] = useState(defaultForm);
+  // Pre-fill customer details from query params (e.g. coming from Contacts page)
+  const initialForm = useMemo(() => {
+    const qs = new URLSearchParams(window.location.search);
+    return {
+      ...defaultForm,
+      customerName: qs.get("name") ?? defaultForm.customerName,
+      customerEmail: qs.get("email") ?? defaultForm.customerEmail,
+      customerPhone: qs.get("phone") ?? defaultForm.customerPhone,
+    };
+  }, []);
+
+  const [form, setForm] = useState(initialForm);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [listingDetails, setListingDetails] = useState<any | null>(null);
