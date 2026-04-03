@@ -552,6 +552,10 @@ export default function StorefrontBook() {
   const urlEnd = searchParams.get("endDate");
   const isKiosk = searchParams.get("kiosk") === "1";
 
+  // Scroll to top on initial mount so navigating from the listing page doesn't
+  // carry over the previous scroll position.
+  useEffect(() => { window.scrollTo(0, 0); }, []);
+
   // Keep the browser in fullscreen while the kiosk booking flow is active
   useEffect(() => {
     if (!isKiosk) return;
