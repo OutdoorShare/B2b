@@ -391,10 +391,9 @@ export default function StorefrontGearDetail() {
                     ...allDisabledDates,
                   ]}
                   numberOfMonths={calendarMonths}
-                  className="[--cell-size:2rem] sm:[--cell-size:2.5rem] w-full"
+                  className="[--cell-size:2.25rem] sm:[--cell-size:2.75rem] w-full"
                   classNames={{
                     root: "w-full",
-                    day: "group/day relative aspect-square w-full select-none p-0 text-center [&:first-child[data-selected=true]_button]:rounded-l-md [&:last-child[data-selected=true]_button]:rounded-r-md",
                   }}
                   modifiers={{ booked: disabledDates, service: serviceDates }}
                   modifiersClassNames={{
