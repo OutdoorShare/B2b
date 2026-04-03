@@ -835,7 +835,7 @@ export default function MyBookingDetail() {
             onClick={() => setLocation(`${base}/book?listingId=${booking.listingId}`)}
           >
             <RotateCcw className="w-4 h-4 mr-2" />
-            Rebook This
+            Book Again
           </Button>
         ) : (
           <Link href={base || "/"} className="flex-1">

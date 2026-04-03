@@ -283,7 +283,7 @@ function BookingCard({ booking, base, showRebook }: { booking: any; base: string
                 onClick={handleRebook}
               >
                 <RotateCcw className="w-3 h-3" />
-                Rebook
+                Book Again
               </Button>
             ) : (
               <div className="text-right">
@@ -300,7 +300,7 @@ function BookingCard({ booking, base, showRebook }: { booking: any; base: string
               <div className="font-semibold text-sm">${Number(booking.totalPrice ?? 0).toFixed(2)}</div>
               <div className="text-xs text-muted-foreground">Booking #{booking.id}</div>
             </div>
-            <p className="text-xs text-muted-foreground">Enjoyed it? Book the same gear again with fresh dates.</p>
+            <p className="text-xs text-muted-foreground">Book the same gear again with fresh dates.</p>
           </div>
         )}
       </div>
