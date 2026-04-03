@@ -32,6 +32,21 @@ export function isLight(hex: string): boolean {
   return luminance > 0.55;
 }
 
+// ── Per-slug brand color cache (localStorage) ──────────────────────────────
+// Persists the tenant's brand colors so they can be applied before the first
+// network response, eliminating the flash of default colors on back-navigation.
+
+export function saveBrandColors(slug: string, primary: string, accent: string) {
+  try { localStorage.setItem(`brand_colors_${slug}`, JSON.stringify({ primary, accent })); } catch {}
+}
+
+export function loadBrandColors(slug: string): { primary: string; accent: string } | null {
+  try {
+    const raw = localStorage.getItem(`brand_colors_${slug}`);
+    return raw ? JSON.parse(raw) : null;
+  } catch { return null; }
+}
+
 export function applyBrandColors(primaryColor?: string | null, accentColor?: string | null) {
   const root = document.documentElement;
 

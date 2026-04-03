@@ -1,4 +1,4 @@
-import { useState, useEffect, useReducer } from "react";
+import { useState, useEffect, useLayoutEffect, useReducer } from "react";
 import { AIAssistant } from "@/components/ai-assistant";
 import { Link, useParams, useLocation } from "wouter";
 import { Tent, Clock, Lock, User, LogOut, BookOpen, UserCircle, Eye, EyeOff } from "lucide-react";
@@ -11,7 +11,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { useGetBusinessProfile } from "@workspace/api-client-react";
 import { PoweredByBadge } from "@/components/powered-by-badge";
-import { applyBrandColors } from "@/lib/theme";
+import { applyBrandColors, saveBrandColors, loadBrandColors } from "@/lib/theme";
 
 // ── Demo Gate ────────────────────────────────────────────────────────────────
 // Slugs whose storefronts require the same credentials as their admin panel.
@@ -293,19 +293,28 @@ export function StorefrontLayout({ children }: { children: React.ReactNode }) {
   const isPaid = plan && plan !== "starter";
   const companyEmail = (profile as any)?.email as string | null | undefined;
 
-  // Brand colors from admin settings
-  const primaryColor = profile?.primaryColor || "#1b4332";
-  const accentColor  = profile?.accentColor  || "#52b788";
+  // Brand colors — seeded from localStorage cache so they're correct on first render,
+  // then updated when the API responds (no flash on back-navigation or hard reload).
+  const DEFAULT_PRIMARY = "#1b4332";
+  const DEFAULT_ACCENT  = "#52b788";
+  const cached = slug ? loadBrandColors(slug) : null;
+  const primaryColor = profile?.primaryColor || cached?.primary || DEFAULT_PRIMARY;
+  const accentColor  = profile?.accentColor  || cached?.accent  || DEFAULT_ACCENT;
 
-  // Apply CSS custom properties so Tailwind utilities (bg-primary, text-primary, etc.)
-  // pick up the tenant's brand colors across ALL storefront pages.
-  useEffect(() => {
+  // Apply CSS custom properties before first paint (useLayoutEffect is synchronous).
+  useLayoutEffect(() => {
     applyBrandColors(primaryColor, accentColor);
+  }, [primaryColor, accentColor]);
+
+  // When the real API data arrives, persist it to cache so future visits skip the flash.
+  useEffect(() => {
+    if (!slug || !profile) return;
+    saveBrandColors(slug, primaryColor, accentColor);
     return () => {
       // Reset to defaults when leaving storefront (e.g. navigating to admin)
-      applyBrandColors("#1b4332", "#52b788");
+      applyBrandColors(DEFAULT_PRIMARY, DEFAULT_ACCENT);
     };
-  }, [primaryColor, accentColor]);
+  }, [slug, primaryColor, accentColor, profile]);
 
   // Dynamic meta: swap favicon, title, og:*, twitter:*, apple-touch-icon, and theme-color
   // to the tenant's branding while on their storefront. Restore OutdoorShare defaults on unmount.
