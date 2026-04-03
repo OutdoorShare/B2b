@@ -16,7 +16,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { Link, useLocation } from "wouter";
-import { ArrowLeft, User, Phone, Mail, Calendar, Package, StickyNote, ShieldAlert, Pencil, FileSignature, FileText, ChevronDown, ChevronUp, Download, Camera, CheckCircle2, Loader2, ExternalLink, ImageIcon, Clock, ShieldCheck, ShieldX, Shield, AlertCircle, Copy, Send, UserCheck, Lock, LockOpen, DollarSign } from "lucide-react";
+import { ArrowLeft, User, Phone, Mail, Calendar, Package, StickyNote, ShieldAlert, Pencil, FileSignature, FileText, ChevronDown, ChevronUp, Download, Camera, CheckCircle2, Loader2, ExternalLink, ImageIcon, Clock, ShieldCheck, ShieldX, Shield, AlertCircle, Copy, Send, UserCheck, Lock, LockOpen, DollarSign, PackageCheck, ScanSearch } from "lucide-react";
 import { format, differenceInDays, startOfDay } from "date-fns";
 
 const SOURCE_CONFIG: Record<string, { label: string; className: string }> = {
@@ -57,6 +57,12 @@ export default function AdminBookingDetail() {
   const [copySuccess, setCopySuccess] = useState(false);
   const [depositLoading, setDepositLoading] = useState<"authorize" | "release" | "capture" | null>(null);
   const [depositHoldStatus, setDepositHoldStatus] = useState<string | null>(null);
+  const [sendingReturnLink, setSendingReturnLink] = useState(false);
+  const [returnLinkSent, setReturnLinkSent] = useState(false);
+  const [returnUrl, setReturnUrl] = useState<string | null>(null);
+  const [copyReturnSuccess, setCopyReturnSuccess] = useState(false);
+  const [inspecting, setInspecting] = useState(false);
+  const [inspectionResult, setInspectionResult] = useState<any | null>(null);
 
   type VerifData = {
     found: boolean;
@@ -126,6 +132,57 @@ export default function AdminBookingDetail() {
     setCopySuccess(true);
     toast({ title: "Link copied!", description: "Paste it in a text message or email to the renter." });
     setTimeout(() => setCopySuccess(false), 3000);
+  };
+
+  const sendReturnLink = async () => {
+    setSendingReturnLink(true);
+    try {
+      const r = await fetch(`${BASE}/api/bookings/${id}/send-return-link`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...(getAdminSession()?.token ? { "x-admin-token": getAdminSession()!.token } : {}) },
+      });
+      const data = await r.json();
+      if (!r.ok || data.error) { toast({ title: "Error", description: data.error ?? "Failed to send link", variant: "destructive" }); return; }
+      setReturnLinkSent(true);
+      if (data.returnUrl) setReturnUrl(data.returnUrl);
+      toast({ title: "Return link sent!", description: "The renter has been emailed a link to upload return photos." });
+    } finally {
+      setSendingReturnLink(false);
+    }
+  };
+
+  const copyReturnLink = async () => {
+    let url = returnUrl;
+    if (!url) {
+      try {
+        const r = await fetch(`${BASE}/api/bookings/${id}/return-link`, {
+          headers: getAdminSession()?.token ? { "x-admin-token": getAdminSession()!.token } : {},
+        });
+        const data = await r.json();
+        if (data.returnUrl) { url = data.returnUrl; setReturnUrl(data.returnUrl); }
+      } catch {}
+    }
+    if (!url) { toast({ title: "Could not retrieve link", variant: "destructive" }); return; }
+    await navigator.clipboard.writeText(url);
+    setCopyReturnSuccess(true);
+    toast({ title: "Return link copied!", description: "Paste it in a text message or email to the renter." });
+    setTimeout(() => setCopyReturnSuccess(false), 3000);
+  };
+
+  const runInspection = async () => {
+    setInspecting(true);
+    try {
+      const r = await fetch(`${BASE}/api/bookings/${id}/inspect`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...(getAdminSession()?.token ? { "x-admin-token": getAdminSession()!.token } : {}) },
+      });
+      const data = await r.json();
+      if (!r.ok || data.error) { toast({ title: "Inspection failed", description: data.error ?? "AI could not analyze photos", variant: "destructive" }); return; }
+      setInspectionResult(data.result);
+      toast({ title: "Inspection complete", description: "AI has analyzed the before and after photos." });
+    } finally {
+      setInspecting(false);
+    }
   };
 
   const handleDepositAction = async (action: "authorize" | "release" | "capture") => {
@@ -853,6 +910,208 @@ export default function AdminBookingDetail() {
               </CardContent>
             </Card>
           )}
+          {/* ── Return Documentation Card ── */}
+          {['active', 'completed'].includes(booking.status) && (
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle className="flex items-center gap-2 text-base">
+                  <PackageCheck className="w-5 h-5 text-blue-600" />
+                  Return Documentation
+                  {(booking as any).returnCompletedAt && (
+                    <span className="ml-auto"><CheckCircle2 className="w-4 h-4 text-green-600" /></span>
+                  )}
+                </CardTitle>
+                <CardDescription className="text-xs leading-relaxed">
+                  Ask the renter to photograph equipment condition at return. Protects against post-return damage disputes.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {(booking as any).returnPhotos?.length > 0 ? (
+                  <>
+                    <div className="grid grid-cols-2 gap-2">
+                      {(booking as any).returnPhotos.map((url: string, i: number) => (
+                        <a key={i} href={url} target="_blank" rel="noopener noreferrer" className="relative group">
+                          <div className="aspect-square rounded-lg overflow-hidden bg-gray-100">
+                            <img src={url} alt={`Return photo ${i + 1}`} className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
+                          </div>
+                          <div className="absolute inset-0 flex items-center justify-center bg-black/0 group-hover:bg-black/20 rounded-lg transition-colors">
+                            <ExternalLink className="w-5 h-5 text-white opacity-0 group-hover:opacity-100 transition-opacity" />
+                          </div>
+                        </a>
+                      ))}
+                    </div>
+                    {(booking as any).returnCompletedAt && (
+                      <p className="text-xs text-muted-foreground">
+                        Submitted {format(new Date((booking as any).returnCompletedAt), "MMM d, yyyy h:mm a")}
+                      </p>
+                    )}
+                    <Button variant="ghost" size="sm" className="w-full text-muted-foreground gap-1.5" onClick={copyReturnLink}>
+                      {copyReturnSuccess ? <CheckCircle2 className="w-3.5 h-3.5 text-green-600" /> : <Copy className="w-3.5 h-3.5" />}
+                      {copyReturnSuccess ? "Copied!" : "Copy upload link"}
+                    </Button>
+                  </>
+                ) : (booking as any).returnToken || returnLinkSent ? (
+                  <>
+                    <div className="flex items-center gap-3 bg-blue-50 border border-blue-200 rounded-xl p-3">
+                      <div className="relative flex h-2.5 w-2.5 shrink-0">
+                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75" />
+                        <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-blue-500" />
+                      </div>
+                      <div>
+                        <p className="text-sm font-semibold text-blue-800">Link sent — awaiting return photos</p>
+                        <p className="text-xs text-blue-700">Renter will receive an email with the upload link.</p>
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <Button variant="outline" size="sm" className="gap-1.5 border-blue-200 text-blue-700 hover:bg-blue-50" onClick={copyReturnLink} disabled={copyReturnSuccess}>
+                        {copyReturnSuccess ? <CheckCircle2 className="w-3.5 h-3.5 text-green-600" /> : <Copy className="w-3.5 h-3.5" />}
+                        {copyReturnSuccess ? "Copied!" : "Copy Link"}
+                      </Button>
+                      <Button variant="outline" size="sm" className="gap-1.5" onClick={sendReturnLink} disabled={sendingReturnLink}>
+                        {sendingReturnLink ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />}
+                        Resend Email
+                      </Button>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <Button className="w-full gap-2 bg-blue-600 hover:bg-blue-700" onClick={sendReturnLink} disabled={sendingReturnLink}>
+                      {sendingReturnLink ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+                      Email Return Link to Renter
+                    </Button>
+                    <div className="flex items-center gap-2">
+                      <div className="flex-1 border-t" />
+                      <span className="text-xs text-muted-foreground">or</span>
+                      <div className="flex-1 border-t" />
+                    </div>
+                    <Button variant="outline" size="sm" className="w-full gap-2" onClick={copyReturnLink}>
+                      {copyReturnSuccess ? <CheckCircle2 className="w-4 h-4 text-green-600" /> : <Copy className="w-4 h-4" />}
+                      {copyReturnSuccess ? "Copied to clipboard!" : "Copy link to share manually"}
+                    </Button>
+                  </>
+                )}
+              </CardContent>
+            </Card>
+          )}
+
+          {/* ── AI Return Inspection Card ── */}
+          {['active', 'completed'].includes(booking.status) && (() => {
+            const beforePhotos: string[] = (booking as any).pickupPhotos ?? [];
+            const afterPhotos: string[] = (booking as any).returnPhotos ?? [];
+            const storedResult: any = (booking as any).inspectionResult
+              ? (() => { try { return JSON.parse((booking as any).inspectionResult); } catch { return null; } })()
+              : null;
+            const result = inspectionResult ?? storedResult;
+            const canInspect = beforePhotos.length > 0 || afterPhotos.length > 0;
+
+            const statusColor = (s: string) => {
+              if (s === "no_issues") return "bg-green-100 text-green-800 border-green-300";
+              if (s === "minor_issues") return "bg-yellow-100 text-yellow-800 border-yellow-300";
+              if (s === "major_issues") return "bg-red-100 text-red-800 border-red-300";
+              return "bg-muted text-muted-foreground";
+            };
+            const severityColor = (s: string) => {
+              if (s === "minor") return "bg-yellow-100 text-yellow-800";
+              if (s === "moderate") return "bg-orange-100 text-orange-800";
+              if (s === "severe") return "bg-red-100 text-red-800";
+              return "bg-muted text-muted-foreground";
+            };
+            const typeIcon: Record<string, string> = { damage: "💥", cleanliness: "🧹", missing_part: "🔩", mechanical: "⚙️" };
+
+            return (
+              <Card>
+                <CardHeader className="pb-3">
+                  <CardTitle className="flex items-center gap-2 text-base">
+                    <ScanSearch className="w-5 h-5 text-violet-600" />
+                    AI Return Inspection
+                    {result && (
+                      <Badge className={`ml-auto text-xs ${statusColor(result.status)}`}>
+                        {result.status === "no_issues" ? "No Issues" : result.status === "minor_issues" ? "Minor Issues" : "Major Issues"}
+                      </Badge>
+                    )}
+                  </CardTitle>
+                  <CardDescription className="text-xs leading-relaxed">
+                    AI compares pickup (before) and return (after) photos to detect new damage, missing parts, or cleanliness issues.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  {!canInspect && (
+                    <div className="flex items-center gap-3 bg-muted/40 rounded-xl p-3 border">
+                      <AlertCircle className="w-4 h-4 text-muted-foreground shrink-0" />
+                      <p className="text-xs text-muted-foreground">
+                        No photos available. Add pickup and/or return photos to run an inspection.
+                      </p>
+                    </div>
+                  )}
+
+                  {result && (
+                    <div className="space-y-3">
+                      {/* Summary */}
+                      <div className={`rounded-xl border p-3 text-sm ${result.claim_recommended ? "bg-red-50 border-red-200" : "bg-green-50 border-green-200"}`}>
+                        <div className="flex items-start gap-2">
+                          <span className="text-base shrink-0">{result.claim_recommended ? "⚠️" : "✅"}</span>
+                          <div>
+                            <p className={`font-semibold text-sm mb-1 ${result.claim_recommended ? "text-red-800" : "text-green-800"}`}>
+                              {result.claim_recommended ? "Claim Recommended" : "No Claim Needed"}
+                            </p>
+                            <p className={`text-xs leading-relaxed ${result.claim_recommended ? "text-red-700" : "text-green-700"}`}>{result.admin_summary}</p>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Confidence */}
+                      <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                        <span>Confidence:</span>
+                        <div className="flex-1 bg-muted rounded-full h-1.5">
+                          <div className="bg-violet-500 h-1.5 rounded-full" style={{ width: `${result.confidence_score ?? 0}%` }} />
+                        </div>
+                        <span className="font-medium">{result.confidence_score ?? 0}%</span>
+                      </div>
+
+                      {/* Issues list */}
+                      {result.issues?.length > 0 && (
+                        <div className="space-y-2">
+                          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Issues Found</p>
+                          {result.issues.map((issue: any, i: number) => (
+                            <div key={i} className="rounded-xl border bg-muted/20 p-3 space-y-1.5">
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <span className="text-sm">{typeIcon[issue.type] ?? "🔍"}</span>
+                                <span className="text-sm font-semibold capitalize">{issue.type?.replace("_", " ")}</span>
+                                <Badge className={`text-xs px-1.5 py-0 ${severityColor(issue.severity)}`}>{issue.severity}</Badge>
+                                {issue.claim_recommended && <Badge className="text-xs px-1.5 py-0 bg-red-100 text-red-800">Claim</Badge>}
+                                <span className="ml-auto text-xs text-muted-foreground">{issue.confidence}% conf.</span>
+                              </div>
+                              <p className="text-xs text-foreground">{issue.description}</p>
+                              {issue.location && <p className="text-xs text-muted-foreground">📍 {issue.location}</p>}
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {canInspect && (
+                    <Button
+                      className="w-full gap-2 bg-violet-600 hover:bg-violet-700 text-white"
+                      onClick={runInspection}
+                      disabled={inspecting}
+                    >
+                      {inspecting ? (
+                        <><Loader2 className="w-4 h-4 animate-spin" />Analyzing photos…</>
+                      ) : (
+                        <><ScanSearch className="w-4 h-4" />{result ? "Re-run Inspection" : "Run AI Inspection"}</>
+                      )}
+                    </Button>
+                  )}
+
+                  <p className="text-xs text-muted-foreground text-center">
+                    Uses {beforePhotos.length} before photo{beforePhotos.length !== 1 ? "s" : ""} · {afterPhotos.length} return photo{afterPhotos.length !== 1 ? "s" : ""}
+                  </p>
+                </CardContent>
+              </Card>
+            );
+          })()}
+
           {/* ── Security Deposit Card ── */}
           {(booking as any).depositPaid && parseFloat((booking as any).depositPaid) > 0 && (
             <Card>

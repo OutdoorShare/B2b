@@ -1085,3 +1085,58 @@ export async function sendAdminBookingContactEmail(opts: {
     },
   });
 }
+
+// ── Return link email (to renter) ─────────────────────────────────────────────
+export async function sendReturnLinkEmail(opts: {
+  toEmail: string;
+  customerName: string;
+  returnUrl: string;
+  listingTitle: string;
+  startDate: string;
+  endDate: string;
+  companyName: string;
+  companyEmail?: string;
+}): Promise<void> {
+  const { toEmail, customerName, returnUrl, listingTitle, startDate, endDate, companyName, companyEmail } = opts;
+  const fromHeader = companyEmail ? `${companyName} <${companyEmail}>` : undefined;
+
+  const tableRows = [
+    { label: "Equipment",   value: listingTitle },
+    { label: "Pickup Date", value: startDate },
+    { label: "Return Date", value: endDate },
+    { label: "Company",     value: companyName },
+  ];
+
+  const subject = `[${companyName}] Please upload return photos for your rental`;
+  const preheader = `Upload return photos for your ${listingTitle} — protects you against any damage claims.`;
+
+  const body = `
+    <p style="margin:0 0 8px;font-size:18px;font-weight:700;color:${BRAND_DARK};">Return Photo Documentation</p>
+    <p style="margin:0 0 20px;font-size:15px;color:#374151;line-height:1.6;">
+      Hi <strong>${customerName}</strong>, thank you for returning your rental to <strong>${companyName}</strong>.
+      Please document the equipment's condition at return by uploading photos using the link below.
+      These photos protect you against any after-the-fact damage claims.
+    </p>
+    ${infoTable(tableRows)}
+    <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;padding:16px;margin:20px 0;">
+      <p style="margin:0;font-size:13px;color:#1e40af;font-weight:600;">📸 What to photograph at return:</p>
+      <ul style="margin:8px 0 0;padding-left:20px;font-size:13px;color:#1d4ed8;line-height:1.8;">
+        <li>All sides of the equipment (front, back, left, right)</li>
+        <li>Any scratches, dents, or marks</li>
+        <li>All accessories and parts returned</li>
+      </ul>
+    </div>
+    ${ctaButton("Upload Return Photos", returnUrl, "#1d4ed8")}
+    <p style="margin:0;font-size:13px;color:#9ca3af;text-align:center;">
+      This link is unique to your booking. You can upload multiple photos.
+    </p>
+  `;
+
+  const html = emailShell({ preheader, badgeLabel: "Action Required — Return Photo Check", badgeColor: "#1d4ed8", body });
+
+  const gmail = await getUncachableGmailClient();
+  await gmail.users.messages.send({
+    userId: "me",
+    requestBody: { raw: makeRawEmail(toEmail, subject, html, fromHeader) },
+  });
+}

@@ -43,6 +43,12 @@ export const bookingsTable = pgTable("bookings", {
   protectionPlanFee: decimal("protection_plan_fee", { precision: 10, scale: 2 }),
   // Per-rule initials: JSON array of {ruleId, title, initials, initialedAt}
   ruleInitials: text("rule_initials"),
+  // Return documentation
+  returnToken: text("return_token"),
+  returnPhotos: text("return_photos"),
+  returnCompletedAt: timestamp("return_completed_at"),
+  // AI inspection result (JSON from vision API)
+  inspectionResult: text("inspection_result"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });

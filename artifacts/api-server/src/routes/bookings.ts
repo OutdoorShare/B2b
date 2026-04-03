@@ -9,6 +9,7 @@ import { eq, and, gte, lte, isNull, or } from "drizzle-orm";
 import { generateAgreementPdf } from "../lib/generate-agreement-pdf";
 import {
   sendPickupLinkEmail,
+  sendReturnLinkEmail,
   sendKioskAccountSetupEmail,
   sendBookingPickupReminderEmail,
   sendAdminPickupReminderEmail,
@@ -16,6 +17,7 @@ import {
   sendContactCardEmail,
   sendAdminBookingContactEmail,
 } from "../services/gmail";
+import { openai } from "@workspace/integrations-openai-ai-server";
 
 const UPLOADS_DIR_BOOKINGS = path.resolve(process.cwd(), "uploads");
 
@@ -47,6 +49,10 @@ function formatBooking(b: typeof bookingsTable.$inferSelect, listingTitle: strin
     pickupPhotos: b.pickupPhotos ? JSON.parse(b.pickupPhotos) : [],
     pickupLinkSent: !!b.pickupToken,
     pickupCompletedAt: b.pickupCompletedAt ? b.pickupCompletedAt.toISOString() : null,
+    returnPhotos: (b as any).returnPhotos ? JSON.parse((b as any).returnPhotos) : [],
+    returnToken: (b as any).returnToken ?? null,
+    returnCompletedAt: (b as any).returnCompletedAt ? (b as any).returnCompletedAt.toISOString() : null,
+    inspectionResult: (b as any).inspectionResult ?? null,
     depositHoldIntentId: b.depositHoldIntentId ?? null,
     depositHoldStatus: b.depositHoldStatus ?? null,
     createdAt: b.createdAt.toISOString(),
@@ -727,6 +733,256 @@ router.post("/pickup/:token/photos", pickupUpload.array("photos", 20), async (re
   } catch (err) {
     req.log.error(err);
     res.status(500).json({ error: "Failed to upload pickup photos" });
+  }
+});
+
+// ── GET /bookings/:id/return-link ─────────────────────────────────────────────
+// Admin: get existing return URL (no email sent); generates token if missing
+router.get("/bookings/:id/return-link", async (req, res) => {
+  try {
+    const bookingId = Number(req.params.id);
+    const conditions = [eq(bookingsTable.id, bookingId)];
+    if (req.tenantId) conditions.push(eq(bookingsTable.tenantId, req.tenantId));
+    const [booking] = await db.select().from(bookingsTable).where(and(...conditions));
+    if (!booking) { res.status(404).json({ error: "Booking not found" }); return; }
+
+    const token = (booking as any).returnToken ?? randomBytes(24).toString("hex");
+    if (!(booking as any).returnToken) {
+      await db.update(bookingsTable).set({ returnToken: token, updatedAt: new Date() } as any).where(eq(bookingsTable.id, bookingId));
+    }
+
+    const BASE = process.env.APP_URL || `https://${process.env.REPLIT_DEV_DOMAIN}`;
+    const slug = req.headers["x-tenant-slug"] as string ?? "";
+    const returnUrl = `${BASE}/${slug}/return/${token}`;
+    res.json({ ok: true, token, returnUrl });
+  } catch (err) {
+    req.log.error(err);
+    res.status(500).json({ error: "Failed to get return link" });
+  }
+});
+
+// ── POST /bookings/:id/send-return-link ────────────────────────────────────────
+// Admin: generate a unique token and email the renter their return photo link
+router.post("/bookings/:id/send-return-link", async (req, res) => {
+  try {
+    const bookingId = Number(req.params.id);
+    const conditions = [eq(bookingsTable.id, bookingId)];
+    if (req.tenantId) conditions.push(eq(bookingsTable.tenantId, req.tenantId));
+
+    const [booking] = await db.select().from(bookingsTable).where(and(...conditions));
+    if (!booking) { res.status(404).json({ error: "Booking not found" }); return; }
+
+    const token = (booking as any).returnToken ?? randomBytes(24).toString("hex");
+    await db.update(bookingsTable).set({ returnToken: token, updatedAt: new Date() } as any).where(eq(bookingsTable.id, bookingId));
+
+    const [listing] = await db.select({ title: listingsTable.title }).from(listingsTable).where(eq(listingsTable.id, booking.listingId));
+    let companyName = "OutdoorShare";
+    let companyEmail: string | undefined;
+    if (req.tenantId) {
+      const [biz] = await db.select({ name: businessProfileTable.name }).from(businessProfileTable).where(eq(businessProfileTable.tenantId, req.tenantId));
+      if (biz?.name) companyName = biz.name;
+      const [tenant] = await db.select({ email: tenantsTable.email }).from(tenantsTable).where(eq(tenantsTable.id, req.tenantId)).limit(1);
+      if (tenant?.email) companyEmail = tenant.email;
+    }
+
+    const BASE = process.env.APP_URL || `https://${process.env.REPLIT_DEV_DOMAIN}`;
+    const slug = req.headers["x-tenant-slug"] as string ?? "";
+    const returnUrl = `${BASE}/${slug}/return/${token}`;
+
+    sendReturnLinkEmail({
+      toEmail: booking.customerEmail,
+      customerName: booking.customerName,
+      returnUrl,
+      listingTitle: listing?.title ?? "Rental Equipment",
+      startDate: booking.startDate,
+      endDate: booking.endDate,
+      companyName,
+      companyEmail,
+    }).catch(err => console.error("[return email]", err));
+
+    res.json({ ok: true, token, returnUrl });
+  } catch (err) {
+    req.log.error(err);
+    res.status(500).json({ error: "Failed to send return link" });
+  }
+});
+
+// ── GET /return/:token ────────────────────────────────────────────────────────
+// Public: renter loads their return photo page
+router.get("/return/:token", async (req, res) => {
+  try {
+    const { token } = req.params;
+    const [booking] = await db.select().from(bookingsTable).where(eq((bookingsTable as any).returnToken, token));
+    if (!booking) { res.status(404).json({ error: "Return link not found or expired" }); return; }
+
+    const [listing] = await db.select({ title: listingsTable.title, imageUrls: listingsTable.imageUrls }).from(listingsTable).where(eq(listingsTable.id, booking.listingId));
+    let companyName = "OutdoorShare";
+    let logoUrl: string | null = null;
+    if (booking.tenantId) {
+      const [biz] = await db.select({ name: businessProfileTable.name, logoUrl: businessProfileTable.logoUrl }).from(businessProfileTable).where(eq(businessProfileTable.tenantId, booking.tenantId));
+      if (biz?.name) companyName = biz.name;
+      if (biz?.logoUrl) logoUrl = biz.logoUrl;
+    }
+
+    res.json({
+      bookingId: booking.id,
+      customerName: booking.customerName,
+      startDate: booking.startDate,
+      endDate: booking.endDate,
+      listingTitle: listing?.title ?? "Rental Equipment",
+      listingImage: Array.isArray(listing?.imageUrls) && listing.imageUrls.length > 0 ? listing.imageUrls[0] : null,
+      companyName,
+      logoUrl,
+      returnCompleted: !!(booking as any).returnCompletedAt,
+      returnPhotos: (booking as any).returnPhotos ? JSON.parse((booking as any).returnPhotos) : [],
+    });
+  } catch (err) {
+    req.log.error(err);
+    res.status(500).json({ error: "Failed to load return info" });
+  }
+});
+
+// ── POST /return/:token/photos ─────────────────────────────────────────────────
+// Public: renter uploads return condition photos
+router.post("/return/:token/photos", pickupUpload.array("photos", 20), async (req, res) => {
+  try {
+    const { token } = req.params;
+    const [booking] = await db.select().from(bookingsTable).where(eq((bookingsTable as any).returnToken, token));
+    if (!booking) { res.status(404).json({ error: "Return link not found" }); return; }
+
+    const files = req.files as Express.Multer.File[];
+    if (!files || files.length === 0) { res.status(400).json({ error: "No photos uploaded" }); return; }
+
+    const existing: string[] = (booking as any).returnPhotos ? JSON.parse((booking as any).returnPhotos) : [];
+    const newUrls = files.map(f => `/api/uploads/${f.filename}`);
+    const allPhotos = [...existing, ...newUrls];
+
+    await db.update(bookingsTable).set({
+      returnPhotos: JSON.stringify(allPhotos),
+      returnCompletedAt: (booking as any).returnCompletedAt ?? new Date(),
+      updatedAt: new Date(),
+    } as any).where(eq(bookingsTable.id, booking.id));
+
+    res.json({ ok: true, photos: allPhotos, count: allPhotos.length });
+  } catch (err) {
+    req.log.error(err);
+    res.status(500).json({ error: "Failed to upload return photos" });
+  }
+});
+
+// ── POST /bookings/:id/inspect ─────────────────────────────────────────────────
+// Admin: run AI vision inspection comparing before (pickup) and after (return) photos
+const INSPECTION_SYSTEM_PROMPT = `You are an AI inspection assistant for OutdoorShare rental returns.
+
+Compare BEFORE and AFTER images of the same rental product and identify NEW issues introduced during the rental.
+
+Detect:
+
+- Physical damage (scratches, dents, cracks, broken parts)
+- Excessive dirt or cleanliness issues
+- Missing parts or accessories
+- Visible mechanical issues (flat tires, misalignment, broken components)
+
+Be accurate and conservative. Only report issues that clearly appear in the AFTER image but not in BEFORE.
+
+Also determine if each issue is suitable for a damage claim.
+
+Return ONLY valid JSON:
+
+{
+  "status": "no_issues | minor_issues | major_issues",
+  "damage_detected": true/false,
+  "claim_recommended": true/false,
+  "issues": [
+    {
+      "type": "damage | cleanliness | missing_part | mechanical",
+      "description": "what changed",
+      "location": "where on the product",
+      "severity": "minor | moderate | severe",
+      "claim_recommended": true/false,
+      "confidence": 0-100
+    }
+  ],
+  "admin_summary": "clear explanation for admin decision making",
+  "confidence_score": 0-100
+}`;
+
+router.post("/bookings/:id/inspect", async (req, res) => {
+  try {
+    const bookingId = Number(req.params.id);
+    const conditions = [eq(bookingsTable.id, bookingId)];
+    if (req.tenantId) conditions.push(eq(bookingsTable.tenantId, req.tenantId));
+    const [booking] = await db.select().from(bookingsTable).where(and(...conditions));
+    if (!booking) { res.status(404).json({ error: "Booking not found" }); return; }
+
+    const beforePhotos: string[] = booking.pickupPhotos ? JSON.parse(booking.pickupPhotos) : [];
+    const afterPhotos: string[] = (booking as any).returnPhotos ? JSON.parse((booking as any).returnPhotos) : [];
+
+    if (beforePhotos.length === 0 && afterPhotos.length === 0) {
+      res.status(400).json({ error: "No photos available for inspection" }); return;
+    }
+
+    // Helper: read a photo (from disk if local path, or from the before-photos stored in uploads/)
+    const toBase64 = (photoPath: string): { base64: string; mime: string } | null => {
+      try {
+        // Local path: /api/uploads/filename.jpg → uploads/filename.jpg
+        const relative = photoPath.replace(/^\/api\/uploads\//, "");
+        const filePath = path.join(UPLOADS_DIR_BOOKINGS, relative);
+        if (!fs.existsSync(filePath)) return null;
+        const buf = fs.readFileSync(filePath);
+        const ext = path.extname(filePath).toLowerCase().replace(".", "");
+        const mimeMap: Record<string, string> = { jpg: "image/jpeg", jpeg: "image/jpeg", png: "image/png", webp: "image/webp", heic: "image/heic" };
+        const mime = mimeMap[ext] ?? "image/jpeg";
+        return { base64: buf.toString("base64"), mime };
+      } catch { return null; }
+    };
+
+    // Build vision content array
+    const buildImageContent = (photos: string[], label: string): any[] => {
+      const items: any[] = [{ type: "text", text: `--- ${label} ---` }];
+      for (const p of photos.slice(0, 5)) {
+        const img = toBase64(p);
+        if (img) {
+          items.push({ type: "image_url", image_url: { url: `data:${img.mime};base64,${img.base64}`, detail: "low" } });
+        }
+      }
+      return items;
+    };
+
+    const content: any[] = [
+      { type: "text", text: "Please compare the BEFORE and AFTER images of this rental equipment and identify any new damage or issues introduced during the rental." },
+      ...buildImageContent(beforePhotos, "BEFORE photos (at pickup)"),
+      ...buildImageContent(afterPhotos, "AFTER photos (at return)"),
+      { type: "text", text: "Return ONLY valid JSON as specified in your system prompt." },
+    ];
+
+    const response = await openai.chat.completions.create({
+      model: "gpt-4o",
+      max_completion_tokens: 1024,
+      messages: [
+        { role: "system", content: INSPECTION_SYSTEM_PROMPT },
+        { role: "user", content },
+      ],
+    });
+
+    const raw = response.choices[0]?.message?.content ?? "{}";
+    // Strip markdown code fences if present
+    const cleaned = raw.replace(/^```(?:json)?\n?/m, "").replace(/\n?```$/m, "").trim();
+
+    let result: any;
+    try { result = JSON.parse(cleaned); }
+    catch { result = { status: "error", admin_summary: "AI returned an unparseable response. Try again.", raw }; }
+
+    // Store result in DB
+    await db.update(bookingsTable).set({
+      inspectionResult: JSON.stringify(result),
+      updatedAt: new Date(),
+    } as any).where(eq(bookingsTable.id, bookingId));
+
+    res.json({ ok: true, result });
+  } catch (err: any) {
+    req.log.error(err);
+    res.status(500).json({ error: err.message ?? "Inspection failed" });
   }
 });
 

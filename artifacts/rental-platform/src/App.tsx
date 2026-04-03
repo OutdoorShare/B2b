@@ -20,6 +20,7 @@ import StorefrontMyBookings from "@/pages/storefront/my-bookings";
 import StorefrontMyBookingDetail from "@/pages/storefront/my-booking-detail";
 import StorefrontProfile from "@/pages/storefront/profile";
 import PickupPage from "@/pages/storefront/pickup";
+import ReturnPage from "@/pages/storefront/return";
 
 import GetStartedPage from "@/pages/public/get-started";
 import SignupPage from "@/pages/public/signup";
@@ -338,6 +339,11 @@ function Router() {
       {/* Pickup Photo Route — public, no layout wrapper */}
       <Route path="/:slug/pickup/:token">
         <PickupPage />
+      </Route>
+
+      {/* Return Photo Route — public, no layout wrapper */}
+      <Route path="/:slug/return/:token">
+        <ReturnPage />
       </Route>
 
       {/* Storefront Routes — tenant-specific via slug prefix */}
