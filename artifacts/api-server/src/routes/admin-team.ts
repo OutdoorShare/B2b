@@ -73,11 +73,15 @@ router.post("/admin/auth/owner-login", async (req, res) => {
       return;
     }
 
-    const token = randomBytes(32).toString("hex");
-    await db
-      .update(tenantsTable)
-      .set({ adminToken: token, updatedAt: new Date() })
-      .where(eq(tenantsTable.id, tenant.id));
+    // Reuse the existing token so all active sessions remain valid.
+    // Only generate a new token if the tenant has none (first login ever).
+    const token = tenant.adminToken ?? randomBytes(32).toString("hex");
+    if (!tenant.adminToken) {
+      await db
+        .update(tenantsTable)
+        .set({ adminToken: token, updatedAt: new Date() })
+        .where(eq(tenantsTable.id, tenant.id));
+    }
 
     res.json({
       token,

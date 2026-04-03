@@ -19,6 +19,11 @@ import { getAdminSession } from "@/lib/admin-nav";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
+function handleUnauthorized() {
+  localStorage.removeItem("admin_session");
+  window.location.reload();
+}
+
 interface ContactCard {
   id: number;
   tenantId: number;
@@ -59,6 +64,7 @@ export default function ContactCards() {
     setLoading(true);
     try {
       const res = await fetch(`${BASE}/api/contact-cards`, { headers: authHeaders() });
+      if (res.status === 401) { handleUnauthorized(); return; }
       if (!res.ok) throw new Error();
       setCards(await res.json());
     } catch {
@@ -92,6 +98,7 @@ export default function ContactCards() {
         : `${BASE}/api/contact-cards`;
       const method = editingCard ? "PUT" : "POST";
       const res = await fetch(url, { method, headers: authHeaders(), body: JSON.stringify(form) });
+      if (res.status === 401) { handleUnauthorized(); return; }
       if (!res.ok) throw new Error();
       toast({ title: editingCard ? "Contact card updated" : "Contact card created" });
       setDialogOpen(false);
@@ -106,6 +113,7 @@ export default function ContactCards() {
   const handleDelete = async (id: number) => {
     try {
       const res = await fetch(`${BASE}/api/contact-cards/${id}`, { method: "DELETE", headers: authHeaders() });
+      if (res.status === 401) { handleUnauthorized(); return; }
       if (!res.ok) throw new Error();
       toast({ title: "Contact card deleted" });
       fetchCards();
