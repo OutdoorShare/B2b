@@ -16,7 +16,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { ArrowLeft, Upload, X, CheckCircle2, AlertCircle, CircleDashed, ImagePlus, Loader2, IdCard, Sparkles, ChevronDown, ChevronUp, RefreshCw, Info, Plus, Trash2, Clock } from "lucide-react";
+import { ArrowLeft, Upload, X, CheckCircle2, AlertCircle, CircleDashed, ImagePlus, Loader2, IdCard, Sparkles, ChevronDown, ChevronUp, RefreshCw, Info, Plus, Trash2, Clock, Search, Package, Link2, Unlink } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Checkbox } from "@/components/ui/checkbox";
 import { AddonManager } from "@/components/addon-manager";
@@ -78,6 +78,18 @@ function usePickupAddresses() {
   return data;
 }
 
+interface Product { id: number; name: string; sku?: string | null; brand?: string | null; model?: string | null; quantity: number; status: string; }
+function useProducts() {
+  const [products, setProducts] = useState<Product[]>([]);
+  useEffect(() => {
+    const s = getAdminSession();
+    const headers: Record<string, string> = {};
+    if (s?.token) headers["x-admin-token"] = s.token;
+    fetch(`${BASE}/api/products`, { headers }).then(r => r.ok ? r.json() : []).then(setProducts).catch(() => {});
+  }, []);
+  return products;
+}
+
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 const OPTIONAL_NUMERIC = new Set(['pricePerWeek', 'pricePerHour', 'ageRestriction']);
 
@@ -100,6 +112,42 @@ export default function AdminListingsForm() {
 
   const createListing = useCreateListing();
   const updateListing = useUpdateListing();
+
+  // Inventory search
+  const allProducts = useProducts();
+  const [inventorySearch, setInventorySearch] = useState('');
+  const [inventoryOpen, setInventoryOpen] = useState(false);
+  const [linkedProduct, setLinkedProduct] = useState<Product | null>(null);
+  const inventorySearchRef = useRef<HTMLDivElement>(null);
+
+  const filteredProducts = inventorySearch.trim().length > 0
+    ? allProducts.filter(p => {
+        const q = inventorySearch.toLowerCase();
+        return (
+          p.name.toLowerCase().includes(q) ||
+          (p.brand ?? '').toLowerCase().includes(q) ||
+          (p.model ?? '').toLowerCase().includes(q) ||
+          (p.sku ?? '').toLowerCase().includes(q)
+        );
+      }).slice(0, 8)
+    : allProducts.slice(0, 8);
+
+  const linkProduct = (product: Product) => {
+    setLinkedProduct(product);
+    setInventorySearch('');
+    setInventoryOpen(false);
+    setFormData(prev => ({
+      ...prev,
+      brand: product.brand || prev.brand,
+      model: product.model || prev.model,
+      quantity: product.quantity || prev.quantity,
+    }));
+  };
+
+  const unlinkProduct = () => {
+    setLinkedProduct(null);
+    setInventorySearch('');
+  };
 
   type InlineUnit = { identifier: string; label: string; type: 'serial' | 'vin' | 'hin' };
   const [inlineUnits, setInlineUnits] = useState<InlineUnit[]>([
@@ -731,50 +779,7 @@ export default function AdminListingsForm() {
                     </div>
                     <Input id="depositAmount" name="depositAmount" type="number" min="0.01" step="0.01" placeholder="e.g. 200" value={formData.depositAmount || ''} onChange={handleChange} required />
                   </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="quantity">Total Quantity <span className="text-destructive">*</span></Label>
-                    <Input id="quantity" name="quantity" type="number" min="1" value={formData.quantity} onChange={handleChange} required />
-                  </div>
                 </div>
-
-                {/* Inline unit identifiers — one row per unit, only when creating */}
-                {!isEditing && (
-                  <div className="space-y-2 pt-1">
-                    <div className="flex items-center gap-2">
-                      <Label className="text-sm">Unit Identifiers</Label>
-                      <span className="text-xs text-muted-foreground">(optional — VIN, HIN, or serial numbers)</span>
-                    </div>
-                    <div className="space-y-2">
-                      {inlineUnits.map((unit, i) => (
-                        <div key={i} className="flex items-center gap-2">
-                          <span className="text-xs text-muted-foreground w-12 shrink-0 text-right">Unit {i + 1}</span>
-                          <Select value={unit.type} onValueChange={v => updateInlineUnit(i, 'type', v as InlineUnit['type'])}>
-                            <SelectTrigger className="w-28 h-8 text-xs">
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="serial">Serial #</SelectItem>
-                              <SelectItem value="vin">VIN</SelectItem>
-                              <SelectItem value="hin">HIN</SelectItem>
-                            </SelectContent>
-                          </Select>
-                          <Input
-                            className="h-8 text-xs font-mono flex-1"
-                            placeholder={unit.type === 'vin' ? '1HGBH41JXMN109186' : unit.type === 'hin' ? 'ABC12345D202' : 'SN-00001'}
-                            value={unit.identifier}
-                            onChange={e => updateInlineUnit(i, 'identifier', e.target.value)}
-                          />
-                          <Input
-                            className="h-8 text-xs w-36"
-                            placeholder="Nickname (optional)"
-                            value={unit.label}
-                            onChange={e => updateInlineUnit(i, 'label', e.target.value)}
-                          />
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
               </CardContent>
             </Card>
 
@@ -854,6 +859,125 @@ export default function AdminListingsForm() {
                 </div>
               </CardHeader>
               <CardContent className="space-y-5">
+
+                {/* ── Inventory Search ── */}
+                <div className="space-y-2">
+                  <Label className="flex items-center gap-1.5"><Package className="w-3.5 h-3.5" /> Link from Inventory</Label>
+                  <p className="text-xs text-muted-foreground">Search your inventory to link an existing product — auto-fills brand, model, and quantity.</p>
+                  {linkedProduct ? (
+                    <div className="flex items-center gap-3 p-3 rounded-lg border bg-muted/40">
+                      <Link2 className="w-4 h-4 text-primary shrink-0" />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium truncate">{linkedProduct.name}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {[linkedProduct.brand, linkedProduct.model].filter(Boolean).join(' · ')}
+                          {linkedProduct.sku ? ` · SKU: ${linkedProduct.sku}` : ''}
+                          {` · Qty: ${linkedProduct.quantity}`}
+                        </p>
+                      </div>
+                      <button type="button" onClick={unlinkProduct} className="text-muted-foreground hover:text-destructive transition-colors shrink-0">
+                        <Unlink className="w-4 h-4" />
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="relative" ref={inventorySearchRef}>
+                      <div className="relative">
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
+                        <Input
+                          className="pl-9"
+                          placeholder="Search by name, brand, model, or SKU…"
+                          value={inventorySearch}
+                          onChange={e => { setInventorySearch(e.target.value); setInventoryOpen(true); }}
+                          onFocus={() => setInventoryOpen(true)}
+                          onBlur={() => setTimeout(() => setInventoryOpen(false), 150)}
+                        />
+                      </div>
+                      {inventoryOpen && filteredProducts.length > 0 && (
+                        <div className="absolute z-50 w-full mt-1 rounded-lg border bg-popover shadow-md overflow-hidden">
+                          {filteredProducts.map(p => (
+                            <button
+                              key={p.id}
+                              type="button"
+                              className="w-full text-left px-3 py-2.5 hover:bg-muted transition-colors flex items-center gap-3"
+                              onMouseDown={() => linkProduct(p)}
+                            >
+                              <Package className="w-4 h-4 text-muted-foreground shrink-0" />
+                              <div className="flex-1 min-w-0">
+                                <p className="text-sm font-medium truncate">{p.name}</p>
+                                <p className="text-xs text-muted-foreground">
+                                  {[p.brand, p.model].filter(Boolean).join(' · ')}
+                                  {p.sku ? ` · SKU: ${p.sku}` : ''}
+                                  {` · Qty: ${p.quantity}`}
+                                </p>
+                              </div>
+                              <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium shrink-0 ${p.status === 'active' ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'}`}>
+                                {p.status}
+                              </span>
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                      {inventoryOpen && inventorySearch.trim().length > 0 && filteredProducts.length === 0 && (
+                        <div className="absolute z-50 w-full mt-1 rounded-lg border bg-popover shadow-md px-4 py-3 text-sm text-muted-foreground">
+                          No inventory products match "{inventorySearch}"
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+
+                <div className="border-t" />
+
+                {/* ── Quantity + Unit Identifiers ── */}
+                <div className="space-y-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="quantity">Total Quantity <span className="text-destructive">*</span></Label>
+                    <p className="text-xs text-muted-foreground">How many identical units you have available to rent simultaneously.</p>
+                    <Input id="quantity" name="quantity" type="number" min="1" value={formData.quantity} onChange={handleChange} required className="max-w-[140px]" />
+                  </div>
+
+                  {/* Inline unit identifiers — one row per unit, only when creating */}
+                  {!isEditing && (
+                    <div className="space-y-2">
+                      <div className="flex items-center gap-2">
+                        <Label className="text-sm">Unit Identifiers</Label>
+                        <span className="text-xs text-muted-foreground">(optional — VIN, HIN, or serial numbers)</span>
+                      </div>
+                      <div className="space-y-2">
+                        {inlineUnits.map((unit, i) => (
+                          <div key={i} className="flex items-center gap-2">
+                            <span className="text-xs text-muted-foreground w-12 shrink-0 text-right">Unit {i + 1}</span>
+                            <Select value={unit.type} onValueChange={v => updateInlineUnit(i, 'type', v as InlineUnit['type'])}>
+                              <SelectTrigger className="w-28 h-8 text-xs">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="serial">Serial #</SelectItem>
+                                <SelectItem value="vin">VIN</SelectItem>
+                                <SelectItem value="hin">HIN</SelectItem>
+                              </SelectContent>
+                            </Select>
+                            <Input
+                              className="h-8 text-xs font-mono flex-1"
+                              placeholder={unit.type === 'vin' ? '1HGBH41JXMN109186' : unit.type === 'hin' ? 'ABC12345D202' : 'SN-00001'}
+                              value={unit.identifier}
+                              onChange={e => updateInlineUnit(i, 'identifier', e.target.value)}
+                            />
+                            <Input
+                              className="h-8 text-xs w-36"
+                              placeholder="Nickname (optional)"
+                              value={unit.label}
+                              onChange={e => updateInlineUnit(i, 'label', e.target.value)}
+                            />
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                <div className="border-t" />
+
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label htmlFor="brand">Brand</Label>
