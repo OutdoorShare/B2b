@@ -142,7 +142,7 @@ export default function AdminKiosk() {
       .catch(() => { /* network error — don't flag as expired */ });
   }, []);
 
-  // Auto-enter fullscreen on mount; re-prompt if user exits with Escape
+  // Auto-enter fullscreen on mount; aggressively re-enter if lost
   useEffect(() => {
     if (!fsSupported) return;
 
@@ -154,18 +154,35 @@ export default function AdminKiosk() {
 
     const onFsChange = () => {
       if (!getFsElement()) {
-        // Fullscreen was lost (Escape key, etc.) — show re-enter overlay
+        // Fullscreen was lost — show banner and snap back in on next touch
         setFsPrompt(true);
+        // Re-enter immediately on the next touchend (counts as a user gesture)
+        const reenter = () => {
+          requestFs()
+            .then(() => setFsPrompt(false))
+            .catch(() => {});
+        };
+        document.addEventListener("touchend", reenter, { once: true });
       } else {
         setFsPrompt(false);
       }
     };
 
+    // Block the swipe-down-to-exit gesture: intercept touchstart near the top
+    // edge with a non-passive listener so preventDefault() actually suppresses it.
+    const blockTopSwipe = (e: TouchEvent) => {
+      if (getFsElement() && e.touches.length === 1 && e.touches[0].clientY < 40) {
+        e.preventDefault();
+      }
+    };
+
     document.addEventListener("fullscreenchange", onFsChange);
     document.addEventListener("webkitfullscreenchange", onFsChange);
+    document.addEventListener("touchstart", blockTopSwipe, { passive: false });
     return () => {
       document.removeEventListener("fullscreenchange", onFsChange);
       document.removeEventListener("webkitfullscreenchange", onFsChange);
+      document.removeEventListener("touchstart", blockTopSwipe);
     };
   }, [fsSupported]);
 
@@ -239,7 +256,7 @@ export default function AdminKiosk() {
   }
 
   return (
-    <div className="min-h-screen bg-background flex flex-col font-sans">
+    <div className="min-h-screen bg-background flex flex-col font-sans" style={{ overscrollBehavior: "none", touchAction: "pan-x pan-y" }}>
       {/* Top Bar */}
       <header className="h-20 border-b bg-card flex items-center px-8 justify-between shrink-0 shadow-sm">
         <div className="flex items-center gap-4">
