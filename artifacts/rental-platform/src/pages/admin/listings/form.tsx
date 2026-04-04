@@ -24,6 +24,7 @@ import { UnitIdentifiersManager } from "@/components/unit-identifiers-manager";
 import { getAdminSession } from "@/lib/admin-nav";
 import { ContactCardDialog } from "@/components/contact-card-dialog";
 import type { ContactCard } from "@/components/contact-card-dialog";
+import { ImageCropDialog } from "@/components/image-crop-dialog";
 
 interface Category { id: number; name: string; slug: string; icon?: string | null; }
 type TimeSlotDef = { label: string; startTime: string; endTime: string; rate: "full_day" | "half_day" };
@@ -427,34 +428,29 @@ export default function AdminListingsForm() {
 
   const [uploading, setUploading] = useState(false);
   const [dragOver, setDragOver] = useState(false);
+  const [cropQueue, setCropQueue] = useState<File[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const uploadFiles = useCallback(async (files: FileList | File[]) => {
-    const arr = Array.from(files);
-    if (!arr.length) return;
+  const uploadBlob = useCallback(async (blob: Blob, filename: string): Promise<string> => {
     setUploading(true);
     try {
-      const uploaded: string[] = [];
-      for (const file of arr) {
-        const fd = new FormData();
-        fd.append("file", file);
-        const res = await fetch(`${BASE}/api/upload/image`, { method: "POST", body: fd });
-        if (!res.ok) { toast({ title: "Upload failed", description: file.name, variant: "destructive" }); continue; }
-        const { url } = await res.json();
-        uploaded.push(url);
-      }
-      if (uploaded.length) {
-        setFormData(prev => ({ ...prev, imageUrls: [...prev.imageUrls, ...uploaded] }));
-        toast({ title: `${uploaded.length} photo${uploaded.length > 1 ? "s" : ""} uploaded` });
-      }
-    } finally { setUploading(false); }
-  }, [toast]);
+      const fd = new FormData();
+      fd.append("file", blob, filename);
+      const res = await fetch(`${BASE}/api/upload/image`, { method: "POST", body: fd });
+      if (!res.ok) throw new Error("Upload failed");
+      const { url } = await res.json();
+      return url as string;
+    } finally {
+      setUploading(false);
+    }
+  }, [BASE]);
 
   const onDrop = useCallback((e: React.DragEvent<HTMLDivElement>) => {
     e.preventDefault();
     setDragOver(false);
-    if (e.dataTransfer.files.length) uploadFiles(e.dataTransfer.files);
-  }, [uploadFiles]);
+    const files = Array.from(e.dataTransfer.files).filter(f => f.type.startsWith("image/"));
+    if (files.length) setCropQueue(files);
+  }, []);
 
   // Publish readiness checks — required when status is "active"
   const publishChecks = [
@@ -548,6 +544,22 @@ export default function AdminListingsForm() {
 
   return (
     <div className="max-w-3xl mx-auto pb-12 space-y-6">
+      {/* Image crop dialog */}
+      {cropQueue.length > 0 && (
+        <ImageCropDialog
+          files={cropQueue}
+          uploadFn={uploadBlob}
+          onDone={urls => {
+            setCropQueue([]);
+            if (urls.length) {
+              setFormData(prev => ({ ...prev, imageUrls: [...prev.imageUrls, ...urls] }));
+              toast({ title: `${urls.length} photo${urls.length > 1 ? "s" : ""} added` });
+            }
+          }}
+          onCancel={() => setCropQueue([])}
+        />
+      )}
+
       {/* Header */}
       <div className="flex items-center gap-4">
         <Button variant="ghost" size="icon" onClick={() => window.history.back()}>
@@ -781,7 +793,11 @@ export default function AdminListingsForm() {
                   accept="image/jpeg,image/png,image/webp,image/gif"
                   multiple
                   className="hidden"
-                  onChange={e => e.target.files && uploadFiles(e.target.files)}
+                  onChange={e => {
+                    const files = Array.from(e.target.files ?? []).filter(f => f.type.startsWith("image/"));
+                    if (files.length) setCropQueue(files);
+                    e.target.value = "";
+                  }}
                 />
                 <div
                   onDragOver={e => { e.preventDefault(); setDragOver(true); }}

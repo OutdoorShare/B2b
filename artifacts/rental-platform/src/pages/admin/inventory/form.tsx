@@ -9,6 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useToast } from "@/hooks/use-toast";
 import { ArrowLeft, Save, Loader2, Upload, X, Package, ImageIcon, GripVertical } from "lucide-react";
 import { Link } from "wouter";
+import { ImageCropDialog } from "@/components/image-crop-dialog";
 
 type Category = { id: number; name: string };
 
@@ -32,6 +33,7 @@ export default function AdminInventoryForm() {
   const [uploadingCount, setUploadingCount] = useState(0);
   const [isDragging, setIsDragging] = useState(false);
   const [lightbox, setLightbox] = useState<string | null>(null);
+  const [cropQueue, setCropQueue] = useState<File[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [form, setForm] = useState({
     name: "",
@@ -92,43 +94,32 @@ export default function AdminInventoryForm() {
     setForm(prev => ({ ...prev, [field]: value }));
   };
 
-  const uploadFiles = useCallback(async (files: File[]) => {
-    const imageFiles = files.filter(f => f.type.startsWith("image/"));
-    if (!imageFiles.length) return;
-    setUploadingCount(c => c + imageFiles.length);
-    const results = await Promise.allSettled(
-      imageFiles.map(async (file) => {
-        const fd = new FormData();
-        fd.append("file", file);
-        const res = await fetch(`${BASE}/api/upload/image`, { method: "POST", body: fd });
-        if (!res.ok) throw new Error("Upload failed");
-        const { url } = await res.json();
-        return url as string;
-      })
-    );
-    const urls: string[] = [];
-    let failed = 0;
-    results.forEach(r => {
-      if (r.status === "fulfilled") urls.push(r.value);
-      else failed++;
-    });
-    if (urls.length) setForm(prev => ({ ...prev, imageUrls: [...prev.imageUrls, ...urls] }));
-    if (failed) toast({ title: `${failed} photo${failed > 1 ? "s" : ""} failed to upload`, variant: "destructive" });
-    setUploadingCount(c => c - imageFiles.length);
-  }, [BASE, toast]);
+  const uploadBlob = useCallback(async (blob: Blob, filename: string): Promise<string> => {
+    setUploadingCount(c => c + 1);
+    try {
+      const fd = new FormData();
+      fd.append("file", blob, filename);
+      const res = await fetch(`${BASE}/api/upload/image`, { method: "POST", body: fd });
+      if (!res.ok) throw new Error("Upload failed");
+      const { url } = await res.json();
+      return url as string;
+    } finally {
+      setUploadingCount(c => c - 1);
+    }
+  }, [BASE]);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = Array.from(e.target.files ?? []);
-    if (files.length) uploadFiles(files);
+    const files = Array.from(e.target.files ?? []).filter(f => f.type.startsWith("image/"));
+    if (files.length) setCropQueue(files);
     e.target.value = "";
   };
 
   const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault();
     setIsDragging(false);
-    const files = Array.from(e.dataTransfer.files);
-    uploadFiles(files);
-  }, [uploadFiles]);
+    const files = Array.from(e.dataTransfer.files).filter(f => f.type.startsWith("image/"));
+    if (files.length) setCropQueue(files);
+  }, []);
 
   const removeImage = (idx: number) => {
     setForm(prev => ({ ...prev, imageUrls: prev.imageUrls.filter((_, i) => i !== idx) }));
@@ -180,6 +171,22 @@ export default function AdminInventoryForm() {
 
   return (
     <div className="space-y-6 max-w-3xl">
+      {/* Image crop dialog */}
+      {cropQueue.length > 0 && (
+        <ImageCropDialog
+          files={cropQueue}
+          uploadFn={uploadBlob}
+          onDone={urls => {
+            setCropQueue([]);
+            if (urls.length) {
+              setForm(prev => ({ ...prev, imageUrls: [...prev.imageUrls, ...urls] }));
+              toast({ title: `${urls.length} photo${urls.length > 1 ? "s" : ""} added` });
+            }
+          }}
+          onCancel={() => setCropQueue([])}
+        />
+      )}
+
       {/* Lightbox */}
       {lightbox && (
         <div
