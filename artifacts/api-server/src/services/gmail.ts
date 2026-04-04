@@ -207,7 +207,11 @@ function emailShell(opts: {
   const contactEmail = brand?.contactEmail || "samhos@myoutdoorshare.com";
 
   // Header: tenant logo → tenant name text → platform logo (fallback cascade)
-  const logoSrc   = brand?.logoUrl || (brand ? null : PLATFORM_LOGO_URL);
+  // Make relative paths absolute — email clients cannot fetch relative URLs
+  const rawLogoUrl = brand?.logoUrl || (brand ? null : PLATFORM_LOGO_URL);
+  const logoSrc = rawLogoUrl
+    ? (rawLogoUrl.startsWith("http") ? rawLogoUrl : `${APP_URL}${rawLogoUrl}`)
+    : null;
   const headerHtml = logoSrc
     ? `<img src="${logoSrc}" alt="${companyName}" width="180" style="display:inline-block;max-width:180px;max-height:80px;height:auto;object-fit:contain;" />`
     : `<span style="font-size:22px;font-weight:900;color:#ffffff;letter-spacing:-0.5px;">${companyName}</span>`;
