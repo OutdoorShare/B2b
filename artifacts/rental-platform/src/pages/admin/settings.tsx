@@ -55,6 +55,8 @@ export default function AdminSettings() {
 
   const [saving, setSaving] = useState(false);
   const [formData, setFormData] = useState<any>({});
+  const [senderPasswordInput, setSenderPasswordInput] = useState("");
+  const [clearSenderCreds, setClearSenderCreds] = useState(false);
 
   useEffect(() => {
     if (profile) setFormData(profile);
@@ -96,7 +98,10 @@ export default function AdminSettings() {
       const res = await fetch(`${BASE}/api/business`, {
         method: "PUT",
         headers: { ...adminHeaders(), "Content-Type": "application/json" },
-        body: JSON.stringify(formData),
+        body: JSON.stringify({
+          ...formData,
+          ...(clearSenderCreds ? { senderPassword: "", senderEmail: "" } : senderPasswordInput !== "" ? { senderPassword: senderPasswordInput } : {}),
+        }),
       });
       if (res.status === 401) {
         redirectToLogin("Your session has expired. Redirecting you to log in…");
@@ -115,6 +120,8 @@ export default function AdminSettings() {
       queryClient.setQueryData(["/api/business", urlSlug], data);
       queryClient.setQueryData(getGetBusinessProfileQueryKey(), data);
       applyBrandColors(data.primaryColor, data.accentColor);
+      setSenderPasswordInput("");
+      setClearSenderCreds(false);
       toast({ title: "Settings saved" });
     } catch {
       if (!retrying) {
@@ -350,6 +357,62 @@ export default function AdminSettings() {
                   <Input id="outboundEmail" name="outboundEmail" type="email" value={formData.outboundEmail || ""} onChange={handleChange} placeholder="e.g. rentals@yourcompany.com" />
                   <p className="text-xs text-muted-foreground">All emails sent to renters will have this as the reply-to address. Leave blank to use your Public Email.</p>
                 </div>
+
+                {/* Custom Email Sender */}
+                <div className="rounded-lg border p-4 space-y-3 bg-muted/30">
+                  <div>
+                    <p className="text-sm font-semibold">Custom Email Sender</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      Send emails directly from your own Gmail address using an App Password. When set, all renter emails come from your account instead of the platform's.
+                    </p>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div className="space-y-1">
+                      <Label htmlFor="senderEmail">From Gmail Address</Label>
+                      <Input
+                        id="senderEmail"
+                        name="senderEmail"
+                        type="email"
+                        value={formData.senderEmail || ""}
+                        onChange={handleChange}
+                        placeholder="you@gmail.com"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <Label htmlFor="senderPassword">
+                        Gmail App Password
+                        {formData.senderPasswordSet && (
+                          <span className="ml-2 text-xs font-normal text-emerald-600">● Saved</span>
+                        )}
+                      </Label>
+                      <Input
+                        id="senderPassword"
+                        type="password"
+                        value={senderPasswordInput}
+                        onChange={e => setSenderPasswordInput(e.target.value)}
+                        placeholder={formData.senderPasswordSet ? "Enter new password to update" : "xxxx xxxx xxxx xxxx"}
+                        autoComplete="new-password"
+                      />
+                    </div>
+                  </div>
+                  {(formData.senderPasswordSet && !clearSenderCreds) && (
+                    <button
+                      type="button"
+                      className="text-xs text-destructive underline"
+                      onClick={() => {
+                        setFormData((prev: any) => ({ ...prev, senderEmail: "", senderPasswordSet: false }));
+                        setSenderPasswordInput("");
+                        setClearSenderCreds(true);
+                      }}
+                    >
+                      Clear saved credentials
+                    </button>
+                  )}
+                  <p className="text-xs text-muted-foreground">
+                    Use a <a href="https://support.google.com/accounts/answer/185833" target="_blank" rel="noopener noreferrer" className="underline">Gmail App Password</a>, not your regular password. Requires 2-Step Verification on your Google account.
+                  </p>
+                </div>
+
                 <div className="space-y-2">
                   <Label htmlFor="location">Primary Location</Label>
                   <Input id="location" name="location" value={formData.location || ""} onChange={handleChange} required />

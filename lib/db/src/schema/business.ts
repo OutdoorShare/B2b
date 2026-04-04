@@ -14,6 +14,8 @@ export const businessProfileTable = pgTable("business_profile", {
   accentColor: text("accent_color").notNull().default("#52b788"),
   email: text("email"),
   outboundEmail: text("outbound_email"),
+  senderEmail: text("sender_email"),
+  senderPassword: text("sender_password"),
   phone: text("phone"),
   website: text("website"),
   location: text("location"),

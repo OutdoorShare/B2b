@@ -3,6 +3,7 @@ import { db } from "@workspace/db";
 import { businessProfileTable, tenantsTable } from "@workspace/db/schema";
 import { eq, ne, and } from "drizzle-orm";
 import { requireTenant } from "../middleware/admin-auth";
+import { encrypt, isEncrypted } from "../lib/crypto";
 
 const RESERVED_SLUGS = new Set(["admin", "superadmin", "get-started", "signup", "demo", "api"]);
 // Slugs that must never be auto-rewritten by the name→slug sync (e.g. platform demo sites)
@@ -82,8 +83,10 @@ router.get("/business", async (req, res) => {
     }
 
     const p = profiles[0];
+    const { senderPassword: _sp, ...pSafe } = p;
     res.json({
-      ...p,
+      ...pSafe,
+      senderPasswordSet: !!p.senderPassword,
       depositPercent: parseFloat(p.depositPercent ?? "25"),
       bundleDiscountPercent: parseFloat(p.bundleDiscountPercent ?? "0"),
       createdAt: p.createdAt.toISOString(),
@@ -108,7 +111,7 @@ router.put("/business", requireTenant as any, async (req, res) => {
     const {
       name, tagline, description, logoUrl, coverImageUrl,
       primaryColor, accentColor,
-      email, outboundEmail, phone, website,
+      email, outboundEmail, senderEmail, senderPassword, phone, website,
       location, address, city, state, zipCode, country,
       socialInstagram, socialFacebook, socialTwitter,
       bundleDiscountPercent,
@@ -127,6 +130,11 @@ router.put("/business", requireTenant as any, async (req, res) => {
       ...(accentColor        !== undefined && { accentColor }),
       ...(email              !== undefined && { email }),
       ...(outboundEmail      !== undefined && { outboundEmail }),
+      ...(senderEmail        !== undefined && { senderEmail: senderEmail || null }),
+      ...(senderPassword     !== undefined && senderPassword !== "" && {
+        senderPassword: isEncrypted(senderPassword) ? senderPassword : encrypt(senderPassword)
+      }),
+      ...(senderPassword === "" && { senderPassword: null, senderEmail: null }),
       ...(phone              !== undefined && { phone }),
       ...(website            !== undefined && { website }),
       ...(location           !== undefined && { location }),
@@ -165,8 +173,10 @@ router.put("/business", requireTenant as any, async (req, res) => {
         updatedAt: new Date(),
       }).returning();
       const p = created;
+      const { senderPassword: _sp2, ...pSafe2 } = p;
       res.json({
-        ...p,
+        ...pSafe2,
+        senderPasswordSet: !!p.senderPassword,
         depositPercent: parseFloat(p.depositPercent ?? "25"),
         createdAt: p.createdAt.toISOString(),
         updatedAt: p.updatedAt.toISOString(),
@@ -203,8 +213,10 @@ router.put("/business", requireTenant as any, async (req, res) => {
     const trialInfo = await getTenantTrialInfo(req.tenantId);
 
     const p = updated;
+    const { senderPassword: _sp3, ...pSafe3 } = p;
     res.json({
-      ...p,
+      ...pSafe3,
+      senderPasswordSet: !!p.senderPassword,
       depositPercent: parseFloat(p.depositPercent ?? "25"),
       createdAt: p.createdAt.toISOString(),
       updatedAt: p.updatedAt.toISOString(),

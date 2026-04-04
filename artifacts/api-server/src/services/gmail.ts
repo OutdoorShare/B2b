@@ -1,4 +1,53 @@
 import { google } from "googleapis";
+import nodemailer from "nodemailer";
+import { AsyncLocalStorage } from "async_hooks";
+
+// ── SMTP context (per-request, safe for concurrency) ──────────────────────────
+export interface SmtpCreds {
+  user: string;
+  pass: string;
+  fromName?: string;
+}
+
+const smtpStorage = new AsyncLocalStorage<SmtpCreds | null>();
+
+/** Wrap any email-sending call so it uses the tenant's SMTP credentials. */
+export async function withSmtpCreds<T>(
+  creds: SmtpCreds | null | undefined,
+  fn: () => Promise<T>
+): Promise<T> {
+  return smtpStorage.run(creds ?? null, fn);
+}
+
+/** Parse the base64url-encoded raw MIME message produced by makeRawEmail(). */
+function parseRawMime(raw: string): { to: string; subject: string; replyTo?: string; html: string } {
+  const decoded = Buffer.from(raw.replace(/-/g, "+").replace(/_/g, "/"), "base64").toString("utf8");
+  const [headerBlock, ...rest] = decoded.split("\r\n\r\n");
+  const headerLines = headerBlock.split("\r\n");
+
+  const getHeader = (name: string) => {
+    const line = headerLines.find(h => h.toLowerCase().startsWith(name.toLowerCase() + ":"));
+    return line ? line.slice(name.length + 1).trim() : "";
+  };
+
+  const to = getHeader("To");
+  const rawSubject = getHeader("Subject");
+  const replyTo = getHeader("Reply-To") || undefined;
+
+  // Decode =?UTF-8?B?...?= encoded subject
+  const subjectMatch = rawSubject.match(/=\?UTF-8\?B\?([^?]+)\?=/i);
+  const subject = subjectMatch
+    ? Buffer.from(subjectMatch[1], "base64").toString("utf8")
+    : rawSubject;
+
+  // Extract HTML between the first content block and the closing boundary
+  const body = rest.join("\r\n\r\n");
+  const htmlStart = body.indexOf("\r\n\r\n") + 4;
+  const boundaryEnd = body.lastIndexOf("\r\n--boundary_outdoorshare--");
+  const html = boundaryEnd > htmlStart ? body.slice(htmlStart, boundaryEnd) : body.slice(htmlStart);
+
+  return { to, subject, replyTo, html };
+}
 
 let connectionSettings: any;
 
@@ -44,11 +93,45 @@ async function getAccessToken() {
   return accessToken;
 }
 
-async function getUncachableGmailClient() {
+async function getGmailClientDirect() {
   const accessToken = await getAccessToken();
   const oauth2Client = new google.auth.OAuth2();
   oauth2Client.setCredentials({ access_token: accessToken });
   return google.gmail({ version: "v1", auth: oauth2Client });
+}
+
+/** Returns either a real Gmail API client or an SMTP-backed mock, depending on context. */
+async function getUncachableGmailClient() {
+  const smtpCreds = smtpStorage.getStore();
+  if (smtpCreds) {
+    const transporter = nodemailer.createTransport({
+      host: "smtp.gmail.com",
+      port: 587,
+      secure: false,
+      auth: { user: smtpCreds.user, pass: smtpCreds.pass },
+    });
+    const fromLabel = smtpCreds.fromName
+      ? `${smtpCreds.fromName} <${smtpCreds.user}>`
+      : smtpCreds.user;
+
+    return {
+      users: {
+        messages: {
+          send: async ({ requestBody }: { requestBody: { raw: string } }) => {
+            const { to, subject, replyTo, html } = parseRawMime(requestBody.raw);
+            await transporter.sendMail({
+              from: fromLabel,
+              to,
+              subject,
+              html,
+              ...(replyTo && { replyTo }),
+            });
+          },
+        },
+      },
+    };
+  }
+  return getGmailClientDirect();
 }
 
 const PLATFORM_FROM = "OutdoorShare <contact.us@myoutdoorshare.com>";
