@@ -41,15 +41,15 @@ async function getContext(tenantId: number | null | undefined) {
 }
 
 async function getListingTitle(listingId: number): Promise<string> {
-  const [listing] = await db.select({ title: listingsTable.title, pickupAddress: (listingsTable as any).pickupAddress })
+  const [listing] = await db.select({ title: listingsTable.title })
     .from(listingsTable).where(eq(listingsTable.id, listingId));
   return listing?.title ?? "your rental";
 }
 
 async function getListingPickupAddress(listingId: number): Promise<string | null> {
-  const [listing] = await db.select({ pickupAddress: (listingsTable as any).pickupAddress })
+  const [listing] = await db.select({ location: listingsTable.location })
     .from(listingsTable).where(eq(listingsTable.id, listingId));
-  return (listing as any)?.pickupAddress ?? null;
+  return listing?.location ?? null;
 }
 
 // ── 1. Pre-pickup reminders (12 hrs window) ────────────────────────────────────
@@ -236,7 +236,7 @@ async function sendReturnReminders() {
 
       console.log(`[scheduler] Return reminder sent for booking #${booking.id}`);
     } catch (err: any) {
-      console.warn(`[scheduler] Return reminder failed for booking #${booking.id}:`, err?.message);
+      console.warn(`[scheduler] Return reminder failed for booking #${booking.id}:`, err?.message, err?.stack?.split('\n').slice(0, 4).join(' | '));
       await db.update(bookingsTable)
         .set({ returnReminderSent: false, updatedAt: new Date() })
         .where(eq(bookingsTable.id, booking.id)).catch(() => {});

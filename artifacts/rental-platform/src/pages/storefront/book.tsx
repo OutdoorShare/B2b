@@ -742,6 +742,12 @@ export default function StorefrontBook() {
       .catch(() => {});
   }, [(listing as any)?.categorySlug]);
 
+  const days = useMemo(() => {
+    if (!dateRange?.from || !dateRange?.to) return 1;
+    const diff = differenceInDays(dateRange.to, dateRange.from);
+    return diff > 0 ? diff : 1;
+  }, [dateRange]);
+
   // Fetch all active listings for bundle picker + bundle discount from business profile
   useEffect(() => {
     const tenantSlug = slug ?? "";
@@ -882,12 +888,6 @@ export default function StorefrontBook() {
       setIdentitySessionLoading(false);
     }
   };
-
-  const days = useMemo(() => {
-    if (!dateRange?.from || !dateRange?.to) return 1;
-    const diff = differenceInDays(dateRange.to, dateRange.from);
-    return diff > 0 ? diff : 1;
-  }, [dateRange]);
 
   // ── Sub-day pricing ──────────────────────────────────────────────────────────
   type SubDayOption =
