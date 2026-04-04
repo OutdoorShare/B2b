@@ -893,7 +893,7 @@ export default function AdminListingsForm() {
                         />
                       </div>
                       {inventoryOpen && filteredProducts.length > 0 && (
-                        <div className="absolute z-50 w-full mt-1 rounded-lg border bg-popover shadow-md overflow-hidden">
+                        <div className="absolute z-50 w-full mt-1 rounded-lg border bg-popover shadow-md max-h-72 overflow-y-auto">
                           {filteredProducts.map(p => (
                             <button
                               key={p.id}
