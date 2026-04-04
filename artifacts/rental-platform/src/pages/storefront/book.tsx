@@ -1531,9 +1531,15 @@ export default function StorefrontBook() {
           setIdentityStatus("verified");
           sessionStorage.removeItem(`identity_session_${listingId}`);
           setTimeout(() => { setCompletePhase(isKiosk ? "photos" : "confirmed"); window.scrollTo(0, 0); }, 1200);
-        } else {
+        } else if (statusData.status === "requires_input" || statusData.status === "cancelled") {
+          // Definitive failure — user can retry or continue anyway
           setIdentityStatus("failed");
-          setIdentityError("Identity could not be verified. Please try again or contact support.");
+          setIdentityError("Verification could not be completed. You can try again or continue with your booking.");
+        } else {
+          // Still processing (async) — don't treat as failed, let renter continue
+          setIdentityStatus("pending");
+          sessionStorage.removeItem(`identity_session_${listingId}`);
+          setTimeout(() => { setCompletePhase(isKiosk ? "photos" : "confirmed"); window.scrollTo(0, 0); }, 1500);
         }
       } else {
         setIdentityStatus("verified");
@@ -1541,8 +1547,9 @@ export default function StorefrontBook() {
         setTimeout(() => { setCompletePhase(isKiosk ? "photos" : "confirmed"); window.scrollTo(0, 0); }, 1200);
       }
     } catch {
-      setIdentityStatus("failed");
-      setIdentityError("Verification failed. Please try again.");
+      // Network/SDK error — don't block the renter, treat as pending
+      setIdentityStatus("pending");
+      setTimeout(() => { setCompletePhase(isKiosk ? "photos" : "confirmed"); window.scrollTo(0, 0); }, 1500);
     }
   };
 
@@ -3077,6 +3084,7 @@ export default function StorefrontBook() {
                           </div>
                         </div>
 
+                        {/* Status messages */}
                         {identityStatus === "failed" && identityError && (
                           <div className="flex items-start gap-3 bg-destructive/10 border border-destructive/20 rounded-xl p-4 text-sm text-destructive">
                             <XCircle className="w-4 h-4 mt-0.5 shrink-0" />
@@ -3087,8 +3095,19 @@ export default function StorefrontBook() {
                           </div>
                         )}
 
+                        {identitySessionFailed && (
+                          <div className="flex items-start gap-3 bg-amber-50 border border-amber-200 rounded-xl p-4 text-sm text-amber-800">
+                            <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0 text-amber-600" />
+                            <div>
+                              <p className="font-semibold">Couldn't start verification session</p>
+                              <p className="text-amber-700 mt-0.5">There was a problem connecting to the verification service. Your booking is saved — retry or continue.</p>
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Primary action */}
                         {identityStatus === "pending" ? (
-                          <div className="flex items-center justify-center gap-3 py-8 text-muted-foreground">
+                          <div className="flex items-center justify-center gap-3 py-6 text-muted-foreground">
                             <Loader2 className="w-5 h-5 animate-spin" />
                             <span>Verification in progress…</span>
                           </div>
@@ -3098,30 +3117,29 @@ export default function StorefrontBook() {
                             Preparing verification…
                           </Button>
                         ) : identitySessionFailed ? (
-                          <div className="space-y-3">
-                            <div className="flex items-start gap-3 bg-amber-50 border border-amber-200 rounded-xl p-4 text-sm text-amber-800">
-                              <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0 text-amber-600" />
-                              <div>
-                                <p className="font-semibold">Couldn't start verification session</p>
-                                <p className="text-amber-700 mt-0.5">There was a problem connecting to our verification service. You may retry or continue — your booking is already saved and the rental company will be notified.</p>
-                              </div>
-                            </div>
-                            <Button size="lg" variant="outline" className="w-full h-13 text-base font-bold rounded-xl gap-2" onClick={() => fetchIdentitySession(session?.id ?? undefined)}>
-                              <RefreshCw className="w-4 h-4" />
-                              Retry
-                            </Button>
-                            <Button size="lg" variant="ghost" className="w-full h-11 text-sm font-medium rounded-xl gap-2 text-muted-foreground hover:text-foreground" onClick={() => { setCompletePhase(isKiosk ? "photos" : "confirmed"); window.scrollTo(0, 0); }}>
-                              Continue without verification
-                            </Button>
-                          </div>
+                          <Button size="lg" variant="outline" className="w-full h-13 text-base font-bold rounded-xl gap-2" onClick={() => fetchIdentitySession(session?.id ?? undefined)}>
+                            <RefreshCw className="w-4 h-4" />
+                            Retry
+                          </Button>
                         ) : identityStatus === "failed" ? (
-                          <Button size="lg" className="w-full h-13 text-base font-bold rounded-xl gap-2" onClick={handleRetryVerification}>
+                          <Button size="lg" variant="outline" className="w-full h-13 text-base font-bold rounded-xl gap-2" onClick={handleRetryVerification}>
                             <RefreshCw className="w-4 h-4" />Try Again
                           </Button>
                         ) : (
                           <Button size="lg" className="w-full h-13 text-base font-bold rounded-xl gap-2" onClick={handleStartVerification} disabled={!identityClientSecret}>
                             <ScanFace className="w-4 h-4" />Start Identity Verification
                           </Button>
+                        )}
+
+                        {/* Always-visible continue — booking is already saved */}
+                        {identityStatus !== "pending" && (
+                          <button
+                            type="button"
+                            className="w-full text-sm text-center text-muted-foreground hover:text-foreground underline underline-offset-2 py-1 transition-colors"
+                            onClick={() => { setCompletePhase(isKiosk ? "photos" : "confirmed"); window.scrollTo(0, 0); }}
+                          >
+                            {identityStatus === "failed" ? "Continue to confirmation without verifying →" : "Skip for now and continue →"}
+                          </button>
                         )}
                       </>
                     )}
@@ -3274,6 +3292,34 @@ export default function StorefrontBook() {
                         )}
                       </div>
                     </div>
+
+                    {/* ── Identity Verification Status ── */}
+                    {identityStatus !== "verified" && (
+                      <div className={`flex items-start gap-3 rounded-xl px-4 py-3 text-sm border ${identityStatus === "pending" ? "bg-blue-50 border-blue-200 text-blue-800" : "bg-amber-50 border-amber-200 text-amber-800"}`}>
+                        {identityStatus === "pending" ? (
+                          <Loader2 className="w-4 h-4 mt-0.5 shrink-0 animate-spin text-blue-600" />
+                        ) : (
+                          <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0 text-amber-600" />
+                        )}
+                        <div>
+                          <p className="font-semibold">
+                            {identityStatus === "pending" ? "Identity verification in progress" : "Identity verification pending"}
+                          </p>
+                          <p className={`mt-0.5 text-xs ${identityStatus === "pending" ? "text-blue-700" : "text-amber-700"}`}>
+                            {identityStatus === "pending"
+                              ? "Stripe is processing your verification. You'll receive an email notification once it's complete — no action needed."
+                              : "Your booking is saved. The rental company has been notified and may reach out if verification is required before pickup."}
+                          </p>
+                        </div>
+                      </div>
+                    )}
+
+                    {identityStatus === "verified" && (
+                      <div className="flex items-center gap-3 rounded-xl px-4 py-3 text-sm bg-green-50 border border-green-200 text-green-800">
+                        <BadgeCheck className="w-4 h-4 shrink-0 text-green-600" />
+                        <p className="font-semibold">Identity verified</p>
+                      </div>
+                    )}
 
                     {/* ── Contact Card + Copy Booking Link ── */}
                     {(() => {
