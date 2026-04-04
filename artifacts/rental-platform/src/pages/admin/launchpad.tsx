@@ -4,7 +4,7 @@ import { adminPath, getAdminSlug } from "@/lib/admin-nav";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import {
-  Building2, Image, CreditCard, FileSignature, Package,
+  Building2, Image, CreditCard, Package,
   Mail, ShieldCheck, CheckCircle2, Circle, ChevronRight,
   Rocket, ExternalLink, Loader2, RefreshCw
 } from "lucide-react";
@@ -112,11 +112,10 @@ export default function AdminLaunchpad() {
   );
   const hasBranding = !!(profile?.logoUrl);
   const isStripeConnected = !!(stripeStatus?.connected && stripeStatus?.chargesEnabled);
-  const hasAgreement = !!(profile?.rentalTerms && profile.rentalTerms.trim().length > 20);
   const hasListing = (listingCount ?? 0) > 0;
 
-  // 5 trackable + 2 always-complete
-  const TRACKABLE = [isProfileComplete, hasBranding, isStripeConnected, hasAgreement, hasListing];
+  // 4 trackable + 2 always-complete
+  const TRACKABLE = [isProfileComplete, hasBranding, isStripeConnected, hasListing];
   const completed = TRACKABLE.filter(Boolean).length + 2; // +2 for always-complete items
   const total = TRACKABLE.length + 2;
   const pct = Math.round((completed / total) * 100);
@@ -151,15 +150,6 @@ export default function AdminLaunchpad() {
       onAction: isStripeConnected
         ? () => setLocation(adminPath("/settings?tab=payments"))
         : handleStripeConnect,
-    },
-    {
-      id: "agreement",
-      icon: FileSignature,
-      title: "Rental Agreement",
-      description: "Write your rental terms and waiver. Customers sign it electronically before their rental begins — a signed PDF is saved to each booking.",
-      state: loading ? "loading" : hasAgreement ? "complete" : "incomplete",
-      actionLabel: "Write Agreement",
-      onAction: () => setLocation(adminPath("/settings?tab=policies")),
     },
     {
       id: "listing",
