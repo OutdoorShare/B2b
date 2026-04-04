@@ -831,19 +831,7 @@ export default function StorefrontBook() {
       .finally(() => setBookingsLoading(false));
   }, [completePhase, email]);
 
-  // Auto-launch Stripe Identity popup as soon as the session is ready — no extra button tap
-  useEffect(() => {
-    if (
-      completePhase === "verification" &&
-      identityClientSecret &&
-      !identitySessionLoading &&
-      !identitySessionFailed &&
-      identityStatus === "idle"
-    ) {
-      handleStartVerification();
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [completePhase, identityClientSecret, identitySessionLoading, identitySessionFailed, identityStatus]);
+  // Auto-launch effect is declared after handleStartVerification (below) to avoid TDZ
 
   // Restore identity session from sessionStorage (page refresh during verification)
   useEffect(() => {
@@ -1568,6 +1556,21 @@ export default function StorefrontBook() {
       setTimeout(() => { setCompletePhase(isKiosk ? "photos" : "confirmed"); window.scrollTo(0, 0); }, 1500);
     }
   };
+
+  // Auto-launch Stripe Identity popup as soon as the session is ready — no extra button tap
+  // Declared here (after handleStartVerification) to avoid temporal dead zone during HMR
+  useEffect(() => {
+    if (
+      completePhase === "verification" &&
+      identityClientSecret &&
+      !identitySessionLoading &&
+      !identitySessionFailed &&
+      identityStatus === "idle"
+    ) {
+      handleStartVerification();
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [completePhase, identityClientSecret, identitySessionLoading, identitySessionFailed, identityStatus]);
 
   const handleRetryVerification = async () => {
     setIdentityStatus("idle");

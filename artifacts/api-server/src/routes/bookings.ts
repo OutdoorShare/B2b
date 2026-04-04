@@ -897,17 +897,19 @@ router.post("/bookings/:id/send-pickup-link", async (req, res) => {
     const slug = req.headers["x-tenant-slug"] as string ?? "";
     const pickupUrl = `${BASE}/${slug}/pickup/${token}`;
 
-    sendPickupLinkEmail({
-      toEmail: booking.customerEmail,
-      customerName: booking.customerName,
-      pickupUrl,
-      listingTitle: listing?.title ?? "Rental Equipment",
-      startDate: booking.startDate,
-      endDate: booking.endDate,
-      companyName,
-      companyEmail,
-      hostPickup: !!hostPickup,
-    }).then(() => appendEmailEvent(bookingId, "pickup_link", booking.customerEmail))
+    Promise.all([getTenantSmtpCreds(req.tenantId), getTenantBrand(req.tenantId)])
+      .then(([smtpCreds, brand]) => withBrand(brand, () => withSmtpCreds(smtpCreds, () => sendPickupLinkEmail({
+        toEmail: booking.customerEmail,
+        customerName: booking.customerName,
+        pickupUrl,
+        listingTitle: listing?.title ?? "Rental Equipment",
+        startDate: booking.startDate,
+        endDate: booking.endDate,
+        companyName,
+        companyEmail,
+        hostPickup: !!hostPickup,
+      }))))
+      .then(() => appendEmailEvent(bookingId, "pickup_link", booking.customerEmail))
       .catch(err => console.error("[pickup email]", err));
 
     res.json({ ok: true, token, pickupUrl });
@@ -945,16 +947,18 @@ router.post("/bookings/:id/send-agreement-link", async (req, res) => {
     const slug = req.headers["x-tenant-slug"] as string ?? "";
     const agreementUrl = `${BASE}/${slug}/pickup/${token}`;
 
-    sendAgreementLinkEmail({
-      toEmail: booking.customerEmail,
-      customerName: booking.customerName,
-      agreementUrl,
-      listingTitle: listing?.title ?? "Rental Equipment",
-      startDate: booking.startDate,
-      endDate: booking.endDate,
-      companyName,
-      companyEmail,
-    }).then(() => appendEmailEvent(bookingId, "agreement_link", booking.customerEmail))
+    Promise.all([getTenantSmtpCreds(req.tenantId), getTenantBrand(req.tenantId)])
+      .then(([smtpCreds, brand]) => withBrand(brand, () => withSmtpCreds(smtpCreds, () => sendAgreementLinkEmail({
+        toEmail: booking.customerEmail,
+        customerName: booking.customerName,
+        agreementUrl,
+        listingTitle: listing?.title ?? "Rental Equipment",
+        startDate: booking.startDate,
+        endDate: booking.endDate,
+        companyName,
+        companyEmail,
+      }))))
+      .then(() => appendEmailEvent(bookingId, "agreement_link", booking.customerEmail))
       .catch(err => console.error("[agreement email]", err));
 
     res.json({ ok: true, token, agreementUrl });
@@ -1033,14 +1037,16 @@ router.post("/bookings/:id/send-identity-link", async (req, res) => {
       }).where(eq(customersTable.id, customer.id));
     }
 
-    sendIdentityVerificationEmail({
-      toEmail: booking.customerEmail,
-      customerName: booking.customerName,
-      verificationUrl: session.url,
-      listingTitle: listing?.title ?? "Rental Equipment",
-      companyName,
-      companyEmail,
-    }).then(() => appendEmailEvent(bookingId, "identity_link", booking.customerEmail))
+    Promise.all([getTenantSmtpCreds(req.tenantId), getTenantBrand(req.tenantId)])
+      .then(([smtpCreds, brand]) => withBrand(brand, () => withSmtpCreds(smtpCreds, () => sendIdentityVerificationEmail({
+        toEmail: booking.customerEmail,
+        customerName: booking.customerName,
+        verificationUrl: session.url,
+        listingTitle: listing?.title ?? "Rental Equipment",
+        companyName,
+        companyEmail,
+      }))))
+      .then(() => appendEmailEvent(bookingId, "identity_link", booking.customerEmail))
       .catch(err => console.error("[identity email]", err));
 
     res.json({ ok: true, sessionId: session.id, url: session.url });
@@ -1272,16 +1278,18 @@ router.post("/bookings/:id/send-return-link", async (req, res) => {
     const slug = req.headers["x-tenant-slug"] as string ?? "";
     const returnUrl = `${BASE}/${slug}/return/${token}`;
 
-    sendReturnLinkEmail({
-      toEmail: booking.customerEmail,
-      customerName: booking.customerName,
-      returnUrl,
-      listingTitle: listing?.title ?? "Rental Equipment",
-      startDate: booking.startDate,
-      endDate: booking.endDate,
-      companyName,
-      companyEmail,
-    }).then(() => appendEmailEvent(bookingId, "return_link", booking.customerEmail))
+    Promise.all([getTenantSmtpCreds(req.tenantId), getTenantBrand(req.tenantId)])
+      .then(([smtpCreds, brand]) => withBrand(brand, () => withSmtpCreds(smtpCreds, () => sendReturnLinkEmail({
+        toEmail: booking.customerEmail,
+        customerName: booking.customerName,
+        returnUrl,
+        listingTitle: listing?.title ?? "Rental Equipment",
+        startDate: booking.startDate,
+        endDate: booking.endDate,
+        companyName,
+        companyEmail,
+      }))))
+      .then(() => appendEmailEvent(bookingId, "return_link", booking.customerEmail))
       .catch(err => console.error("[return email]", err));
 
     res.json({ ok: true, token, returnUrl });
