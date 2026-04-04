@@ -108,7 +108,7 @@ router.put("/business", requireTenant as any, async (req, res) => {
     const {
       name, tagline, description, logoUrl, coverImageUrl,
       primaryColor, accentColor,
-      email, phone, website,
+      email, outboundEmail, phone, website,
       location, address, city, state, zipCode, country,
       socialInstagram, socialFacebook, socialTwitter,
       bundleDiscountPercent,
@@ -126,6 +126,7 @@ router.put("/business", requireTenant as any, async (req, res) => {
       ...(primaryColor       !== undefined && { primaryColor }),
       ...(accentColor        !== undefined && { accentColor }),
       ...(email              !== undefined && { email }),
+      ...(outboundEmail      !== undefined && { outboundEmail }),
       ...(phone              !== undefined && { phone }),
       ...(website            !== undefined && { website }),
       ...(location           !== undefined && { location }),

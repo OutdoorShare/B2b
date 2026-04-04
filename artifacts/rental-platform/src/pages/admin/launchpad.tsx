@@ -112,9 +112,10 @@ export default function AdminLaunchpad() {
   const hasBranding = !!(profile?.logoUrl);
   const isStripeConnected = !!(stripeStatus?.connected && stripeStatus?.chargesEnabled);
   const hasListing = (listingCount ?? 0) > 0;
+  const hasOutboundEmail = !!(profile?.outboundEmail && profile.outboundEmail.trim().length > 0);
 
-  // 4 trackable + 1 always-complete
-  const TRACKABLE = [isProfileComplete, hasBranding, isStripeConnected, hasListing];
+  // 5 trackable + 1 always-complete
+  const TRACKABLE = [isProfileComplete, hasBranding, isStripeConnected, hasListing, hasOutboundEmail];
   const completed = TRACKABLE.filter(Boolean).length + 1; // +1 for always-complete email item
   const total = TRACKABLE.length + 1;
   const pct = Math.round((completed / total) * 100);
@@ -160,10 +161,19 @@ export default function AdminLaunchpad() {
       onAction: () => setLocation(adminPath(hasListing ? "/listings" : "/listings/new")),
     },
     {
+      id: "outbound-email",
+      icon: Mail,
+      title: "Outbound Email Address",
+      description: "Set the reply-to email address renters see on all booking confirmations, reminders, and receipts. Keeps your personal email private.",
+      state: loading ? "loading" : hasOutboundEmail ? "complete" : "incomplete",
+      actionLabel: hasOutboundEmail ? "Update Outbound Email" : "Set Outbound Email",
+      onAction: () => setLocation(adminPath("/settings?tab=general")),
+    },
+    {
       id: "email",
       icon: Mail,
       title: "Email Notifications",
-      description: "Booking confirmations, pickup reminders, and return receipts are sent automatically. OutdoorShare handles Gmail delivery using your business email as the reply-to.",
+      description: "Booking confirmations, pickup reminders, and return receipts are sent automatically. OutdoorShare handles Gmail delivery using your outbound email as the reply-to.",
       state: "always",
       actionLabel: "View Email Settings",
       onAction: () => setLocation(adminPath("/communications")),

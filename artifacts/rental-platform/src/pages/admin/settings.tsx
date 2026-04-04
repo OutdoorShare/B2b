@@ -346,6 +346,11 @@ export default function AdminSettings() {
                   </div>
                 </div>
                 <div className="space-y-2">
+                  <Label htmlFor="outboundEmail">Outbound Email (Reply-To)</Label>
+                  <Input id="outboundEmail" name="outboundEmail" type="email" value={formData.outboundEmail || ""} onChange={handleChange} placeholder="e.g. rentals@yourcompany.com" />
+                  <p className="text-xs text-muted-foreground">All emails sent to renters will have this as the reply-to address. Leave blank to use your Public Email.</p>
+                </div>
+                <div className="space-y-2">
                   <Label htmlFor="location">Primary Location</Label>
                   <Input id="location" name="location" value={formData.location || ""} onChange={handleChange} required />
                 </div>

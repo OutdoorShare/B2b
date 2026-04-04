@@ -134,7 +134,7 @@ router.post("/communications/send", async (req, res) => {
       const [biz] = await db.select().from(businessProfileTable).where(eq(businessProfileTable.tenantId, req.tenantId)).limit(1);
       if (biz) {
         companyName = biz.name ?? companyName;
-        companyEmail = biz.email ?? null;
+        companyEmail = biz.outboundEmail ?? biz.email ?? null;
       }
     }
 
@@ -231,7 +231,7 @@ router.post("/communications/send-automation", async (req, res) => {
       const [biz] = await db.select().from(businessProfileTable).where(eq(businessProfileTable.tenantId, effectiveTenantId)).limit(1);
       if (biz) {
         companyName = biz.name ?? companyName;
-        companyEmail = biz.email ?? null;
+        companyEmail = biz.outboundEmail ?? biz.email ?? null;
       }
     }
 

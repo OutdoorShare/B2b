@@ -329,16 +329,16 @@ router.post("/bookings", async (req, res) => {
           let adminEmail: string | undefined;
           if (req.tenantId) {
             const [biz] = await db
-              .select({ businessName: businessProfileTable.businessName })
+              .select({ name: businessProfileTable.name, outboundEmail: businessProfileTable.outboundEmail })
               .from(businessProfileTable)
               .where(eq(businessProfileTable.tenantId, req.tenantId));
-            if (biz?.businessName) companyName = biz.businessName;
+            if (biz?.name) companyName = biz.name;
             const [t] = await db
               .select({ slug: tenantsTable.slug, email: tenantsTable.email })
               .from(tenantsTable)
               .where(eq(tenantsTable.id, req.tenantId));
             if (t?.slug) tenantSlug = t.slug;
-            if (t?.email) adminEmail = t.email;
+            adminEmail = biz?.outboundEmail ?? t?.email ?? undefined;
           }
           await sendKioskAccountSetupEmail({
             customerName: created.customerName,
@@ -367,16 +367,16 @@ router.post("/bookings", async (req, res) => {
           let adminEmail: string | undefined;
           if (req.tenantId) {
             const [biz] = await db
-              .select({ businessName: businessProfileTable.businessName })
+              .select({ name: businessProfileTable.name, outboundEmail: businessProfileTable.outboundEmail })
               .from(businessProfileTable)
               .where(eq(businessProfileTable.tenantId, req.tenantId));
-            if (biz?.businessName) companyName = biz.businessName;
+            if (biz?.name) companyName = biz.name;
             const [t] = await db
               .select({ slug: tenantsTable.slug, email: tenantsTable.email })
               .from(tenantsTable)
               .where(eq(tenantsTable.id, req.tenantId));
             if (t?.slug) tenantSlug = t.slug;
-            if (t?.email) adminEmail = t.email;
+            adminEmail = biz?.outboundEmail ?? t?.email ?? undefined;
           }
           await sendBookingPickupReminderEmail({
             customerName: created.customerName,
@@ -621,7 +621,7 @@ router.put("/bookings/:id", async (req, res) => {
               .where(eq(listingsTable.id, updated.listingId));
 
             const [profileRow] = await db
-              .select({ name: businessProfileTable.name, email: businessProfileTable.email })
+              .select({ name: businessProfileTable.name, email: businessProfileTable.email, outboundEmail: businessProfileTable.outboundEmail })
               .from(businessProfileTable)
               .where(eq(businessProfileTable.tenantId, updated.tenantId!));
 
@@ -631,7 +631,7 @@ router.put("/bookings/:id", async (req, res) => {
               .where(eq(tenantsTable.id, updated.tenantId!));
 
             const companyName = profileRow?.name ?? tenantRow?.slug ?? "Your Rental Company";
-            const companyEmail = profileRow?.email ?? tenantRow?.email ?? undefined;
+            const companyEmail = profileRow?.outboundEmail ?? profileRow?.email ?? tenantRow?.email ?? undefined;
 
             // Notify renter: booking confirmed
             if (updated.tenantId && updated.customerEmail) {
@@ -752,7 +752,7 @@ router.put("/bookings/:id", async (req, res) => {
               .where(eq(listingsTable.id, updated.listingId));
 
             const [profileRow] = await db
-              .select({ name: businessProfileTable.name, email: businessProfileTable.email })
+              .select({ name: businessProfileTable.name, email: businessProfileTable.email, outboundEmail: businessProfileTable.outboundEmail })
               .from(businessProfileTable)
               .where(eq(businessProfileTable.tenantId, updated.tenantId!));
 
@@ -762,7 +762,7 @@ router.put("/bookings/:id", async (req, res) => {
               .where(eq(tenantsTable.id, updated.tenantId!));
 
             const companyName = profileRow?.name ?? tenantRow?.slug ?? "Your Rental Company";
-            const companyEmail = profileRow?.email ?? tenantRow?.email ?? undefined;
+            const companyEmail = profileRow?.outboundEmail ?? profileRow?.email ?? tenantRow?.email ?? undefined;
 
             const returnToken = updated.returnToken ?? randomBytes(24).toString("hex");
             if (!updated.returnToken) {

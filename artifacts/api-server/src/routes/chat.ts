@@ -253,7 +253,7 @@ router.post("/chat/threads/:id/messages", requireTenant, async (req, res) => {
           .where(eq(tenantsTable.id, req.tenantId!))
           .limit(1);
         const [profile] = await db
-          .select({ name: businessProfileTable.name, email: businessProfileTable.email })
+          .select({ name: businessProfileTable.name, email: businessProfileTable.email, outboundEmail: businessProfileTable.outboundEmail })
           .from(businessProfileTable)
           .where(eq(businessProfileTable.tenantId, req.tenantId!))
           .limit(1);
@@ -261,7 +261,7 @@ router.post("/chat/threads/:id/messages", requireTenant, async (req, res) => {
           renterEmail: thread.customerEmail,
           renterName: thread.customerName,
           companyName: profile?.name ?? tenant?.slug ?? "Your Company",
-          companyEmail: profile?.email ?? undefined,
+          companyEmail: profile?.outboundEmail ?? profile?.email ?? undefined,
           messageBody: body,
           threadId,
           slug: tenant?.slug ?? "",
