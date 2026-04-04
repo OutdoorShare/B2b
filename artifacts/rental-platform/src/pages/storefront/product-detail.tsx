@@ -657,12 +657,9 @@ export default function StorefrontProductDetail() {
                         <span className="text-[9px] font-bold tracking-widest uppercase" style={{ color: "#3ab549" }}>by OutdoorShare</span>
                       </div>
                     </div>
-                    <div className="flex items-center gap-2">
-                      <img src="/outdoorshare-logo.png" alt="OutdoorShare" className="h-4 object-contain" style={{ filter: "brightness(0) invert(1)", opacity: 0.9 }} />
-                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1 border" style={{ background: "rgba(58,181,73,0.15)", borderColor: "#3ab549", color: "#3ab549" }}>
-                        <Lock className="w-2.5 h-2.5" /> Required
-                      </span>
-                    </div>
+                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1 border" style={{ background: "rgba(58,181,73,0.15)", borderColor: "#3ab549", color: "#3ab549" }}>
+                      <Lock className="w-2.5 h-2.5" /> Required
+                    </span>
                   </div>
                   {/* Body */}
                   <div className="px-4 py-3 flex items-start justify-between gap-4" style={{ background: "#f0faf1" }}>
@@ -689,6 +686,7 @@ export default function StorefrontProductDetail() {
                       <div className="text-right shrink-0">
                         <p className="text-2xl font-black" style={{ color: "#1a2332" }}>{priceLabel}</p>
                         <p className="text-[10px] font-semibold mt-1" style={{ color: "#3ab549" }}>Added at checkout</p>
+                        <img src="/outdoorshare-logo-transparent.png" alt="OutdoorShare" className="mt-2 h-6 object-contain mx-auto" />
                       </div>
                     )}
                   </div>

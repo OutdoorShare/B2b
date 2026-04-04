@@ -2047,12 +2047,9 @@ export default function StorefrontBook() {
                                   <span className="text-[10px] font-bold tracking-widest uppercase" style={{ color: "#3ab549" }}>by OutdoorShare</span>
                                 </div>
                               </div>
-                              <div className="flex items-center gap-2.5">
-                                <img src="/outdoorshare-logo.png" alt="OutdoorShare" className="h-5 object-contain" style={{ filter: "brightness(0) invert(1)", opacity: 0.9 }} />
-                                <span className="text-white text-xs font-bold px-2.5 py-1 rounded-full flex items-center gap-1 border" style={{ background: "rgba(58,181,73,0.15)", borderColor: "#3ab549", color: "#3ab549" }}>
-                                  <Lock className="w-3 h-3" /> Required
-                                </span>
-                              </div>
+                              <span className="text-white text-xs font-bold px-2.5 py-1 rounded-full flex items-center gap-1 border" style={{ background: "rgba(58,181,73,0.15)", borderColor: "#3ab549", color: "#3ab549" }}>
+                                <Lock className="w-3 h-3" /> Required
+                              </span>
                             </div>
                             <div className="p-5" style={{ background: "#f0faf1" }}>
                               <div className="flex items-start justify-between gap-4">
@@ -2087,6 +2084,7 @@ export default function StorefrontBook() {
                                   <div className="mt-3 flex items-center justify-center gap-1.5 rounded-lg px-4 py-2 font-bold text-sm text-white cursor-default" style={{ background: "#3ab549" }}>
                                     <CheckCircle2 className="w-4 h-4" /> Included
                                   </div>
+                                  <img src="/outdoorshare-logo-transparent.png" alt="OutdoorShare" className="mt-3 h-7 object-contain mx-auto" />
                                 </div>
                               </div>
                             </div>
