@@ -195,7 +195,7 @@ export async function sendBlastEmail(opts: {
   companyEmail?: string | null;
 }): Promise<void> {
   const { toEmail, customerName, subject, bodyText, companyName, companyEmail } = opts;
-  const fromHeader = `${companyName} via OutdoorShare <contact.us@myoutdoorshare.com>`;
+  const fromHeader = `${companyName} <contact.us@myoutdoorshare.com>`;
   const replyTo = companyEmail || undefined;
 
   // Convert plain-text line breaks to HTML paragraphs
