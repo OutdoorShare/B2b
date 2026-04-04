@@ -13,7 +13,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
-import { Copy, CheckCircle2, Paintbrush, RefreshCw, Upload, Eye, EyeOff, ImageIcon, X, KeyRound, Mail, ChevronDown, ChevronUp, ExternalLink, Wand2 } from "lucide-react";
+import { Copy, CheckCircle2, Paintbrush, RefreshCw, Upload, Eye, EyeOff, ImageIcon, X, KeyRound, Mail, ChevronDown, ChevronUp, ExternalLink, Wand2, Plus, FileText, BookOpen } from "lucide-react";
 import { applyBrandColors, PRESET_THEMES, isLight } from "@/lib/theme";
 
 function slugifyPreview(name: string): string {
@@ -154,6 +154,27 @@ export default function AdminSettings() {
       accentColor:  preset.accent
     }));
     applyBrandColors(preset.primary, preset.accent);
+  };
+
+  // ── Rental Rules list ────────────────────────────────────────────────
+  const [newRule, setNewRule] = useState("");
+
+  const rentalRules: string[] = (formData.rentalTerms || "")
+    .split("\n")
+    .map((r: string) => r.trim())
+    .filter(Boolean);
+
+  const addRule = () => {
+    const trimmed = newRule.trim();
+    if (!trimmed) return;
+    const updated = [...rentalRules, trimmed].join("\n");
+    setFormData((prev: any) => ({ ...prev, rentalTerms: updated }));
+    setNewRule("");
+  };
+
+  const removeRule = (idx: number) => {
+    const updated = rentalRules.filter((_: string, i: number) => i !== idx).join("\n");
+    setFormData((prev: any) => ({ ...prev, rentalTerms: updated }));
   };
 
   // ── Match Logo Colors ────────────────────────────────────────────────
@@ -1082,10 +1103,74 @@ export default function AdminSettings() {
                     </div>
                   )}
                 </div>
-                <div className="space-y-2">
-                  <Label htmlFor="rentalTerms">Rental Terms & Conditions</Label>
-                  <p className="text-xs text-muted-foreground">Full terms shown in the rental agreement. Also available to your AI assistant for answering detailed renter questions.</p>
-                  <Textarea id="rentalTerms" name="rentalTerms" value={formData.rentalTerms || ""} onChange={handleChange} rows={6} />
+                {/* Rental Rules list */}
+                <div className="space-y-3">
+                  <div>
+                    <Label className="text-base font-semibold">Rental Rules & Policies</Label>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Add each rule as a separate item. Rules are displayed on every listing page and printed in the rental agreement renters sign before checkout.
+                    </p>
+                  </div>
+
+                  {/* Where it shows up */}
+                  <div className="flex flex-wrap gap-2">
+                    <span className="inline-flex items-center gap-1.5 rounded-full bg-blue-50 border border-blue-200 px-3 py-1 text-xs font-medium text-blue-700">
+                      <BookOpen className="w-3 h-3" /> Shown on each listing
+                    </span>
+                    <span className="inline-flex items-center gap-1.5 rounded-full bg-purple-50 border border-purple-200 px-3 py-1 text-xs font-medium text-purple-700">
+                      <FileText className="w-3 h-3" /> Printed in rental agreement
+                    </span>
+                    <span className="inline-flex items-center gap-1.5 rounded-full bg-green-50 border border-green-200 px-3 py-1 text-xs font-medium text-green-700">
+                      <CheckCircle2 className="w-3 h-3" /> Read by your AI assistant
+                    </span>
+                  </div>
+
+                  {/* Existing rules */}
+                  {rentalRules.length > 0 ? (
+                    <ul className="divide-y rounded-lg border overflow-hidden">
+                      {rentalRules.map((rule: string, idx: number) => (
+                        <li key={idx} className="flex items-start gap-3 px-4 py-3 bg-card hover:bg-muted/40 transition-colors group">
+                          <span className="mt-0.5 flex-shrink-0 w-5 h-5 rounded-full bg-muted flex items-center justify-center text-[10px] font-bold text-muted-foreground">
+                            {idx + 1}
+                          </span>
+                          <span className="flex-1 text-sm leading-snug">{rule}</span>
+                          <button
+                            type="button"
+                            onClick={() => removeRule(idx)}
+                            className="shrink-0 opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-destructive"
+                            title="Remove rule"
+                          >
+                            <X className="w-4 h-4" />
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <div className="rounded-lg border-2 border-dashed border-border px-4 py-6 text-center text-sm text-muted-foreground">
+                      No rules added yet. Add your first rule below.
+                    </div>
+                  )}
+
+                  {/* Add new rule */}
+                  <div className="flex gap-2">
+                    <Input
+                      value={newRule}
+                      onChange={e => setNewRule(e.target.value)}
+                      onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); addRule(); } }}
+                      placeholder="e.g. No smoking in or around equipment"
+                      className="flex-1"
+                    />
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      className="gap-2 shrink-0"
+                      onClick={addRule}
+                      disabled={!newRule.trim()}
+                    >
+                      <Plus className="w-4 h-4" /> Add Rule
+                    </Button>
+                  </div>
+                  <p className="text-xs text-muted-foreground">Press Enter or click Add Rule. Hover a rule to delete it.</p>
                 </div>
               </CardContent>
             </Card>
