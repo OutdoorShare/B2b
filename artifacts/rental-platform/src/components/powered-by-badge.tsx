@@ -11,7 +11,7 @@ export function PoweredByBadge({ variant = "footer" }: PoweredByBadgeProps) {
         href="/get-started"
         target="_blank"
         rel="noopener noreferrer"
-        className="fixed bottom-4 right-4 z-50 flex items-center gap-1.5 bg-white border border-gray-200 shadow-md rounded-full pl-1.5 pr-3 py-1 hover:shadow-lg hover:border-gray-300 transition-all group"
+        className="fixed bottom-4 left-4 z-50 flex items-center gap-1.5 bg-white border border-gray-200 shadow-md rounded-full pl-1.5 pr-3 py-1 hover:shadow-lg hover:border-gray-300 transition-all group"
         title="Powered by OutdoorShare"
       >
         <img
