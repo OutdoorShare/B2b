@@ -120,6 +120,20 @@ router.put("/business", requireTenant as any, async (req, res) => {
       kioskModeEnabled, instantBooking, embedCode,
     } = req.body;
 
+    // Require business address fields whenever they are submitted
+    const addressFields = { address, city, state, zipCode };
+    const addressPresent = Object.values(addressFields).some(v => v !== undefined);
+    if (addressPresent) {
+      const missing = Object.entries(addressFields)
+        .filter(([, v]) => !v || !String(v).trim())
+        .map(([k]) => k);
+      if (missing.length > 0) {
+        return res.status(400).json({
+          error: `Business address is incomplete. Missing: ${missing.join(", ")}.`,
+        });
+      }
+    }
+
     const safeBody = {
       ...(name               !== undefined && { name }),
       ...(tagline            !== undefined && { tagline }),

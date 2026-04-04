@@ -439,6 +439,67 @@ export default function AdminSettings() {
                     <Input id="phone" name="phone" value={formData.phone || ""} onChange={handleChange} required />
                   </div>
                 </div>
+
+                {/* Business Address */}
+                <div className="space-y-2">
+                  <Label htmlFor="address">
+                    Street Address <span className="text-destructive">*</span>
+                  </Label>
+                  <Input
+                    id="address"
+                    name="address"
+                    value={formData.address || ""}
+                    onChange={handleChange}
+                    placeholder="123 Main St"
+                    required
+                    autoComplete="street-address"
+                  />
+                </div>
+                <div className="grid grid-cols-3 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="city">
+                      City <span className="text-destructive">*</span>
+                    </Label>
+                    <Input
+                      id="city"
+                      name="city"
+                      value={formData.city || ""}
+                      onChange={handleChange}
+                      placeholder="Springfield"
+                      required
+                      autoComplete="address-level2"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="state">
+                      State <span className="text-destructive">*</span>
+                    </Label>
+                    <Input
+                      id="state"
+                      name="state"
+                      value={formData.state || ""}
+                      onChange={handleChange}
+                      placeholder="IL"
+                      required
+                      autoComplete="address-level1"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="zipCode">
+                      ZIP Code <span className="text-destructive">*</span>
+                    </Label>
+                    <Input
+                      id="zipCode"
+                      name="zipCode"
+                      value={formData.zipCode || ""}
+                      onChange={handleChange}
+                      placeholder="62701"
+                      required
+                      autoComplete="postal-code"
+                    />
+                  </div>
+                </div>
+
                 <div className="space-y-2">
                   <Label htmlFor="outboundEmail">Outbound Email (Reply-To)</Label>
                   <Input id="outboundEmail" name="outboundEmail" type="email" value={formData.outboundEmail || ""} onChange={handleChange} placeholder="e.g. rentals@yourcompany.com" />
