@@ -115,7 +115,7 @@ function validateRow(row: ParsedRow, categoryNames: Set<string>): ParsedRow {
   return { ...row, _errors: errors, _warnings: warnings };
 }
 
-type Step = "upload" | "verify" | "result";
+type Step = "upload" | "map" | "verify" | "result";
 
 interface ImportResult {
   created: number;
@@ -135,6 +135,9 @@ export default function AdminInventoryImport() {
   const [categoryNames, setCategoryNames] = useState<Set<string>>(new Set());
   const [importing, setImporting] = useState(false);
   const [result, setResult] = useState<ImportResult | null>(null);
+  const [rawHeaders, setRawHeaders] = useState<string[]>([]);
+  const [rawDataRows, setRawDataRows] = useState<any[][]>([]);
+  const [columnMapping, setColumnMapping] = useState<Record<string, string>>({});
 
   const errorCount = parsedRows.filter(r => r._errors.length > 0).length;
   const warnCount = parsedRows.filter(r => r._warnings.length > 0 && r._errors.length === 0).length;
@@ -174,26 +177,37 @@ export default function AdminInventoryImport() {
         const headers: string[] = rawRows[0].map((h: any) => String(h ?? "").trim());
         const dataRows = rawRows.slice(1).filter(row => row.some((cell: any) => cell !== "" && cell != null));
 
-        const parsed: ParsedRow[] = dataRows.map((row: any[], idx) => {
-          const obj: ParsedRow = { _rowIndex: idx + 2, _errors: [], _warnings: [] };
-          headers.forEach((header, colIdx) => {
-            const field = COLUMN_MAP[header.toLowerCase()];
-            if (field) {
-              const val = row[colIdx] != null ? String(row[colIdx]).trim() : "";
-              obj[field] = val;
-            }
-          });
-          return validateRow(obj, categoryNames);
+        const initialMapping: Record<string, string> = {};
+        headers.forEach(h => {
+          initialMapping[h] = COLUMN_MAP[h.toLowerCase()] ?? "";
         });
 
-        setParsedRows(parsed);
-        setStep("verify");
+        setRawHeaders(headers);
+        setRawDataRows(dataRows);
+        setColumnMapping(initialMapping);
+        setStep("map");
       } catch {
         toast({ title: "Failed to parse file", description: "Make sure the file is a valid Excel (.xlsx, .xls) or CSV file.", variant: "destructive" });
       }
     };
     reader.readAsBinaryString(file);
-  }, [categoryNames, loadCategories, toast]);
+  }, [loadCategories, toast]);
+
+  const applyMapping = useCallback(() => {
+    const parsed: ParsedRow[] = rawDataRows.map((row: any[], idx) => {
+      const obj: ParsedRow = { _rowIndex: idx + 2, _errors: [], _warnings: [] };
+      rawHeaders.forEach((header, colIdx) => {
+        const field = columnMapping[header];
+        if (field) {
+          const val = row[colIdx] != null ? String(row[colIdx]).trim() : "";
+          obj[field] = val;
+        }
+      });
+      return validateRow(obj, categoryNames);
+    });
+    setParsedRows(parsed);
+    setStep("verify");
+  }, [rawHeaders, rawDataRows, columnMapping, categoryNames]);
 
   const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault();
@@ -256,6 +270,9 @@ export default function AdminInventoryImport() {
     setParsedRows([]);
     setFileName("");
     setResult(null);
+    setRawHeaders([]);
+    setRawDataRows([]);
+    setColumnMapping({});
     setStep("upload");
     if (fileInputRef.current) fileInputRef.current.value = "";
   };
@@ -293,11 +310,11 @@ export default function AdminInventoryImport() {
 
       {/* Step indicator */}
       <div className="flex items-center gap-2 text-sm">
-        {(["upload", "verify", "result"] as Step[]).map((s, i) => (
+        {(["upload", "map", "verify", "result"] as Step[]).map((s, i) => (
           <div key={s} className="flex items-center gap-2">
             {i > 0 && <ChevronRight className="h-3 w-3 text-muted-foreground" />}
             <span className={`font-medium ${step === s ? "text-foreground" : "text-muted-foreground"}`}>
-              {i + 1}. {s === "upload" ? "Upload File" : s === "verify" ? "Verify Data" : "Results"}
+              {i + 1}. {s === "upload" ? "Upload File" : s === "map" ? "Map Columns" : s === "verify" ? "Verify Data" : "Results"}
             </span>
           </div>
         ))}
@@ -368,7 +385,83 @@ export default function AdminInventoryImport() {
         </div>
       )}
 
-      {/* ── STEP 2: VERIFY ── */}
+      {/* ── STEP 2: MAP COLUMNS ── */}
+      {step === "map" && (
+        <div className="space-y-4">
+          <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-muted text-sm w-fit">
+            <FileSpreadsheet className="h-4 w-4 text-muted-foreground" />
+            <span className="font-medium">{fileName}</span>
+            <span className="text-muted-foreground">— {rawHeaders.length} column{rawHeaders.length !== 1 ? "s" : ""} detected</span>
+          </div>
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">Map Your Columns</CardTitle>
+              <CardDescription>
+                Assign each column from your spreadsheet to the matching field in the system.
+                Recognized columns are pre-mapped — adjust any that don't look right, and ignore columns you don't need.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-2">
+                {rawHeaders.map(header => {
+                  const mapped = columnMapping[header] ?? "";
+                  return (
+                    <div key={header} className="flex items-center gap-3">
+                      <div className="w-48 shrink-0 text-sm font-mono bg-muted rounded px-3 py-2 truncate" title={header}>
+                        {header}
+                      </div>
+                      <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
+                      <select
+                        value={mapped}
+                        onChange={e => setColumnMapping(prev => ({ ...prev, [header]: e.target.value }))}
+                        className="flex-1 h-9 rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                      >
+                        <option value="">— Ignore this column —</option>
+                        {Object.entries(FIELD_LABELS).map(([field, label]) => (
+                          <option key={field} value={field}>{label}{REQUIRED_FIELDS.includes(field) ? " *" : ""}</option>
+                        ))}
+                      </select>
+                      {mapped && REQUIRED_FIELDS.includes(mapped) && (
+                        <Badge variant="destructive" className="text-xs shrink-0">required</Badge>
+                      )}
+                      {mapped && !REQUIRED_FIELDS.includes(mapped) && (
+                        <Badge variant="secondary" className="text-xs shrink-0">mapped</Badge>
+                      )}
+                      {!mapped && (
+                        <Badge variant="outline" className="text-xs shrink-0 text-muted-foreground">ignored</Badge>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+
+              {REQUIRED_FIELDS.some(f => !Object.values(columnMapping).includes(f)) && (
+                <div className="flex items-start gap-2 p-3 rounded-lg bg-yellow-50 border border-yellow-200 text-sm text-yellow-800 mt-4">
+                  <AlertCircle className="h-4 w-4 mt-0.5 shrink-0" />
+                  <span>
+                    Required fields not yet mapped:{" "}
+                    {REQUIRED_FIELDS.filter(f => !Object.values(columnMapping).includes(f))
+                      .map(f => FIELD_LABELS[f])
+                      .join(", ")}. Rows missing these will be skipped.
+                  </span>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          <div className="flex justify-end gap-3">
+            <Button variant="outline" onClick={handleReset}>
+              <RotateCcw className="h-4 w-4 mr-2" /> Upload different file
+            </Button>
+            <Button onClick={applyMapping}>
+              Apply Mapping <ChevronRight className="h-4 w-4 ml-2" />
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {/* ── STEP 3: VERIFY ── */}
       {step === "verify" && (
         <div className="space-y-4">
           <div className="flex flex-wrap items-center gap-3">
