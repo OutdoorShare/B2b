@@ -12,7 +12,7 @@ import { format } from "date-fns";
 import {
   ArrowLeft, Pencil, Trash2, Plus, Wrench, AlertTriangle,
   CheckCircle2, Clock, Archive, Package, ImageIcon, ExternalLink,
-  ChevronRight, CalendarDays, User, DollarSign, Loader2, X, CalendarOff, ToggleLeft, ToggleRight,
+  ChevronRight, CalendarDays, User, DollarSign, Loader2, X, CalendarOff, ToggleLeft, ToggleRight, Hash,
 } from "lucide-react";
 
 type ProductStatus = "available" | "maintenance" | "damaged" | "reserved" | "out_of_service";
@@ -22,6 +22,7 @@ type Product = {
   id: number;
   name: string;
   sku: string | null;
+  serialNumber: string | null;
   categoryId: number | null;
   status: ProductStatus;
   quantity: number;
@@ -78,6 +79,7 @@ export default function AdminInventoryDetail() {
   const [loading, setLoading] = useState(true);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [lightbox, setLightbox] = useState<{ urls: string[]; idx: number } | null>(null);
 
   // Status change
   const [statusSaving, setStatusSaving] = useState(false);
@@ -403,18 +405,73 @@ export default function AdminInventoryDetail() {
         {/* Left column */}
         <div className="lg:col-span-2 space-y-5">
 
+          {/* Lightbox */}
+          {lightbox && (
+            <div
+              className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 p-4"
+              onClick={() => setLightbox(null)}
+            >
+              <img
+                src={lightbox.urls[lightbox.idx]}
+                alt={product.name}
+                className="max-h-[90vh] max-w-[90vw] rounded-xl shadow-2xl object-contain"
+                onClick={e => e.stopPropagation()}
+              />
+              <button
+                onClick={() => setLightbox(null)}
+                className="absolute top-4 right-4 w-9 h-9 rounded-full bg-white/20 hover:bg-white/30 flex items-center justify-center text-white"
+              >
+                <X className="w-5 h-5" />
+              </button>
+              {lightbox.urls.length > 1 && (
+                <div className="absolute bottom-6 left-1/2 -translate-x-1/2 flex gap-2">
+                  {lightbox.urls.map((_, i) => (
+                    <button
+                      key={i}
+                      onClick={e => { e.stopPropagation(); setLightbox(prev => prev ? { ...prev, idx: i } : null); }}
+                      className={`w-2 h-2 rounded-full transition-all ${i === lightbox.idx ? "bg-white scale-125" : "bg-white/40 hover:bg-white/70"}`}
+                    />
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
           {/* Photos */}
           {product.imageUrls.length > 0 && (
             <div className="bg-background rounded-2xl border overflow-hidden">
-              <div className="flex gap-0 overflow-x-auto">
-                {product.imageUrls.map((url, i) => (
+              <div className="px-4 pt-4 pb-3 border-b bg-muted/20 flex items-center gap-2">
+                <ImageIcon className="w-4 h-4 text-primary" />
+                <h3 className="font-semibold text-sm">Photos</h3>
+                <span className="text-xs text-muted-foreground">({product.imageUrls.length})</span>
+              </div>
+              <div className="p-4">
+                {product.imageUrls.length === 1 ? (
                   <img
-                    key={i}
-                    src={url}
+                    src={product.imageUrls[0]}
                     alt={product.name}
-                    className="h-52 w-auto object-cover shrink-0 first:rounded-l-2xl last:rounded-r-2xl"
+                    className="w-full max-h-64 object-cover rounded-xl cursor-pointer hover:opacity-95 transition-opacity"
+                    onClick={() => setLightbox({ urls: product.imageUrls, idx: 0 })}
                   />
-                ))}
+                ) : (
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                    {product.imageUrls.map((url, i) => (
+                      <div
+                        key={i}
+                        className="relative group rounded-xl overflow-hidden border bg-muted aspect-[4/3] cursor-pointer"
+                        onClick={() => setLightbox({ urls: product.imageUrls, idx: i })}
+                      >
+                        <img src={url} alt="" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-200" />
+                        {i === 0 && (
+                          <div className="absolute bottom-1.5 left-1.5 text-[10px] font-semibold bg-black/60 text-white px-1.5 py-0.5 rounded">
+                            Cover
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+                <p className="text-xs text-muted-foreground mt-2">Click any photo to expand</p>
               </div>
             </div>
           )}
@@ -678,6 +735,18 @@ export default function AdminInventoryDetail() {
                 <span className="text-muted-foreground">Quantity</span>
                 <span className="font-medium">{product.quantity}</span>
               </div>
+              {product.sku && (
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">SKU</span>
+                  <span className="font-mono text-xs font-medium">{product.sku}</span>
+                </div>
+              )}
+              {product.serialNumber && (
+                <div className="flex justify-between gap-2">
+                  <span className="text-muted-foreground shrink-0">VIN / Serial #</span>
+                  <span className="font-mono text-xs font-medium text-right break-all">{product.serialNumber}</span>
+                </div>
+              )}
               {product.brand && (
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">Brand</span>

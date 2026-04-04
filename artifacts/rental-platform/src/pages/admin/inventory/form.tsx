@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { useParams, useLocation } from "wouter";
 import { adminPath, getAdminSession } from "@/lib/admin-nav";
 import { Button } from "@/components/ui/button";
@@ -7,7 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { ArrowLeft, Save, Loader2, Upload, X, Package } from "lucide-react";
+import { ArrowLeft, Save, Loader2, Upload, X, Package, ImageIcon, GripVertical } from "lucide-react";
 import { Link } from "wouter";
 
 type Category = { id: number; name: string };
@@ -29,11 +29,14 @@ export default function AdminInventoryForm() {
   const fileRef = useRef<HTMLInputElement>(null);
 
   const [saving, setSaving] = useState(false);
-  const [uploading, setUploading] = useState(false);
+  const [uploadingCount, setUploadingCount] = useState(0);
+  const [isDragging, setIsDragging] = useState(false);
+  const [lightbox, setLightbox] = useState<string | null>(null);
   const [categories, setCategories] = useState<Category[]>([]);
   const [form, setForm] = useState({
     name: "",
     sku: "",
+    serialNumber: "",
     categoryId: "",
     description: "",
     status: "available",
@@ -52,13 +55,11 @@ export default function AdminInventoryForm() {
   };
 
   useEffect(() => {
-    // Load categories
     fetch(`${BASE}/api/categories`, { headers: adminHeaders() })
       .then(r => r.ok ? r.json() : [])
       .then(setCategories)
       .catch(() => {});
 
-    // Load existing product if editing
     if (isEdit) {
       fetch(`${BASE}/api/products/${id}`, { headers: adminHeaders() })
         .then(r => r.ok ? r.json() : null)
@@ -67,6 +68,7 @@ export default function AdminInventoryForm() {
             setForm({
               name: data.name ?? "",
               sku: data.sku ?? "",
+              serialNumber: data.serialNumber ?? "",
               categoryId: data.categoryId ? String(data.categoryId) : "",
               description: data.description ?? "",
               status: data.status ?? "available",
@@ -88,21 +90,43 @@ export default function AdminInventoryForm() {
     setForm(prev => ({ ...prev, [field]: value }));
   };
 
-  const uploadImage = async (file: File) => {
-    setUploading(true);
-    try {
-      const fd = new FormData();
-      fd.append("file", file);
-      const res = await fetch(`${BASE}/api/upload/image`, { method: "POST", body: fd });
-      if (!res.ok) throw new Error("Upload failed");
-      const { url } = await res.json();
-      setForm(prev => ({ ...prev, imageUrls: [...prev.imageUrls, url] }));
-    } catch {
-      toast({ title: "Image upload failed", variant: "destructive" });
-    } finally {
-      setUploading(false);
-    }
+  const uploadFiles = useCallback(async (files: File[]) => {
+    const imageFiles = files.filter(f => f.type.startsWith("image/"));
+    if (!imageFiles.length) return;
+    setUploadingCount(c => c + imageFiles.length);
+    const results = await Promise.allSettled(
+      imageFiles.map(async (file) => {
+        const fd = new FormData();
+        fd.append("file", file);
+        const res = await fetch(`${BASE}/api/upload/image`, { method: "POST", body: fd });
+        if (!res.ok) throw new Error("Upload failed");
+        const { url } = await res.json();
+        return url as string;
+      })
+    );
+    const urls: string[] = [];
+    let failed = 0;
+    results.forEach(r => {
+      if (r.status === "fulfilled") urls.push(r.value);
+      else failed++;
+    });
+    if (urls.length) setForm(prev => ({ ...prev, imageUrls: [...prev.imageUrls, ...urls] }));
+    if (failed) toast({ title: `${failed} photo${failed > 1 ? "s" : ""} failed to upload`, variant: "destructive" });
+    setUploadingCount(c => c - imageFiles.length);
+  }, [BASE, toast]);
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files ?? []);
+    if (files.length) uploadFiles(files);
+    e.target.value = "";
   };
+
+  const handleDrop = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(false);
+    const files = Array.from(e.dataTransfer.files);
+    uploadFiles(files);
+  }, [uploadFiles]);
 
   const removeImage = (idx: number) => {
     setForm(prev => ({ ...prev, imageUrls: prev.imageUrls.filter((_, i) => i !== idx) }));
@@ -119,6 +143,7 @@ export default function AdminInventoryForm() {
       const body = {
         name: form.name.trim(),
         sku: form.sku.trim() || null,
+        serialNumber: form.serialNumber.trim() || null,
         categoryId: form.categoryId ? Number(form.categoryId) : null,
         description: form.description.trim() || null,
         status: form.status,
@@ -148,8 +173,32 @@ export default function AdminInventoryForm() {
     }
   };
 
+  const isUploading = uploadingCount > 0;
+
   return (
     <div className="space-y-6 max-w-3xl">
+      {/* Lightbox */}
+      {lightbox && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4"
+          onClick={() => setLightbox(null)}
+        >
+          <img
+            src={lightbox}
+            alt="Preview"
+            className="max-h-[90vh] max-w-[90vw] rounded-xl shadow-2xl object-contain"
+            onClick={e => e.stopPropagation()}
+          />
+          <button
+            type="button"
+            onClick={() => setLightbox(null)}
+            className="absolute top-4 right-4 w-9 h-9 rounded-full bg-white/20 hover:bg-white/30 flex items-center justify-center text-white"
+          >
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+      )}
+
       {/* Header */}
       <div className="flex items-center gap-3">
         <Link href={adminPath(isEdit ? `/inventory/${id}` : "/inventory")}>
@@ -183,12 +232,21 @@ export default function AdminInventoryForm() {
               />
             </div>
             <div className="space-y-1.5">
-              <Label htmlFor="sku">SKU / Serial Number</Label>
+              <Label htmlFor="sku">SKU / Item #</Label>
               <Input
                 id="sku"
                 value={form.sku}
                 onChange={e => handleChange("sku", e.target.value)}
                 placeholder="e.g. TENT-001"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="serialNumber">VIN / HIN / Serial #</Label>
+              <Input
+                id="serialNumber"
+                value={form.serialNumber}
+                onChange={e => handleChange("serialNumber", e.target.value)}
+                placeholder="e.g. 1HGBH41JXMN109186"
               />
             </div>
             <div className="space-y-1.5">
@@ -245,6 +303,114 @@ export default function AdminInventoryForm() {
           </div>
         </div>
 
+        {/* Photos */}
+        <div className="bg-background rounded-2xl border p-5 space-y-4">
+          <div className="flex items-center justify-between">
+            <h3 className="font-semibold flex items-center gap-2 text-sm">
+              <ImageIcon className="w-4 h-4 text-primary" /> Photos
+              {form.imageUrls.length > 0 && (
+                <span className="text-xs font-normal text-muted-foreground">
+                  ({form.imageUrls.length} photo{form.imageUrls.length !== 1 ? "s" : ""})
+                </span>
+              )}
+            </h3>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => fileRef.current?.click()}
+              disabled={isUploading}
+              className="gap-1.5"
+            >
+              {isUploading
+                ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                : <Upload className="w-3.5 h-3.5" />
+              }
+              {isUploading ? `Uploading ${uploadingCount}…` : "Upload Photos"}
+            </Button>
+          </div>
+
+          {/* Drop zone + grid */}
+          <div
+            onDragOver={e => { e.preventDefault(); setIsDragging(true); }}
+            onDragLeave={() => setIsDragging(false)}
+            onDrop={handleDrop}
+            className={`rounded-xl transition-colors ${
+              isDragging
+                ? "ring-2 ring-primary bg-primary/5"
+                : form.imageUrls.length === 0 ? "border-2 border-dashed border-muted-foreground/25" : ""
+            }`}
+          >
+            {form.imageUrls.length === 0 && !isUploading ? (
+              <div
+                className="py-10 flex flex-col items-center justify-center gap-2 text-muted-foreground cursor-pointer"
+                onClick={() => fileRef.current?.click()}
+              >
+                <ImageIcon className="w-8 h-8" />
+                <p className="text-sm font-medium">Drop photos here or click to browse</p>
+                <p className="text-xs">Supports JPG, PNG, WebP — select multiple at once</p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-3 sm:grid-cols-4 gap-3">
+                {form.imageUrls.map((url, i) => (
+                  <div
+                    key={i}
+                    className="relative group rounded-xl overflow-hidden border bg-muted aspect-[4/3]"
+                  >
+                    <img
+                      src={url}
+                      alt=""
+                      className="w-full h-full object-cover cursor-pointer"
+                      onClick={() => setLightbox(url)}
+                    />
+                    <div className="absolute inset-0 bg-black/0 group-hover:bg-black/30 transition-colors" />
+                    <button
+                      type="button"
+                      onClick={() => removeImage(i)}
+                      className="absolute top-1.5 right-1.5 w-6 h-6 rounded-full bg-black/60 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-600"
+                    >
+                      <X className="w-3.5 h-3.5 text-white" />
+                    </button>
+                    {i === 0 && (
+                      <div className="absolute bottom-1.5 left-1.5 text-[10px] font-semibold bg-black/60 text-white px-1.5 py-0.5 rounded">
+                        Cover
+                      </div>
+                    )}
+                  </div>
+                ))}
+                {/* Upload more tile */}
+                {isUploading ? (
+                  <div className="rounded-xl border-2 border-dashed border-primary/30 bg-primary/5 aspect-[4/3] flex flex-col items-center justify-center gap-1 text-primary/60">
+                    <Loader2 className="w-5 h-5 animate-spin" />
+                    <span className="text-[11px]">{uploadingCount} uploading…</span>
+                  </div>
+                ) : (
+                  <div
+                    className="rounded-xl border-2 border-dashed border-muted-foreground/25 aspect-[4/3] flex flex-col items-center justify-center gap-1 text-muted-foreground hover:border-primary/50 hover:text-primary cursor-pointer transition-colors"
+                    onClick={() => fileRef.current?.click()}
+                  >
+                    <Upload className="w-5 h-5" />
+                    <span className="text-[11px]">Add more</span>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+
+          <p className="text-xs text-muted-foreground">
+            The first photo is used as the cover image. Click any photo to expand.
+          </p>
+
+          <input
+            ref={fileRef}
+            type="file"
+            accept="image/*"
+            multiple
+            className="hidden"
+            onChange={handleFileChange}
+          />
+        </div>
+
         {/* Availability & Quantity */}
         <div className="bg-background rounded-2xl border p-5 space-y-4">
           <h3 className="font-semibold text-sm">Availability & Quantity</h3>
@@ -288,7 +454,6 @@ export default function AdminInventoryForm() {
                 onChange={e => handleChange("nextMaintenanceDate", e.target.value)}
               />
             </div>
-            <div className="sm:col-span-2 space-y-1.5 sm:hidden lg:block" />
             <div className="sm:col-span-2 space-y-1.5">
               <Label htmlFor="notes">Internal Notes</Label>
               <Textarea
@@ -302,44 +467,9 @@ export default function AdminInventoryForm() {
           </div>
         </div>
 
-        {/* Photos */}
-        <div className="bg-background rounded-2xl border p-5 space-y-4">
-          <h3 className="font-semibold text-sm">Photos</h3>
-          <div className="flex flex-wrap gap-3">
-            {form.imageUrls.map((url, i) => (
-              <div key={i} className="relative w-20 h-20 rounded-xl overflow-hidden border group">
-                <img src={url} alt="" className="w-full h-full object-cover" />
-                <button
-                  type="button"
-                  onClick={() => removeImage(i)}
-                  className="absolute inset-0 bg-black/50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
-                >
-                  <X className="w-4 h-4 text-white" />
-                </button>
-              </div>
-            ))}
-            <button
-              type="button"
-              onClick={() => fileRef.current?.click()}
-              disabled={uploading}
-              className="w-20 h-20 rounded-xl border-2 border-dashed border-muted-foreground/30 flex flex-col items-center justify-center gap-1 text-muted-foreground hover:border-primary/50 hover:text-primary transition-colors"
-            >
-              {uploading ? <Loader2 className="w-5 h-5 animate-spin" /> : <Upload className="w-5 h-5" />}
-              <span className="text-[10px]">{uploading ? "Uploading" : "Add Photo"}</span>
-            </button>
-          </div>
-          <input
-            ref={fileRef}
-            type="file"
-            accept="image/*"
-            className="hidden"
-            onChange={e => { const f = e.target.files?.[0]; if (f) uploadImage(f); e.target.value = ""; }}
-          />
-        </div>
-
         {/* Actions */}
         <div className="flex gap-3">
-          <Button type="submit" disabled={saving} className="gap-2">
+          <Button type="submit" disabled={saving || isUploading} className="gap-2">
             {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
             {saving ? "Saving…" : isEdit ? "Save Changes" : "Add to Inventory"}
           </Button>
