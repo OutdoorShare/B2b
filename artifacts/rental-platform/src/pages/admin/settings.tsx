@@ -795,6 +795,10 @@ export default function AdminSettings() {
                             placeholder="#1b4332"
                             className="font-mono"
                             maxLength={7}
+                            autoComplete="off"
+                            autoCorrect="off"
+                            autoCapitalize="off"
+                            spellCheck={false}
                           />
                           <Button
                             type="button"
@@ -840,6 +844,10 @@ export default function AdminSettings() {
                             placeholder="#52b788"
                             className="font-mono"
                             maxLength={7}
+                            autoComplete="off"
+                            autoCorrect="off"
+                            autoCapitalize="off"
+                            spellCheck={false}
                           />
                           <Button
                             type="button"
