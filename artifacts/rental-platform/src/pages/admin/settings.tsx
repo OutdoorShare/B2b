@@ -1056,12 +1056,6 @@ export default function AdminSettings() {
                     onCheckedChange={checked => handleSwitchChange("depositRequired", checked)}
                   />
                 </div>
-                {formData.depositRequired && (
-                  <div className="space-y-2">
-                    <Label htmlFor="depositPercent">Deposit Percentage (%)</Label>
-                    <Input id="depositPercent" name="depositPercent" type="number" value={formData.depositPercent || 0} onChange={handleChange} min="0" max="100" />
-                  </div>
-                )}
                 <div className="space-y-3">
                   <div>
                     <Label htmlFor="cancellationPolicy">Cancellation Policy</Label>
