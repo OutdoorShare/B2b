@@ -423,7 +423,7 @@ router.post("/ai/chat", async (req: Request, res: Response) => {
     let loopCount = 0;
     while (loopCount++ < 5) {
       const stream = await openai.chat.completions.create({
-        model: "gpt-5-mini",
+        model: "gpt-4o-mini",
         max_completion_tokens: 1024,
         messages: chatMessages,
         tools: isAdmin ? adminTools : undefined,
@@ -552,7 +552,7 @@ ${listingDetails}${userHint ? `\n\nAdditional direction from the owner: ${userHi
 
   try {
     const completion = await openai.chat.completions.create({
-      model: "gpt-5-mini",
+      model: "gpt-4o-mini",
       max_completion_tokens: 600,
       messages: [
         { role: "system", content: systemPrompt },

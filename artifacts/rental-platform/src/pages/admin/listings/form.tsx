@@ -575,6 +575,7 @@ export default function AdminListingsForm() {
                           onChange={e => { setInventorySearch(e.target.value); setInventoryOpen(true); }}
                           onFocus={() => setInventoryOpen(true)}
                           onBlur={() => setTimeout(() => setInventoryOpen(false), 150)}
+                          onKeyDown={e => { if (e.key === "Enter") e.preventDefault(); }}
                         />
                       </div>
                       {inventoryOpen && filteredProducts.length > 0 && (
