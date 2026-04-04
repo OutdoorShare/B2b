@@ -129,8 +129,8 @@ export default function AdminListingsForm() {
           (p.model ?? '').toLowerCase().includes(q) ||
           (p.sku ?? '').toLowerCase().includes(q)
         );
-      }).slice(0, 8)
-    : allProducts.slice(0, 8);
+      })
+    : allProducts;
 
   const linkProduct = (product: Product) => {
     setLinkedProduct(product);
