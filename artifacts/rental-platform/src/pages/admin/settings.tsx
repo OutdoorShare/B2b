@@ -13,7 +13,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
-import { Copy, CheckCircle2, Paintbrush, RefreshCw, Upload, Eye, EyeOff, ImageIcon, X, KeyRound } from "lucide-react";
+import { Copy, CheckCircle2, Paintbrush, RefreshCw, Upload, Eye, EyeOff, ImageIcon, X, KeyRound, Mail, ChevronDown, ChevronUp, ExternalLink } from "lucide-react";
 import { applyBrandColors, PRESET_THEMES, isLight } from "@/lib/theme";
 
 function slugifyPreview(name: string): string {
@@ -57,6 +57,8 @@ export default function AdminSettings() {
   const [formData, setFormData] = useState<any>({});
   const [senderPasswordInput, setSenderPasswordInput] = useState("");
   const [clearSenderCreds, setClearSenderCreds] = useState(false);
+  const [showSenderSteps, setShowSenderSteps] = useState(false);
+  const [showSenderPassword, setShowSenderPassword] = useState(false);
 
   useEffect(() => {
     if (profile) setFormData(profile);
@@ -359,16 +361,81 @@ export default function AdminSettings() {
                 </div>
 
                 {/* Custom Email Sender */}
-                <div className="rounded-lg border p-4 space-y-3 bg-muted/30">
-                  <div>
-                    <p className="text-sm font-semibold">Custom Email Sender</p>
-                    <p className="text-xs text-muted-foreground mt-0.5">
-                      Send emails directly from your own Gmail address using an App Password. When set, all renter emails come from your account instead of the platform's.
-                    </p>
+                <div className="rounded-lg border p-4 space-y-4">
+                  {/* Header */}
+                  <div className="flex items-start gap-3">
+                    <div className="rounded-md bg-blue-50 p-2 mt-0.5 shrink-0">
+                      <Mail className="h-4 w-4 text-blue-600" />
+                    </div>
+                    <div>
+                      <p className="text-sm font-semibold">Custom Email Sender</p>
+                      <p className="text-xs text-muted-foreground mt-0.5">
+                        Send all renter emails directly from your own Gmail. When set, renters see <em>your</em> email address — not the platform's.
+                      </p>
+                    </div>
                   </div>
+
+                  {/* How-to accordion */}
+                  <div className="rounded-md border border-amber-200 bg-amber-50 overflow-hidden">
+                    <button
+                      type="button"
+                      className="w-full flex items-center justify-between px-3 py-2.5 text-xs font-semibold text-amber-800 hover:bg-amber-100 transition-colors"
+                      onClick={() => setShowSenderSteps(s => !s)}
+                    >
+                      <span className="flex items-center gap-1.5">
+                        <KeyRound className="h-3.5 w-3.5" />
+                        How to get a Gmail App Password (step-by-step)
+                      </span>
+                      {showSenderSteps ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+                    </button>
+                    {showSenderSteps && (
+                      <ol className="px-4 pb-3 pt-1 space-y-2.5 text-xs text-amber-800 list-none">
+                        <li className="flex gap-2.5">
+                          <span className="flex-shrink-0 w-5 h-5 rounded-full bg-amber-200 text-amber-900 flex items-center justify-center font-bold text-[10px]">1</span>
+                          <span>
+                            Sign in to{" "}
+                            <a href="https://myaccount.google.com/security" target="_blank" rel="noopener noreferrer" className="underline font-medium inline-flex items-center gap-0.5">
+                              myaccount.google.com <ExternalLink className="h-2.5 w-2.5" />
+                            </a>{" "}
+                            with the Gmail address you want to send from.
+                          </span>
+                        </li>
+                        <li className="flex gap-2.5">
+                          <span className="flex-shrink-0 w-5 h-5 rounded-full bg-amber-200 text-amber-900 flex items-center justify-center font-bold text-[10px]">2</span>
+                          <span>
+                            Go to <strong>Security</strong> and confirm <strong>2-Step Verification</strong> is turned on. (Required — App Passwords won't appear without it.)
+                          </span>
+                        </li>
+                        <li className="flex gap-2.5">
+                          <span className="flex-shrink-0 w-5 h-5 rounded-full bg-amber-200 text-amber-900 flex items-center justify-center font-bold text-[10px]">3</span>
+                          <span>
+                            Search for{" "}
+                            <a href="https://myaccount.google.com/apppasswords" target="_blank" rel="noopener noreferrer" className="underline font-medium inline-flex items-center gap-0.5">
+                              App Passwords <ExternalLink className="h-2.5 w-2.5" />
+                            </a>{" "}
+                            in your account, or go directly to that link.
+                          </span>
+                        </li>
+                        <li className="flex gap-2.5">
+                          <span className="flex-shrink-0 w-5 h-5 rounded-full bg-amber-200 text-amber-900 flex items-center justify-center font-bold text-[10px]">4</span>
+                          <span>
+                            Click <strong>Create</strong>, name it <em>"OutdoorShare"</em>, and copy the <strong>16-character password</strong> Google gives you.
+                          </span>
+                        </li>
+                        <li className="flex gap-2.5">
+                          <span className="flex-shrink-0 w-5 h-5 rounded-full bg-amber-200 text-amber-900 flex items-center justify-center font-bold text-[10px]">5</span>
+                          <span>
+                            Paste your Gmail address and that 16-character code into the fields below, then click <strong>Save Settings</strong>.
+                          </span>
+                        </li>
+                      </ol>
+                    )}
+                  </div>
+
+                  {/* Inputs */}
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div className="space-y-1">
-                      <Label htmlFor="senderEmail">From Gmail Address</Label>
+                      <Label htmlFor="senderEmail">Your Gmail Address</Label>
                       <Input
                         id="senderEmail"
                         name="senderEmail"
@@ -377,40 +444,51 @@ export default function AdminSettings() {
                         onChange={handleChange}
                         placeholder="you@gmail.com"
                       />
+                      <p className="text-xs text-muted-foreground">Gmail or Google Workspace address</p>
                     </div>
                     <div className="space-y-1">
                       <Label htmlFor="senderPassword">
-                        Gmail App Password
-                        {formData.senderPasswordSet && (
+                        App Password
+                        {formData.senderPasswordSet && !clearSenderCreds && (
                           <span className="ml-2 text-xs font-normal text-emerald-600">● Saved</span>
                         )}
                       </Label>
-                      <Input
-                        id="senderPassword"
-                        type="password"
-                        value={senderPasswordInput}
-                        onChange={e => setSenderPasswordInput(e.target.value)}
-                        placeholder={formData.senderPasswordSet ? "Enter new password to update" : "xxxx xxxx xxxx xxxx"}
-                        autoComplete="new-password"
-                      />
+                      <div className="relative">
+                        <Input
+                          id="senderPassword"
+                          type={showSenderPassword ? "text" : "password"}
+                          value={senderPasswordInput}
+                          onChange={e => setSenderPasswordInput(e.target.value)}
+                          placeholder={formData.senderPasswordSet && !clearSenderCreds ? "Enter new code to update" : "xxxx xxxx xxxx xxxx"}
+                          autoComplete="new-password"
+                          className="pr-9"
+                        />
+                        <button
+                          type="button"
+                          className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                          onClick={() => setShowSenderPassword(v => !v)}
+                          tabIndex={-1}
+                        >
+                          {showSenderPassword ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+                        </button>
+                      </div>
+                      <p className="text-xs text-muted-foreground">16-character code from Google, not your login password</p>
                     </div>
                   </div>
+
                   {(formData.senderPasswordSet && !clearSenderCreds) && (
                     <button
                       type="button"
-                      className="text-xs text-destructive underline"
+                      className="text-xs text-destructive underline hover:no-underline"
                       onClick={() => {
                         setFormData((prev: any) => ({ ...prev, senderEmail: "", senderPasswordSet: false }));
                         setSenderPasswordInput("");
                         setClearSenderCreds(true);
                       }}
                     >
-                      Clear saved credentials
+                      Remove saved credentials
                     </button>
                   )}
-                  <p className="text-xs text-muted-foreground">
-                    Use a <a href="https://support.google.com/accounts/answer/185833" target="_blank" rel="noopener noreferrer" className="underline">Gmail App Password</a>, not your regular password. Requires 2-Step Verification on your Google account.
-                  </p>
                 </div>
 
                 <div className="space-y-2">
