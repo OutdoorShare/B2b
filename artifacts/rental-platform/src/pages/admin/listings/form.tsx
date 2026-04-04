@@ -78,7 +78,7 @@ function usePickupAddresses() {
   return data;
 }
 
-interface Product { id: number; name: string; sku?: string | null; brand?: string | null; model?: string | null; quantity: number; status: string; }
+interface Product { id: number; name: string; sku?: string | null; brand?: string | null; model?: string | null; quantity: number; status: string; description?: string | null; categoryId?: number | null; imageUrls?: string[] | null; }
 function useProducts() {
   const [products, setProducts] = useState<Product[]>([]);
   useEffect(() => {
@@ -138,9 +138,13 @@ export default function AdminListingsForm() {
     setInventoryOpen(false);
     setFormData(prev => ({
       ...prev,
+      title: prev.title || product.name,
       brand: product.brand || prev.brand,
       model: product.model || prev.model,
       quantity: product.quantity || prev.quantity,
+      ...(product.description && !prev.description ? { description: product.description } : {}),
+      ...(product.categoryId && !prev.categoryId ? { categoryId: product.categoryId } : {}),
+      ...(product.imageUrls?.length && !(prev.photos?.length) ? { photos: product.imageUrls } : {}),
     }));
   };
 
@@ -540,6 +544,75 @@ export default function AdminListingsForm() {
                 </div>
               </CardHeader>
               <CardContent className="space-y-4">
+
+                {/* ── Link from Inventory ── */}
+                <div className="space-y-2">
+                  <Label className="flex items-center gap-1.5"><Package className="w-3.5 h-3.5" /> Link from Inventory</Label>
+                  <p className="text-xs text-muted-foreground">Pick an existing inventory item to auto-fill the title, brand, model, description, category, photos, and quantity.</p>
+                  {linkedProduct ? (
+                    <div className="flex items-center gap-3 p-3 rounded-lg border bg-muted/40">
+                      <Link2 className="w-4 h-4 text-primary shrink-0" />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium truncate">{linkedProduct.name}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {[linkedProduct.brand, linkedProduct.model].filter(Boolean).join(' · ')}
+                          {linkedProduct.sku ? ` · SKU: ${linkedProduct.sku}` : ''}
+                          {` · Qty: ${linkedProduct.quantity}`}
+                        </p>
+                      </div>
+                      <button type="button" onClick={unlinkProduct} className="text-muted-foreground hover:text-destructive transition-colors shrink-0">
+                        <Unlink className="w-4 h-4" />
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="relative" ref={inventorySearchRef}>
+                      <div className="relative">
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
+                        <Input
+                          className="pl-9"
+                          placeholder="Search by name, brand, model, or SKU…"
+                          value={inventorySearch}
+                          onChange={e => { setInventorySearch(e.target.value); setInventoryOpen(true); }}
+                          onFocus={() => setInventoryOpen(true)}
+                          onBlur={() => setTimeout(() => setInventoryOpen(false), 150)}
+                        />
+                      </div>
+                      {inventoryOpen && filteredProducts.length > 0 && (
+                        <div className="absolute z-50 w-full mt-1 rounded-lg border bg-popover shadow-md max-h-72 overflow-y-auto">
+                          {filteredProducts.map(p => (
+                            <button
+                              key={p.id}
+                              type="button"
+                              className="w-full text-left px-3 py-2.5 hover:bg-muted transition-colors flex items-center gap-3"
+                              onMouseDown={() => linkProduct(p)}
+                            >
+                              <Package className="w-4 h-4 text-muted-foreground shrink-0" />
+                              <div className="flex-1 min-w-0">
+                                <p className="text-sm font-medium truncate">{p.name}</p>
+                                <p className="text-xs text-muted-foreground">
+                                  {[p.brand, p.model].filter(Boolean).join(' · ')}
+                                  {p.sku ? ` · SKU: ${p.sku}` : ''}
+                                  {` · Qty: ${p.quantity}`}
+                                </p>
+                              </div>
+                              <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium shrink-0 ${p.status === 'active' ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'}`}>
+                                {p.status}
+                              </span>
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                      {inventoryOpen && inventorySearch.trim().length > 0 && filteredProducts.length === 0 && (
+                        <div className="absolute z-50 w-full mt-1 rounded-lg border bg-popover shadow-md px-4 py-3 text-sm text-muted-foreground">
+                          No inventory products match "{inventorySearch}"
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+
+                <div className="border-t" />
+
                 <div className="space-y-2">
                   <Label htmlFor="title">Title <span className="text-destructive">*</span></Label>
                   <Input id="title" name="title" value={formData.title} onChange={handleChange} required />
@@ -859,74 +932,6 @@ export default function AdminListingsForm() {
                 </div>
               </CardHeader>
               <CardContent className="space-y-5">
-
-                {/* ── Inventory Search ── */}
-                <div className="space-y-2">
-                  <Label className="flex items-center gap-1.5"><Package className="w-3.5 h-3.5" /> Link from Inventory</Label>
-                  <p className="text-xs text-muted-foreground">Search your inventory to link an existing product — auto-fills brand, model, and quantity.</p>
-                  {linkedProduct ? (
-                    <div className="flex items-center gap-3 p-3 rounded-lg border bg-muted/40">
-                      <Link2 className="w-4 h-4 text-primary shrink-0" />
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium truncate">{linkedProduct.name}</p>
-                        <p className="text-xs text-muted-foreground">
-                          {[linkedProduct.brand, linkedProduct.model].filter(Boolean).join(' · ')}
-                          {linkedProduct.sku ? ` · SKU: ${linkedProduct.sku}` : ''}
-                          {` · Qty: ${linkedProduct.quantity}`}
-                        </p>
-                      </div>
-                      <button type="button" onClick={unlinkProduct} className="text-muted-foreground hover:text-destructive transition-colors shrink-0">
-                        <Unlink className="w-4 h-4" />
-                      </button>
-                    </div>
-                  ) : (
-                    <div className="relative" ref={inventorySearchRef}>
-                      <div className="relative">
-                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
-                        <Input
-                          className="pl-9"
-                          placeholder="Search by name, brand, model, or SKU…"
-                          value={inventorySearch}
-                          onChange={e => { setInventorySearch(e.target.value); setInventoryOpen(true); }}
-                          onFocus={() => setInventoryOpen(true)}
-                          onBlur={() => setTimeout(() => setInventoryOpen(false), 150)}
-                        />
-                      </div>
-                      {inventoryOpen && filteredProducts.length > 0 && (
-                        <div className="absolute z-50 w-full mt-1 rounded-lg border bg-popover shadow-md max-h-72 overflow-y-auto">
-                          {filteredProducts.map(p => (
-                            <button
-                              key={p.id}
-                              type="button"
-                              className="w-full text-left px-3 py-2.5 hover:bg-muted transition-colors flex items-center gap-3"
-                              onMouseDown={() => linkProduct(p)}
-                            >
-                              <Package className="w-4 h-4 text-muted-foreground shrink-0" />
-                              <div className="flex-1 min-w-0">
-                                <p className="text-sm font-medium truncate">{p.name}</p>
-                                <p className="text-xs text-muted-foreground">
-                                  {[p.brand, p.model].filter(Boolean).join(' · ')}
-                                  {p.sku ? ` · SKU: ${p.sku}` : ''}
-                                  {` · Qty: ${p.quantity}`}
-                                </p>
-                              </div>
-                              <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium shrink-0 ${p.status === 'active' ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'}`}>
-                                {p.status}
-                              </span>
-                            </button>
-                          ))}
-                        </div>
-                      )}
-                      {inventoryOpen && inventorySearch.trim().length > 0 && filteredProducts.length === 0 && (
-                        <div className="absolute z-50 w-full mt-1 rounded-lg border bg-popover shadow-md px-4 py-3 text-sm text-muted-foreground">
-                          No inventory products match "{inventorySearch}"
-                        </div>
-                      )}
-                    </div>
-                  )}
-                </div>
-
-                <div className="border-t" />
 
                 {/* ── Quantity + Unit Identifiers ── */}
                 <div className="space-y-4">
