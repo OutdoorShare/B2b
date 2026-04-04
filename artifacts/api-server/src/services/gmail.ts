@@ -278,7 +278,9 @@ export async function sendBlastEmail(opts: {
   companyEmail?: string | null;
 }): Promise<void> {
   const { toEmail, customerName, subject, bodyText, companyName, companyEmail } = opts;
-  const fromHeader = `${companyName} <samhos@myoutdoorshare.com>`;
+  const fromHeader = companyEmail
+    ? `${companyName} <${companyEmail}>`
+    : `${companyName} <samhos@myoutdoorshare.com>`;
   const replyTo = companyEmail || undefined;
 
   // Convert plain-text line breaks to HTML paragraphs
@@ -591,7 +593,9 @@ export async function sendKioskAccountSetupEmail(opts: {
   listingTitle: string;
 }): Promise<void> {
   const { customerName, customerEmail, bookingId, tenantSlug, companyName, adminEmail, startDate, endDate, listingTitle } = opts;
-  const fromHeader = `${companyName} <samhos@myoutdoorshare.com>`;
+  const fromHeader = adminEmail
+    ? `${companyName} <${adminEmail}>`
+    : `${companyName} <samhos@myoutdoorshare.com>`;
   const registerUrl = `${APP_URL}/${tenantSlug}/set-password?email=${encodeURIComponent(customerEmail)}`;
 
   const body = `
@@ -847,7 +851,9 @@ export async function sendBookingPickupReminderEmail(opts: {
   adminEmail?: string;
 }): Promise<void> {
   const { customerName, customerEmail, bookingId, listingTitle, startDate, endDate, companyName, tenantSlug, adminEmail } = opts;
-  const fromHeader = `${companyName} <samhos@myoutdoorshare.com>`;
+  const fromHeader = adminEmail
+    ? `${companyName} <${adminEmail}>`
+    : `${companyName} <samhos@myoutdoorshare.com>`;
   const bookingUrl = tenantSlug ? `${APP_URL}/${tenantSlug}/my-bookings/${bookingId}` : null;
 
   const body = `
@@ -977,7 +983,9 @@ export async function sendReadyToAdventureEmail(opts: {
   adminEmail?: string;
 }): Promise<void> {
   const { customerName, customerEmail, bookingId, listingTitle, startDate, endDate, companyName, adminEmail } = opts;
-  const fromHeader = `${companyName} <samhos@myoutdoorshare.com>`;
+  const fromHeader = adminEmail
+    ? `${companyName} <${adminEmail}>`
+    : `${companyName} <samhos@myoutdoorshare.com>`;
 
   const body = `
     <p style="margin:0 0 8px;font-size:18px;font-weight:700;color:${BRAND_DARK};">You're all set — enjoy your adventure, ${customerName}!</p>
@@ -1269,7 +1277,9 @@ export async function sendPrePickupReminderRenterEmail(opts: {
   contactPhone?: string | null;
 }): Promise<void> {
   const { customerName, customerEmail, bookingId, listingTitle, startDate, endDate, pickupTime, pickupAddress, companyName, tenantSlug, adminEmail, contactPhone } = opts;
-  const fromHeader = `${companyName} <samhos@myoutdoorshare.com>`;
+  const fromHeader = adminEmail
+    ? `${companyName} <${adminEmail}>`
+    : `${companyName} <samhos@myoutdoorshare.com>`;
   const bookingUrl = tenantSlug ? `${APP_URL}/${tenantSlug}/my-bookings/${bookingId}` : null;
 
   const body = `
@@ -1392,7 +1402,9 @@ export async function sendReturnReminderRenterEmail(opts: {
   depositNote?: string;
 }): Promise<void> {
   const { customerName, customerEmail, bookingId, listingTitle, startDate, endDate, companyName, tenantSlug, adminEmail, depositNote } = opts;
-  const fromHeader = `${companyName} <samhos@myoutdoorshare.com>`;
+  const fromHeader = adminEmail
+    ? `${companyName} <${adminEmail}>`
+    : `${companyName} <samhos@myoutdoorshare.com>`;
   const bookingUrl = tenantSlug ? `${APP_URL}/${tenantSlug}/my-bookings/${bookingId}` : null;
 
   const body = `
