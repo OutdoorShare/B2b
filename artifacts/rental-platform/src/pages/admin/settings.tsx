@@ -13,11 +13,74 @@ import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
-import { Copy, CheckCircle2, Paintbrush, RefreshCw, Upload, Eye, EyeOff, ImageIcon, X, KeyRound, Mail, ChevronDown, ChevronUp, ExternalLink } from "lucide-react";
+import { Copy, CheckCircle2, Paintbrush, RefreshCw, Upload, Eye, EyeOff, ImageIcon, X, KeyRound, Mail, ChevronDown, ChevronUp, ExternalLink, Wand2 } from "lucide-react";
 import { applyBrandColors, PRESET_THEMES, isLight } from "@/lib/theme";
 
 function slugifyPreview(name: string): string {
   return name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 40);
+}
+
+// ── Canvas-based logo color extractor ────────────────────────────────────────
+function toHex(r: number, g: number, b: number): string {
+  return "#" + [r, g, b].map(v => Math.min(255, v).toString(16).padStart(2, "0")).join("");
+}
+
+function colorDist(r1: number, g1: number, b1: number, r2: number, g2: number, b2: number): number {
+  return Math.sqrt((r1 - r2) ** 2 + (g1 - g2) ** 2 + (b1 - b2) ** 2);
+}
+
+async function extractColorsFromImage(src: string): Promise<[string, string] | null> {
+  return new Promise(resolve => {
+    const img = new Image();
+    img.crossOrigin = "anonymous";
+    img.onload = () => {
+      try {
+        const SIZE = 80;
+        const canvas = document.createElement("canvas");
+        canvas.width = SIZE;
+        canvas.height = SIZE;
+        const ctx = canvas.getContext("2d");
+        if (!ctx) { resolve(null); return; }
+        ctx.drawImage(img, 0, 0, SIZE, SIZE);
+        const { data } = ctx.getImageData(0, 0, SIZE, SIZE);
+
+        const buckets: Record<string, { r: number; g: number; b: number; count: number }> = {};
+
+        for (let i = 0; i < data.length; i += 4) {
+          const r = data[i], g = data[i + 1], b = data[i + 2], a = data[i + 3];
+          if (a < 100) continue;                    // skip transparent
+          if (r > 230 && g > 230 && b > 230) continue; // skip near-white
+          if (r < 30  && g < 30  && b < 30)  continue; // skip near-black
+
+          // Skip low-saturation (near-gray)
+          const max = Math.max(r, g, b), min = Math.min(r, g, b);
+          const sat = max === 0 ? 0 : (max - min) / max;
+          if (sat < 0.18) continue;
+
+          // Quantize to 20-unit buckets
+          const br = Math.round(r / 20) * 20;
+          const bg = Math.round(g / 20) * 20;
+          const bb = Math.round(b / 20) * 20;
+          const key = `${br},${bg},${bb}`;
+          if (!buckets[key]) buckets[key] = { r: br, g: bg, b: bb, count: 0 };
+          buckets[key].count++;
+        }
+
+        const sorted = Object.values(buckets).sort((a, b) => b.count - a.count);
+        if (sorted.length === 0) { resolve(null); return; }
+
+        const top = sorted[0];
+        const second = sorted.find(c => colorDist(c.r, c.g, c.b, top.r, top.g, top.b) > 55)
+          ?? (sorted[1] ?? top);
+
+        resolve([toHex(top.r, top.g, top.b), toHex(second.r, second.g, second.b)]);
+      } catch {
+        resolve(null);
+      }
+    };
+    img.onerror = () => resolve(null);
+    img.src = src;
+  });
 }
 
 export default function AdminSettings() {
@@ -91,6 +154,28 @@ export default function AdminSettings() {
       accentColor:  preset.accent
     }));
     applyBrandColors(preset.primary, preset.accent);
+  };
+
+  // ── Match Logo Colors ────────────────────────────────────────────────
+  const [matchingColors, setMatchingColors] = useState(false);
+
+  const handleMatchLogoColors = async () => {
+    const url = formData.logoUrl;
+    if (!url || matchingColors) return;
+    setMatchingColors(true);
+    try {
+      const colors = await extractColorsFromImage(url);
+      if (colors) {
+        const [primary, secondary] = colors;
+        setFormData((prev: any) => ({ ...prev, primaryColor: primary, accentColor: secondary }));
+        applyBrandColors(primary, secondary);
+        toast({ title: "Colors matched!", description: "Brand colors updated from your logo." });
+      } else {
+        toast({ title: "Couldn't extract colors", description: "Try a logo with bold, distinct colors.", variant: "destructive" });
+      }
+    } finally {
+      setMatchingColors(false);
+    }
   };
 
   const doSave = async (retrying = false) => {
@@ -663,11 +748,25 @@ export default function AdminSettings() {
             {/* Colors */}
             <Card>
               <CardHeader>
-                <div className="flex items-center justify-between">
+                <div className="flex items-center justify-between gap-4">
                   <div>
                     <CardTitle className="flex items-center gap-2"><Paintbrush className="w-4 h-4" /> Brand Colors</CardTitle>
                     <CardDescription className="mt-1">These colors are applied across the entire storefront in real time.</CardDescription>
                   </div>
+                  {formData.logoUrl && (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="gap-2 shrink-0"
+                      onClick={handleMatchLogoColors}
+                      disabled={matchingColors}
+                      title="Analyze your logo and automatically set matching brand colors"
+                    >
+                      <Wand2 className={`w-3.5 h-3.5 ${matchingColors ? "animate-spin" : ""}`} />
+                      {matchingColors ? "Analyzing…" : "Match Logo Colors"}
+                    </Button>
+                  )}
                 </div>
               </CardHeader>
               <CardContent className="space-y-6">
