@@ -2,8 +2,8 @@ import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
 import { bookingsTable, messageLogs, automationSettings, businessProfileTable } from "@workspace/db/schema";
 import { eq, and, gt, desc } from "drizzle-orm";
-import { sendBlastEmail, withSmtpCreds } from "../services/gmail";
-import { getTenantSmtpCreds } from "../services/smtp-helper";
+import { sendBlastEmail, withSmtpCreds, withBrand } from "../services/gmail";
+import { getTenantSmtpCreds, getTenantBrand } from "../services/smtp-helper";
 
 const router: IRouter = Router();
 
@@ -138,7 +138,7 @@ router.post("/communications/send", async (req, res) => {
         companyEmail = biz.outboundEmail ?? biz.email ?? null;
       }
     }
-    const smtpCreds = await getTenantSmtpCreds(req.tenantId);
+    const [smtpCreds, brand] = await Promise.all([getTenantSmtpCreds(req.tenantId), getTenantBrand(req.tenantId)]);
 
     const logs = [];
     const emailChannel = channel === "email" || channel === "both" || !channel;
@@ -150,14 +150,14 @@ router.post("/communications/send", async (req, res) => {
       // Attempt real email delivery
       if (emailChannel && r.email) {
         try {
-          await withSmtpCreds(smtpCreds, () => sendBlastEmail({
+          await withBrand(brand, () => withSmtpCreds(smtpCreds, () => sendBlastEmail({
             toEmail: r.email,
             customerName: r.name || "there",
             subject: subject || `Message from ${companyName}`,
             bodyText: body,
             companyName,
             companyEmail,
-          }));
+          })));
           status = "sent";
         } catch (emailErr: any) {
           req.log.warn({ emailErr }, "Failed to send blast email (logging anyway)");
@@ -251,18 +251,18 @@ router.post("/communications/send-automation", async (req, res) => {
       : "sms";
 
     // Attempt real email delivery for email channel
-    const smtpCreds = await getTenantSmtpCreds(req.tenantId);
+    const [smtpCreds, brand] = await Promise.all([getTenantSmtpCreds(req.tenantId), getTenantBrand(effectiveTenantId)]);
     let status: "sent" | "failed" | "simulated" = "simulated";
     if (automation.emailEnabled && booking.customerEmail) {
       try {
-        await withSmtpCreds(smtpCreds, () => sendBlastEmail({
+        await withBrand(brand, () => withSmtpCreds(smtpCreds, () => sendBlastEmail({
           toEmail: booking.customerEmail,
           customerName: booking.customerName,
           subject: automation.subject || `Message from ${companyName}`,
           bodyText: body,
           companyName,
           companyEmail,
-        }));
+        })));
         status = "sent";
       } catch (emailErr) {
         req.log.warn({ emailErr }, "Failed to send automation email (logging anyway)");

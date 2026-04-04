@@ -9,8 +9,8 @@ import {
 import { eq, and, desc, sql } from "drizzle-orm";
 import { requireTenant } from "../middleware/admin-auth";
 import { createNotification } from "../services/notifications";
-import { sendChatMessageToAdminEmail, sendChatReplyToRenterEmail, withSmtpCreds } from "../services/gmail";
-import { getTenantSmtpCreds } from "../services/smtp-helper";
+import { sendChatMessageToAdminEmail, sendChatReplyToRenterEmail, withSmtpCreds, withBrand } from "../services/gmail";
+import { getTenantSmtpCreds, getTenantBrand } from "../services/smtp-helper";
 
 const router = Router();
 
@@ -258,17 +258,18 @@ router.post("/chat/threads/:id/messages", requireTenant, async (req, res) => {
           .from(businessProfileTable)
           .where(eq(businessProfileTable.tenantId, req.tenantId!))
           .limit(1);
-        getTenantSmtpCreds(req.tenantId).then(smtpCreds =>
-          withSmtpCreds(smtpCreds, () => sendChatReplyToRenterEmail({
-            renterEmail: thread.customerEmail,
-            renterName: thread.customerName,
-            companyName: profile?.name ?? tenant?.slug ?? "Your Company",
-            companyEmail: profile?.outboundEmail ?? profile?.email ?? undefined,
-            messageBody: body,
-            threadId,
-            slug: tenant?.slug ?? "",
-          }))
-        ).catch(() => {});
+        Promise.all([getTenantSmtpCreds(req.tenantId), getTenantBrand(req.tenantId)])
+          .then(([smtpCreds, brand]) =>
+            withBrand(brand, () => withSmtpCreds(smtpCreds, () => sendChatReplyToRenterEmail({
+              renterEmail: thread.customerEmail,
+              renterName: thread.customerName,
+              companyName: profile?.name ?? tenant?.slug ?? "Your Company",
+              companyEmail: profile?.outboundEmail ?? profile?.email ?? undefined,
+              messageBody: body,
+              threadId,
+              slug: tenant?.slug ?? "",
+            })))
+          ).catch(() => {});
       } catch {}
     } else {
       // Notify admin

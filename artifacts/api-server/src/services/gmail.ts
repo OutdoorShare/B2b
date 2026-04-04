@@ -19,6 +19,24 @@ export async function withSmtpCreds<T>(
   return smtpStorage.run(creds ?? null, fn);
 }
 
+// ── Brand context (per-request, safe for concurrency) ─────────────────────────
+export interface BrandOpts {
+  logoUrl?: string | null;
+  primaryColor?: string | null;
+  companyName?: string | null;
+  contactEmail?: string | null;
+}
+
+const brandStorage = new AsyncLocalStorage<BrandOpts | null>();
+
+/** Wrap any email-sending call so it uses the tenant's brand. */
+export async function withBrand<T>(
+  brand: BrandOpts | null | undefined,
+  fn: () => Promise<T>
+): Promise<T> {
+  return brandStorage.run(brand ?? null, fn);
+}
+
 /** Parse the base64url-encoded raw MIME message produced by makeRawEmail(). */
 function parseRawMime(raw: string): { to: string; subject: string; replyTo?: string; html: string } {
   const decoded = Buffer.from(raw.replace(/-/g, "+").replace(/_/g, "/"), "base64").toString("utf8");
@@ -170,10 +188,10 @@ const APP_URL =
   process.env.APP_URL ||
   (process.env.REPLIT_DEV_DOMAIN ? `https://${process.env.REPLIT_DEV_DOMAIN}` : "https://outdoorshare.app");
 
-// ── Brand constants ────────────────────────────────────────────────────────────
+// ── Brand constants (platform defaults) ───────────────────────────────────────
 const BRAND_GREEN = "#3ab549";
-const BRAND_DARK = "#1a2332";
-const LOGO_URL = `${APP_URL}/outdoorshare-logo.png`;
+const BRAND_DARK  = "#1a2332";
+const PLATFORM_LOGO_URL = `${APP_URL}/outdoorshare-logo.png`;
 
 // ── Shared HTML wrapper ────────────────────────────────────────────────────────
 function emailShell(opts: {
@@ -182,29 +200,40 @@ function emailShell(opts: {
   badgeColor: string;
   body: string;
 }): string {
+  // Pull tenant branding from context (set via withBrand), falling back to platform defaults
+  const brand       = brandStorage.getStore();
+  const accentColor = brand?.primaryColor  || BRAND_GREEN;
+  const companyName = brand?.companyName   || "OutdoorShare";
+  const contactEmail = brand?.contactEmail || "samhos@myoutdoorshare.com";
+
+  // Header: tenant logo → tenant name text → platform logo (fallback cascade)
+  const logoSrc   = brand?.logoUrl || (brand ? null : PLATFORM_LOGO_URL);
+  const headerHtml = logoSrc
+    ? `<img src="${logoSrc}" alt="${companyName}" width="180" style="display:inline-block;max-width:180px;max-height:80px;height:auto;object-fit:contain;" />`
+    : `<span style="font-size:22px;font-weight:900;color:#ffffff;letter-spacing:-0.5px;">${companyName}</span>`;
+
   const { preheader, badgeLabel, badgeColor, body } = opts;
+
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>OutdoorShare</title>
+  <title>${companyName}</title>
 </head>
 <body style="margin:0;padding:0;background:#f0f2f0;font-family:'Helvetica Neue',Arial,sans-serif;">
-  <!-- preheader text (hidden) -->
   <span style="display:none;max-height:0;overflow:hidden;mso-hide:all;">${preheader}</span>
 
   <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#f0f2f0;min-height:100vh;">
     <tr>
       <td align="center" valign="top" style="padding:40px 16px;">
 
-        <!-- Card -->
         <table width="600" cellpadding="0" cellspacing="0" border="0" style="max-width:600px;width:100%;background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,0.10);">
 
-          <!-- Header: logo on dark bg -->
+          <!-- Header: brand logo / name on dark bg -->
           <tr>
             <td style="background:${BRAND_DARK};padding:28px 40px;text-align:center;">
-              <img src="${LOGO_URL}" alt="OutdoorShare" width="180" style="display:inline-block;max-width:180px;height:auto;" />
+              ${headerHtml}
             </td>
           </tr>
 
@@ -226,16 +255,16 @@ function emailShell(opts: {
           <tr>
             <td style="background:#f8faf8;padding:20px 40px;text-align:center;border-top:1px solid #e5e7eb;">
               <p style="margin:0 0 6px 0;font-size:13px;color:#6b7280;">
-                <strong style="color:${BRAND_GREEN};">OutdoorShare</strong> &mdash; Find New Boundaries
+                <strong style="color:${accentColor};">${companyName}</strong>
               </p>
               <p style="margin:0;font-size:11px;color:#9ca3af;">
-                Questions? Contact us at <a href="mailto:samhos@myoutdoorshare.com" style="color:#9ca3af;">samhos@myoutdoorshare.com</a>
+                Questions? <a href="mailto:${contactEmail}" style="color:#9ca3af;">${contactEmail}</a>
               </p>
+              <p style="margin:8px 0 0;font-size:10px;color:#d1d5db;">Powered by OutdoorShare</p>
             </td>
           </tr>
 
         </table>
-        <!-- /Card -->
 
       </td>
     </tr>

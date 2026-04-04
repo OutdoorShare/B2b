@@ -19,8 +19,9 @@ import {
   sendAgreementLinkEmail,
   sendIdentityVerificationEmail,
   withSmtpCreds,
+  withBrand,
 } from "../services/gmail";
-import { getTenantSmtpCreds } from "../services/smtp-helper";
+import { getTenantSmtpCreds, getTenantBrand } from "../services/smtp-helper";
 import { openai } from "@workspace/integrations-openai-ai-server";
 import { getStripeForTenant } from "../services/stripe";
 import { createNotification } from "../services/notifications";
@@ -342,8 +343,8 @@ router.post("/bookings", async (req, res) => {
             if (t?.slug) tenantSlug = t.slug;
             adminEmail = biz?.outboundEmail ?? t?.email ?? undefined;
           }
-          const smtpCreds = await getTenantSmtpCreds(req.tenantId);
-          await withSmtpCreds(smtpCreds, () => sendKioskAccountSetupEmail({
+          const [smtpCreds, brand] = await Promise.all([getTenantSmtpCreds(req.tenantId), getTenantBrand(req.tenantId)]);
+          await withBrand(brand, () => withSmtpCreds(smtpCreds, () => sendKioskAccountSetupEmail({
             customerName: created.customerName,
             customerEmail: created.customerEmail,
             bookingId: created.id,
@@ -353,7 +354,7 @@ router.post("/bookings", async (req, res) => {
             startDate: created.startDate,
             endDate: created.endDate,
             listingTitle: listing.title,
-          }));
+          })));
           appendEmailEvent(created.id, "kiosk_setup", created.customerEmail);
         } catch (emailErr) {
           req.log.warn(emailErr, "Failed to send kiosk account-setup email");
@@ -381,8 +382,8 @@ router.post("/bookings", async (req, res) => {
             if (t?.slug) tenantSlug = t.slug;
             adminEmail = biz?.outboundEmail ?? t?.email ?? undefined;
           }
-          const smtpCreds = await getTenantSmtpCreds(req.tenantId);
-          await withSmtpCreds(smtpCreds, () => sendBookingPickupReminderEmail({
+          const [smtpCreds, brand] = await Promise.all([getTenantSmtpCreds(req.tenantId), getTenantBrand(req.tenantId)]);
+          await withBrand(brand, () => withSmtpCreds(smtpCreds, () => sendBookingPickupReminderEmail({
             customerName: created.customerName,
             customerEmail: created.customerEmail,
             bookingId: created.id,
@@ -392,7 +393,7 @@ router.post("/bookings", async (req, res) => {
             companyName,
             tenantSlug,
             adminEmail,
-          }));
+          })));
           appendEmailEvent(created.id, "confirmation", created.customerEmail);
           if (adminEmail && tenantSlug) {
             await sendAdminPickupReminderEmail({
@@ -659,7 +660,7 @@ router.put("/bookings/:id", async (req, res) => {
 
             const companyName = profileRow?.name ?? tenantRow?.slug ?? "Your Rental Company";
             const companyEmail = profileRow?.outboundEmail ?? profileRow?.email ?? tenantRow?.email ?? undefined;
-            const smtpCreds = await getTenantSmtpCreds(updated.tenantId);
+            const [smtpCreds, brand] = await Promise.all([getTenantSmtpCreds(updated.tenantId), getTenantBrand(updated.tenantId)]);
 
             // Notify renter: booking confirmed
             if (updated.tenantId && updated.customerEmail) {
@@ -684,7 +685,7 @@ router.put("/bookings/:id", async (req, res) => {
                 .where(eq(contactCardsTable.id, listingRow.contactCardId));
 
               if (card) {
-                await withSmtpCreds(smtpCreds, () => sendContactCardEmail({
+                await withBrand(brand, () => withSmtpCreds(smtpCreds, () => sendContactCardEmail({
                   toEmail: updated.customerEmail,
                   customerName: updated.customerName,
                   listingTitle: listingRow.title,
@@ -693,7 +694,7 @@ router.put("/bookings/:id", async (req, res) => {
                   companyName,
                   companyEmail,
                   contactCard: card,
-                }));
+                })));
               }
             }
 
@@ -724,7 +725,7 @@ router.put("/bookings/:id", async (req, res) => {
               }
               const BASE = process.env.APP_URL || `https://${process.env.REPLIT_DEV_DOMAIN}`;
               const pickupUrl = `${BASE}/${tenantRow?.slug ?? ""}/pickup/${pickupToken}`;
-              withSmtpCreds(smtpCreds, () => sendPickupLinkEmail({
+              withBrand(brand, () => withSmtpCreds(smtpCreds, () => sendPickupLinkEmail({
                 toEmail: updated.customerEmail,
                 customerName: updated.customerName,
                 pickupUrl,
@@ -734,7 +735,7 @@ router.put("/bookings/:id", async (req, res) => {
                 companyName,
                 companyEmail,
                 hostPickup: false,
-              })).then(() => appendEmailEvent(updated.id, "pickup_link", updated.customerEmail))
+              }))).then(() => appendEmailEvent(updated.id, "pickup_link", updated.customerEmail))
                 .catch(err => console.error("[auto pickup email]", err));
             }
           } catch (e) {
@@ -791,7 +792,7 @@ router.put("/bookings/:id", async (req, res) => {
 
             const companyName = profileRow?.name ?? tenantRow?.slug ?? "Your Rental Company";
             const companyEmail = profileRow?.outboundEmail ?? profileRow?.email ?? tenantRow?.email ?? undefined;
-            const smtpCreds = await getTenantSmtpCreds(updated.tenantId);
+            const [smtpCreds, brand] = await Promise.all([getTenantSmtpCreds(updated.tenantId), getTenantBrand(updated.tenantId)]);
 
             const returnToken = updated.returnToken ?? randomBytes(24).toString("hex");
             if (!updated.returnToken) {
@@ -802,7 +803,7 @@ router.put("/bookings/:id", async (req, res) => {
             const BASE = process.env.APP_URL || `https://${process.env.REPLIT_DEV_DOMAIN}`;
             const returnUrl = `${BASE}/${tenantRow?.slug ?? ""}/return/${returnToken}`;
 
-            await withSmtpCreds(smtpCreds, () => sendReturnLinkEmail({
+            await withBrand(brand, () => withSmtpCreds(smtpCreds, () => sendReturnLinkEmail({
               toEmail: updated.customerEmail,
               customerName: updated.customerName,
               returnUrl,
@@ -811,7 +812,7 @@ router.put("/bookings/:id", async (req, res) => {
               endDate: updated.endDate,
               companyName,
               companyEmail,
-            }));
+            })));
             await appendEmailEvent(updated.id, "return_link", updated.customerEmail);
           } catch (e) {
             console.error("[auto return email]", e);
@@ -1127,11 +1128,11 @@ router.post("/bookings/:id/before-photos", pickupUpload.array("photos", 15), asy
                 .from(tenantsTable).where(eq(tenantsTable.id, booking.tenantId));
               if (t?.email) adminEmail = t.email;
             }
-            const smtpCreds = await getTenantSmtpCreds(booking.tenantId);
+            const [smtpCreds, brand] = await Promise.all([getTenantSmtpCreds(booking.tenantId), getTenantBrand(booking.tenantId)]);
             const listingTitle1 = booking.listingId
               ? (await db.select({ title: listingsTable.title }).from(listingsTable).where(eq(listingsTable.id, booking.listingId)))[0]?.title ?? "your rental"
               : "your rental";
-            await withSmtpCreds(smtpCreds, () => sendReadyToAdventureEmail({
+            await withBrand(brand, () => withSmtpCreds(smtpCreds, () => sendReadyToAdventureEmail({
               customerName: booking.customerName,
               customerEmail: booking.customerEmail,
               bookingId: booking.id,
@@ -1140,7 +1141,7 @@ router.post("/bookings/:id/before-photos", pickupUpload.array("photos", 15), asy
               endDate: booking.endDate,
               companyName,
               adminEmail,
-            }));
+            })));
           } catch (emailErr) {
             req.log.warn(emailErr, "Failed to send ready-to-adventure email");
           }
@@ -1195,11 +1196,11 @@ router.post("/pickup/:token/photos", pickupUpload.array("photos", 20), async (re
                 .from(tenantsTable).where(eq(tenantsTable.id, booking.tenantId));
               if (t?.email) adminEmail = t.email;
             }
-            const smtpCreds = await getTenantSmtpCreds(booking.tenantId);
+            const [smtpCreds, brand] = await Promise.all([getTenantSmtpCreds(booking.tenantId), getTenantBrand(booking.tenantId)]);
             const listingTitle = booking.listingId
               ? (await db.select({ title: listingsTable.title }).from(listingsTable).where(eq(listingsTable.id, booking.listingId)))[0]?.title ?? "your rental"
               : "your rental";
-            await withSmtpCreds(smtpCreds, () => sendReadyToAdventureEmail({
+            await withBrand(brand, () => withSmtpCreds(smtpCreds, () => sendReadyToAdventureEmail({
               customerName: booking.customerName,
               customerEmail: booking.customerEmail,
               bookingId: booking.id,
@@ -1208,7 +1209,7 @@ router.post("/pickup/:token/photos", pickupUpload.array("photos", 20), async (re
               endDate: booking.endDate,
               companyName,
               adminEmail,
-            }));
+            })));
           } catch (emailErr) {
             req.log.warn(emailErr, "Failed to send ready-to-adventure email");
           }
