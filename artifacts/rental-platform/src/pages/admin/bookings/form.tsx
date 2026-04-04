@@ -1,4 +1,3 @@
-import { adminPath } from "@/lib/admin-nav";
 import { useState, useEffect, useMemo } from "react";
 import { useLocation, useParams } from "wouter";
 import {
@@ -381,7 +380,7 @@ export default function AdminBookingForm() {
             description: `Email sent to ${form.customerEmail}. Booking #${newBookingId} is pending payment.`,
           });
           queryClient.invalidateQueries({ queryKey: getGetBookingsQueryKey() });
-          setLocation(adminPath(`/bookings/${newBookingId}`));
+          setLocation(`/${params.slug}/admin/bookings/${newBookingId}`);
           return;
         }
       } else if (!isEditing && paymentMode === "charge_saved") {
@@ -399,7 +398,7 @@ export default function AdminBookingForm() {
             description: `${csData.brand ?? savedCard?.brand ?? "Card"} ••••${csData.last4 ?? savedCard?.last4} successfully charged $${estimatedTotal.toFixed(2)}. Booking confirmed.`,
           });
           queryClient.invalidateQueries({ queryKey: getGetBookingsQueryKey() });
-          setLocation(adminPath(`/bookings/${newBookingId}`));
+          setLocation(`/${params.slug}/admin/bookings/${newBookingId}`);
           return;
         }
       } else {
@@ -409,7 +408,7 @@ export default function AdminBookingForm() {
         });
       }
 
-      setLocation(isEditing ? adminPath(`/bookings/${editId}`) : adminPath(`/bookings/${newBookingId}`));
+      setLocation(isEditing ? `/${params.slug}/admin/bookings/${editId}` : `/${params.slug}/admin/bookings/${newBookingId}`);
     } catch {
       setError("Connection error. Please try again.");
     } finally { setSaving(false); }

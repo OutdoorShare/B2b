@@ -25,10 +25,25 @@ export async function resolveTenant(req: Request, _res: Response, next: NextFunc
         .where(eq(adminUsersTable.token, adminToken))
         .limit(1);
 
-      if (user && user.tenantId) {
-        req.tenantId = user.tenantId;
+      if (user) {
         req.adminUser = { id: user.id, role: user.role, tenantId: user.tenantId };
-        return next();
+        // When a tenant slug is also provided (from the URL), use it for tenant resolution.
+        // This allows the correct tenant context when an admin accesses a panel via slug URL.
+        if (tenantSlug) {
+          const [slugTenant] = await db
+            .select()
+            .from(tenantsTable)
+            .where(eq(tenantsTable.slug, tenantSlug))
+            .limit(1);
+          if (slugTenant) {
+            req.tenantId = slugTenant.id;
+            return next();
+          }
+        }
+        if (user.tenantId) {
+          req.tenantId = user.tenantId;
+          return next();
+        }
       }
 
       // Try tenant owner token
@@ -39,6 +54,18 @@ export async function resolveTenant(req: Request, _res: Response, next: NextFunc
         .limit(1);
 
       if (tenant) {
+        // When a tenant slug is also provided, use it for tenant resolution.
+        if (tenantSlug) {
+          const [slugTenant] = await db
+            .select()
+            .from(tenantsTable)
+            .where(eq(tenantsTable.slug, tenantSlug))
+            .limit(1);
+          if (slugTenant) {
+            req.tenantId = slugTenant.id;
+            return next();
+          }
+        }
         req.tenantId = tenant.id;
         return next();
       }

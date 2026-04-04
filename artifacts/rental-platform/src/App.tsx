@@ -82,13 +82,20 @@ const queryClient = new QueryClient();
 // Inject tenant context headers on every generated API call.
 //
 // IMPORTANT: Admin token must ONLY be sent on admin routes.
-// If we sent it on storefront routes, any logged-in admin viewing
-// a different company's storefront would receive THEIR company's
-// logo/colors instead of the storefront's — causing cross-tenant
-// data contamination.
 setExtraHeadersGetter(() => {
   const base = import.meta.env.BASE_URL.replace(/\/$/, "");
   const path = window.location.pathname.replace(base, "") || "/";
+
+  const reserved = new Set([
+    "admin", "api", "superadmin", "platform", "docs", "public", "signup",
+    "get-started", "demo", "audit", "health", "static", "assets", "uploads",
+    "login", "logout", "register", "account", "dashboard", "settings", "billing",
+    "support", "help", "about", "contact", "privacy", "terms", "pricing",
+    "www", "mail", "email", "ftp", "cdn", "media", "images",
+  ]);
+  const segments = path.split("/").filter(Boolean);
+  const firstSegment = segments[0];
+  const slugFromUrl = firstSegment && !reserved.has(firstSegment) ? firstSegment : null;
 
   // Only inject the admin token when the URL is actually an admin route
   // (contains /admin/ or ends with /admin).
@@ -100,26 +107,21 @@ setExtraHeadersGetter(() => {
       if (raw) {
         const session = JSON.parse(raw);
         if (session?.token) {
-          return { "x-admin-token": session.token };
+          // Send both the admin token (for auth) and the URL slug (for tenant resolution).
+          // The slug ensures the API uses the correct tenant for the panel being accessed,
+          // even when the admin session belongs to a different tenant.
+          const headers: Record<string, string> = { "x-admin-token": session.token };
+          if (slugFromUrl) headers["x-tenant-slug"] = slugFromUrl;
+          return headers;
         }
       }
     } catch { /* ignore */ }
   }
 
   // For storefront routes (and any non-admin route that has a slug),
-  // always use the tenant slug so the correct company data is fetched,
-  // regardless of whether an admin session exists in localStorage.
-  const reserved = new Set([
-    "admin", "api", "superadmin", "platform", "docs", "public", "signup",
-    "get-started", "demo", "audit", "health", "static", "assets", "uploads",
-    "login", "logout", "register", "account", "dashboard", "settings", "billing",
-    "support", "help", "about", "contact", "privacy", "terms", "pricing",
-    "www", "mail", "email", "ftp", "cdn", "media", "images",
-  ]);
-  const segments = path.split("/").filter(Boolean);
-  const firstSegment = segments[0];
-  if (firstSegment && !reserved.has(firstSegment)) {
-    return { "x-tenant-slug": firstSegment };
+  // always use the tenant slug so the correct company data is fetched.
+  if (slugFromUrl) {
+    return { "x-tenant-slug": slugFromUrl };
   }
   return {};
 });

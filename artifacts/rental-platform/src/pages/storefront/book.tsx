@@ -1452,8 +1452,10 @@ export default function StorefrontBook() {
           subtotal: a.priceType === "per_day" ? a.price * days : a.price,
         }));
 
+      const bookingHeaders: Record<string, string> = { "Content-Type": "application/json" };
+      if (slug) bookingHeaders["x-tenant-slug"] = slug;
       const res = await fetch(`${BASE}/api/bookings`, {
-        method: "POST", headers: { "Content-Type": "application/json" },
+        method: "POST", headers: bookingHeaders,
         body: JSON.stringify({
           listingId: listing.id,
           customerName: name,
