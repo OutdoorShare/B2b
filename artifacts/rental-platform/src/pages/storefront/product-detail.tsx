@@ -470,17 +470,40 @@ export default function StorefrontProductDetail() {
                         ))}
                       </div>
                       {/* Per-hour hour count */}
-                      {selectedPricingType === "per_hour" && selectedOpt && (
-                        <div className="flex items-center gap-2 pt-1">
-                          <button type="button" onClick={() => setSelectedHours(h => Math.max(selectedOpt.minHours ?? 1, h - 1))}
-                            className="w-7 h-7 rounded-full border flex items-center justify-center font-bold hover:bg-muted text-sm"
-                            disabled={selectedHours <= (selectedOpt.minHours ?? 1)}>−</button>
-                          <span className="font-bold text-base w-8 text-center">{selectedHours}</span>
-                          <button type="button" onClick={() => setSelectedHours(h => h + 1)}
-                            className="w-7 h-7 rounded-full border flex items-center justify-center font-bold hover:bg-muted text-sm">+</button>
-                          <span className="text-xs text-muted-foreground">hrs × ${selectedOpt.pricePerHour?.toFixed(2)} = <span className="font-bold text-foreground">${((selectedOpt.pricePerHour ?? 0) * selectedHours).toFixed(2)}</span></span>
-                        </div>
-                      )}
+                      {selectedPricingType === "per_hour" && selectedOpt && (() => {
+                        const snapSlots = subDayOptions.filter(
+                          o => (o.type.startsWith("slot_") || o.type === "half_day") && typeof (o as any).hours === "number"
+                        ) as Array<{ type: string; label: string; hours: number; price: number }>;
+                        const snapTarget = snapSlots.find(s => s.hours === selectedHours + 1);
+                        return (
+                          <div className="flex flex-col gap-1 pt-1">
+                            <div className="flex items-center gap-2">
+                              <button type="button" onClick={() => setSelectedHours(h => Math.max(selectedOpt.minHours ?? 1, h - 1))}
+                                className="w-7 h-7 rounded-full border flex items-center justify-center font-bold hover:bg-muted text-sm"
+                                disabled={selectedHours <= (selectedOpt.minHours ?? 1)}>−</button>
+                              <span className="font-bold text-base w-8 text-center">{selectedHours}</span>
+                              <button type="button"
+                                onClick={() => {
+                                  const next = selectedHours + 1;
+                                  const snap = snapSlots.find(s => s.hours === next);
+                                  if (snap) {
+                                    setSelectedPricingType(snap.type);
+                                  } else {
+                                    setSelectedHours(next);
+                                  }
+                                }}
+                                className="w-7 h-7 rounded-full border flex items-center justify-center font-bold hover:bg-muted text-sm">+</button>
+                              <span className="text-xs text-muted-foreground">hrs × ${selectedOpt.pricePerHour?.toFixed(2)} = <span className="font-bold text-foreground">${((selectedOpt.pricePerHour ?? 0) * selectedHours).toFixed(2)}</span></span>
+                            </div>
+                            {snapTarget && (
+                              <p className="text-[11px] text-primary/80 flex items-center gap-1">
+                                <span className="inline-block w-1 h-1 rounded-full bg-primary/60" />
+                                +1 more switches to <span className="font-semibold">{snapTarget.label}</span> (${snapTarget.price.toFixed(2)} flat)
+                              </p>
+                            )}
+                          </div>
+                        );
+                      })()}
                     </div>
                   )}
 

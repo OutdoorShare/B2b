@@ -1892,6 +1892,12 @@ export default function StorefrontBook() {
                     {selectedPricingType === "per_hour" && (() => {
                       const opt = selectedOption as { type: "per_hour"; pricePerHour: number; minHours: number } | null;
                       if (!opt) return null;
+                      // Fixed slots that the per-hour rate can snap into
+                      const snapSlots = subDayOptions.filter(
+                        o => (o.type.startsWith("slot_") || o.type === "half_day") && typeof (o as any).hours === "number"
+                      ) as Array<{ type: string; label: string; hours: number; price: number }>;
+                      const nextHours = selectedHours + 1;
+                      const snapTarget = snapSlots.find(s => s.hours === nextHours);
                       return (
                         <div className="border-t pt-3 space-y-2">
                           <div className="flex items-center justify-between">
@@ -1908,11 +1914,34 @@ export default function StorefrontBook() {
                             <span className="font-bold text-lg w-12 text-center">{selectedHours}</span>
                             <button
                               type="button"
-                              onClick={() => setSelectedHours(h => h + 1)}
+                              onClick={() => {
+                                const next = selectedHours + 1;
+                                const snap = snapSlots.find(s => s.hours === next);
+                                if (snap) {
+                                  setSelectedPricingType(snap.type);
+                                } else {
+                                  setSelectedHours(next);
+                                }
+                              }}
                               className="w-8 h-8 rounded-full border flex items-center justify-center text-lg font-bold hover:bg-muted transition-colors"
                             >+</button>
                             <span className="text-sm text-muted-foreground">× ${opt.pricePerHour.toFixed(2)}/hr = <span className="font-bold text-foreground">${(opt.pricePerHour * selectedHours).toFixed(2)}</span></span>
                           </div>
+                          {snapTarget && (
+                            <p className="text-xs text-primary/80 flex items-center gap-1">
+                              <span className="inline-block w-1.5 h-1.5 rounded-full bg-primary/60" />
+                              Adding 1 more hour will switch to <span className="font-semibold">{snapTarget.label}</span> (${snapTarget.price.toFixed(2)} flat)
+                            </p>
+                          )}
+                          {snapSlots.length > 0 && !snapTarget && (
+                            <p className="text-xs text-muted-foreground/70 flex items-center gap-1.5">
+                              {snapSlots.map(s => (
+                                <span key={s.type}>
+                                  {s.hours}h → <span className="font-medium">{s.label}</span>
+                                </span>
+                              )).reduce<React.ReactNode[]>((acc, el, i) => i === 0 ? [el] : [...acc, <span key={`dot-${i}`} className="opacity-40">·</span>, el], [])}
+                            </p>
+                          )}
                         </div>
                       );
                     })()}
