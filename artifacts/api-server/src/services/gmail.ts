@@ -278,9 +278,7 @@ export async function sendBlastEmail(opts: {
   companyEmail?: string | null;
 }): Promise<void> {
   const { toEmail, customerName, subject, bodyText, companyName, companyEmail } = opts;
-  const fromHeader = companyEmail
-    ? `${companyName} <${companyEmail}>`
-    : `${companyName} <contact.us@myoutdoorshare.com>`;
+  const fromHeader = `${companyName} <contact.us@myoutdoorshare.com>`;
   const replyTo = companyEmail || undefined;
 
   // Convert plain-text line breaks to HTML paragraphs
@@ -419,7 +417,8 @@ export async function sendPickupLinkEmail(opts: {
   hostPickup?: boolean;
 }): Promise<void> {
   const { toEmail, customerName, pickupUrl, listingTitle, startDate, endDate, companyName, companyEmail, hostPickup } = opts;
-  const fromHeader = companyEmail ? `${companyName} <${companyEmail}>` : undefined;
+  const fromHeader = `${companyName} <contact.us@myoutdoorshare.com>`;
+  const replyTo = companyEmail || undefined;
 
   const tableRows: { label: string; value: string }[] = [
     { label: "Equipment",   value: listingTitle },
@@ -471,7 +470,7 @@ export async function sendPickupLinkEmail(opts: {
   const gmail = await getUncachableGmailClient();
   await gmail.users.messages.send({
     userId: "me",
-    requestBody: { raw: makeRawEmail(toEmail, subject, html, fromHeader) },
+    requestBody: { raw: makeRawEmail(toEmail, subject, html, fromHeader, replyTo) },
   });
 }
 
@@ -593,9 +592,7 @@ export async function sendKioskAccountSetupEmail(opts: {
   listingTitle: string;
 }): Promise<void> {
   const { customerName, customerEmail, bookingId, tenantSlug, companyName, adminEmail, startDate, endDate, listingTitle } = opts;
-  const fromHeader = adminEmail
-    ? `${companyName} <${adminEmail}>`
-    : `${companyName} <contact.us@myoutdoorshare.com>`;
+  const fromHeader = `${companyName} <contact.us@myoutdoorshare.com>`;
   const registerUrl = `${APP_URL}/${tenantSlug}/set-password?email=${encodeURIComponent(customerEmail)}`;
 
   const body = `
@@ -774,9 +771,7 @@ export async function sendClaimSettlementEmail(opts: {
     chargedAmount, settledAmount, refundAmount, noRefund, adminNotes, adminEmail,
   } = opts;
 
-  const fromHeader = adminEmail
-    ? `${companyName} <${adminEmail}>`
-    : `${companyName} <contact.us@myoutdoorshare.com>`;
+  const fromHeader = `${companyName} <contact.us@myoutdoorshare.com>`;
 
   const typeLabel = type === "policy_violation" ? "Policy Violation"
     : type.charAt(0).toUpperCase() + type.slice(1);
@@ -851,9 +846,7 @@ export async function sendBookingPickupReminderEmail(opts: {
   adminEmail?: string;
 }): Promise<void> {
   const { customerName, customerEmail, bookingId, listingTitle, startDate, endDate, companyName, tenantSlug, adminEmail } = opts;
-  const fromHeader = adminEmail
-    ? `${companyName} <${adminEmail}>`
-    : `${companyName} <contact.us@myoutdoorshare.com>`;
+  const fromHeader = `${companyName} <contact.us@myoutdoorshare.com>`;
   const bookingUrl = tenantSlug ? `${APP_URL}/${tenantSlug}/my-bookings/${bookingId}` : null;
 
   const body = `
@@ -983,9 +976,7 @@ export async function sendReadyToAdventureEmail(opts: {
   adminEmail?: string;
 }): Promise<void> {
   const { customerName, customerEmail, bookingId, listingTitle, startDate, endDate, companyName, adminEmail } = opts;
-  const fromHeader = adminEmail
-    ? `${companyName} <${adminEmail}>`
-    : `${companyName} <contact.us@myoutdoorshare.com>`;
+  const fromHeader = `${companyName} <contact.us@myoutdoorshare.com>`;
 
   const body = `
     <p style="margin:0 0 8px;font-size:18px;font-weight:700;color:${BRAND_DARK};">You're all set — enjoy your adventure, ${customerName}!</p>
@@ -1188,7 +1179,8 @@ export async function sendContactCardEmail(opts: {
   });
 
   const gmail = await getUncachableGmailClient();
-  const fromHeader = companyEmail ? `${companyName} <${companyEmail}>` : undefined;
+  const fromHeader = `${companyName} <contact.us@myoutdoorshare.com>`;
+  const replyToEmail = companyEmail || undefined;
   await gmail.users.messages.send({
     userId: "me",
     requestBody: {
@@ -1196,8 +1188,8 @@ export async function sendContactCardEmail(opts: {
         toEmail,
         `Your ${listingTitle} rental is confirmed — pickup details inside`,
         html,
-        fromHeader ?? PLATFORM_FROM,
-        fromHeader ? undefined : companyEmail,
+        fromHeader,
+        replyToEmail,
       ),
     },
   });
@@ -1277,9 +1269,7 @@ export async function sendPrePickupReminderRenterEmail(opts: {
   contactPhone?: string | null;
 }): Promise<void> {
   const { customerName, customerEmail, bookingId, listingTitle, startDate, endDate, pickupTime, pickupAddress, companyName, tenantSlug, adminEmail, contactPhone } = opts;
-  const fromHeader = adminEmail
-    ? `${companyName} <${adminEmail}>`
-    : `${companyName} <contact.us@myoutdoorshare.com>`;
+  const fromHeader = `${companyName} <contact.us@myoutdoorshare.com>`;
   const bookingUrl = tenantSlug ? `${APP_URL}/${tenantSlug}/my-bookings/${bookingId}` : null;
 
   const body = `
@@ -1402,9 +1392,7 @@ export async function sendReturnReminderRenterEmail(opts: {
   depositNote?: string;
 }): Promise<void> {
   const { customerName, customerEmail, bookingId, listingTitle, startDate, endDate, companyName, tenantSlug, adminEmail, depositNote } = opts;
-  const fromHeader = adminEmail
-    ? `${companyName} <${adminEmail}>`
-    : `${companyName} <contact.us@myoutdoorshare.com>`;
+  const fromHeader = `${companyName} <contact.us@myoutdoorshare.com>`;
   const bookingUrl = tenantSlug ? `${APP_URL}/${tenantSlug}/my-bookings/${bookingId}` : null;
 
   const body = `
@@ -1506,9 +1494,8 @@ export async function sendChatReplyToRenterEmail(opts: {
   slug: string;
 }): Promise<void> {
   const { renterEmail, renterName, companyName, companyEmail, messageBody, threadId, slug } = opts;
-  const fromHeader = companyEmail
-    ? `${companyName} <${companyEmail}>`
-    : `${companyName} via OutdoorShare <contact.us@myoutdoorshare.com>`;
+  const fromHeader = `${companyName} <contact.us@myoutdoorshare.com>`;
+  const replyToEmail = companyEmail || undefined;
   const chatUrl = `${APP_URL}/${slug}`;
 
   const body = `
@@ -1535,7 +1522,7 @@ export async function sendChatReplyToRenterEmail(opts: {
   const gmail = await getUncachableGmailClient();
   await gmail.users.messages.send({
     userId: "me",
-    requestBody: { raw: makeRawEmail(renterEmail, `[${companyName}] You have a new reply`, html, fromHeader) },
+    requestBody: { raw: makeRawEmail(renterEmail, `[${companyName}] You have a new reply`, html, fromHeader, replyToEmail) },
   });
 }
 
@@ -1550,7 +1537,8 @@ export async function sendReturnLinkEmail(opts: {
   companyEmail?: string;
 }): Promise<void> {
   const { toEmail, customerName, returnUrl, listingTitle, startDate, endDate, companyName, companyEmail } = opts;
-  const fromHeader = companyEmail ? `${companyName} <${companyEmail}>` : undefined;
+  const fromHeader = `${companyName} <contact.us@myoutdoorshare.com>`;
+  const replyToEmail = companyEmail || undefined;
 
   const tableRows = [
     { label: "Equipment",   value: listingTitle },
@@ -1589,7 +1577,7 @@ export async function sendReturnLinkEmail(opts: {
   const gmail = await getUncachableGmailClient();
   await gmail.users.messages.send({
     userId: "me",
-    requestBody: { raw: makeRawEmail(toEmail, subject, html, fromHeader) },
+    requestBody: { raw: makeRawEmail(toEmail, subject, html, fromHeader, replyToEmail) },
   });
 }
 
@@ -1686,7 +1674,8 @@ export async function sendAgreementLinkEmail(opts: {
   companyEmail?: string;
 }): Promise<void> {
   const { toEmail, customerName, agreementUrl, listingTitle, startDate, endDate, companyName, companyEmail } = opts;
-  const fromHeader = companyEmail ? `${companyName} <${companyEmail}>` : undefined;
+  const fromHeader = `${companyName} <contact.us@myoutdoorshare.com>`;
+  const replyToEmail = companyEmail || undefined;
   const subject = `[${companyName}] Please sign your rental agreement`;
   const preheader = `Action required — sign your rental agreement for ${listingTitle} before pickup.`;
 
@@ -1719,7 +1708,7 @@ export async function sendAgreementLinkEmail(opts: {
   const gmail = await getUncachableGmailClient();
   await gmail.users.messages.send({
     userId: "me",
-    requestBody: { raw: makeRawEmail(toEmail, subject, html, fromHeader) },
+    requestBody: { raw: makeRawEmail(toEmail, subject, html, fromHeader, replyToEmail) },
   });
 }
 
@@ -1733,7 +1722,8 @@ export async function sendIdentityVerificationEmail(opts: {
   companyEmail?: string;
 }): Promise<void> {
   const { toEmail, customerName, verificationUrl, listingTitle, companyName, companyEmail } = opts;
-  const fromHeader = companyEmail ? `${companyName} <${companyEmail}>` : undefined;
+  const fromHeader = `${companyName} <contact.us@myoutdoorshare.com>`;
+  const replyToEmail = companyEmail || undefined;
   const subject = `[${companyName}] Identity verification required for your rental`;
   const preheader = `Verify your identity before your rental pickup — takes under 2 minutes.`;
 
@@ -1761,7 +1751,7 @@ export async function sendIdentityVerificationEmail(opts: {
   const gmail = await getUncachableGmailClient();
   await gmail.users.messages.send({
     userId: "me",
-    requestBody: { raw: makeRawEmail(toEmail, subject, html, fromHeader) },
+    requestBody: { raw: makeRawEmail(toEmail, subject, html, fromHeader, replyToEmail) },
   });
 }
 
@@ -1778,7 +1768,8 @@ export async function sendPaymentRequestEmail(opts: {
   companyEmail?: string;
 }): Promise<void> {
   const { toEmail, customerName, paymentUrl, listingTitle, startDate, endDate, totalPrice, companyName, companyEmail } = opts;
-  const fromHeader = companyEmail ? `${companyName} <${companyEmail}>` : undefined;
+  const fromHeader = `${companyName} <contact.us@myoutdoorshare.com>`;
+  const replyToEmail = companyEmail || undefined;
   const subject = `[${companyName}] Complete your rental payment — ${listingTitle}`;
   const preheader = `Your rental from ${companyName} is reserved. Complete payment to confirm your booking.`;
 
@@ -1813,6 +1804,6 @@ export async function sendPaymentRequestEmail(opts: {
   const gmail = await getUncachableGmailClient();
   await gmail.users.messages.send({
     userId: "me",
-    requestBody: { raw: makeRawEmail(toEmail, subject, html, fromHeader) },
+    requestBody: { raw: makeRawEmail(toEmail, subject, html, fromHeader, replyToEmail) },
   });
 }
