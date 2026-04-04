@@ -22,8 +22,9 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { AddonManager } from "@/components/addon-manager";
 import { UnitIdentifiersManager } from "@/components/unit-identifiers-manager";
 import { getAdminSession } from "@/lib/admin-nav";
+import { ContactCardDialog } from "@/components/contact-card-dialog";
+import type { ContactCard } from "@/components/contact-card-dialog";
 
-interface ContactCard { id: number; name: string; address?: string | null; phone?: string | null; email?: string | null; }
 interface Category { id: number; name: string; slug: string; icon?: string | null; }
 type TimeSlotDef = { label: string; startTime: string; endTime: string; rate: "full_day" | "half_day" };
 
@@ -49,7 +50,7 @@ function useContactCards() {
     if (s?.token) headers["x-admin-token"] = s.token;
     fetch(`${BASE}/api/contact-cards`, { headers }).then(r => r.ok ? r.json() : []).then(setCards).catch(() => {});
   }, []);
-  return cards;
+  return [cards, setCards] as const;
 }
 
 function useCategories() {
@@ -94,10 +95,12 @@ const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 const OPTIONAL_NUMERIC = new Set(['pricePerWeek', 'pricePerHour', 'ageRestriction']);
 
 export default function AdminListingsForm() {
-  const contactCards = useContactCards();
+  const [contactCards, setContactCards] = useContactCards();
   const categories = useCategories();
   const pickupAddresses = usePickupAddresses();
   const [useBusinessAddress, setUseBusinessAddress] = useState(false);
+  const [ccDialogOpen, setCcDialogOpen] = useState(false);
+  const [businessAddress, setBusinessAddress] = useState<string | null>(null);
   const params = useParams<{ slug: string; id?: string }>();
   const isEditing = !!params.id;
   const id = params?.id ? parseInt(params.id) : 0;
@@ -112,6 +115,17 @@ export default function AdminListingsForm() {
 
   const createListing = useCreateListing();
   const updateListing = useUpdateListing();
+
+  // Fetch business address for contact card dialog
+  useEffect(() => {
+    const s = getAdminSession();
+    const headers: Record<string, string> = {};
+    if (s?.token) headers["x-admin-token"] = s.token;
+    fetch(`${BASE}/api/business`, { headers })
+      .then(r => r.ok ? r.json() : null)
+      .then(d => { if (d?.address) setBusinessAddress(d.address); })
+      .catch(() => {});
+  }, []);
 
   // Inventory search
   const allProducts = useProducts();
@@ -1284,27 +1298,33 @@ export default function AdminListingsForm() {
                     When a booking is confirmed, the assigned contact card is automatically emailed to the renter with your pickup address, phone, and instructions.
                   </p>
                   {contactCards.length === 0 ? (
-                    <div className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground text-center">
-                      No contact cards yet.{" "}
-                      <a href={adminPath("/contact-cards")} className="text-primary underline underline-offset-2">Create one</a>{" "}
-                      to auto-send pickup details when bookings are confirmed.
+                    <div className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground text-center space-y-3">
+                      <p>No contact cards yet. Create one to auto-send pickup details when bookings are confirmed.</p>
+                      <Button type="button" size="sm" variant="outline" className="gap-1.5" onClick={() => setCcDialogOpen(true)}>
+                        <Plus className="w-3.5 h-3.5" /> Create Contact Card
+                      </Button>
                     </div>
                   ) : (
                     <div className="space-y-2">
-                      <Select
-                        value={formData.contactCardId?.toString() ?? "none"}
-                        onValueChange={v => setFormData(prev => ({ ...prev, contactCardId: v === "none" ? null : Number(v) }))}
-                      >
-                        <SelectTrigger><SelectValue placeholder="No contact card assigned" /></SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="none">— None —</SelectItem>
-                          {contactCards.map(c => (
-                            <SelectItem key={c.id} value={c.id.toString()}>
-                              {c.name}{c.address ? ` · ${c.address.split(",")[0]}` : ""}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                      <div className="flex items-center gap-2">
+                        <Select
+                          value={formData.contactCardId?.toString() ?? "none"}
+                          onValueChange={v => setFormData(prev => ({ ...prev, contactCardId: v === "none" ? null : Number(v) }))}
+                        >
+                          <SelectTrigger className="flex-1"><SelectValue placeholder="No contact card assigned" /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="none">— None —</SelectItem>
+                            {contactCards.map(c => (
+                              <SelectItem key={c.id} value={c.id.toString()}>
+                                {c.name}{c.address ? ` · ${c.address.split(",")[0]}` : ""}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <Button type="button" size="icon" variant="outline" className="shrink-0 h-9 w-9" title="Create new contact card" onClick={() => setCcDialogOpen(true)}>
+                          <Plus className="w-4 h-4" />
+                        </Button>
+                      </div>
                       {formData.contactCardId && (() => {
                         const selected = contactCards.find(c => c.id === formData.contactCardId);
                         if (!selected) return null;
@@ -1398,6 +1418,16 @@ export default function AdminListingsForm() {
           Save the listing first, then you can register unit identifiers (VIN / HIN / serial #) and add optional add-ons.
         </div>
       )}
+
+      <ContactCardDialog
+        open={ccDialogOpen}
+        onOpenChange={setCcDialogOpen}
+        businessAddress={businessAddress}
+        onSaved={card => {
+          setContactCards(prev => [...prev, card]);
+          setFormData(prev => ({ ...prev, contactCardId: card.id }));
+        }}
+      />
     </div>
   );
 }

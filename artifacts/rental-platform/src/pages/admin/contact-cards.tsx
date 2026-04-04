@@ -1,23 +1,18 @@
 import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import { Separator } from "@/components/ui/separator";
-import {
-  Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter
-} from "@/components/ui/dialog";
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger
 } from "@/components/ui/alert-dialog";
 import { useToast } from "@/hooks/use-toast";
 import {
-  Plus, MapPin, Phone, Mail, FileText, Pencil, Trash2, IdCard, Info,
-  Shirt, ShoppingBag, Truck, Lightbulb, ChevronDown, ChevronUp
+  Plus, MapPin, Phone, Mail, FileText, Pencil, Trash2, IdCard, Info, Lightbulb
 } from "lucide-react";
 import { getAdminSession } from "@/lib/admin-nav";
+import { ContactCardDialog } from "@/components/contact-card-dialog";
+import type { ContactCard } from "@/components/contact-card-dialog";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
@@ -25,39 +20,6 @@ function handleUnauthorized() {
   localStorage.removeItem("admin_session");
   window.location.reload();
 }
-
-interface ContactCard {
-  id: number;
-  tenantId: number;
-  name: string;
-  address: string | null;
-  phone: string | null;
-  email: string | null;
-  specialInstructions: string | null;
-  prepWhatToWear: string | null;
-  prepWhatToBring: string | null;
-  prepVehicleTowRating: string | null;
-  prepAdditionalTips: string | null;
-  createdAt: string;
-  updatedAt: string;
-}
-
-interface CardFormData {
-  name: string;
-  address: string;
-  phone: string;
-  email: string;
-  specialInstructions: string;
-  prepWhatToWear: string;
-  prepWhatToBring: string;
-  prepVehicleTowRating: string;
-  prepAdditionalTips: string;
-}
-
-const emptyForm: CardFormData = {
-  name: "", address: "", phone: "", email: "", specialInstructions: "",
-  prepWhatToWear: "", prepWhatToBring: "", prepVehicleTowRating: "", prepAdditionalTips: "",
-};
 
 function authHeaders() {
   const s = getAdminSession();
@@ -74,11 +36,7 @@ export default function ContactCards() {
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingCard, setEditingCard] = useState<ContactCard | null>(null);
-  const [form, setForm] = useState<CardFormData>(emptyForm);
-  const [saving, setSaving] = useState(false);
-  const [prepExpanded, setPrepExpanded] = useState(false);
   const [businessAddress, setBusinessAddress] = useState<string | null>(null);
-  const [useBusinessAddr, setUseBusinessAddr] = useState(false);
 
   useEffect(() => {
     const s = getAdminSession();
@@ -108,51 +66,24 @@ export default function ContactCards() {
 
   const openCreate = () => {
     setEditingCard(null);
-    setForm(emptyForm);
-    setPrepExpanded(false);
-    setUseBusinessAddr(false);
     setDialogOpen(true);
   };
 
   const openEdit = (card: ContactCard) => {
     setEditingCard(card);
-    const addr = card.address ?? "";
-    setForm({
-      name: card.name,
-      address: addr,
-      phone: card.phone ?? "",
-      email: card.email ?? "",
-      specialInstructions: card.specialInstructions ?? "",
-      prepWhatToWear: card.prepWhatToWear ?? "",
-      prepWhatToBring: card.prepWhatToBring ?? "",
-      prepVehicleTowRating: card.prepVehicleTowRating ?? "",
-      prepAdditionalTips: card.prepAdditionalTips ?? "",
-    });
-    setPrepExpanded(hasPrepGuide(card));
-    // Auto-check if address matches business address
-    setUseBusinessAddr(!!(businessAddress && addr.trim() === businessAddress.trim()));
     setDialogOpen(true);
   };
 
-  const handleSave = async () => {
-    if (!form.name.trim()) { toast({ title: "Card name is required", variant: "destructive" }); return; }
-    setSaving(true);
-    try {
-      const url = editingCard
-        ? `${BASE}/api/contact-cards/${editingCard.id}`
-        : `${BASE}/api/contact-cards`;
-      const method = editingCard ? "PUT" : "POST";
-      const res = await fetch(url, { method, headers: authHeaders(), body: JSON.stringify(form) });
-      if (res.status === 401) { handleUnauthorized(); return; }
-      if (!res.ok) throw new Error();
-      toast({ title: editingCard ? "Contact card updated" : "Contact card created" });
-      setDialogOpen(false);
-      fetchCards();
-    } catch {
-      toast({ title: "Failed to save contact card", variant: "destructive" });
-    } finally {
-      setSaving(false);
-    }
+  const handleSaved = (saved: ContactCard) => {
+    setCards(prev => {
+      const idx = prev.findIndex(c => c.id === saved.id);
+      if (idx >= 0) {
+        const updated = [...prev];
+        updated[idx] = saved;
+        return updated;
+      }
+      return [...prev, saved].sort((a, b) => a.name.localeCompare(b.name));
+    });
   };
 
   const handleDelete = async (id: number) => {
@@ -161,14 +92,11 @@ export default function ContactCards() {
       if (res.status === 401) { handleUnauthorized(); return; }
       if (!res.ok) throw new Error();
       toast({ title: "Contact card deleted" });
-      fetchCards();
+      setCards(prev => prev.filter(c => c.id !== id));
     } catch {
       toast({ title: "Failed to delete contact card", variant: "destructive" });
     }
   };
-
-  const f = (key: keyof CardFormData) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
-    setForm(p => ({ ...p, [key]: e.target.value }));
 
   return (
     <div className="space-y-6">
@@ -292,191 +220,13 @@ export default function ContactCards() {
         </div>
       )}
 
-      {/* Create / Edit Dialog */}
-      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="sm:max-w-xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>{editingCard ? "Edit Contact Card" : "New Contact Card"}</DialogTitle>
-            <DialogDescription>
-              This information is displayed to renters on their booking confirmation screen and sent by email.
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="space-y-5 py-2">
-            {/* Card name */}
-            <div className="space-y-1.5">
-              <Label htmlFor="cc-name">Card name <span className="text-destructive">*</span></Label>
-              <Input
-                id="cc-name"
-                placeholder="e.g., Main Location, Trailhead Parking Lot"
-                value={form.name}
-                onChange={f("name")}
-              />
-              <p className="text-xs text-muted-foreground">A label to identify this card internally (not shown to renters)</p>
-            </div>
-
-            {/* Contact Info */}
-            <div className="space-y-4 rounded-xl border p-4">
-              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Contact Information</p>
-
-              <div className="space-y-2">
-                <Label className="flex items-center gap-1.5">
-                  <MapPin className="w-3.5 h-3.5 text-primary" />
-                  Pickup Address
-                </Label>
-
-                {/* Business address shortcut */}
-                {businessAddress && (
-                  <label className="flex items-start gap-2.5 cursor-pointer group">
-                    <input
-                      type="checkbox"
-                      className="mt-0.5 h-4 w-4 accent-primary cursor-pointer"
-                      checked={useBusinessAddr}
-                      onChange={e => {
-                        const checked = e.target.checked;
-                        setUseBusinessAddr(checked);
-                        setForm(p => ({ ...p, address: checked ? businessAddress : "" }));
-                      }}
-                    />
-                    <span className="text-sm leading-snug group-hover:text-foreground transition-colors">
-                      Use business address
-                      <span className="block text-xs text-muted-foreground mt-0.5">{businessAddress}</span>
-                    </span>
-                  </label>
-                )}
-
-                <div className={useBusinessAddr ? "opacity-50 pointer-events-none" : ""}>
-                  <Textarea
-                    id="cc-address"
-                    placeholder="123 Main St, Anytown, CA 90210"
-                    rows={2}
-                    value={form.address}
-                    onChange={f("address")}
-                    readOnly={useBusinessAddr}
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1.5">
-                  <Label htmlFor="cc-phone" className="flex items-center gap-1.5">
-                    <Phone className="w-3.5 h-3.5 text-primary" />
-                    Phone
-                  </Label>
-                  <Input id="cc-phone" type="tel" placeholder="(555) 123-4567" value={form.phone} onChange={f("phone")} />
-                </div>
-                <div className="space-y-1.5">
-                  <Label htmlFor="cc-email" className="flex items-center gap-1.5">
-                    <Mail className="w-3.5 h-3.5 text-primary" />
-                    Email
-                  </Label>
-                  <Input id="cc-email" type="email" placeholder="info@yourcompany.com" value={form.email} onChange={f("email")} />
-                </div>
-              </div>
-
-              <div className="space-y-1.5">
-                <Label htmlFor="cc-instructions" className="flex items-center gap-1.5">
-                  <FileText className="w-3.5 h-3.5 text-primary" />
-                  Special Instructions
-                </Label>
-                <Textarea
-                  id="cc-instructions"
-                  placeholder="e.g., Call 30 minutes before arrival. Park in the gravel lot on the left."
-                  rows={3}
-                  value={form.specialInstructions}
-                  onChange={f("specialInstructions")}
-                />
-              </div>
-            </div>
-
-            {/* Preparation Guide — collapsible */}
-            <div className="rounded-xl border overflow-hidden">
-              <button
-                type="button"
-                onClick={() => setPrepExpanded(v => !v)}
-                className="w-full flex items-center justify-between px-4 py-3 bg-muted/40 hover:bg-muted/60 transition-colors text-left"
-              >
-                <div className="flex items-center gap-2">
-                  <Lightbulb className="w-4 h-4 text-primary" />
-                  <span className="text-sm font-semibold">Rental Preparation Guide</span>
-                  <span className="text-xs text-muted-foreground ml-1">(optional)</span>
-                </div>
-                {prepExpanded ? <ChevronUp className="w-4 h-4 text-muted-foreground" /> : <ChevronDown className="w-4 h-4 text-muted-foreground" />}
-              </button>
-
-              {prepExpanded && (
-                <div className="p-4 space-y-4">
-                  <p className="text-xs text-muted-foreground">
-                    Shown to renters on their confirmation screen to help them prepare for pickup. Leave any field blank to hide it.
-                  </p>
-
-                  <div className="space-y-1.5">
-                    <Label htmlFor="cc-wear" className="flex items-center gap-1.5">
-                      <Shirt className="w-3.5 h-3.5 text-primary" />
-                      What to Wear
-                    </Label>
-                    <Textarea
-                      id="cc-wear"
-                      placeholder="e.g., Wear closed-toe shoes and weather-appropriate layers. Sun protection recommended."
-                      rows={2}
-                      value={form.prepWhatToWear}
-                      onChange={f("prepWhatToWear")}
-                    />
-                  </div>
-
-                  <div className="space-y-1.5">
-                    <Label htmlFor="cc-bring" className="flex items-center gap-1.5">
-                      <ShoppingBag className="w-3.5 h-3.5 text-primary" />
-                      What to Bring
-                    </Label>
-                    <Textarea
-                      id="cc-bring"
-                      placeholder="e.g., Valid driver's license, water, snacks, sunscreen, a fully charged phone."
-                      rows={2}
-                      value={form.prepWhatToBring}
-                      onChange={f("prepWhatToBring")}
-                    />
-                  </div>
-
-                  <div className="space-y-1.5">
-                    <Label htmlFor="cc-tow" className="flex items-center gap-1.5">
-                      <Truck className="w-3.5 h-3.5 text-primary" />
-                      Vehicle / Tow Rating Requirements
-                    </Label>
-                    <Input
-                      id="cc-tow"
-                      placeholder="e.g., Minimum 3,500 lb tow rating. Class III hitch required. 4WD recommended."
-                      value={form.prepVehicleTowRating}
-                      onChange={f("prepVehicleTowRating")}
-                    />
-                  </div>
-
-                  <div className="space-y-1.5">
-                    <Label htmlFor="cc-tips" className="flex items-center gap-1.5">
-                      <Lightbulb className="w-3.5 h-3.5 text-primary" />
-                      Additional Tips
-                    </Label>
-                    <Textarea
-                      id="cc-tips"
-                      placeholder="e.g., Arrive 15 minutes early for a walkthrough. Download offline maps. Check weather before departure."
-                      rows={2}
-                      value={form.prepAdditionalTips}
-                      onChange={f("prepAdditionalTips")}
-                    />
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
-
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setDialogOpen(false)}>Cancel</Button>
-            <Button onClick={handleSave} disabled={saving}>
-              {saving ? "Saving…" : editingCard ? "Save Changes" : "Create Card"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <ContactCardDialog
+        open={dialogOpen}
+        onOpenChange={setDialogOpen}
+        editingCard={editingCard}
+        onSaved={handleSaved}
+        businessAddress={businessAddress}
+      />
     </div>
   );
 }
