@@ -237,7 +237,7 @@ export default function BundlePickerModal({
               <p className="text-xs text-muted-foreground">This amount is added to your main item's total.</p>
             </div>
           ) : (
-            <p className="text-sm text-muted-foreground text-center">No items added yet — search and add gear above.</p>
+            <p className="text-sm text-muted-foreground text-center">No items added yet — search and add products above.</p>
           )}
 
           <div className="flex gap-3">

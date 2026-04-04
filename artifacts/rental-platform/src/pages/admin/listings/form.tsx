@@ -771,7 +771,7 @@ export default function AdminListingsForm() {
                             <li><strong>Rentals 5 days or longer</strong> — the deposit is <strong>fully charged</strong> at pickup and refunded manually at return if no damage.</li>
                           </ul>
                           <ul className="text-muted-foreground space-y-1 list-disc list-inside leading-relaxed">
-                            <li>If the gear is returned undamaged, release the hold (or issue a refund for long rentals) from the Booking detail page.</li>
+                            <li>If the product is returned undamaged, release the hold (or issue a refund for long rentals) from the Booking detail page.</li>
                             <li>If there is damage, capture the hold or keep the charge from the Booking detail page.</li>
                           </ul>
                         </PopoverContent>

@@ -207,7 +207,7 @@ export default function AuditPage() {
             </p>
             <div>
               <p className="font-semibold text-sm text-gray-900">Jake Winters</p>
-              <p className="text-xs text-muted-foreground">Summit Gear Rentals</p>
+              <p className="text-xs text-muted-foreground">Summit Rentals</p>
             </div>
           </div>
 
@@ -237,11 +237,11 @@ export default function AuditPage() {
             </div>
             <div className="col-span-2 sm:col-span-1">
               <label className="text-xs font-semibold text-gray-700 mb-1 block">Business name *</label>
-              <Input value={form.businessName} onChange={e => setForm(f => ({ ...f, businessName: e.target.value }))} placeholder="Summit Gear Rentals" />
+              <Input value={form.businessName} onChange={e => setForm(f => ({ ...f, businessName: e.target.value }))} placeholder="Summit Rentals" />
             </div>
             <div className="col-span-2 sm:col-span-1">
               <label className="text-xs font-semibold text-gray-700 mb-1 block">Email *</label>
-              <Input type="email" value={form.email} onChange={e => setForm(f => ({ ...f, email: e.target.value }))} placeholder="jake@summitgear.com" />
+              <Input type="email" value={form.email} onChange={e => setForm(f => ({ ...f, email: e.target.value }))} placeholder="jake@summitrental.com" />
             </div>
             <div className="col-span-2 sm:col-span-1">
               <label className="text-xs font-semibold text-gray-700 mb-1 block">Phone</label>
@@ -249,7 +249,7 @@ export default function AuditPage() {
             </div>
             <div className="col-span-2">
               <label className="text-xs font-semibold text-gray-700 mb-1 block">Website (if any)</label>
-              <Input value={form.website} onChange={e => setForm(f => ({ ...f, website: e.target.value }))} placeholder="summitgearrentals.com" />
+              <Input value={form.website} onChange={e => setForm(f => ({ ...f, website: e.target.value }))} placeholder="summitrentals.com" />
             </div>
           </div>
 

@@ -286,7 +286,7 @@ export default function AdminOnboarding() {
               </div>
               <div className="space-y-1.5">
                 <Label>Category</Label>
-                <Input value={listing.category} onChange={e => setList("category", e.target.value)} placeholder='e.g. "Kayak", "Bike", "Camping Gear"' className="h-11" />
+                <Input value={listing.category} onChange={e => setList("category", e.target.value)} placeholder='e.g. "Kayak", "Bike", "Camping Equipment"' className="h-11" />
               </div>
               <div className="space-y-1.5">
                 <Label>Description</Label>

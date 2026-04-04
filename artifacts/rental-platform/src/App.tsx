@@ -12,7 +12,7 @@ import { ThemeProvider } from "@/components/theme-provider";
 
 // Pages
 import StorefrontHome from "@/pages/storefront/home";
-import StorefrontGearDetail from "@/pages/storefront/gear-detail";
+import StorefrontProductDetail from "@/pages/storefront/product-detail";
 import StorefrontBook from "@/pages/storefront/book";
 import StorefrontLogin from "@/pages/storefront/login";
 import StorefrontSetPassword from "@/pages/storefront/set-password";
@@ -373,7 +373,7 @@ function Router() {
         <StorefrontLayout><StorefrontHome /></StorefrontLayout>
       </Route>
       <Route path="/:slug/listings/:id">
-        <StorefrontLayout><StorefrontGearDetail /></StorefrontLayout>
+        <StorefrontLayout><StorefrontProductDetail /></StorefrontLayout>
       </Route>
       <Route path="/:slug/book">
         <StorefrontLayout><StorefrontBook /></StorefrontLayout>

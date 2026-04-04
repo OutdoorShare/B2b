@@ -37,7 +37,7 @@ const STARTERS: Record<Role, string[]> = {
     "What does the protection plan cover?",
     "How do I pick up my rental?",
     "Can I cancel my booking?",
-    "What happens if gear is damaged?",
+    "What happens if a product is damaged?",
     "How does the booking process work?",
   ],
 };

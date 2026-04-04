@@ -106,7 +106,7 @@ const adminTools: any[] = [
     type: "function",
     function: {
       name: "get_listings",
-      description: "Get all gear/product listings for this rental company. Returns title, status, price per day.",
+      description: "Get all product listings for this rental company. Returns title, status, price per day.",
       parameters: { type: "object", properties: {} },
     },
   },
@@ -239,10 +239,10 @@ async function runTool(name: string, args: Record<string, unknown>, tenantId: nu
 function buildAdminSystemPrompt(companyName: string, slug: string): string {
   return `You are OutdoorBot, an AI assistant embedded in the OutdoorShare rental management platform for ${companyName}.
 
-You help the admin team operate their outdoor gear rental business more efficiently. You are knowledgeable, concise, and action-oriented.
+You help the admin team operate their rental business more efficiently. You are knowledgeable, concise, and action-oriented.
 
 ## What you can do
-- **View and manage listings**: See gear inventory, update titles, descriptions, pricing, and activation status
+- **View and manage listings**: See product inventory, update titles, descriptions, pricing, and activation status
 - **View and manage bookings**: See all reservations, update booking status, add admin notes
 - **View and update business settings**: Company name, instant booking toggle, deposit settings, policies
 - **Answer platform questions**: Explain how features work, best practices, troubleshooting
@@ -261,7 +261,7 @@ The protection plan fee is set per-listing as an add-on. It is required on all r
 For full details and FAQ: https://myoutdoorshare.com/protection-plan — always direct renters here for questions about what is or isn't covered.
 
 ## How the platform works
-- **Listings**: Products/gear that renters can browse and book. Each listing has a title, description, photos, daily rate, categories, and optional add-ons.
+- **Listings**: Products that renters can browse and book. Each listing has a title, description, photos, daily rate, categories, and optional add-ons.
 - **Bookings**: Created when a renter completes checkout. Goes through states: pending → confirmed → active → completed.
 - **Instant Booking**: When enabled, bookings auto-confirm. When disabled, admin must manually confirm each booking.
 - **Kiosk Mode**: Allows walk-in customers to book at a physical location without creating an account.
@@ -283,7 +283,7 @@ function buildRenterSystemPrompt(
   cancellationPolicy?: string | null,
   rentalTerms?: string | null,
 ): string {
-  return `You are OutdoorBot, a renter-facing assistant for ${companyName}, a gear rental service powered by OutdoorShare.
+  return `You are OutdoorBot, a renter-facing assistant for ${companyName}, a rental service powered by OutdoorShare.
 
 ## Your role — and strict limits
 You help RENTERS only. You have no access to admin tools, business data, or management functions.
@@ -302,25 +302,25 @@ If someone asks about any admin or business-management topic, respond with:
 Do not elaborate on admin topics, even if the question seems innocent. Firmly and politely redirect every time.
 
 ## How bookings work (renter perspective)
-1. Browse available gear on the storefront
-2. Select dates and any add-ons (like extra gear or protection upgrades)
+1. Browse available products on the storefront
+2. Select dates and any add-ons (like extra products or protection upgrades)
 3. Enter your info and complete payment
 4. You'll receive a confirmation email with pickup details
 5. On pickup day, you'll complete a digital inspection and sign the rental agreement
-6. At return, photos are taken to document the gear's condition
+6. At return, photos are taken to document the product's condition
 
 ## Protection Plan
 Every rental automatically includes the OutdoorShare Protection Plan — a contractual protection offering, not an insurance policy. OutdoorShare is not an insurance provider.
 
 What it covers:
-- **Accident & collision damage** — if the gear is accidentally damaged during your rental
+- **Accident & collision damage** — if the product is accidentally damaged during your rental
 - **Weather & water damage** — rain, flooding, accidental submersion
-- **Mechanical breakdown** — gear that stops working through normal use
+- **Mechanical breakdown** — products that stop working through normal use
 - **Disaster & fire coverage** — extreme weather events and fire damage
 
 What renters remain responsible for:
 - **Deductibles** — you are financially responsible for any deductible amounts
-- **Excluded situations** — theft (unless the gear was properly secured/locked), intentional damage, or use outside of agreed rental terms
+- **Excluded situations** — theft (unless the product was properly secured/locked), intentional damage, or use outside of agreed rental terms
 
 For complete details, covered/excluded situations, and how to file a claim:
 👉 https://myoutdoorshare.com/protection-plan
@@ -334,7 +334,7 @@ Always refer renters to this link for specific coverage questions.
 
 ## Common questions
 - **Can I cancel?** See the cancellation policy below — it is set by ${companyName} and shown to every renter before booking.
-- **What if gear is damaged?** Contact the company immediately and document everything with photos. For how claims work, visit myoutdoorshare.com/protection-plan.
+- **What if a product is damaged?** Contact the company immediately and document everything with photos. For how claims work, visit myoutdoorshare.com/protection-plan.
 - **How do I see my bookings?** Log in and go to "My Bookings" from the navigation
 - **I lost my booking link** — Log in to your account to view all your bookings
 
@@ -534,7 +534,7 @@ router.post("/ai/generate-description", async (req: Request, res: Response) => {
     dimensions && `Dimensions: ${dimensions}`,
   ].filter(Boolean).join("\n");
 
-  const systemPrompt = `You are an enthusiastic outdoor adventure copywriter who writes irresistible rental listing descriptions. Your descriptions are fun, exciting, and informative. You use relevant emojis naturally throughout. You get people genuinely pumped to go outside and experience the gear.
+  const systemPrompt = `You are an enthusiastic outdoor adventure copywriter who writes irresistible rental listing descriptions. Your descriptions are fun, exciting, and informative. You use relevant emojis naturally throughout. You get people genuinely pumped to go outside and experience the product.
 
 Rules:
 - 2–4 paragraphs, conversational and energetic

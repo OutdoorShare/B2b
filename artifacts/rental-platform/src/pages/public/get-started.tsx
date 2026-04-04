@@ -21,11 +21,11 @@ const features = [
   { icon: BarChart3, title: "Analytics Dashboard", desc: "Revenue trends, utilization rates, and top-performing listings at a glance." },
   { icon: Users, title: "Customer Portal", desc: "Your customers browse, book, and manage rentals on a branded storefront." },
   { icon: Shield, title: "Claims & Deposits", desc: "Track damage claims, manage security deposits, and protect your fleet." },
-  { icon: Zap, title: "Kiosk Mode", desc: "Self-service check-in terminal for customers to pick up gear without staff." },
+  { icon: Zap, title: "Kiosk Mode", desc: "Self-service check-in terminal for customers to pick up products without staff." },
 ];
 
 const testimonials = [
-  { name: "Jake Winters", company: "Summit Gear Rentals", text: "Set up our entire booking system in one afternoon. Bookings went up 40% in the first month.", stars: 5 },
+  { name: "Jake Winters", company: "Summit Rentals", text: "Set up our entire booking system in one afternoon. Bookings went up 40% in the first month.", stars: 5 },
   { name: "Maria Chen", company: "Coastal Watersports", text: "The kiosk mode alone saved us 2 hours of staff time per day. Our customers love it.", stars: 5 },
   { name: "Derek Park", company: "Trail Wheels MTB", text: "Finally a platform built for rental companies, not adapted from something else.", stars: 5 },
 ];
@@ -73,7 +73,7 @@ function HeroSignIn() {
               autoFocus
               value={slug}
               onChange={e => { setSlug(e.target.value); setError(""); }}
-              placeholder="e.g. summit-gear-rentals"
+              placeholder="e.g. summit-rentals"
               className="h-11 text-sm flex-1"
             />
             <Button type="submit" size="lg" className="h-11 px-5 font-bold text-white hover:opacity-90" style={{ backgroundColor: OS_GREEN }}>
@@ -156,7 +156,7 @@ function SignInDropdown() {
               <Input
                 value={adminSlug}
                 onChange={e => { setAdminSlug(e.target.value); setAdminError(""); }}
-                placeholder="e.g. summit-gear-rentals"
+                placeholder="e.g. summit-rentals"
                 className="h-9 text-sm"
               />
               {adminError && <p className="text-xs text-destructive">{adminError}</p>}
@@ -187,7 +187,7 @@ function SignInDropdown() {
               <Input
                 value={renterSlug}
                 onChange={e => { setRenterSlug(e.target.value); setRenterError(""); }}
-                placeholder="e.g. summit-gear-rentals"
+                placeholder="e.g. summit-rentals"
                 className="h-9 text-sm"
               />
               {renterError && <p className="text-xs text-destructive">{renterError}</p>}

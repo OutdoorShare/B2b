@@ -1260,7 +1260,7 @@ export default function AdminSettings() {
                     </span>
                   </div>
                   <p className="text-xs text-muted-foreground">
-                    Applied to the entire order (primary item + bundle items) when the renter adds extra gear.
+                    Applied to the entire order (primary item + bundle items) when the renter adds extra products.
                   </p>
                 </div>
                 <Button onClick={doSave} disabled={saving} size="sm">
@@ -1312,7 +1312,7 @@ export default function AdminSettings() {
                   </div>
                 </div>
                 <p className="text-xs text-muted-foreground">
-                  Send this link to your customers. They'll see your branded storefront where they can browse gear and make bookings.
+                  Send this link to your customers. They'll see your branded storefront where they can browse products and make bookings.
                 </p>
               </CardContent>
             </Card>

@@ -300,7 +300,7 @@ function BookingCard({ booking, base, showRebook }: { booking: any; base: string
               <div className="font-semibold text-sm">${Number(booking.totalPrice ?? 0).toFixed(2)}</div>
               <div className="text-xs text-muted-foreground">Booking #{booking.id}</div>
             </div>
-            <p className="text-xs text-muted-foreground">Book the same gear again with fresh dates.</p>
+            <p className="text-xs text-muted-foreground">Book the same product again with fresh dates.</p>
           </div>
         )}
       </div>

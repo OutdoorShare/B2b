@@ -185,7 +185,7 @@ export default function DemoPage() {
           {/* Listings preview */}
           <div>
             <div className="flex items-center justify-between mb-3">
-              <p className="text-xs font-bold uppercase tracking-wider text-slate-500 flex items-center gap-1.5"><Package className="w-3 h-3" />Available Gear ({listings.length})</p>
+              <p className="text-xs font-bold uppercase tracking-wider text-slate-500 flex items-center gap-1.5"><Package className="w-3 h-3" />Available Products ({listings.length})</p>
               <Button asChild size="sm" variant="ghost" className="text-slate-400 hover:text-white hover:bg-slate-800 gap-1 h-6 text-xs">
                 <Link href={`/${primarySlug}`}>See All <ArrowRight className="w-3 h-3" /></Link>
               </Button>

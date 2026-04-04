@@ -321,7 +321,7 @@ export default function MyBookingDetail() {
                 {[
                   "Staff will check your ID and look up your booking",
                   "You'll photograph the equipment condition — this protects you from any damage disputes",
-                  "Pick up your gear and enjoy!",
+                  "Pick up your product and enjoy!",
                 ].map((step, i) => (
                   <li key={i} className="flex items-start gap-2.5 text-sm text-muted-foreground">
                     <span className="w-5 h-5 rounded-full bg-green-100 text-green-700 text-xs font-bold flex items-center justify-center shrink-0 mt-0.5">{i + 1}</span>

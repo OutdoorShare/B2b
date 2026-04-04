@@ -2130,7 +2130,7 @@ export default function StorefrontBook() {
                             Build a Bundle
                           </h2>
                           <p className="text-sm text-muted-foreground mt-0.5">
-                            Add more gear to your order{bundleDiscountPercent > 0 && ` and save ${bundleDiscountPercent}%`}
+                            Add more products to your order{bundleDiscountPercent > 0 && ` and save ${bundleDiscountPercent}%`}
                           </p>
                         </div>
                         <Button

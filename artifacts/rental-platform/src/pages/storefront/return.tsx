@@ -191,7 +191,7 @@ export default function ReturnPage() {
                 <div>
                   <p className="font-semibold text-gray-900 text-sm">Document the equipment on return</p>
                   <p className="text-gray-500 text-xs mt-0.5 leading-relaxed">
-                    These photos document the gear's condition when you returned it. They protect you against any after-the-fact damage claims.
+                    These photos document the product's condition when you returned it. They protect you against any after-the-fact damage claims.
                   </p>
                   <ul className="mt-2 space-y-0.5">
                     {["All sides — front, back, left, right", "Any scratches, dents, or marks", "All accessories and parts returned"].map(tip => (

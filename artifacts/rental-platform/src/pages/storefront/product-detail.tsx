@@ -41,7 +41,7 @@ const CONDITION_LABEL: Record<string, string> = {
   fair: "Fair",
 };
 
-export default function StorefrontGearDetail() {
+export default function StorefrontProductDetail() {
   const { slug, id: idParam } = useParams<{ slug: string; id: string }>();
   const [, setLocation] = useLocation();
   const sfBase = slug ? `/${slug}` : "";
@@ -247,7 +247,7 @@ export default function StorefrontGearDetail() {
       <div className="min-h-screen flex items-center justify-center flex-col gap-4 text-muted-foreground">
         <Package className="w-12 h-12 text-muted" />
         <p className="font-semibold text-lg">Listing not found</p>
-        <Button variant="outline" onClick={() => setLocation(sfBase || "/")}>Browse all gear</Button>
+        <Button variant="outline" onClick={() => setLocation(sfBase || "/")}>Browse all products</Button>
       </div>
     );
   }
