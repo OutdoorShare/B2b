@@ -509,10 +509,25 @@ router.get("/admin/customer-saved-card", async (req, res) => {
     const isTestMode = !!(tenant?.testMode);
     const stripeClient = getStripeForTenant(isTestMode);
 
-    const pms = await stripeClient.paymentMethods.list({
-      customer: customer.stripeCustomerId,
-      type: "card",
-    });
+    let pms;
+    try {
+      pms = await stripeClient.paymentMethods.list({
+        customer: customer.stripeCustomerId,
+        type: "card",
+      });
+    } catch (stripeErr: any) {
+      // Stale customer ID (wrong mode or account was reset) — clear it and report no card
+      if (stripeErr?.code === "resource_missing" && stripeErr?.message?.toLowerCase().includes("customer")) {
+        console.warn("[customer-saved-card] Stale stripeCustomerId — clearing for customer", customer.id);
+        await db
+          .update(customersTable)
+          .set({ stripeCustomerId: null, cardBrand: null, cardLastFour: null, updatedAt: new Date() })
+          .where(eq(customersTable.id, customer.id));
+        res.json({ hasCard: false, brand: null, last4: null, stripeCustomerId: null });
+        return;
+      }
+      throw stripeErr;
+    }
 
     if (!pms.data.length) {
       res.json({ hasCard: false, brand: null, last4: null, stripeCustomerId: customer.stripeCustomerId });

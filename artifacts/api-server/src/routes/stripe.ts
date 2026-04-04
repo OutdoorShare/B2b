@@ -249,6 +249,9 @@ router.post("/stripe/payment-intent", async (req, res) => {
 
     // ── Attach or create a Stripe Customer so the card is saved for future use ──
     let stripeCustomerId: string | undefined;
+    // Keep a reference so we can recreate the customer on stale-ID errors below
+    let dbCustomerRef: { id: number; email: string; name: string | null } | undefined;
+
     if (customerId) {
       const [dbCustomer] = await db
         .select({ id: customersTable.id, email: customersTable.email, name: customersTable.name, stripeCustomerId: customersTable.stripeCustomerId })
@@ -257,6 +260,7 @@ router.post("/stripe/payment-intent", async (req, res) => {
         .limit(1);
 
       if (dbCustomer) {
+        dbCustomerRef = { id: dbCustomer.id, email: dbCustomer.email, name: dbCustomer.name };
         if (dbCustomer.stripeCustomerId) {
           stripeCustomerId = dbCustomer.stripeCustomerId;
         } else {
@@ -303,7 +307,34 @@ router.post("/stripe/payment-intent", async (req, res) => {
     }
     // Otherwise: full amount held on platform, swept later via sweep-pending
 
-    const intent = await stripeClient.paymentIntents.create(intentParams);
+    let intent;
+    try {
+      intent = await stripeClient.paymentIntents.create(intentParams);
+    } catch (piErr: any) {
+      // Stale customer ID — happens when the Stripe mode changed (test ↔ live)
+      // or the connected account was reset. Create a fresh customer and retry once.
+      if (
+        piErr?.code === "resource_missing" &&
+        piErr?.message?.toLowerCase().includes("customer") &&
+        dbCustomerRef
+      ) {
+        console.warn("[stripe/payment-intent] Stale customer ID — recreating customer for db_id", dbCustomerRef.id);
+        const sc = await stripeClient.customers.create({
+          email: dbCustomerRef.email,
+          name: dbCustomerRef.name ?? undefined,
+          metadata: { platform_customer_id: String(dbCustomerRef.id) },
+        });
+        // Persist the new ID so future requests don't hit this again
+        await db
+          .update(customersTable)
+          .set({ stripeCustomerId: sc.id, updatedAt: new Date() })
+          .where(eq(customersTable.id, dbCustomerRef.id));
+        intentParams.customer = sc.id;
+        intent = await stripeClient.paymentIntents.create(intentParams);
+      } else {
+        throw piErr;
+      }
+    }
 
     res.json({
       clientSecret: intent.client_secret,
