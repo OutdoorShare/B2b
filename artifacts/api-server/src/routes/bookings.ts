@@ -366,23 +366,25 @@ router.post("/bookings", async (req, res) => {
     if (created.source !== "kiosk" && created.customerEmail) {
       (async () => {
         try {
-          let companyName = "Rental Company";
+          let companyName = "OutdoorShare";
           let tenantSlug = "";
           let adminEmail: string | undefined;
-          if (req.tenantId) {
+          // Use req.tenantId first, fall back to the listing's owner tenant
+          const effectiveTenantId = req.tenantId ?? listing.tenantId ?? null;
+          if (effectiveTenantId) {
             const [biz] = await db
               .select({ name: businessProfileTable.name, outboundEmail: businessProfileTable.outboundEmail })
               .from(businessProfileTable)
-              .where(eq(businessProfileTable.tenantId, req.tenantId));
+              .where(eq(businessProfileTable.tenantId, effectiveTenantId));
             if (biz?.name) companyName = biz.name;
             const [t] = await db
               .select({ slug: tenantsTable.slug, email: tenantsTable.email })
               .from(tenantsTable)
-              .where(eq(tenantsTable.id, req.tenantId));
+              .where(eq(tenantsTable.id, effectiveTenantId));
             if (t?.slug) tenantSlug = t.slug;
             adminEmail = biz?.outboundEmail ?? t?.email ?? undefined;
           }
-          const [smtpCreds, brand] = await Promise.all([getTenantSmtpCreds(req.tenantId), getTenantBrand(req.tenantId)]);
+          const [smtpCreds, brand] = await Promise.all([getTenantSmtpCreds(effectiveTenantId), getTenantBrand(effectiveTenantId)]);
           await withBrand(brand, () => withSmtpCreds(smtpCreds, () => sendBookingPickupReminderEmail({
             customerName: created.customerName,
             customerEmail: created.customerEmail,

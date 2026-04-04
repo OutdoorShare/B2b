@@ -342,9 +342,10 @@ export default function AdminBookingForm() {
       const url = isEditing ? `${BASE}/api/bookings/${editId}` : `${BASE}/api/bookings`;
       const method = isEditing ? "PUT" : "POST";
 
+      const tenantHeaders: Record<string, string> = params.slug ? { "x-tenant-slug": params.slug } : {};
       const res = await fetch(url, {
         method,
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...tenantHeaders },
         body: JSON.stringify(payload),
       });
       const data = await res.json();
