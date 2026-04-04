@@ -79,7 +79,15 @@ function usePickupAddresses() {
   return data;
 }
 
-interface Product { id: number; name: string; sku?: string | null; brand?: string | null; model?: string | null; quantity: number; status: string; description?: string | null; categoryId?: number | null; imageUrls?: string[] | null; }
+interface Product { id: number; name: string; sku?: string | null; brand?: string | null; model?: string | null; quantity: number; status: string; description?: string | null; categoryId?: number | null; imageUrls?: string[] | null; serialNumber?: string | null; }
+
+function guessIdentifierType(val: string): 'vin' | 'hin' | 'serial' {
+  const v = val.trim().toUpperCase();
+  if (/^[A-HJ-NPR-Z0-9]{17}$/.test(v)) return 'vin';
+  if (/^[A-Z]{3}[A-Z0-9]{5}[A-Z]\d{4}$/.test(v)) return 'hin';
+  return 'serial';
+}
+
 function useProducts() {
   const [products, setProducts] = useState<Product[]>([]);
   useEffect(() => {
@@ -160,6 +168,16 @@ export default function AdminListingsForm() {
       ...(product.categoryId && !prev.categoryId ? { categoryId: product.categoryId } : {}),
       ...(product.imageUrls?.length && !(prev.photos?.length) ? { photos: product.imageUrls } : {}),
     }));
+    if (product.serialNumber?.trim()) {
+      const sn = product.serialNumber.trim();
+      setInlineUnits(prev => {
+        const alreadySet = prev.some(u => u.identifier === sn);
+        if (alreadySet) return prev;
+        const type = guessIdentifierType(sn);
+        const withoutEmpties = prev.filter(u => u.identifier.trim());
+        return [...withoutEmpties, { identifier: sn, label: '', type }];
+      });
+    }
   };
 
   const unlinkProduct = () => {
