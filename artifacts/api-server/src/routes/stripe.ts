@@ -302,7 +302,7 @@ router.post("/stripe/payment-intent", async (req, res) => {
 
     if (tenantConnected) {
       // Funds go directly to tenant; platform keeps its fee
-      intentParams.transfer_data = { destination: tenant.stripeAccountId, amount: transferAmount };
+      intentParams.transfer_data = { destination: tenant.stripeAccountId };
       intentParams.application_fee_amount = platformFeeAmount;
     }
     // Otherwise: full amount held on platform, swept later via sweep-pending
@@ -755,7 +755,7 @@ router.post("/stripe/checkout-qr", async (req, res) => {
 
     if (tenantConnected) {
       sessionParams.payment_intent_data = {
-        transfer_data: { destination: tenant.stripeAccountId, amount: transferAmount },
+        transfer_data: { destination: tenant.stripeAccountId },
         application_fee_amount: platformFeeAmount,
       };
     }
@@ -1012,7 +1012,7 @@ router.post("/stripe/admin-payment-link", requireAdminAuth, async (req, res) => 
     };
 
     if (tenantConnected) {
-      sessionParams.payment_intent_data.transfer_data = { destination: tenant.stripeAccountId, amount: transferAmount };
+      sessionParams.payment_intent_data.transfer_data = { destination: tenant.stripeAccountId };
       sessionParams.payment_intent_data.application_fee_amount = platformFeeAmount;
     }
 
@@ -1111,7 +1111,7 @@ router.post("/stripe/admin-charge-saved", requireAdminAuth, async (req, res) => 
     };
 
     if (tenantConnected) {
-      intentParams.transfer_data = { destination: tenant.stripeAccountId, amount: transferAmount };
+      intentParams.transfer_data = { destination: tenant.stripeAccountId };
       intentParams.application_fee_amount = platformFeeAmount;
     }
 
