@@ -505,19 +505,22 @@ export default function AdminBookingForm() {
                       Unit Assignment
                     </span>
                     <span className="text-xs text-muted-foreground ml-1">
-                      — {assignedSlots.length} unit{assignedSlots.length !== 1 ? "s" : ""} required
+                      {availableUnits.length > 0
+                        ? `— ${assignedSlots.length} unit${assignedSlots.length !== 1 ? "s" : ""} required`
+                        : "— optional"}
                     </span>
                   </div>
                   <div className="space-y-2">
                     {assignedSlots.map((val, i) => {
                       const identType = availableUnits[0]?.identifierType ?? "serial";
                       const label = identType === "vin" ? "VIN" : identType === "hin" ? "HIN" : "Serial #";
+                      const hasRegisteredUnits = availableUnits.length > 0;
                       return (
                         <div key={i} className="flex items-center gap-2">
                           <span className="text-xs font-medium text-muted-foreground w-14 shrink-0">
                             Unit {i + 1}
                           </span>
-                          {availableUnits.length > 0 ? (
+                          {hasRegisteredUnits ? (
                             <Select
                               value={val}
                               onValueChange={v => setAssignedSlots(prev => { const n = [...prev]; n[i] = v; return n; })}
@@ -543,13 +546,13 @@ export default function AdminBookingForm() {
                             </Select>
                           ) : (
                             <Input
-                              className={`flex-1 h-9 text-sm font-mono ${!val.trim() ? "border-destructive/60 bg-destructive/5" : ""}`}
-                              placeholder={`Enter ${label} for unit ${i + 1}`}
+                              className="flex-1 h-9 text-sm font-mono"
+                              placeholder={`${label} for unit ${i + 1} (optional)`}
                               value={val}
                               onChange={e => setAssignedSlots(prev => { const n = [...prev]; n[i] = e.target.value; return n; })}
                             />
                           )}
-                          {!val && (
+                          {hasRegisteredUnits && !val && (
                             <span className="text-[10px] text-destructive font-semibold shrink-0">Required</span>
                           )}
                         </div>
@@ -558,7 +561,7 @@ export default function AdminBookingForm() {
                   </div>
                   {availableUnits.length === 0 && (
                     <p className="text-xs text-muted-foreground">
-                      No units registered for this listing. Enter identifiers manually, or add units in the listing detail.
+                      No units registered for this listing. You can enter identifiers manually or leave blank — unit tracking can be added later from the listing detail.
                     </p>
                   )}
                 </div>
