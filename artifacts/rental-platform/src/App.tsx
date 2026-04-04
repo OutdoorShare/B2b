@@ -108,7 +108,13 @@ setExtraHeadersGetter(() => {
   // For storefront routes (and any non-admin route that has a slug),
   // always use the tenant slug so the correct company data is fetched,
   // regardless of whether an admin session exists in localStorage.
-  const reserved = new Set(["superadmin", "get-started", "signup", "demo", "audit"]);
+  const reserved = new Set([
+    "admin", "api", "superadmin", "platform", "docs", "public", "signup",
+    "get-started", "demo", "audit", "health", "static", "assets", "uploads",
+    "login", "logout", "register", "account", "dashboard", "settings", "billing",
+    "support", "help", "about", "contact", "privacy", "terms", "pricing",
+    "www", "mail", "email", "ftp", "cdn", "media", "images",
+  ]);
   const segments = path.split("/").filter(Boolean);
   const firstSegment = segments[0];
   if (firstSegment && !reserved.has(firstSegment)) {

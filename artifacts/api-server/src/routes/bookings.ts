@@ -462,19 +462,15 @@ router.patch("/bookings/:id/seen", async (req, res) => {
 router.get("/bookings/:id", async (req, res) => {
   try {
     const bookingId = Number(req.params.id);
-    let booking: typeof bookingsTable.$inferSelect | undefined;
 
-    // First try scoped to this tenant
-    if (req.tenantId) {
-      [booking] = await db.select().from(bookingsTable)
-        .where(and(eq(bookingsTable.id, bookingId), eq(bookingsTable.tenantId, req.tenantId)));
+    // Require either tenant context (admin) or a valid customer token before returning booking data
+    if (!req.tenantId) {
+      res.status(401).json({ error: "Unauthorized" });
+      return;
     }
 
-    // If not found (or no tenant context), fall back to finding by ID alone.
-    // The caller (storefront) enforces ownership via customerEmail check on the client.
-    if (!booking) {
-      [booking] = await db.select().from(bookingsTable).where(eq(bookingsTable.id, bookingId));
-    }
+    const [booking] = await db.select().from(bookingsTable)
+      .where(and(eq(bookingsTable.id, bookingId), eq(bookingsTable.tenantId, req.tenantId)));
 
     if (!booking) { res.status(404).json({ error: "Not found" }); return; }
 

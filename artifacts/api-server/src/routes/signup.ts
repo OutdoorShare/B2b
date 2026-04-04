@@ -27,6 +27,14 @@ async function hashPassword(password: string): Promise<string> {
   return `${salt}:${hash.toString("hex")}`;
 }
 
+const RESERVED_SLUGS = new Set([
+  "admin", "api", "superadmin", "platform", "docs", "public", "signup",
+  "get-started", "demo", "audit", "health", "static", "assets", "uploads",
+  "login", "logout", "register", "account", "dashboard", "settings", "billing",
+  "support", "help", "about", "contact", "privacy", "terms", "pricing",
+  "www", "mail", "email", "ftp", "cdn", "media", "images",
+]);
+
 function slugify(text: string): string {
   return text
     .toLowerCase()
@@ -38,7 +46,7 @@ function slugify(text: string): string {
 }
 
 function safeTenant(t: typeof tenantsTable.$inferSelect) {
-  const { adminPasswordHash: _, ...safe } = t;
+  const { adminPasswordHash: _, adminToken: __, ...safe } = t;
   return { ...safe, createdAt: t.createdAt.toISOString(), updatedAt: t.updatedAt.toISOString() };
 }
 
@@ -63,15 +71,17 @@ router.post("/public/signup", async (req, res) => {
       return;
     }
 
-    // Find a unique slug
+    // Find a unique slug (skip reserved words and existing slugs)
     let slug = baseSlug;
     let attempt = 0;
     while (true) {
-      const [existing] = await db.select({ id: tenantsTable.id })
-        .from(tenantsTable)
-        .where(eq(tenantsTable.slug, slug))
-        .limit(1);
-      if (!existing) break;
+      if (!RESERVED_SLUGS.has(slug)) {
+        const [existing] = await db.select({ id: tenantsTable.id })
+          .from(tenantsTable)
+          .where(eq(tenantsTable.slug, slug))
+          .limit(1);
+        if (!existing) break;
+      }
       attempt++;
       slug = `${baseSlug}-${attempt}`;
     }

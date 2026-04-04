@@ -10,6 +10,14 @@ import { stripe } from "../services/stripe";
 const scryptAsync = promisify(scrypt);
 
 // ── Slug helpers ───────────────────────────────────────────────────────────────
+const RESERVED_SLUGS = new Set([
+  "admin", "api", "superadmin", "platform", "docs", "public", "signup",
+  "get-started", "demo", "audit", "health", "static", "assets", "uploads",
+  "login", "logout", "register", "account", "dashboard", "settings", "billing",
+  "support", "help", "about", "contact", "privacy", "terms", "pricing",
+  "www", "mail", "email", "ftp", "cdn", "media", "images",
+]);
+
 function nameToSlug(name: string): string {
   return name
     .toLowerCase()
@@ -23,6 +31,10 @@ async function generateUniqueSlug(name: string, excludeId?: number): Promise<str
   let candidate = base;
   let attempt = 2;
   while (true) {
+    if (RESERVED_SLUGS.has(candidate)) {
+      candidate = `${base}-${attempt++}`;
+      continue;
+    }
     const conditions: any[] = [eq(tenantsTable.slug, candidate)];
     if (excludeId) conditions.push(ne(tenantsTable.id, excludeId));
     const existing = await db.select({ id: tenantsTable.id }).from(tenantsTable)
@@ -90,7 +102,7 @@ async function verifySAPassword(password: string, stored: string): Promise<boole
 }
 
 function safeTenant(t: typeof tenantsTable.$inferSelect) {
-  const { adminPasswordHash: _, ...safe } = t;
+  const { adminPasswordHash: _, adminToken: __, ...safe } = t;
   return { ...safe, createdAt: t.createdAt.toISOString(), updatedAt: t.updatedAt.toISOString() };
 }
 
