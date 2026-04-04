@@ -65,11 +65,13 @@ async function getTenantTrialInfo(tenantId: number | undefined) {
 }
 
 router.get("/business", async (req, res) => {
+  if (!req.tenantId) {
+    res.status(404).json({ error: "Tenant not found" });
+    return;
+  }
   try {
     const [profileWhere, trialInfo] = await Promise.all([
-      req.tenantId
-        ? db.select().from(businessProfileTable).where(eq(businessProfileTable.tenantId, req.tenantId)).limit(1)
-        : db.select().from(businessProfileTable).limit(1),
+      db.select().from(businessProfileTable).where(eq(businessProfileTable.tenantId, req.tenantId)).limit(1),
       getTenantTrialInfo(req.tenantId),
     ]);
 

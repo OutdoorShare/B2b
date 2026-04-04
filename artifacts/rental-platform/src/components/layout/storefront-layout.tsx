@@ -282,7 +282,7 @@ export function StorefrontLayout({ children }: { children: React.ReactNode }) {
   // initials for avatar
   const initials = customer?.name?.split(" ").map(w => w[0]).join("").slice(0, 2).toUpperCase() ?? "";
 
-  const { data: profile } = useGetBusinessProfile({
+  const { data: profile, isError: businessNotFound, isLoading: businessLoading } = useGetBusinessProfile({
     query: { queryKey: ["/api/business", slug] }
   });
 
@@ -425,6 +425,25 @@ export function StorefrontLayout({ children }: { children: React.ReactNode }) {
   const headerBorder   = isLight(primaryColor) ? "rgba(0,0,0,0.08)" : "rgba(255,255,255,0.10)";
   const btnText        = isLight(accentColor)  ? "#111111" : "#ffffff";
   const btnHoverBg     = darken(accentColor, 18);
+
+  // All hooks have fired — now safe to early-return based on query state.
+  if (businessLoading) {
+    return <div className="min-h-screen bg-gray-50" />;
+  }
+
+  if (businessNotFound) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex flex-col items-center justify-center px-4 text-center">
+        <div className="w-16 h-16 rounded-full bg-gray-100 flex items-center justify-center mb-6">
+          <Tent className="w-8 h-8 text-gray-400" />
+        </div>
+        <h1 className="text-2xl font-bold text-gray-800 mb-2">Page not found</h1>
+        <p className="text-gray-500 max-w-sm">
+          No rental company was found at this address. Double-check the URL or contact the company directly.
+        </p>
+      </div>
+    );
+  }
 
   return (
     <DemoGate slug={slug ?? ""}>
