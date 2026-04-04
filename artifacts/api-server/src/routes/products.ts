@@ -256,11 +256,17 @@ router.post("/products/bulk", requireTenant as any, async (req, res) => {
       .select()
       .from(categoriesTable)
       .where(eq(categoriesTable.tenantId, req.tenantId!));
+    const normCat = (s: string) => s.toLowerCase().replace(/[-_\s]+/g, "");
     const catByName: Record<string, number> = {};
     for (const c of cats) {
       catByName[c.name.toLowerCase()] = c.id;
       catByName[c.slug.toLowerCase()] = c.id;
+      catByName[normCat(c.name)] = c.id;
     }
+    const lookupCategory = (val: string): number | null => {
+      const key = val.toLowerCase().trim();
+      return catByName[key] ?? catByName[normCat(key)] ?? null;
+    };
 
     const created: any[] = [];
     const errors: { row: number; error: string }[] = [];
@@ -287,7 +293,7 @@ router.post("/products/bulk", requireTenant as any, async (req, res) => {
 
       let categoryId: number | null = null;
       if (row.category) {
-        categoryId = catByName[String(row.category).toLowerCase().trim()] ?? null;
+        categoryId = lookupCategory(String(row.category));
       }
 
       const status = validStatus.includes(row.status) ? row.status : "available";

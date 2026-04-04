@@ -41,6 +41,15 @@ const COLUMN_MAP: Record<string, string> = {
   "vin/hin/serial": "serialNumber",
   category: "category",
   "category name": "category",
+  type: "category",
+  "body type": "category",
+  "vehicle type": "category",
+  "equipment type": "category",
+  "product type": "category",
+  "item type": "category",
+  "asset type": "category",
+  "rental type": "category",
+  class: "category",
   description: "description",
   desc: "description",
   status: "status",
@@ -106,6 +115,10 @@ interface ParsedRow {
 
 const VALID_STATUS = ["available", "maintenance", "damaged", "reserved", "out_of_service"];
 
+function normCat(s: string): string {
+  return s.toLowerCase().replace(/[-_\s]+/g, "");
+}
+
 function buildFallbackName(row: ParsedRow): string {
   return [row.year?.trim(), row.brand?.trim(), row.model?.trim()]
     .filter(Boolean)
@@ -135,8 +148,10 @@ function validateRow(row: ParsedRow, categoryNames: Set<string>): ParsedRow {
     warnings.push(`Status "${row.status}" not recognized — will default to "available"`);
   }
 
-  if (row.category && categoryNames.size > 0 && !categoryNames.has(row.category.toLowerCase().trim())) {
-    warnings.push(`Category "${row.category}" not found — product will have no category`);
+  if (row.category && categoryNames.size > 0) {
+    const val = row.category.toLowerCase().trim();
+    const matched = categoryNames.has(val) || categoryNames.has(normCat(val));
+    if (!matched) warnings.push(`Category "${row.category}" not found — product will have no category`);
   }
 
   if (row.nextMaintenanceDate && row.nextMaintenanceDate.trim()) {
@@ -182,7 +197,11 @@ export default function AdminInventoryImport() {
       const res = await fetch(`${BASE}/api/categories`, { headers });
       if (res.ok) {
         const cats = await res.json();
-        setCategoryNames(new Set(cats.map((c: any) => c.name.toLowerCase())));
+        setCategoryNames(new Set([
+          ...cats.map((c: any) => c.name.toLowerCase()),
+          ...cats.map((c: any) => normCat(c.name)),
+          ...cats.map((c: any) => c.slug?.toLowerCase() ?? ""),
+        ]));
       }
     } catch { /* non-critical */ }
   }, []);
@@ -575,9 +594,13 @@ export default function AdminInventoryImport() {
                           </TableCell>
                           <TableCell className="text-sm">
                             {row.category
-                              ? categoryNames.has(row.category.toLowerCase().trim())
-                                ? <Badge variant="outline" className="text-xs">{row.category}</Badge>
-                                : <span className="text-muted-foreground text-xs">{row.category} (unmatched)</span>
+                              ? (() => {
+                                  const v = row.category.toLowerCase().trim();
+                                  const matched = categoryNames.has(v) || categoryNames.has(normCat(v));
+                                  return matched
+                                    ? <Badge variant="outline" className="text-xs">{row.category}</Badge>
+                                    : <span className="text-muted-foreground text-xs">{row.category} (unmatched)</span>;
+                                })()
                               : <span className="text-muted-foreground text-xs">—</span>
                             }
                           </TableCell>
