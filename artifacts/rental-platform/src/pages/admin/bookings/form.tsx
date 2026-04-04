@@ -33,7 +33,6 @@ const defaultForm = {
   source: "walkin",
   notes: "",
   adminNotes: "",
-  depositPaid: "",
 };
 
 export default function AdminBookingForm() {
@@ -117,7 +116,6 @@ export default function AdminBookingForm() {
         source: existingBooking.source ?? "walkin",
         notes: existingBooking.notes ?? "",
         adminNotes: existingBooking.adminNotes ?? "",
-        depositPaid: existingBooking.depositPaid != null ? String(existingBooking.depositPaid) : "",
       });
       // Prefill assigned unit slots
       try {
@@ -332,7 +330,6 @@ export default function AdminBookingForm() {
         source: form.source,
         notes: form.notes || null,
         adminNotes: form.adminNotes || null,
-        depositPaid: form.depositPaid ? Number(form.depositPaid) : null,
         assignedUnitIds: filledSlots.length > 0 ? filledSlots : [],
         addonsData: JSON.stringify(addonsPayload),
         bundleItems: bundleItems.length > 0 ? bundleItems : undefined,
@@ -634,6 +631,39 @@ export default function AdminBookingForm() {
 
         {/* Right: Summary & Status */}
         <div className="space-y-6">
+
+          {/* Listing preview card */}
+          {listingDetails && (() => {
+            const imgs: string[] = Array.isArray((listingDetails as any).imageUrls)
+              ? (listingDetails as any).imageUrls
+              : (() => { try { return JSON.parse((listingDetails as any).imageUrls ?? "[]"); } catch { return []; } })();
+            const cover = imgs[0];
+            return (
+              <Card className="overflow-hidden">
+                {cover && (
+                  <div className="aspect-video w-full overflow-hidden bg-muted">
+                    <img src={cover} alt={listingDetails.title} className="w-full h-full object-cover" />
+                  </div>
+                )}
+                <CardContent className={`space-y-1 ${cover ? "pt-3 pb-4 px-4" : "py-4 px-4"}`}>
+                  <p className="font-semibold text-sm leading-snug">{listingDetails.title}</p>
+                  <p className="text-xs text-muted-foreground">
+                    ${parseFloat(String(listingDetails.pricePerDay)).toFixed(2)}/day
+                    {(listingDetails as any).depositAmount && parseFloat(String((listingDetails as any).depositAmount)) > 0
+                      ? ` · $${parseFloat(String((listingDetails as any).depositAmount)).toFixed(2)} deposit`
+                      : ""}
+                    {" · "}{listingDetails.quantity} unit{listingDetails.quantity > 1 ? "s" : ""}
+                  </p>
+                  {(listingDetails as any).description && (
+                    <p className="text-xs text-muted-foreground line-clamp-2 pt-0.5">
+                      {(listingDetails as any).description}
+                    </p>
+                  )}
+                </CardContent>
+              </Card>
+            );
+          })()}
+
           {/* Pricing summary */}
           <Card>
             <CardHeader>
@@ -802,16 +832,6 @@ export default function AdminBookingForm() {
                   <div className="flex justify-between font-bold">
                     <span>Estimated Total</span>
                     <span className="text-lg">${estimatedTotal.toFixed(2)}</span>
-                  </div>
-                  <div className="space-y-1.5 pt-2">
-                    <Label className="text-xs">Deposit Paid ($)</Label>
-                    <Input
-                      type="number" min="0" step="0.01"
-                      value={form.depositPaid}
-                      onChange={e => handleChange("depositPaid", e.target.value)}
-                      placeholder="0.00"
-                      className="h-8 text-sm"
-                    />
                   </div>
                 </>
               ) : (
