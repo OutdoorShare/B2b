@@ -49,6 +49,9 @@ const COLUMN_MAP: Record<string, string> = {
   quantity: "quantity",
   stock: "quantity",
   count: "quantity",
+  year: "year",
+  "model year": "year",
+  "yr": "year",
   brand: "brand",
   manufacturer: "brand",
   make: "brand",
@@ -69,6 +72,7 @@ const FIELD_LABELS: Record<string, string> = {
   name: "Product Name",
   sku: "SKU / Item #",
   serialNumber: "VIN / HIN / Serial #",
+  year: "Year",
   category: "Category",
   description: "Description",
   status: "Status",
@@ -87,6 +91,7 @@ interface ParsedRow {
   name?: string;
   sku?: string;
   serialNumber?: string;
+  year?: string;
   category?: string;
   description?: string;
   status?: string;
@@ -246,6 +251,7 @@ export default function AdminInventoryImport() {
         name: r.name,
         sku: r.sku || null,
         serialNumber: r.serialNumber || null,
+        year: r.year ? parseInt(r.year) || null : null,
         category: r.category || null,
         description: r.description || null,
         status: r.status?.toLowerCase().replace(/\s/g, "_") || "available",

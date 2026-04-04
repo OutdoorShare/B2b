@@ -23,6 +23,7 @@ type Product = {
   name: string;
   sku: string | null;
   serialNumber: string | null;
+  year: number | null;
   categoryId: number | null;
   status: ProductStatus;
   quantity: number;
@@ -745,6 +746,12 @@ export default function AdminInventoryDetail() {
                 <div className="flex justify-between gap-2">
                   <span className="text-muted-foreground shrink-0">VIN / Serial #</span>
                   <span className="font-mono text-xs font-medium text-right break-all">{product.serialNumber}</span>
+                </div>
+              )}
+              {product.year && (
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Year</span>
+                  <span className="font-medium">{product.year}</span>
                 </div>
               )}
               {product.brand && (

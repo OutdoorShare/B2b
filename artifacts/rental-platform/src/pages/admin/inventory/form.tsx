@@ -37,6 +37,7 @@ export default function AdminInventoryForm() {
     name: "",
     sku: "",
     serialNumber: "",
+    year: "",
     categoryId: "",
     description: "",
     status: "available",
@@ -69,6 +70,7 @@ export default function AdminInventoryForm() {
               name: data.name ?? "",
               sku: data.sku ?? "",
               serialNumber: data.serialNumber ?? "",
+              year: data.year ? String(data.year) : "",
               categoryId: data.categoryId ? String(data.categoryId) : "",
               description: data.description ?? "",
               status: data.status ?? "available",
@@ -144,6 +146,7 @@ export default function AdminInventoryForm() {
         name: form.name.trim(),
         sku: form.sku.trim() || null,
         serialNumber: form.serialNumber.trim() || null,
+        year: form.year ? Number(form.year) : null,
         categoryId: form.categoryId ? Number(form.categoryId) : null,
         description: form.description.trim() || null,
         status: form.status,
@@ -278,6 +281,18 @@ export default function AdminInventoryForm() {
                 value={form.model}
                 onChange={e => handleChange("model", e.target.value)}
                 placeholder="e.g. Passage 4, Pro-V…"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="year">Year</Label>
+              <Input
+                id="year"
+                type="number"
+                min={1900}
+                max={new Date().getFullYear() + 1}
+                value={form.year}
+                onChange={e => handleChange("year", e.target.value)}
+                placeholder={String(new Date().getFullYear())}
               />
             </div>
             <div className="sm:col-span-2 space-y-1.5">

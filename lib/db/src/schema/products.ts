@@ -15,6 +15,7 @@ export const productsTable = pgTable("products", {
   quantity: integer("quantity").notNull().default(1),
   imageUrls: json("image_urls").$type<string[]>().notNull().default([]),
   serialNumber: text("serial_number"),
+  year: integer("year"),
   brand: text("brand"),
   model: text("model"),
   specs: text("specs"),

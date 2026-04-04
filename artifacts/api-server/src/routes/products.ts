@@ -59,7 +59,7 @@ router.get("/products/:id", async (req, res) => {
 router.post("/products", requireTenant as any, async (req, res) => {
   try {
     const {
-      name, sku, serialNumber, categoryId, description, status, quantity,
+      name, sku, serialNumber, year, categoryId, description, status, quantity,
       imageUrls, brand, model, specs, notes, nextMaintenanceDate,
     } = req.body;
     const [product] = await db
@@ -69,6 +69,7 @@ router.post("/products", requireTenant as any, async (req, res) => {
         name,
         sku: sku || null,
         serialNumber: serialNumber || null,
+        year: year ? Number(year) : null,
         categoryId: categoryId || null,
         description: description || null,
         status: status || "available",
@@ -102,7 +103,7 @@ router.put("/products/:id", requireTenant as any, async (req, res) => {
       return;
     }
     const {
-      name, sku, serialNumber, categoryId, description, status, quantity,
+      name, sku, serialNumber, year, categoryId, description, status, quantity,
       imageUrls, brand, model, specs, notes, nextMaintenanceDate,
       serviceUntil, deactivateListings,
     } = req.body;
@@ -118,6 +119,7 @@ router.put("/products/:id", requireTenant as any, async (req, res) => {
         ...(name !== undefined && { name }),
         ...(sku !== undefined && { sku }),
         ...(serialNumber !== undefined && { serialNumber }),
+        ...(year !== undefined && { year: year ? Number(year) : null }),
         ...(categoryId !== undefined && { categoryId }),
         ...(description !== undefined && { description }),
         ...(status !== undefined && { status }),
@@ -281,6 +283,7 @@ router.post("/products/bulk", requireTenant as any, async (req, res) => {
 
       const status = validStatus.includes(row.status) ? row.status : "available";
       const quantity = row.quantity != null ? parseInt(row.quantity) || 1 : 1;
+      const year = row.year ? parseInt(row.year) || null : null;
       const nextMaintenanceDate = row.nextMaintenanceDate?.trim() || null;
 
       try {
@@ -291,6 +294,7 @@ router.post("/products/bulk", requireTenant as any, async (req, res) => {
             name: row.name.trim(),
             sku: row.sku?.trim() || null,
             serialNumber: row.serialNumber?.trim() || null,
+            year,
             categoryId,
             description: row.description?.trim() || null,
             status,
