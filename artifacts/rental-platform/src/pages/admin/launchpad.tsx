@@ -5,8 +5,8 @@ import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import {
   Building2, Image, CreditCard, Package,
-  Mail, ShieldCheck, CheckCircle2, Circle, ChevronRight,
-  Rocket, ExternalLink, Loader2, RefreshCw
+  Mail, CheckCircle2, Circle, ChevronRight,
+  Rocket, Loader2, RefreshCw
 } from "lucide-react";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
@@ -32,7 +32,6 @@ interface LaunchItem {
   state: ItemState;
   actionLabel: string;
   onAction: () => void;
-  optional?: boolean;
 }
 
 export default function AdminLaunchpad() {
@@ -114,10 +113,10 @@ export default function AdminLaunchpad() {
   const isStripeConnected = !!(stripeStatus?.connected && stripeStatus?.chargesEnabled);
   const hasListing = (listingCount ?? 0) > 0;
 
-  // 4 trackable + 2 always-complete
+  // 4 trackable + 1 always-complete
   const TRACKABLE = [isProfileComplete, hasBranding, isStripeConnected, hasListing];
-  const completed = TRACKABLE.filter(Boolean).length + 2; // +2 for always-complete items
-  const total = TRACKABLE.length + 2;
+  const completed = TRACKABLE.filter(Boolean).length + 1; // +1 for always-complete email item
+  const total = TRACKABLE.length + 1;
   const pct = Math.round((completed / total) * 100);
   const allDone = completed === total;
 
@@ -168,16 +167,6 @@ export default function AdminLaunchpad() {
       state: "always",
       actionLabel: "View Email Settings",
       onAction: () => setLocation(adminPath("/communications")),
-    },
-    {
-      id: "identity",
-      icon: ShieldCheck,
-      title: "Stripe Identity Verification",
-      description: "Renters are asked to verify their government-issued ID before pickup. Powered by Stripe Identity and built into every booking — no setup required.",
-      state: "always",
-      actionLabel: "Learn About Verification",
-      onAction: () => window.open("https://stripe.com/identity", "_blank"),
-      optional: true,
     },
   ];
 
@@ -273,11 +262,7 @@ export default function AdminLaunchpad() {
                         Included
                       </span>
                     )}
-                    {item.optional && (
-                      <span className="inline-flex items-center gap-1 text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-muted text-muted-foreground border">
-                        Optional
-                      </span>
-                    )}
+
                   </div>
                   <p className="text-xs text-muted-foreground mt-1 leading-relaxed">{item.description}</p>
                 </div>
@@ -297,9 +282,7 @@ export default function AdminLaunchpad() {
                       <Loader2 className="w-3 h-3 animate-spin" />
                     ) : null}
                     {item.actionLabel}
-                    {item.id === "identity" ? (
-                      <ExternalLink className="w-3 h-3" />
-                    ) : item.id === "stripe" && stripeConnectLoading ? null : (
+                    {item.id === "stripe" && stripeConnectLoading ? null : (
                       <ChevronRight className="w-3 h-3" />
                     )}
                   </Button>
