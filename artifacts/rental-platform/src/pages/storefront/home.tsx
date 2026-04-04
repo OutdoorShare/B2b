@@ -38,6 +38,15 @@ function getCategoryIcon(slug: string): React.ElementType {
   return CATEGORY_ICONS[slug] || Gauge;
 }
 
+/** Returns "City, State" from a full address — hides street & zip for privacy. */
+function cityState(location: string): string {
+  const parts = location.split(",").map(p => p.trim()).filter(Boolean);
+  if (parts.length <= 2) return location;
+  // Drop zip-only segments (5 digits, optionally +4)
+  const nonZip = parts.filter(p => !/^\d{5}(-\d{4})?$/.test(p));
+  return nonZip.length >= 2 ? nonZip.slice(-2).join(", ") : location;
+}
+
 const HOW_IT_WORKS = [
   {
     step: "01",
@@ -416,10 +425,10 @@ export default function StorefrontHome() {
                         <p className="text-xs text-muted-foreground leading-relaxed line-clamp-2">{listing.description}</p>
                       )}
 
-                      {/* Location */}
+                      {/* Location — city & state only; full address shared after booking */}
                       {listing.location && (
                         <p className="text-xs text-muted-foreground flex items-center gap-1">
-                          <MapPin className="w-3 h-3 shrink-0" />{listing.location}
+                          <MapPin className="w-3 h-3 shrink-0" />{cityState(listing.location)}
                         </p>
                       )}
 

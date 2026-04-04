@@ -41,6 +41,14 @@ const CONDITION_LABEL: Record<string, string> = {
   fair: "Fair",
 };
 
+/** Returns "City, State" from a full address — hides street & zip for privacy. */
+function cityState(location: string): string {
+  const parts = location.split(",").map(p => p.trim()).filter(Boolean);
+  if (parts.length <= 2) return location;
+  const nonZip = parts.filter(p => !/^\d{5}(-\d{4})?$/.test(p));
+  return nonZip.length >= 2 ? nonZip.slice(-2).join(", ") : location;
+}
+
 export default function StorefrontProductDetail() {
   const { slug, id: idParam } = useParams<{ slug: string; id: string }>();
   const [, setLocation] = useLocation();
@@ -619,7 +627,7 @@ export default function StorefrontProductDetail() {
                 </Button>
                 {profile?.location && (
                   <div className="flex items-center justify-center gap-1.5 text-xs text-muted-foreground">
-                    <MapPin className="w-3 h-3" /> Pickup: {profile.location}
+                    <MapPin className="w-3 h-3" /> Pickup: {cityState(profile.location)}
                   </div>
                 )}
                 <p className="text-xs text-center text-muted-foreground">No charge until your booking is confirmed.</p>
