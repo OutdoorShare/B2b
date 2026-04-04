@@ -268,12 +268,21 @@ router.post("/products/bulk", requireTenant as any, async (req, res) => {
     const validStatus = ["available", "maintenance", "damaged", "reserved", "out_of_service"];
 
     for (let i = 0; i < rows.length; i++) {
-      const row = rows[i];
+      let row = rows[i];
       const rowNum = i + 1;
 
       if (!row.name?.trim()) {
-        errors.push({ row: rowNum, error: "Name is required" });
-        continue;
+        const fallback = [
+          row.year ? String(row.year).trim() : "",
+          row.brand?.trim() ?? "",
+          row.model?.trim() ?? "",
+        ].filter(Boolean).join(" ");
+        if (fallback) {
+          row = { ...row, name: fallback };
+        } else {
+          errors.push({ row: rowNum, error: "Name is required (or provide Make / Model)" });
+          continue;
+        }
       }
 
       let categoryId: number | null = null;

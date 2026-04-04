@@ -106,11 +106,25 @@ interface ParsedRow {
 
 const VALID_STATUS = ["available", "maintenance", "damaged", "reserved", "out_of_service"];
 
+function buildFallbackName(row: ParsedRow): string {
+  return [row.year?.trim(), row.brand?.trim(), row.model?.trim()]
+    .filter(Boolean)
+    .join(" ");
+}
+
 function validateRow(row: ParsedRow, categoryNames: Set<string>): ParsedRow {
   const errors: string[] = [];
   const warnings: string[] = [];
 
-  if (!row.name?.trim()) errors.push("Product name is required");
+  if (!row.name?.trim()) {
+    const fallback = buildFallbackName(row);
+    if (fallback) {
+      row = { ...row, name: fallback };
+      warnings.push(`No name provided — using "${fallback}" from Make / Model`);
+    } else {
+      errors.push("Product name is required (or provide Make / Model)");
+    }
+  }
 
   if (row.quantity && row.quantity.trim() !== "") {
     const q = parseInt(row.quantity);
