@@ -650,7 +650,7 @@ export default function StorefrontProductDetail() {
                       </div>
                     </div>
                     <div className="flex items-center gap-2">
-                      <img src="/outdoorshare-logo.png" alt="OutdoorShare" className="h-4 opacity-80 object-contain" />
+                      <img src="/outdoorshare-logo.png" alt="OutdoorShare" className="h-4 object-contain" style={{ filter: "brightness(0) invert(1)", opacity: 0.9 }} />
                       <span className="text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1 border" style={{ background: "rgba(58,181,73,0.15)", borderColor: "#3ab549", color: "#3ab549" }}>
                         <Lock className="w-2.5 h-2.5" /> Required
                       </span>
