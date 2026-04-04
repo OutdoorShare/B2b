@@ -25,9 +25,20 @@ const COLUMN_MAP: Record<string, string> = {
   item: "name",
   title: "name",
   sku: "sku",
-  "serial number": "sku",
-  serial: "sku",
   "item #": "sku",
+  vin: "serialNumber",
+  hin: "serialNumber",
+  "serial number": "serialNumber",
+  serial: "serialNumber",
+  "serial #": "serialNumber",
+  serial_number: "serialNumber",
+  "vehicle id number": "serialNumber",
+  "hull id number": "serialNumber",
+  "vin/hin": "serialNumber",
+  "vin / hin": "serialNumber",
+  "registration number": "serialNumber",
+  vin_hin_serial: "serialNumber",
+  "vin/hin/serial": "serialNumber",
   category: "category",
   "category name": "category",
   description: "description",
@@ -56,7 +67,8 @@ const REQUIRED_FIELDS = ["name"];
 
 const FIELD_LABELS: Record<string, string> = {
   name: "Product Name",
-  sku: "SKU / Serial #",
+  sku: "SKU / Item #",
+  serialNumber: "VIN / HIN / Serial #",
   category: "Category",
   description: "Description",
   status: "Status",
@@ -74,6 +86,7 @@ interface ParsedRow {
   _warnings: string[];
   name?: string;
   sku?: string;
+  serialNumber?: string;
   category?: string;
   description?: string;
   status?: string;
@@ -232,6 +245,7 @@ export default function AdminInventoryImport() {
       const payload = validRows.map(r => ({
         name: r.name,
         sku: r.sku || null,
+        serialNumber: r.serialNumber || null,
         category: r.category || null,
         description: r.description || null,
         status: r.status?.toLowerCase().replace(/\s/g, "_") || "available",
@@ -280,11 +294,11 @@ export default function AdminInventoryImport() {
   const downloadTemplate = async () => {
     const { utils, writeFile } = await import("xlsx");
     const headers = [
-      "name", "sku", "category", "description", "status",
+      "name", "sku", "vin_hin_serial", "category", "description", "status",
       "quantity", "brand", "model", "specs", "notes", "next_maintenance",
     ];
     const example = [
-      "2022 Sea-Doo Spark", "SD-001", "Jet Ski",
+      "2022 Sea-Doo Spark", "SD-001", "YAMA1234567890AB", "Jet Ski",
       "Fun personal watercraft, great for beginners", "available",
       "2", "Sea-Doo", "Spark 90HP", "90HP engine, 3-seater",
       "Purchased 2022", "2025-06-01",

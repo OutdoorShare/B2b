@@ -59,7 +59,7 @@ router.get("/products/:id", async (req, res) => {
 router.post("/products", requireTenant as any, async (req, res) => {
   try {
     const {
-      name, sku, categoryId, description, status, quantity,
+      name, sku, serialNumber, categoryId, description, status, quantity,
       imageUrls, brand, model, specs, notes, nextMaintenanceDate,
     } = req.body;
     const [product] = await db
@@ -68,6 +68,7 @@ router.post("/products", requireTenant as any, async (req, res) => {
         tenantId: req.tenantId!,
         name,
         sku: sku || null,
+        serialNumber: serialNumber || null,
         categoryId: categoryId || null,
         description: description || null,
         status: status || "available",
@@ -101,7 +102,7 @@ router.put("/products/:id", requireTenant as any, async (req, res) => {
       return;
     }
     const {
-      name, sku, categoryId, description, status, quantity,
+      name, sku, serialNumber, categoryId, description, status, quantity,
       imageUrls, brand, model, specs, notes, nextMaintenanceDate,
       serviceUntil, deactivateListings,
     } = req.body;
@@ -116,6 +117,7 @@ router.put("/products/:id", requireTenant as any, async (req, res) => {
       .set({
         ...(name !== undefined && { name }),
         ...(sku !== undefined && { sku }),
+        ...(serialNumber !== undefined && { serialNumber }),
         ...(categoryId !== undefined && { categoryId }),
         ...(description !== undefined && { description }),
         ...(status !== undefined && { status }),
@@ -288,6 +290,7 @@ router.post("/products/bulk", requireTenant as any, async (req, res) => {
             tenantId: req.tenantId!,
             name: row.name.trim(),
             sku: row.sku?.trim() || null,
+            serialNumber: row.serialNumber?.trim() || null,
             categoryId,
             description: row.description?.trim() || null,
             status,
