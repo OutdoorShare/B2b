@@ -787,14 +787,32 @@ export default function AdminSettings() {
                         />
                       </div>
                       <div className="flex-1">
-                        <Input
-                          name="primaryColor"
-                          value={formData.primaryColor || ""}
-                          onChange={e => handleColorChange("primaryColor", e.target.value)}
-                          placeholder="#1b4332"
-                          className="font-mono"
-                          maxLength={7}
-                        />
+                        <div className="flex gap-2">
+                          <Input
+                            name="primaryColor"
+                            value={formData.primaryColor || ""}
+                            onChange={e => handleColorChange("primaryColor", e.target.value)}
+                            placeholder="#1b4332"
+                            className="font-mono"
+                            maxLength={7}
+                          />
+                          <Button
+                            type="button"
+                            variant="secondary"
+                            size="sm"
+                            className="shrink-0"
+                            onClick={() => {
+                              const v = (formData.primaryColor || "").trim();
+                              if (/^#[0-9a-fA-F]{6}$/.test(v)) {
+                                setFormData((prev: any) => ({ ...prev, primaryColor: v }));
+                                applyBrandColors(v, formData.accentColor);
+                                toast({ title: "Primary color set", description: v });
+                              }
+                            }}
+                          >
+                            Set
+                          </Button>
+                        </div>
                         <p className="text-xs text-muted-foreground mt-1">Hex code e.g. #1b4332</p>
                       </div>
                     </div>
@@ -814,14 +832,32 @@ export default function AdminSettings() {
                         />
                       </div>
                       <div className="flex-1">
-                        <Input
-                          name="accentColor"
-                          value={formData.accentColor || ""}
-                          onChange={e => handleColorChange("accentColor", e.target.value)}
-                          placeholder="#52b788"
-                          className="font-mono"
-                          maxLength={7}
-                        />
+                        <div className="flex gap-2">
+                          <Input
+                            name="accentColor"
+                            value={formData.accentColor || ""}
+                            onChange={e => handleColorChange("accentColor", e.target.value)}
+                            placeholder="#52b788"
+                            className="font-mono"
+                            maxLength={7}
+                          />
+                          <Button
+                            type="button"
+                            variant="secondary"
+                            size="sm"
+                            className="shrink-0"
+                            onClick={() => {
+                              const v = (formData.accentColor || "").trim();
+                              if (/^#[0-9a-fA-F]{6}$/.test(v)) {
+                                setFormData((prev: any) => ({ ...prev, accentColor: v }));
+                                applyBrandColors(formData.primaryColor, v);
+                                toast({ title: "Accent color set", description: v });
+                              }
+                            }}
+                          >
+                            Set
+                          </Button>
+                        </div>
                         <p className="text-xs text-muted-foreground mt-1">Hex code e.g. #52b788</p>
                       </div>
                     </div>
