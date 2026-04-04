@@ -595,6 +595,33 @@ router.put("/bookings/:id", async (req, res) => {
 
     if (!updated) { res.status(404).json({ error: "Not found" }); return; }
 
+    // ── Stripe payment capture / cancellation on status change ────────────────
+    // Non-instant bookings use capture_method: "manual" — funds are authorized
+    // but not charged until admin confirms. Cancel the hold if booking is rejected.
+    if (body.status && body.status !== previousStatus && updated.stripePaymentIntentId) {
+      const [tenantForStripe] = await db.select({ testMode: tenantsTable.testMode })
+        .from(tenantsTable).where(eq(tenantsTable.id, updated.tenantId!));
+      const stripeClient = getStripeForTenant(!!tenantForStripe?.testMode);
+      (async () => {
+        try {
+          const pi = await stripeClient.paymentIntents.retrieve(updated.stripePaymentIntentId!);
+          if (body.status === "confirmed" && pi.status === "requires_capture") {
+            await stripeClient.paymentIntents.capture(updated.stripePaymentIntentId!);
+            await db.update(bookingsTable).set({ stripePaymentStatus: "paid", updatedAt: new Date() })
+              .where(eq(bookingsTable.id, updated.id));
+            console.log(`[bookings] captured payment for booking #${updated.id}`);
+          } else if (body.status === "cancelled" && pi.status === "requires_capture") {
+            await stripeClient.paymentIntents.cancel(updated.stripePaymentIntentId!);
+            await db.update(bookingsTable).set({ stripePaymentStatus: "refunded", updatedAt: new Date() })
+              .where(eq(bookingsTable.id, updated.id));
+            console.log(`[bookings] cancelled (released hold) for booking #${updated.id}`);
+          }
+        } catch (captureErr: any) {
+          console.error(`[bookings] stripe capture/cancel error for booking #${updated.id}:`, captureErr.message);
+        }
+      })();
+    }
+
     if (body.status && body.status !== previousStatus) {
       const triggerMap: Record<string, string> = {
         confirmed: "booking_confirmed",

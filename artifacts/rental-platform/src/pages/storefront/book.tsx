@@ -628,6 +628,7 @@ export default function StorefrontBook() {
   const [paymentIntentId, setPaymentIntentId] = useState<string | null>(null);
   const [paymentConfirmed, setPaymentConfirmed] = useState(false);
   const [isTestMode, setIsTestMode] = useState(false);
+  const [isInstantBooking, setIsInstantBooking] = useState(false);
   const [showStripeForm, setShowStripeForm] = useState(false);
   // Prevents the auto-create effect from firing again when email/name change after intent is already in flight
   const intentFiredRef = useRef(false);
@@ -1299,6 +1300,7 @@ export default function StorefrontBook() {
       setClientSecret(data.clientSecret);
       setPaymentIntentId(data.paymentIntentId);
       setIsTestMode(!!data.testMode);
+      setIsInstantBooking(!!data.instantBooking);
     } catch {
       toast({ title: "Payment setup failed — please try again", variant: "destructive" });
       setShowStripeForm(false);
@@ -2539,7 +2541,13 @@ export default function StorefrontBook() {
                           <BadgeCheck className="w-6 h-6 text-green-600 shrink-0" />
                           <div>
                             <p className="font-semibold text-green-800">Payment authorized</p>
-                            <p className="text-sm text-green-700">{isTestMode ? "Test payment recorded — no real charge." : "Your card has been charged successfully."}</p>
+                            <p className="text-sm text-green-700">
+                              {isTestMode
+                                ? "Test payment recorded — no real charge."
+                                : isInstantBooking
+                                  ? "Your card has been charged — booking confirmed!"
+                                  : "Card authorized — you'll only be charged once the rental is accepted."}
+                            </p>
                             <p className="text-xs text-green-600 mt-1 flex items-center gap-1.5">
                               <Loader2 className="w-3 h-3 animate-spin" />
                               Taking you to the rental agreement…
@@ -3744,7 +3752,10 @@ export default function StorefrontBook() {
                         </div>
                       )}
                       <p className="text-xs text-muted-foreground flex items-center gap-1">
-                        <Lock className="w-3 h-3" /> No charge until confirmed
+                        <Lock className="w-3 h-3" />
+                        {isInstantBooking
+                          ? "Card charged immediately upon booking"
+                          : "Card authorized now — charged only when accepted"}
                       </p>
                     </div>
                   </div>

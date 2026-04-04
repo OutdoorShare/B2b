@@ -247,6 +247,12 @@ router.post("/stripe/payment-intent", async (req, res) => {
     // In test mode, don't route to tenant's connected account (test ≠ live accounts)
     const tenantConnected = !isTestMode && !!(tenant.stripeAccountId && tenant.stripeChargesEnabled);
 
+    // Lookup instant booking setting — determines whether to authorize-only or capture immediately
+    const [bizProfile] = await db.select({ instantBooking: businessProfileTable.instantBooking })
+      .from(businessProfileTable)
+      .where(eq(businessProfileTable.tenantId, tenant.id));
+    const instantBooking = bizProfile?.instantBooking ?? false;
+
     // ── Attach or create a Stripe Customer so the card is saved for future use ──
     let stripeCustomerId: string | undefined;
     // Keep a reference so we can recreate the customer on stale-ID errors below
@@ -286,6 +292,8 @@ router.post("/stripe/payment-intent", async (req, res) => {
       receipt_email: (customerEmail && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(customerEmail)) ? customerEmail : undefined,
       // Save the payment method for future off-session use (required for deposit hold/charge at pickup)
       setup_future_usage: "off_session",
+      // Non-instant bookings: authorize only — capture when admin confirms
+      ...(!instantBooking ? { capture_method: "manual" } : {}),
       description: `Rental booking — ${tenant.name}${isTestMode ? " [TEST MODE]" : ""}`,
       metadata: {
         tenant_id: String(tenant.id),
@@ -342,6 +350,7 @@ router.post("/stripe/payment-intent", async (req, res) => {
       platformFee: (platformFeeAmount / 100).toFixed(2),
       heldOnPlatform: !tenantConnected,
       testMode: isTestMode,
+      instantBooking,
       stripePublishableKey: isTestMode
         ? (process.env.STRIPE_TEST_PUBLISHABLE_KEY ?? "")
         : (process.env.STRIPE_PUBLISHABLE_KEY ?? ""),
