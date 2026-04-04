@@ -830,6 +830,20 @@ export default function StorefrontBook() {
       .finally(() => setBookingsLoading(false));
   }, [completePhase, email]);
 
+  // Auto-launch Stripe Identity popup as soon as the session is ready — no extra button tap
+  useEffect(() => {
+    if (
+      completePhase === "verification" &&
+      identityClientSecret &&
+      !identitySessionLoading &&
+      !identitySessionFailed &&
+      identityStatus === "idle"
+    ) {
+      handleStartVerification();
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [completePhase, identityClientSecret, identitySessionLoading, identitySessionFailed, identityStatus]);
+
   // Restore identity session from sessionStorage (page refresh during verification)
   useEffect(() => {
     const storageKey = `identity_session_${listingId}`;
@@ -3274,20 +3288,20 @@ export default function StorefrontBook() {
                 {/* ── CONFIRMED PHASE ── */}
                 {completePhase === "confirmed" && (
                   <div className="space-y-8">
-                    <div className="bg-green-50 border border-green-200 rounded-2xl p-6 flex items-center gap-5">
-                      <div className="w-14 h-14 bg-green-100 text-green-600 rounded-full flex items-center justify-center shrink-0">
+                    <div className="bg-green-50 border border-green-200 rounded-2xl p-6 flex items-start gap-5">
+                      <div className="w-14 h-14 bg-green-100 text-green-600 rounded-full flex items-center justify-center shrink-0 mt-0.5">
                         <CheckCircle2 className="w-7 h-7" />
                       </div>
                       <div>
-                        <h1 className="text-xl font-black tracking-tight text-green-900">Booking Requested!</h1>
+                        <h1 className="text-xl font-black tracking-tight text-green-900">You're all set — adventure awaits! 🎉</h1>
                         {confirmedBooking && <p className="text-green-700 text-sm mt-0.5">Reference #{confirmedBooking.id} · {listing.title}</p>}
                         {isKiosk ? (
-                          <p className="text-green-700/80 text-sm mt-1">
-                            A confirmation has been sent to <strong>{email}</strong>. Scan below to access your renter portal on your phone.
+                          <p className="text-green-700/80 text-sm mt-2 leading-relaxed">
+                            We're so excited for your rental! A confirmation with all the details has been sent to <strong>{email}</strong>. Scan below to access your renter portal.
                           </p>
                         ) : (
-                          <p className="text-green-700/80 text-sm mt-1">
-                            We'll review and email a confirmation to <strong>{email}</strong>. Bring a valid ID on {startFormatted}.
+                          <p className="text-green-700/80 text-sm mt-2 leading-relaxed">
+                            We're looking forward to your adventure! Check <strong>{email}</strong> — your confirmation is on its way with directions, pickup details, and everything you need for {startFormatted}.
                           </p>
                         )}
                       </div>
