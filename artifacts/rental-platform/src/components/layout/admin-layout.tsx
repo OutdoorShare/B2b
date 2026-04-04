@@ -90,6 +90,65 @@ const NAV_GROUPS: NavGroup[] = [
 
 const NAV_ITEMS: NavItem[] = NAV_GROUPS.flatMap(g => g.items);
 
+function EmailVerificationBanner() {
+  const session = getAdminSession();
+  const [dismissed, setDismissed] = useState(false);
+  const [resending, setResending] = useState(false);
+  const [resent, setResent] = useState(false);
+  const base = import.meta.env.BASE_URL.replace(/\/+$/, "");
+
+  // Only show for owner accounts with unverified email
+  if (dismissed || !session || session.type !== "owner" || session.emailVerified !== false) {
+    return null;
+  }
+
+  const handleResend = async () => {
+    if (!session.email) return;
+    setResending(true);
+    try {
+      await fetch(`${base}/api/public/resend-verification`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: session.email }),
+      });
+      setResent(true);
+    } catch {
+      setResent(true);
+    } finally {
+      setResending(false);
+    }
+  };
+
+  return (
+    <div className="bg-amber-50 border-b border-amber-200 px-6 py-2.5 flex items-center gap-3 flex-wrap">
+      <div className="flex items-center gap-2 flex-1 min-w-0">
+        <span className="text-amber-600 shrink-0">⚠️</span>
+        <p className="text-sm text-amber-800 font-medium">
+          {resent
+            ? "Verification email sent — check your inbox."
+            : "Please verify your email address to fully activate your account."}
+        </p>
+      </div>
+      {!resent && (
+        <button
+          onClick={handleResend}
+          disabled={resending}
+          className="text-xs font-semibold text-amber-700 hover:text-amber-900 underline decoration-dotted shrink-0 disabled:opacity-50"
+        >
+          {resending ? "Sending…" : "Resend verification email"}
+        </button>
+      )}
+      <button
+        onClick={() => setDismissed(true)}
+        className="text-xs text-amber-500 hover:text-amber-700 shrink-0 ml-1"
+        title="Dismiss"
+      >
+        ✕
+      </button>
+    </div>
+  );
+}
+
 function TrialStatusBanner() {
   const slug = getAdminSlug();
   const { data: profile } = useGetBusinessProfile({
@@ -377,6 +436,7 @@ export function AdminLayout({ children }: { children: React.ReactNode }) {
 
       {/* Main Content */}
       <main className="flex-1 flex flex-col min-w-0 min-h-0 overflow-hidden">
+        <EmailVerificationBanner />
         <TrialStatusBanner />
 
         <header className="h-14 flex items-center justify-between px-6 border-b border-border/70 bg-background/80 backdrop-blur-sm sticky top-0 z-10">

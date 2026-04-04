@@ -27,6 +27,9 @@ export const tenantsTable = pgTable("tenants", {
   subscriptionStatus: text("subscription_status"),
   currentPeriodEnd: timestamp("current_period_end"),
   stripeRestrictedAlertSentAt: timestamp("stripe_restricted_alert_sent_at"),
+  emailVerified: boolean("email_verified").default(false).notNull(),
+  emailVerificationToken: text("email_verification_token"),
+  emailVerificationExpiresAt: timestamp("email_verification_expires_at"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });

@@ -4,6 +4,11 @@ import { tenantsTable, businessProfileTable, categoriesTable } from "@workspace/
 import { eq } from "drizzle-orm";
 import { scrypt, randomBytes } from "crypto";
 import { promisify } from "util";
+import { sendVerificationEmail } from "../services/gmail";
+
+const APP_URL =
+  process.env.APP_URL ||
+  (process.env.REPLIT_DEV_DOMAIN ? `https://${process.env.REPLIT_DEV_DOMAIN}` : "https://outdoorshare.app");
 
 const DEFAULT_CATEGORIES = [
   { name: "Jet Ski",         slug: "jet-ski",         icon: "🚤" },
@@ -141,16 +146,30 @@ router.post("/public/signup", async (req, res) => {
     // Generate an auth token so the user is auto-logged in immediately after signup —
     // no separate login step required, and the session is correctly scoped to this tenant.
     const adminToken = randomBytes(32).toString("hex");
+
+    // Generate email verification token (expires in 24 hours)
+    const emailVerificationToken = randomBytes(32).toString("hex");
+    const emailVerificationExpiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
+
     await db.update(tenantsTable)
-      .set({ adminToken, updatedAt: new Date() })
+      .set({ adminToken, emailVerificationToken, emailVerificationExpiresAt, updatedAt: new Date() })
       .where(eq(tenantsTable.id, tenant.id));
+
+    // Send verification email (non-blocking — don't fail the request if email fails)
+    const verifyUrl = `${APP_URL}/verify-email?token=${emailVerificationToken}`;
+    sendVerificationEmail({
+      toEmail: email.toLowerCase().trim(),
+      companyName: companyName.trim(),
+      verifyUrl,
+    }).catch(err => console.error("[signup] Failed to send verification email:", err?.message));
 
     res.status(201).json({
       tenant: safeTenant(tenant),
       adminEmail: email.toLowerCase().trim(),
       siteSlug: slug,
       adminToken,
-      message: "Account created successfully",
+      emailVerified: false,
+      message: "Account created successfully. Please check your email to verify your address.",
     });
   } catch (err: any) {
     if (err?.code === "23505") {
@@ -160,6 +179,87 @@ router.post("/public/signup", async (req, res) => {
     console.error("[signup]", err);
     res.status(500).json({ error: "Failed to create account" });
   }
+});
+
+// ── GET /public/verify-email ───────────────────────────────────────────────────
+router.get("/public/verify-email", async (req, res) => {
+  const { token } = req.query;
+  if (!token || typeof token !== "string") {
+    res.status(400).json({ error: "Invalid or missing token" });
+    return;
+  }
+
+  const [tenant] = await db.select()
+    .from(tenantsTable)
+    .where(eq(tenantsTable.emailVerificationToken, token))
+    .limit(1);
+
+  if (!tenant) {
+    res.status(404).json({ error: "Verification link is invalid or has already been used" });
+    return;
+  }
+
+  if (tenant.emailVerified) {
+    res.json({ alreadyVerified: true, message: "Email is already verified" });
+    return;
+  }
+
+  if (tenant.emailVerificationExpiresAt && tenant.emailVerificationExpiresAt < new Date()) {
+    res.status(410).json({ error: "Verification link has expired. Please request a new one." });
+    return;
+  }
+
+  await db.update(tenantsTable)
+    .set({
+      emailVerified: true,
+      emailVerificationToken: null,
+      emailVerificationExpiresAt: null,
+      updatedAt: new Date(),
+    })
+    .where(eq(tenantsTable.id, tenant.id));
+
+  res.json({ success: true, message: "Email verified successfully", tenantName: tenant.name, slug: tenant.slug });
+});
+
+// ── POST /public/resend-verification ──────────────────────────────────────────
+router.post("/public/resend-verification", async (req, res) => {
+  const { email } = req.body;
+  if (!email || typeof email !== "string") {
+    res.status(400).json({ error: "Email is required" });
+    return;
+  }
+
+  const [tenant] = await db.select()
+    .from(tenantsTable)
+    .where(eq(tenantsTable.email, email.toLowerCase().trim()))
+    .limit(1);
+
+  if (!tenant) {
+    // Don't reveal whether the email exists
+    res.json({ message: "If that email is registered, a verification link has been sent." });
+    return;
+  }
+
+  if (tenant.emailVerified) {
+    res.json({ alreadyVerified: true, message: "Email is already verified" });
+    return;
+  }
+
+  const emailVerificationToken = randomBytes(32).toString("hex");
+  const emailVerificationExpiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
+
+  await db.update(tenantsTable)
+    .set({ emailVerificationToken, emailVerificationExpiresAt, updatedAt: new Date() })
+    .where(eq(tenantsTable.id, tenant.id));
+
+  const verifyUrl = `${APP_URL}/verify-email?token=${emailVerificationToken}`;
+  sendVerificationEmail({
+    toEmail: tenant.email,
+    companyName: tenant.name,
+    verifyUrl,
+  }).catch(err => console.error("[resend-verification] Failed to send email:", err?.message));
+
+  res.json({ message: "If that email is registered, a verification link has been sent." });
 });
 
 // ── GET /public/check-slug ─────────────────────────────────────────────────────

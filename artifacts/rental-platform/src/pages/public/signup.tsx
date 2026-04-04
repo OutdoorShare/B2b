@@ -133,6 +133,7 @@ export default function SignupPage() {
           tenantName: data.tenant?.name,
           tenantSlug: data.siteSlug,
           email: data.adminEmail,
+          emailVerified: data.emailVerified ?? false,
         }));
       }
 
@@ -385,6 +386,17 @@ export default function SignupPage() {
         {/* Step 3: Payment */}
         {step === "payment" && created && (
           <div className="space-y-6">
+            {/* Email verification notice */}
+            <div className="bg-amber-50 border border-amber-200 rounded-2xl p-5 flex items-start gap-3">
+              <span className="text-amber-500 text-lg shrink-0 mt-0.5">📧</span>
+              <div>
+                <p className="font-semibold text-amber-800 text-sm">Check your inbox</p>
+                <p className="text-amber-700 text-sm mt-0.5">
+                  We sent a verification link to <strong>{created.adminEmail}</strong>. Click it to activate your account.
+                </p>
+              </div>
+            </div>
+
             <div className="bg-white rounded-2xl border shadow-sm p-8 text-center space-y-4">
               <div className="w-16 h-16 rounded-full bg-green-100 flex items-center justify-center mx-auto">
                 <CheckCircle2 className="w-8 h-8 text-green-600" />

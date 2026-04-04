@@ -354,6 +354,42 @@ export async function sendWelcomeEmail(opts: {
   });
 }
 
+// ── Email verification ─────────────────────────────────────────────────────────
+export async function sendVerificationEmail(opts: {
+  toEmail: string;
+  companyName: string;
+  verifyUrl: string;
+}): Promise<void> {
+  const { toEmail, companyName, verifyUrl } = opts;
+
+  const body = `
+    <p style="margin:0 0 8px;font-size:18px;font-weight:700;color:${BRAND_DARK};">Verify your email address</p>
+    <p style="margin:0 0 20px;font-size:15px;color:#374151;line-height:1.6;">
+      Thanks for signing up, <strong>${companyName}</strong>! Click the button below to verify your email address
+      and activate your OutdoorShare account. This link expires in <strong>24 hours</strong>.
+    </p>
+
+    ${ctaButton("Verify My Email", verifyUrl)}
+
+    <p style="margin:24px 0 0;font-size:13px;color:#9ca3af;text-align:center;">
+      If you didn't create an OutdoorShare account, you can safely ignore this email.
+    </p>
+  `;
+
+  const html = emailShell({
+    preheader: `Verify your email to activate your OutdoorShare account for ${companyName}.`,
+    badgeLabel: "Verify Your Email",
+    badgeColor: BRAND_GREEN,
+    body,
+  });
+
+  const gmail = await getUncachableGmailClient();
+  await gmail.users.messages.send({
+    userId: "me",
+    requestBody: { raw: makeRawEmail(toEmail, `Verify your email — ${companyName} on OutdoorShare`, html) },
+  });
+}
+
 // ── Account updated email ──────────────────────────────────────────────────────
 export async function sendAccountUpdatedEmail(opts: {
   toEmail: string;

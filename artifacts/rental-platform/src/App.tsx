@@ -24,6 +24,7 @@ import ReturnPage from "@/pages/storefront/return";
 
 import GetStartedPage from "@/pages/public/get-started";
 import SignupPage from "@/pages/public/signup";
+import VerifyEmailPage from "@/pages/public/verify-email";
 import AuditPage from "@/pages/public/audit";
 import DemoPage from "@/pages/demo";
 import AdminOnboarding from "@/pages/admin/onboarding";
@@ -191,6 +192,9 @@ function Router() {
       </Route>
       <Route path="/signup">
         <SignupPage />
+      </Route>
+      <Route path="/verify-email">
+        <VerifyEmailPage />
       </Route>
       <Route path="/audit">
         <AuditPage />

@@ -54,6 +54,7 @@ export default function AdminLoginPage({ slug }: Props) {
         tenantName: data.tenantName,
         tenantSlug: data.tenantSlug,
         email: data.email,
+        emailVerified: data.emailVerified ?? true,
       }));
       toast({ title: "Welcome back!", description: `Signed in as owner of ${data.tenantName}` });
       window.location.href = `${BASE}/${slug}/admin`;

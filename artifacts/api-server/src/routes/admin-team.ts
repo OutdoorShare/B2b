@@ -89,6 +89,7 @@ router.post("/admin/auth/owner-login", async (req, res) => {
       tenantName: tenant.name,
       tenantSlug: tenant.slug,
       email: tenant.email,
+      emailVerified: tenant.emailVerified,
     });
   } catch {
     res.status(500).json({ error: "Login failed" });
