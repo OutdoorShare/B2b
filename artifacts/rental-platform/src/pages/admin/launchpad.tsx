@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useLocation } from "wouter";
 import { adminPath, getAdminSlug } from "@/lib/admin-nav";
 import { Button } from "@/components/ui/button";
+import { useToast } from "@/hooks/use-toast";
 import {
   Building2, Image, CreditCard, FileSignature, Package,
   Mail, ShieldCheck, CheckCircle2, Circle, ChevronRight,
@@ -36,8 +37,10 @@ interface LaunchItem {
 
 export default function AdminLaunchpad() {
   const [, setLocation] = useLocation();
+  const { toast } = useToast();
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [stripeConnectLoading, setStripeConnectLoading] = useState(false);
 
   // Data state
   const [profile, setProfile] = useState<any>(null);
@@ -76,11 +79,29 @@ export default function AdminLaunchpad() {
   };
 
   const handleStripeConnect = async () => {
+    setStripeConnectLoading(true);
     try {
       const res = await fetch(`${BASE}/api/stripe/connect/onboard`, { method: "POST", headers: adminHeaders() });
       const data = await res.json();
-      if (data.url) window.location.href = data.url;
-    } catch { /* ignore */ }
+      if (res.status === 401) {
+        toast({ title: "Session expired", description: "Please log in again to connect Stripe.", variant: "destructive" });
+        return;
+      }
+      if (res.status === 403) {
+        toast({ title: "Permission denied", description: "Your account doesn't have permission to manage Stripe.", variant: "destructive" });
+        return;
+      }
+      if (data.url) {
+        window.location.href = data.url;
+      } else {
+        const msg = data.error || "Could not start Stripe onboarding";
+        toast({ title: "Stripe setup failed", description: msg.length > 120 ? msg.slice(0, 120) + "…" : msg, variant: "destructive" });
+      }
+    } catch {
+      toast({ title: "Connection error", description: "Could not reach the server. Please check your connection and try again.", variant: "destructive" });
+    } finally {
+      setStripeConnectLoading(false);
+    }
   };
 
   const isProfileComplete = !!(
@@ -126,7 +147,7 @@ export default function AdminLaunchpad() {
       title: "Stripe Connect",
       description: "Link your Stripe account to start accepting payments and receiving payouts. Required for live bookings.",
       state: loading ? "loading" : isStripeConnected ? "complete" : "incomplete",
-      actionLabel: isStripeConnected ? "View Stripe Dashboard" : "Connect Stripe",
+      actionLabel: isStripeConnected ? "View Stripe Dashboard" : stripeConnectLoading ? "Redirecting…" : "Connect Stripe",
       onAction: isStripeConnected
         ? () => setLocation(adminPath("/settings?tab=payments"))
         : handleStripeConnect,
@@ -280,11 +301,15 @@ export default function AdminLaunchpad() {
                     variant={isComplete ? "ghost" : "default"}
                     className="gap-1.5 text-xs"
                     onClick={item.onAction}
+                    disabled={item.id === "stripe" && stripeConnectLoading}
                   >
+                    {item.id === "stripe" && stripeConnectLoading ? (
+                      <Loader2 className="w-3 h-3 animate-spin" />
+                    ) : null}
                     {item.actionLabel}
                     {item.id === "identity" ? (
                       <ExternalLink className="w-3 h-3" />
-                    ) : (
+                    ) : item.id === "stripe" && stripeConnectLoading ? null : (
                       <ChevronRight className="w-3 h-3" />
                     )}
                   </Button>
