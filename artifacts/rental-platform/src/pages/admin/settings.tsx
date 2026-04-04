@@ -366,7 +366,29 @@ export default function AdminSettings() {
       const res = await fetch(`${BASE}/api/upload/image`, { method: "POST", body: fd });
       if (!res.ok) { toast({ title: "Upload failed", variant: "destructive" }); return; }
       const data = await res.json();
-      setFormData((prev: any) => ({ ...prev, [field]: data.url }));
+      // Update local state first, then immediately persist so the checklist updates
+      setFormData((prev: any) => {
+        const updated = { ...prev, [field]: data.url };
+        // Auto-save with the freshly merged object (avoid stale closure over formData)
+        fetch(`${BASE}/api/business`, {
+          method: "PUT",
+          headers: { ...adminHeaders(), "Content-Type": "application/json" },
+          body: JSON.stringify(updated),
+        })
+          .then(r => r.ok ? r.json() : null)
+          .then(saved => {
+            if (saved) {
+              queryClient.setQueryData(["/api/business", urlSlug], saved);
+              queryClient.setQueryData(getGetBusinessProfileQueryKey(), saved);
+              applyBrandColors(saved.primaryColor, saved.accentColor);
+              toast({ title: field === "logoUrl" ? "Logo saved" : "Cover photo saved" });
+            } else {
+              toast({ title: "Upload saved locally — click Save Settings to persist", variant: "destructive" });
+            }
+          })
+          .catch(() => toast({ title: "Upload saved locally — click Save Settings to persist", variant: "destructive" }));
+        return updated;
+      });
     } catch {
       toast({ title: "Upload error", variant: "destructive" });
     } finally {
