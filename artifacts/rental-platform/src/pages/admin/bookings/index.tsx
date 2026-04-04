@@ -401,7 +401,9 @@ export default function AdminBookings() {
                       return (
                       <TableRow
                         key={booking.id}
-                        className={isUnseen ? "bg-amber-50/60 dark:bg-amber-950/20" : ""}
+                        style={{ cursor: "pointer" }}
+                        className={`hover:bg-muted/40 transition-colors ${isUnseen ? "bg-amber-50/60 dark:bg-amber-950/20" : ""}`}
+                        onClick={() => setLocation(adminPath(`/bookings/${booking.id}`))}
                       >
                         <TableCell className="font-mono text-xs text-muted-foreground">
                           <div className="flex items-center gap-1.5">
@@ -457,7 +459,7 @@ export default function AdminBookings() {
                             );
                           })()}
                         </TableCell>
-                        <TableCell className="text-right">
+                        <TableCell className="text-right" onClick={e => e.stopPropagation()}>
                           <div className="flex justify-end gap-2">
                             {booking.status === "pending" && (
                               <Button
