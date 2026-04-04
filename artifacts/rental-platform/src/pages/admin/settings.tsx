@@ -13,7 +13,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
-import { Copy, CheckCircle2, Paintbrush, RefreshCw, Upload, Eye, EyeOff, ImageIcon, X, KeyRound, Mail, ChevronDown, ChevronUp, ExternalLink, Wand2, Plus, FileText, BookOpen } from "lucide-react";
+import { Copy, CheckCircle2, Paintbrush, RefreshCw, Upload, Eye, EyeOff, ImageIcon, X, KeyRound, Mail, ChevronDown, ChevronUp, ExternalLink, Wand2, Plus, FileText, BookOpen, AlertCircle, Rocket } from "lucide-react";
 import { applyBrandColors, PRESET_THEMES, isLight } from "@/lib/theme";
 
 function slugifyPreview(name: string): string {
@@ -425,6 +425,53 @@ export default function AdminSettings() {
                       <Eye className="w-3.5 h-3.5 mr-1.5" /> Preview
                     </Button>
                   </div>
+                </div>
+              );
+            })()}
+
+            {/* ── Setup checklist status ─────────────────────────────────────── */}
+            {(() => {
+              const nameOk  = !!(formData.name && formData.name.trim() && formData.name.trim() !== "My Rental Company");
+              const emailOk = !!(formData.email && formData.email.trim());
+              const outboundOk = !!(formData.outboundEmail && formData.outboundEmail.trim());
+              const logoOk  = !!(formData.logoUrl && formData.logoUrl.trim());
+              const allOk   = nameOk && emailOk && outboundOk && logoOk;
+              if (allOk) return (
+                <div className="rounded-xl border border-green-200 bg-green-50 dark:bg-green-950/30 dark:border-green-800 px-5 py-4 flex items-center gap-3">
+                  <Rocket className="w-5 h-5 text-green-600 shrink-0" />
+                  <p className="text-sm font-semibold text-green-800 dark:text-green-300">Profile complete — you're all set to go live!</p>
+                </div>
+              );
+              const steps = [
+                { ok: nameOk,      label: "Business name set (not the default)",  anchor: "name" },
+                { ok: emailOk,     label: "Public contact email added",            anchor: "email" },
+                { ok: outboundOk,  label: "Outbound reply-to email added",         anchor: "outboundEmail" },
+                { ok: logoOk,      label: "Logo uploaded (in the Branding tab)",   anchor: null },
+              ];
+              const remaining = steps.filter(s => !s.ok).length;
+              return (
+                <div className="rounded-xl border border-amber-200 bg-amber-50 dark:bg-amber-950/30 dark:border-amber-800 px-5 py-4 space-y-3">
+                  <div className="flex items-center gap-2">
+                    <AlertCircle className="w-4 h-4 text-amber-600 shrink-0" />
+                    <p className="text-sm font-semibold text-amber-800 dark:text-amber-300">
+                      {remaining} item{remaining !== 1 ? "s" : ""} left to complete your profile
+                    </p>
+                  </div>
+                  <ul className="space-y-1.5">
+                    {steps.map((s, i) => (
+                      <li key={i} className="flex items-center gap-2 text-sm">
+                        {s.ok
+                          ? <CheckCircle2 className="w-4 h-4 text-green-600 shrink-0" />
+                          : <div className="w-4 h-4 rounded-full border-2 border-amber-400 shrink-0" />
+                        }
+                        {s.anchor && !s.ok
+                          ? <button type="button" className="text-amber-800 dark:text-amber-300 underline underline-offset-2 hover:no-underline text-left" onClick={() => { document.getElementById(s.anchor!)?.focus(); document.getElementById(s.anchor!)?.scrollIntoView({ behavior: "smooth", block: "center" }); }}>{s.label}</button>
+                          : <span className={s.ok ? "text-muted-foreground line-through" : "text-amber-800 dark:text-amber-300"}>{s.label}</span>
+                        }
+                      </li>
+                    ))}
+                  </ul>
+                  <p className="text-xs text-amber-700 dark:text-amber-400">Fill in the fields below, then click <strong>Save Settings</strong> at the bottom of this page.</p>
                 </div>
               );
             })()}
@@ -1356,10 +1403,25 @@ export default function AdminSettings() {
 
           <div className="mt-8 flex justify-end">
             <Button type="submit" size="lg" disabled={saving}>
-              {saving ? "Saving..." : "Save Settings"}
+              {saving ? <><RefreshCw className="w-4 h-4 mr-2 animate-spin" />Saving…</> : "Save Settings"}
             </Button>
           </div>
         </form>
+
+        {/* ── Sticky save bar ─────────────────────────────────────────────── */}
+        <div className="fixed bottom-0 left-0 right-0 z-50 pointer-events-none">
+          <div className="max-w-4xl mx-auto px-4 pb-4 flex justify-end">
+            <div className="pointer-events-auto shadow-xl rounded-xl border bg-background/95 backdrop-blur-sm px-4 py-3 flex items-center gap-4">
+              {saving
+                ? <span className="text-sm text-muted-foreground flex items-center gap-1.5"><RefreshCw className="w-3.5 h-3.5 animate-spin" />Saving…</span>
+                : <span className="text-sm text-muted-foreground">Unsaved changes?</span>
+              }
+              <Button size="sm" disabled={saving} onClick={doSave} className="gap-1.5">
+                {saving ? <><RefreshCw className="w-3.5 h-3.5 animate-spin" />Saving…</> : <><CheckCircle2 className="w-3.5 h-3.5" />Save Settings</>}
+              </Button>
+            </div>
+          </div>
+        </div>
       </Tabs>
     </div>
   );
