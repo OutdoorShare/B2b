@@ -44,7 +44,7 @@ export function HostBookingsPage() {
           <div className="bg-white rounded-xl border border-gray-200 p-16 text-center">
             <CalendarDays className="h-12 w-12 text-gray-300 mx-auto mb-4" />
             <h2 className="text-lg font-semibold text-gray-700 mb-2">No bookings yet</h2>
-            <p className="text-gray-400 text-sm">When renters book your gear, their bookings will appear here.</p>
+            <p className="text-gray-400 text-sm">When renters book your adventure, their bookings will appear here.</p>
           </div>
         ) : (
           <div className="space-y-3">

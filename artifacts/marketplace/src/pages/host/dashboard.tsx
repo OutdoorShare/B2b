@@ -39,7 +39,7 @@ export function HostDashboardPage() {
           <h1 className="text-2xl font-bold text-gray-900">
             Welcome back, {customer?.name?.split(" ")[0]}
           </h1>
-          <p className="text-gray-500 mt-1">Here's how your gear is performing on OutdoorShare.</p>
+          <p className="text-gray-500 mt-1">Here's how your adventure is performing on OutdoorShare.</p>
         </div>
 
         {/* Stats grid */}
@@ -136,13 +136,13 @@ export function HostDashboardPage() {
             <div className="space-y-3">
               <QuickAction
                 label="Add a new listing"
-                description="List your outdoor gear on OutdoorShare"
+                description="List your outdoor adventure on OutdoorShare"
                 icon={Plus}
                 onClick={() => setLocation("/host/listings/new")}
               />
               <QuickAction
                 label="View bookings"
-                description="See who's renting your gear"
+                description="See who's renting your adventure"
                 icon={CalendarDays}
                 onClick={() => setLocation("/host/bookings")}
               />

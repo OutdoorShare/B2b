@@ -67,11 +67,11 @@ export function BecomeHostPage({ onAuthOpen }: { onAuthOpen: () => void }) {
           {/* Left: info */}
           <div>
             <h1 className="text-3xl font-bold text-gray-900 mb-4">
-              List your outdoor gear,<br />
+              List your outdoor adventure,<br />
               <span className="text-primary">earn on your terms.</span>
             </h1>
             <p className="text-gray-500 mb-8">
-              Become a Host on OutdoorShare and connect your gear with adventurers nearby. 
+              Become a Host on OutdoorShare and connect your adventure with adventurers nearby. 
               Manage everything from your personal host dashboard — completely free to get started.
             </p>
 
@@ -89,7 +89,7 @@ export function BecomeHostPage({ onAuthOpen }: { onAuthOpen: () => void }) {
               <Feature
                 icon={DollarSign}
                 title="Earn from what you own"
-                description="Set your own rates and get paid for gear that would otherwise sit in the garage."
+                description="Set your own rates and get paid for adventure that would otherwise sit in the garage."
               />
             </div>
           </div>
@@ -128,7 +128,7 @@ export function BecomeHostPage({ onAuthOpen }: { onAuthOpen: () => void }) {
                     <Input
                       value={displayName}
                       onChange={e => setDisplayName(e.target.value)}
-                      placeholder="e.g. Jake's Outdoor Gear"
+                      placeholder="e.g. Jake's Outdoor Adventures"
                       required
                     />
                     <p className="text-xs text-gray-400 mt-1">This appears on your listings on OutdoorShare.</p>

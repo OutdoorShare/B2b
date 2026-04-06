@@ -79,7 +79,7 @@ export function Navbar({ onAuthOpen }: { onAuthOpen: () => void }) {
                     onClick={() => setLocation("/become-host")}
                     className="hidden sm:flex items-center gap-1.5 border-primary/30 text-primary hover:bg-primary/5"
                   >
-                    List your gear
+                    List your adventure
                   </Button>
                 )}
 
@@ -123,7 +123,7 @@ export function Navbar({ onAuthOpen }: { onAuthOpen: () => void }) {
                   onClick={() => setLocation("/become-host")}
                   className="hidden sm:flex border-primary/30 text-primary hover:bg-primary/5"
                 >
-                  List your gear
+                  List your adventure
                 </Button>
                 <Button
                   size="sm"
@@ -178,7 +178,7 @@ export function Navbar({ onAuthOpen }: { onAuthOpen: () => void }) {
                     onClick={() => { setLocation("/become-host"); setMobileOpen(false); }}
                     className="block w-full text-left px-2 py-2 text-sm text-primary font-medium hover:bg-primary/5 rounded-md"
                   >
-                    List your gear
+                    List your adventure
                   </button>
                 )}
               </>
@@ -187,7 +187,7 @@ export function Navbar({ onAuthOpen }: { onAuthOpen: () => void }) {
                 onClick={() => { setLocation("/become-host"); setMobileOpen(false); }}
                 className="block w-full text-left px-2 py-2 text-sm text-primary font-medium hover:bg-primary/5 rounded-md"
               >
-                List your gear
+                List your adventure
               </button>
             )}
           </div>

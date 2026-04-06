@@ -74,7 +74,7 @@ export function HostSettingsPage() {
                 <Input
                   value={form.displayName}
                   onChange={e => set("displayName", e.target.value)}
-                  placeholder="e.g. Jake's Outdoor Gear"
+                  placeholder="e.g. Jake's Outdoor Adventures"
                 />
                 <p className="text-xs text-gray-400 mt-1">This name appears on your listings on OutdoorShare.</p>
               </div>
@@ -85,7 +85,7 @@ export function HostSettingsPage() {
                   onChange={e => set("description", e.target.value)}
                   rows={3}
                   className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring resize-none"
-                  placeholder="Tell renters a bit about yourself and your gear..."
+                  placeholder="Tell renters a bit about yourself and your adventure..."
                 />
               </div>
             </div>

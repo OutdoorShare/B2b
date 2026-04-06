@@ -82,7 +82,7 @@ export function HostListingsPage() {
           <div className="bg-white rounded-xl border border-gray-200 p-16 text-center">
             <Package className="h-12 w-12 text-gray-300 mx-auto mb-4" />
             <h2 className="text-lg font-semibold text-gray-700 mb-2">No listings yet</h2>
-            <p className="text-gray-400 text-sm mb-6">Add your first piece of gear and start earning on OutdoorShare.</p>
+            <p className="text-gray-400 text-sm mb-6">Add your first adventure and start earning on OutdoorShare.</p>
             <Button
               onClick={() => setLocation("/host/listings/new")}
               className="bg-primary hover:bg-primary/90 text-white"
