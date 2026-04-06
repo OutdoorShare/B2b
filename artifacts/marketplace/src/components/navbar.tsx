@@ -37,7 +37,7 @@ export function Navbar({ onAuthOpen }: { onAuthOpen: () => void }) {
             />
             <div className="flex flex-col items-start leading-none">
               <span className="font-bold text-lg text-primary tracking-tight">OutdoorShare</span>
-              <span className="text-[11px] font-normal text-gray-400 tracking-wide">Marketplace</span>
+              <span className="text-[11px] font-normal text-brand-blue tracking-wide">Marketplace</span>
             </div>
           </button>
 
@@ -59,7 +59,7 @@ export function Navbar({ onAuthOpen }: { onAuthOpen: () => void }) {
               onClick={() => setLocation("/memories")}
               className="text-sm font-medium text-gray-600 hover:text-gray-900 transition-colors flex items-center gap-1"
             >
-              <Mountain className="h-3.5 w-3.5" />
+              <Mountain className="h-3.5 w-3.5 text-brand-blue" />
               Memories
             </button>
           </nav>
@@ -135,7 +135,7 @@ export function Navbar({ onAuthOpen }: { onAuthOpen: () => void }) {
                 <Button
                   size="sm"
                   onClick={onAuthOpen}
-                  className="bg-primary hover:bg-primary/90 text-primary-foreground"
+                  className="bg-brand-blue hover:bg-brand-blue/90 text-brand-blue-foreground"
                 >
                   Sign In
                 </Button>
