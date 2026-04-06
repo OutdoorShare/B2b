@@ -34,6 +34,7 @@ The platform is built as a monorepo using `pnpm workspaces`, Node.js 24, and Typ
 - `lib/`: Houses shared libraries like `api-spec` (OpenAPI), `api-client-react` (generated React Query hooks), `api-zod` (generated Zod schemas), and `db` (Drizzle ORM schema).
 
 **UI/UX Decisions:**
+- **Marketplace Brand Colors:** Primary green `hsl(127,55%,38%)` (vivid logo green), accent blue `hsl(197,78%,58%)` (wave sky blue). Logo: `artifacts/marketplace/public/outdoorshare-logo-transparent.png`. Colors set in `index.css` CSS variables and hardcoded in `map-view.tsx` (OS_GREEN/OS_BLUE constants) and `home.tsx` hero gradient.
 - **Customer Storefront:** Branded homepage, gear detail pages with photo carousels, and a multi-step booking checkout flow.
 - **Admin Dashboard:** Comprehensive dashboard with live analytics (revenue, bookings, top gear), CRUD interfaces for listings, bookings, quotes, categories, and business settings. Includes tools like a real-time notification bell, Kiosk Mode for in-store bookings, custom quote builder, and analytics dashboards.
 - **White-label Theming:** CSS variable-based theming with 8 preset themes and a live color picker for extensive branding customization (logo, colors, policies).

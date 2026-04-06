@@ -90,18 +90,18 @@
   --sidebar: 0 0% 100%;
   --sidebar-foreground: 220 20% 20%;
   --sidebar-border: 216 14% 89%;
-  --sidebar-primary: 155 42% 18%;
+  --sidebar-primary: 127 55% 38%;
   --sidebar-primary-foreground: 0 0% 100%;
   --sidebar-accent: 216 20% 95%;
   --sidebar-accent-foreground: 220 25% 15%;
-  --sidebar-ring: 155 42% 18%;
+  --sidebar-ring: 127 55% 38%;
 
   --popover: 0 0% 100%;
   --popover-foreground: 220 25% 15%;
   --popover-border: 216 14% 89%;
 
-  /* OutdoorShare Deep Forest Green */
-  --primary: 155 42% 18%;
+  /* OutdoorShare Vivid Logo Green */
+  --primary: 127 55% 38%;
   --primary-foreground: 0 0% 100%;
 
   --secondary: 216 14% 92%;
@@ -117,8 +117,8 @@
   --destructive-foreground: 0 0% 100%;
 
   --input: 216 14% 87%;
-  --ring: 155 42% 18%;
-  --chart-1: 155 42% 18%;
+  --ring: 127 55% 38%;
+  --chart-1: 127 55% 38%;
   --chart-2: 25 80% 45%;
   --chart-3: 200 30% 40%;
   --chart-4: 40 40% 60%;

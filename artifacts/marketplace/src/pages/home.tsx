@@ -92,7 +92,7 @@ export function HomePage({ onAuthOpen }: { onAuthOpen: () => void }) {
       {/* ── HERO ─────────────────────────────────────────────── */}
       <div
         className="text-white"
-        style={{ background: "linear-gradient(135deg, hsl(155,42%,8%) 0%, hsl(155,42%,18%) 60%, hsl(155,42%,24%) 100%)" }}
+        style={{ background: "linear-gradient(135deg, hsl(127,55%,16%) 0%, hsl(127,55%,28%) 60%, hsl(127,55%,34%) 100%)" }}
       >
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-16 pb-10">
           {/* Headline */}
@@ -303,7 +303,7 @@ export function HomePage({ onAuthOpen }: { onAuthOpen: () => void }) {
         {/* CTA */}
         <div
           className="mt-16 rounded-2xl p-8 text-center text-white"
-          style={{ background: "linear-gradient(135deg, hsl(155,42%,12%) 0%, hsl(155,42%,20%) 100%)" }}
+          style={{ background: "linear-gradient(135deg, hsl(127,55%,20%) 0%, hsl(127,55%,30%) 100%)" }}
         >
           <h2 className="text-2xl font-bold mb-2">One account, every company</h2>
           <p className="text-white/80 mb-6">

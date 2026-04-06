@@ -3,10 +3,10 @@ import { useLocation } from "wouter";
 import "leaflet/dist/leaflet.css";
 
 // OutdoorShare brand colors (matching logo exactly)
-const OS_GREEN = "hsl(155,42%,18%)";        // Deep forest green — primary
-const OS_GREEN_MID = "hsl(155,42%,28%)";    // Mid forest green — hover/ring
-const OS_BLUE = "hsl(198,72%,52%)";         // Water-wave blue — logo accent
-const OS_BLUE_DARK = "hsl(198,72%,40%)";    // Deeper blue — price text
+const OS_GREEN = "hsl(127,55%,38%)";        // Vivid logo green — primary
+const OS_GREEN_MID = "hsl(127,55%,30%)";    // Darker logo green — hover/ring
+const OS_BLUE = "hsl(197,78%,58%)";         // Water-wave blue — logo accent
+const OS_BLUE_DARK = "hsl(197,78%,44%)";    // Deeper blue — price text
 
 type Listing = {
   id: number;
@@ -133,7 +133,7 @@ export function MapView({ listings }: MapViewProps) {
             "
           >
             <div style="flex:1;min-width:0;">
-              <div style="font-size:12px;font-weight:600;color:#1a2e24;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">
+              <div style="font-size:12px;font-weight:600;color:#1a3d22;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">
                 ${l.categoryIcon ? l.categoryIcon + " " : ""}${l.title}
               </div>
               <div style="font-size:11px;color:${OS_BLUE_DARK};font-weight:700;margin-top:2px;">
@@ -235,7 +235,7 @@ export function MapView({ listings }: MapViewProps) {
       {/* Branded map border */}
       <div
         className="w-full h-full rounded-xl overflow-hidden shadow-md"
-        style={{ border: `2px solid hsl(155,42%,28%)` }}
+        style={{ border: `2px solid hsl(127,55%,38%)` }}
       >
         <div ref={mapRef} className="w-full h-full" />
       </div>
@@ -247,7 +247,7 @@ export function MapView({ listings }: MapViewProps) {
           style={{
             background: "white",
             color: OS_GREEN,
-            border: `1.5px solid hsl(155,42%,70%)`,
+            border: `1.5px solid hsl(127,55%,70%)`,
           }}
         >
           {mappable.length} of {listings.length} listings on map
@@ -272,7 +272,7 @@ export function MapView({ listings }: MapViewProps) {
           padding: 0;
           overflow: hidden;
           box-shadow: 0 4px 20px rgba(0,0,0,0.18);
-          border: 1.5px solid hsl(155,42%,82%);
+          border: 1.5px solid hsl(127,55%,82%);
         }
         .os-popup .leaflet-popup-content {
           margin: 12px;
