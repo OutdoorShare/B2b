@@ -137,10 +137,16 @@ export function HomePage({ onAuthOpen }: { onAuthOpen: () => void }) {
 
       {/* ── HERO ─────────────────────────────────────────────── */}
       <div
-        className="text-white"
-        style={{ background: "linear-gradient(135deg, hsl(127,55%,16%) 0%, hsl(127,55%,28%) 60%, hsl(127,55%,34%) 100%)" }}
+        className="text-white relative"
+        style={{
+          backgroundImage: "url('/marketplace/hero-cover.png')",
+          backgroundSize: "cover",
+          backgroundPosition: "center 40%",
+        }}
       >
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-16 pb-10">
+        {/* Dark overlay for text legibility */}
+        <div className="absolute inset-0" style={{ background: "linear-gradient(to bottom, rgba(0,0,0,0.52) 0%, rgba(0,0,0,0.38) 60%, rgba(0,0,0,0.55) 100%)" }} />
+        <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-16 pb-10">
           {/* Headline */}
           <div className="text-center max-w-3xl mx-auto">
             <h1 className="text-4xl md:text-5xl font-bold mb-3 leading-tight">
