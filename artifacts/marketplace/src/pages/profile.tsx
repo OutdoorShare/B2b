@@ -156,7 +156,7 @@ export function ProfilePage({ onAuthOpen }: { onAuthOpen: () => void }) {
             }`}
           >
             <Calendar className="h-4 w-4" />
-            My Bookings {bookings && <span className="text-xs text-gray-400">({bookings.length})</span>}
+            Booked Adventures {bookings && <span className="text-xs text-gray-400">({bookings.length})</span>}
           </button>
           <button
             onClick={() => setTab("settings")}

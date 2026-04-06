@@ -101,7 +101,7 @@ export function Navbar({ onAuthOpen }: { onAuthOpen: () => void }) {
                   <DropdownMenuContent align="end" className="w-52">
                     <DropdownMenuItem onClick={() => setLocation("/profile")}>
                       <BookOpen className="h-4 w-4 mr-2" />
-                      My Bookings
+                      Booked Adventures
                     </DropdownMenuItem>
                     <DropdownMenuItem onClick={() => setLocation("/profile?tab=settings")}>
                       <User className="h-4 w-4 mr-2" />
@@ -181,7 +181,7 @@ export function Navbar({ onAuthOpen }: { onAuthOpen: () => void }) {
                   onClick={() => { setLocation("/profile"); setMobileOpen(false); }}
                   className="block w-full text-left px-2 py-2 text-sm text-gray-700 hover:bg-gray-50 rounded-md"
                 >
-                  My Bookings
+                  Booked Adventures
                 </button>
                 {isHost ? (
                   <button
