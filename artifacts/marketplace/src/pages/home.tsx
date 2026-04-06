@@ -1,13 +1,11 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import { ListingCard } from "@/components/listing-card";
 import { MapView } from "@/components/map-view";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Calendar } from "@/components/ui/calendar";
-import type { DateRange } from "react-day-picker";
-import { format } from "date-fns";
+import { format, parseISO, differenceInCalendarDays } from "date-fns";
 import {
   Search, SlidersHorizontal, X, LayoutGrid, Map,
   Waves, Bus, Truck, Car, Anchor, Bike, Zap,
@@ -34,14 +32,8 @@ function getCategoryIcon(slug: string): React.ElementType {
   return CATEGORY_ICONS[slug] || Gauge;
 }
 
-// Date formatting helper
-function fmtDate(d: Date) {
-  return format(d, "MMM d");
-}
-
-function fmtDateFull(d: Date) {
-  return format(d, "yyyy-MM-dd");
-}
+// Today's date as yyyy-MM-dd for the min attribute on date inputs
+const todayStr = format(new Date(), "yyyy-MM-dd");
 
 export function HomePage({ onAuthOpen }: { onAuthOpen: () => void }) {
   const [search, setSearch] = useState("");
@@ -50,38 +42,28 @@ export function HomePage({ onAuthOpen }: { onAuthOpen: () => void }) {
   const [minPrice, setMinPrice] = useState("");
   const [maxPrice, setMaxPrice] = useState("");
   const [showFilters, setShowFilters] = useState(false);
-  const [showDatePicker, setShowDatePicker] = useState(false);
-  const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined);
+  const [startDate, setStartDate] = useState("");
+  const [endDate, setEndDate] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [viewMode, setViewMode] = useState<"grid" | "map">("grid");
-
-  const datePickerRef = useRef<HTMLDivElement>(null);
-
-  // Close date picker when clicking outside
-  useEffect(() => {
-    function handleClickOutside(e: MouseEvent) {
-      if (datePickerRef.current && !datePickerRef.current.contains(e.target as Node)) {
-        setShowDatePicker(false);
-      }
-    }
-    if (showDatePicker) {
-      document.addEventListener("mousedown", handleClickOutside);
-      return () => document.removeEventListener("mousedown", handleClickOutside);
-    }
-  }, [showDatePicker]);
 
   useEffect(() => {
     const t = setTimeout(() => setDebouncedSearch(search), 350);
     return () => clearTimeout(t);
   }, [search]);
 
+  // When startDate changes, clear endDate if it's before startDate
+  useEffect(() => {
+    if (startDate && endDate && endDate <= startDate) setEndDate("");
+  }, [startDate]);
+
   const params: Record<string, string> = {};
   if (debouncedSearch) params.search = debouncedSearch;
   if (selectedCategory) params.categoryId = selectedCategory;
   if (minPrice) params.minPrice = minPrice;
   if (maxPrice) params.maxPrice = maxPrice;
-  if (dateRange?.from) params.startDate = fmtDateFull(dateRange.from);
-  if (dateRange?.to) params.endDate = fmtDateFull(dateRange.to);
+  if (startDate) params.startDate = startDate;
+  if (endDate) params.endDate = endDate;
 
   const { data: listings, isLoading } = useQuery({
     queryKey: ["marketplace-listings", params],
@@ -114,22 +96,26 @@ export function HomePage({ onAuthOpen }: { onAuthOpen: () => void }) {
     setSelectedCategoryName(null);
     setMinPrice("");
     setMaxPrice("");
-    setDateRange(undefined);
+    setStartDate("");
+    setEndDate("");
   };
 
   const clearDates = () => {
-    setDateRange(undefined);
-    setShowDatePicker(false);
+    setStartDate("");
+    setEndDate("");
   };
 
-  const hasDateFilter = !!(dateRange?.from);
+  const hasDateFilter = !!startDate;
   const hasFilters = !!debouncedSearch || !!selectedCategory || !!minPrice || !!maxPrice || hasDateFilter;
 
-  // Date button label
+  // Human-readable date chip label
   const dateBtnLabel = (() => {
-    if (!dateRange?.from) return null;
-    if (!dateRange?.to) return fmtDate(dateRange.from);
-    return `${fmtDate(dateRange.from)} → ${fmtDate(dateRange.to)}`;
+    if (!startDate) return null;
+    const s = format(parseISO(startDate), "MMM d");
+    if (!endDate) return s;
+    const e = format(parseISO(endDate), "MMM d");
+    const nights = differenceInCalendarDays(parseISO(endDate), parseISO(startDate));
+    return `${s} → ${e} (${nights}n)`;
   })();
 
   return (
@@ -156,7 +142,7 @@ export function HomePage({ onAuthOpen }: { onAuthOpen: () => void }) {
               Browse listings from verified outdoor rental companies — one account, every adventure.
             </p>
 
-            {/* ── SEARCH + DATE + FILTER ROW ── */}
+            {/* ── SEARCH + FILTER ROW ── */}
             <div className="max-w-2xl mx-auto">
               <div className="flex gap-2 mb-3">
                 {/* Search input */}
@@ -170,137 +156,100 @@ export function HomePage({ onAuthOpen }: { onAuthOpen: () => void }) {
                   />
                 </div>
 
-                {/* Date picker trigger */}
-                <div className="relative" ref={datePickerRef}>
-                  <button
-                    onClick={() => {
-                      setShowDatePicker(v => !v);
-                      if (showFilters) setShowFilters(false);
-                    }}
-                    className={`h-12 px-4 rounded-xl flex items-center gap-2 text-sm font-medium transition-all border shadow-xl ${
-                      hasDateFilter
-                        ? "bg-primary text-white border-primary/50"
-                        : "bg-white text-gray-700 border-0 hover:bg-gray-50"
-                    }`}
-                  >
-                    <CalendarDays className="h-4 w-4 flex-shrink-0" />
-                    <span className="whitespace-nowrap hidden sm:inline">
-                      {dateBtnLabel ?? "Availability"}
-                    </span>
-                    {hasDateFilter && (
-                      <span
-                        role="button"
-                        tabIndex={0}
-                        onClick={e => { e.stopPropagation(); clearDates(); }}
-                        onKeyDown={e => { if (e.key === "Enter") { e.stopPropagation(); clearDates(); } }}
-                        className="ml-1 opacity-80 hover:opacity-100"
-                      >
-                        <X className="h-3.5 w-3.5" />
-                      </span>
-                    )}
-                  </button>
-
-                  {/* Date picker dropdown */}
-                  {showDatePicker && (
-                    <div className="absolute right-0 top-14 z-50 bg-white rounded-2xl shadow-2xl border border-gray-100 p-3">
-                      {/* Header */}
-                      <div className="flex items-center justify-between px-2 pb-2 border-b border-gray-100 mb-1">
-                        <p className="text-sm font-semibold text-gray-800">
-                          {!dateRange?.from
-                            ? "Select check-in date"
-                            : !dateRange?.to
-                            ? "Select check-out date"
-                            : `${fmtDate(dateRange.from)} → ${fmtDate(dateRange.to)}`}
-                        </p>
-                        {hasDateFilter && (
-                          <button
-                            onClick={clearDates}
-                            className="text-xs text-gray-400 hover:text-red-500 flex items-center gap-1 transition-colors"
-                          >
-                            <X className="h-3 w-3" /> Clear
-                          </button>
-                        )}
-                      </div>
-
-                      <Calendar
-                        mode="range"
-                        selected={dateRange}
-                        onSelect={(range) => {
-                          setDateRange(range);
-                          // Auto-close when a full range is selected
-                          if (range?.from && range?.to) {
-                            setTimeout(() => setShowDatePicker(false), 300);
-                          }
-                        }}
-                        disabled={{ before: new Date() }}
-                        numberOfMonths={2}
-                        className="p-0"
-                      />
-
-                      {/* Footer */}
-                      <div className="flex items-center justify-between pt-2 border-t border-gray-100 mt-1 px-2">
-                        <p className="text-xs text-gray-400">
-                          {dateRange?.from && dateRange?.to
-                            ? `${Math.ceil((dateRange.to.getTime() - dateRange.from.getTime()) / (1000 * 60 * 60 * 24))} nights`
-                            : "Select start & end dates"}
-                        </p>
-                        {dateRange?.from && dateRange?.to && (
-                          <Button
-                            size="sm"
-                            className="h-7 bg-primary hover:bg-primary/90 text-white"
-                            onClick={() => setShowDatePicker(false)}
-                          >
-                            Show available
-                          </Button>
-                        )}
-                      </div>
-                    </div>
-                  )}
-                </div>
-
-                {/* Price filter toggle */}
+                {/* Filter toggle */}
                 <Button
                   size="lg"
                   variant="outline"
                   className={`h-12 px-4 rounded-xl border-0 shadow-xl transition-all ${
-                    showFilters ? "bg-white/30 text-white" : "bg-white/10 border-white/20 text-white hover:bg-white/20"
+                    showFilters
+                      ? "bg-white text-primary"
+                      : "bg-white/10 border-white/20 text-white hover:bg-white/20"
                   }`}
-                  onClick={() => {
-                    setShowFilters(v => !v);
-                    if (showDatePicker) setShowDatePicker(false);
-                  }}
-                  title="Price filters"
+                  onClick={() => setShowFilters(v => !v)}
+                  title="Filters"
                 >
                   <SlidersHorizontal className="h-5 w-5" />
                 </Button>
               </div>
 
-              {/* Price filters */}
+              {/* Combined filter panel — dates + price */}
               {showFilters && (
-                <div className="bg-white/95 backdrop-blur-md rounded-xl p-4 shadow-xl text-left mb-3 border border-white/20">
-                  <p className="text-xs font-semibold text-gray-600 mb-2">Price per day</p>
-                  <div className="flex gap-2 items-center">
-                    <Input
-                      type="number"
-                      placeholder="Min $"
-                      value={minPrice}
-                      onChange={e => setMinPrice(e.target.value)}
-                      className="w-28 h-9 text-gray-900"
-                    />
-                    <span className="text-gray-400 text-sm">–</span>
-                    <Input
-                      type="number"
-                      placeholder="Max $"
-                      value={maxPrice}
-                      onChange={e => setMaxPrice(e.target.value)}
-                      className="w-28 h-9 text-gray-900"
-                    />
-                    {(minPrice || maxPrice) && (
-                      <button onClick={() => { setMinPrice(""); setMaxPrice(""); }} className="text-xs text-white/70 hover:text-white ml-1">
-                        <X className="h-4 w-4" />
-                      </button>
+                <div className="bg-white/97 backdrop-blur-md rounded-2xl p-4 shadow-2xl text-left mb-3 border border-white/30 space-y-4">
+
+                  {/* Date range */}
+                  <div>
+                    <div className="flex items-center gap-1.5 mb-2">
+                      <CalendarDays className="h-3.5 w-3.5 text-primary" />
+                      <p className="text-xs font-semibold text-gray-700">Availability</p>
+                      {hasDateFilter && (
+                        <button onClick={clearDates} className="ml-auto text-xs text-gray-400 hover:text-red-500 flex items-center gap-0.5 transition-colors">
+                          <X className="h-3 w-3" /> Clear dates
+                        </button>
+                      )}
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <label className="block text-[10px] text-gray-400 font-medium mb-1 uppercase tracking-wide">Check-in</label>
+                        <input
+                          type="date"
+                          value={startDate}
+                          min={todayStr}
+                          onChange={e => setStartDate(e.target.value)}
+                          className="w-full h-9 rounded-lg border border-gray-200 bg-white px-3 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[10px] text-gray-400 font-medium mb-1 uppercase tracking-wide">Check-out</label>
+                        <input
+                          type="date"
+                          value={endDate}
+                          min={startDate || todayStr}
+                          onChange={e => setEndDate(e.target.value)}
+                          disabled={!startDate}
+                          className="w-full h-9 rounded-lg border border-gray-200 bg-white px-3 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary disabled:opacity-40 disabled:cursor-not-allowed"
+                        />
+                      </div>
+                    </div>
+                    {startDate && endDate && (
+                      <p className="text-xs text-primary font-medium mt-1.5">
+                        {differenceInCalendarDays(parseISO(endDate), parseISO(startDate))} night{differenceInCalendarDays(parseISO(endDate), parseISO(startDate)) !== 1 ? "s" : ""} selected — showing available listings
+                      </p>
+                    )}
+                    {startDate && !endDate && (
+                      <p className="text-xs text-amber-600 mt-1.5">Pick a check-out date to filter by availability</p>
                     )}
                   </div>
+
+                  {/* Divider */}
+                  <div className="border-t border-gray-100" />
+
+                  {/* Price range */}
+                  <div>
+                    <p className="text-xs font-semibold text-gray-700 mb-2">Price per day</p>
+                    <div className="flex gap-2 items-center">
+                      <Input
+                        type="number"
+                        placeholder="Min $"
+                        value={minPrice}
+                        onChange={e => setMinPrice(e.target.value)}
+                        className="w-28 h-9 text-gray-900"
+                      />
+                      <span className="text-gray-400 text-sm">–</span>
+                      <Input
+                        type="number"
+                        placeholder="Max $"
+                        value={maxPrice}
+                        onChange={e => setMaxPrice(e.target.value)}
+                        className="w-28 h-9 text-gray-900"
+                      />
+                      {(minPrice || maxPrice) && (
+                        <button onClick={() => { setMinPrice(""); setMaxPrice(""); }} className="text-gray-400 hover:text-red-500 ml-1">
+                          <X className="h-4 w-4" />
+                        </button>
+                      )}
+                    </div>
+                  </div>
+
                 </div>
               )}
             </div>
