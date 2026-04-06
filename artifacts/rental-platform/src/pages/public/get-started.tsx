@@ -50,7 +50,7 @@ function HeroSignIn() {
           <Link href="/signup">
             <Button
               size="lg"
-              className="h-13 px-8 text-base font-bold gap-2 text-white hover:opacity-90"
+              className="h-13 px-8 text-base font-bold gap-2 text-white hover:opacity-90 shadow-lg shadow-green-900/40"
               style={{ backgroundColor: OS_GREEN }}
             >
               Start Free Trial <ArrowRight className="w-4 h-4" />
@@ -59,7 +59,7 @@ function HeroSignIn() {
           <Button
             size="lg"
             variant="outline"
-            className="h-13 px-8 text-base"
+            className="h-13 px-8 text-base border-white/40 text-white hover:bg-white/10 hover:border-white/70 hover:text-white bg-white/5 backdrop-blur-sm"
             onClick={() => setShowSlugInput(true)}
           >
             Sign into my account
@@ -67,30 +67,30 @@ function HeroSignIn() {
         </div>
       ) : (
         <form onSubmit={handleSignIn} className="flex flex-col items-center gap-3 w-full max-w-sm">
-          <p className="text-sm text-muted-foreground font-medium">Enter your company's website name</p>
+          <p className="text-sm text-white/70 font-medium">Enter your company's website name</p>
           <div className="flex gap-2 w-full">
             <Input
               autoFocus
               value={slug}
               onChange={e => { setSlug(e.target.value); setError(""); }}
               placeholder="e.g. summit-rentals"
-              className="h-11 text-sm flex-1"
+              className="h-11 text-sm flex-1 bg-white/10 border-white/30 text-white placeholder:text-white/40 focus:border-green-400"
             />
             <Button type="submit" size="lg" className="h-11 px-5 font-bold text-white hover:opacity-90" style={{ backgroundColor: OS_GREEN }}>
               Go
             </Button>
           </div>
-          {error && <p className="text-xs text-destructive">{error}</p>}
+          {error && <p className="text-xs text-red-400">{error}</p>}
           <button
             type="button"
-            className="text-xs text-muted-foreground hover:text-foreground underline"
+            className="text-xs text-white/50 hover:text-white/80 underline"
             onClick={() => { setShowSlugInput(false); setSlug(""); setError(""); }}
           >
             Cancel
           </button>
         </form>
       )}
-      <p className="text-sm text-muted-foreground">No credit card required for trial · Cancel anytime</p>
+      <p className="text-sm text-white/50">No credit card required · Cancel anytime</p>
     </div>
   );
 }
@@ -314,17 +314,17 @@ function FAQItem({ q, a }: { q: string; a: string }) {
 export default function GetStartedPage() {
   return (
     <div className="min-h-screen bg-white">
-      {/* Nav */}
-      <header className="border-b bg-white/95 backdrop-blur sticky top-0 z-50">
+      {/* Nav — floats over hero with dark glass background */}
+      <header className="sticky top-0 z-50 bg-black/70 backdrop-blur-md border-b border-white/10">
         <div className="max-w-6xl mx-auto px-6 h-16 flex items-center justify-between">
           <div className="flex items-center gap-2.5">
-            <img src="/outdoorshare-logo.png" alt="OutdoorShare" className="w-8 h-8 object-contain" />
-            <span className="font-black text-lg tracking-tight text-gray-900">OutdoorShare</span>
+            <img src="/outdoorshare-logo-transparent.png" alt="OutdoorShare" className="w-8 h-8 object-contain" />
+            <span className="font-black text-lg tracking-tight text-white">OutdoorShare</span>
           </div>
-          <nav className="hidden md:flex items-center gap-8 text-sm font-medium text-muted-foreground">
-            <a href="#features" className="hover:text-foreground transition-colors">Features</a>
-            <a href="#pricing" className="hover:text-foreground transition-colors">Pricing</a>
-            <Link href="/audit" className="hover:text-foreground transition-colors font-semibold" style={{ color: OS_GREEN }}>Free Audit</Link>
+          <nav className="hidden md:flex items-center gap-8 text-sm font-medium text-white/70">
+            <a href="#features" className="hover:text-white transition-colors">Features</a>
+            <a href="#pricing" className="hover:text-white transition-colors">Pricing</a>
+            <Link href="/audit" className="hover:text-white transition-colors font-semibold" style={{ color: OS_GREEN }}>Free Audit</Link>
           </nav>
           <div className="flex items-center gap-3">
             <SignInDropdown />
@@ -337,22 +337,58 @@ export default function GetStartedPage() {
         </div>
       </header>
 
-      {/* Hero */}
-      <section className="max-w-6xl mx-auto px-6 pt-24 pb-20 text-center">
-        <Badge
-          className="mb-6 border-0 px-4 py-1.5 text-sm font-semibold"
-          style={{ backgroundColor: `${OS_GREEN}18`, color: OS_GREEN_DARK }}
-        >
-          🎉 &nbsp; White-label rental management platform
-        </Badge>
-        <h1 className="text-5xl md:text-6xl font-black tracking-tight text-gray-900 leading-tight mb-6">
-          Your rental business,<br />
-          <span style={{ color: OS_GREEN }}>fully online</span> in minutes
-        </h1>
-        <p className="text-xl text-muted-foreground max-w-2xl mx-auto mb-10">
-          OutdoorShare gives you a complete booking platform — branded storefront, admin dashboard, calendar, analytics, and more — without hiring developers.
-        </p>
-        <HeroSignIn />
+      {/* Hero — full-bleed cinematic */}
+      <section
+        className="relative flex items-center justify-center min-h-[92vh] overflow-hidden"
+        style={{
+          backgroundImage: "url('/opengraph.jpg')",
+          backgroundSize: "cover",
+          backgroundPosition: "center 40%",
+        }}
+      >
+        {/* Dark gradient overlay */}
+        <div
+          className="absolute inset-0"
+          style={{
+            background: "linear-gradient(160deg, rgba(0,0,0,0.72) 0%, rgba(10,30,15,0.60) 50%, rgba(0,0,0,0.80) 100%)",
+          }}
+        />
+
+        {/* Green accent line at bottom */}
+        <div className="absolute bottom-0 left-0 right-0 h-1" style={{ background: `linear-gradient(90deg, transparent, ${OS_GREEN}, transparent)` }} />
+
+        <div className="relative z-10 max-w-5xl mx-auto px-6 py-32 text-center">
+          {/* Eyebrow */}
+          <div
+            className="inline-flex items-center gap-2 rounded-full px-4 py-1.5 text-xs font-bold uppercase tracking-widest mb-8 border"
+            style={{ borderColor: `${OS_GREEN}60`, backgroundColor: `${OS_GREEN}18`, color: OS_GREEN }}
+          >
+            <span className="w-1.5 h-1.5 rounded-full animate-pulse" style={{ backgroundColor: OS_GREEN }} />
+            Outdoor Equipment Rental Platform
+          </div>
+
+          <h1 className="text-5xl sm:text-6xl md:text-7xl font-black tracking-tight text-white leading-[1.05] mb-6 drop-shadow-lg">
+            Your Fleet.<br />
+            <span style={{ color: OS_GREEN }} className="drop-shadow-[0_0_30px_rgba(58,181,73,0.4)]">Your Brand.</span><br />
+            Fully Booked.
+          </h1>
+
+          <p className="text-lg md:text-xl text-white/75 max-w-2xl mx-auto mb-10 leading-relaxed">
+            OutdoorShare is the all-in-one rental management platform built for operators who go all in — ATVs, jet skis, e-bikes, snowmobiles, and more. Launch your branded storefront in minutes.
+          </p>
+
+          <HeroSignIn />
+
+          {/* Trust signals */}
+          <div className="flex items-center justify-center gap-6 mt-10 flex-wrap">
+            {[["500+", "Rental Companies"], ["50k+", "Bookings Processed"], ["98%", "Uptime"]].map(([val, label]) => (
+              <div key={label} className="flex items-center gap-2">
+                <span className="font-black text-white text-lg">{val}</span>
+                <span className="text-white/50 text-sm">{label}</span>
+              </div>
+            ))}
+          </div>
+        </div>
       </section>
 
       {/* Stats bar */}
