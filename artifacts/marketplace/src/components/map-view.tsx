@@ -1,6 +1,12 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef } from "react";
 import { useLocation } from "wouter";
 import "leaflet/dist/leaflet.css";
+
+// OutdoorShare brand colors (matching logo exactly)
+const OS_GREEN = "hsl(155,42%,18%)";        // Deep forest green — primary
+const OS_GREEN_MID = "hsl(155,42%,28%)";    // Mid forest green — hover/ring
+const OS_BLUE = "hsl(198,72%,52%)";         // Water-wave blue — logo accent
+const OS_BLUE_DARK = "hsl(198,72%,40%)";    // Deeper blue — price text
 
 type Listing = {
   id: number;
@@ -32,22 +38,14 @@ export function MapView({ listings }: MapViewProps) {
   const leafletMapRef = useRef<any>(null);
   const markersRef = useRef<any[]>([]);
   const [, navigate] = useLocation();
-  const [selectedId, setSelectedId] = useState<number | null>(null);
 
-  // Listings that have coordinates
   const mappable = listings.filter(l => l.businessLat != null && l.businessLng != null);
 
   useEffect(() => {
     if (!mapRef.current || leafletMapRef.current) return;
 
     import("leaflet").then(L => {
-      // Fix default icon paths for Vite/webpack bundling
       delete (L.Icon.Default.prototype as any)._getIconUrl;
-      L.Icon.Default.mergeOptions({
-        iconRetinaUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png",
-        iconUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png",
-        shadowUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png",
-      });
 
       const map = L.map(mapRef.current!, {
         center: [39.5, -105.0],
@@ -79,76 +77,134 @@ export function MapView({ listings }: MapViewProps) {
         const count = group.length;
         const first = group[0];
 
+        // Pin: forest-green circle with blue ring accent
         const icon = L.divIcon({
           className: "",
-          html: `<div style="
-            background: hsl(155,42%,18%);
-            color: white;
-            border: 2.5px solid white;
-            border-radius: 50%;
-            width: 36px;
-            height: 36px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 13px;
-            font-weight: 700;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.3);
-            cursor: pointer;
-            transition: transform 0.15s;
-          ">${count}</div>`,
-          iconSize: [36, 36],
-          iconAnchor: [18, 18],
+          html: `
+            <div style="position:relative;width:42px;height:42px;">
+              <!-- Outer blue glow ring -->
+              <div style="
+                position:absolute;inset:0;
+                border-radius:50%;
+                background:${OS_BLUE};
+                opacity:0.22;
+              "></div>
+              <!-- Inner green circle -->
+              <div style="
+                position:absolute;inset:3px;
+                background:linear-gradient(135deg, ${OS_GREEN_MID} 0%, ${OS_GREEN} 100%);
+                border-radius:50%;
+                border:2px solid white;
+                box-shadow:0 2px 10px rgba(0,0,0,0.35);
+                display:flex;align-items:center;justify-content:center;
+                font-size:13px;font-weight:700;color:white;
+                font-family:system-ui,sans-serif;
+              ">${count}</div>
+              <!-- Blue bottom accent dot (echoes logo wave) -->
+              <div style="
+                position:absolute;bottom:-4px;left:50%;transform:translateX(-50%);
+                width:8px;height:8px;
+                background:${OS_BLUE};
+                border-radius:50%;
+                border:1.5px solid white;
+                box-shadow:0 1px 4px rgba(0,0,0,0.3);
+              "></div>
+            </div>
+          `,
+          iconSize: [42, 46],
+          iconAnchor: [21, 46],
         });
 
         const marker = L.marker([lat, lng], { icon }).addTo(map);
 
         const location = [first.businessCity, first.businessState].filter(Boolean).join(", ");
+
+        const listingRows = group.slice(0, 3).map(l => `
+          <div
+            data-id="${l.id}"
+            data-slug="${l.tenantSlug}"
+            class="map-listing-item"
+            style="
+              display:flex;align-items:center;gap:8px;
+              cursor:pointer;padding:7px 9px;border-radius:8px;
+              background:#f7faf8;
+              border:1.5px solid #d4e9df;
+              transition:border-color 0.15s;
+            "
+          >
+            <div style="flex:1;min-width:0;">
+              <div style="font-size:12px;font-weight:600;color:#1a2e24;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">
+                ${l.categoryIcon ? l.categoryIcon + " " : ""}${l.title}
+              </div>
+              <div style="font-size:11px;color:${OS_BLUE_DARK};font-weight:700;margin-top:2px;">
+                ${priceLabel(l.pricePerDay) ?? ""}
+              </div>
+            </div>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="${OS_BLUE}" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+              <path d="m9 18 6-6-6-6"/>
+            </svg>
+          </div>
+        `).join("");
+
+        const moreRow = count > 3
+          ? `<div style="font-size:11px;color:${OS_GREEN};text-align:center;font-weight:600;padding-top:2px;">+${count - 3} more listings</div>`
+          : "";
+
         const popupContent = `
-          <div style="min-width:200px;max-width:260px;font-family:sans-serif;">
-            <div style="font-weight:700;font-size:13px;color:#1a1a1a;margin-bottom:4px;">
-              ${location || first.businessName}
+          <div style="min-width:210px;max-width:270px;font-family:system-ui,sans-serif;">
+            <!-- Header -->
+            <div style="
+              margin:-12px -12px 10px -12px;
+              padding:10px 12px 8px;
+              background:linear-gradient(135deg, ${OS_GREEN} 0%, ${OS_GREEN_MID} 100%);
+              border-radius:8px 8px 0 0;
+            ">
+              <div style="font-weight:700;font-size:13px;color:white;margin-bottom:2px;">
+                📍 ${location || first.businessName}
+              </div>
+              <div style="font-size:11px;color:rgba(255,255,255,0.75);">
+                ${count} listing${count !== 1 ? "s" : ""} available
+                <!-- Blue wave underline echoing logo -->
+              </div>
+              <div style="
+                margin-top:6px;height:2px;
+                background:linear-gradient(90deg, ${OS_BLUE} 0%, transparent 100%);
+                border-radius:1px;opacity:0.8;
+              "></div>
             </div>
-            <div style="font-size:12px;color:#555;margin-bottom:10px;">
-              ${count} listing${count !== 1 ? "s" : ""} available
-            </div>
-            <div style="display:flex;flex-direction:column;gap:8px;">
-              ${group.slice(0, 3).map(l => `
-                <div data-id="${l.id}" data-slug="${l.tenantSlug}" style="
-                  display:flex;align-items:center;gap:8px;
-                  cursor:pointer;padding:6px 8px;border-radius:8px;
-                  background:#f8f9fa;border:1px solid #e9ecef;
-                " class="map-listing-item">
-                  <div style="flex:1;min-width:0;">
-                    <div style="font-size:12px;font-weight:600;color:#1a1a1a;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">
-                      ${l.categoryIcon ? l.categoryIcon + " " : ""}${l.title}
-                    </div>
-                    <div style="font-size:11px;color:hsl(155,42%,22%);font-weight:600;margin-top:1px;">
-                      ${priceLabel(l.pricePerDay) ?? ""}
-                    </div>
-                  </div>
-                </div>
-              `).join("")}
-              ${count > 3 ? `<div style="font-size:11px;color:#888;text-align:center;">+${count - 3} more</div>` : ""}
+            <!-- Listings -->
+            <div style="display:flex;flex-direction:column;gap:6px;">
+              ${listingRows}
+              ${moreRow}
             </div>
           </div>
         `;
 
-        const popup = L.popup({ maxWidth: 280, closeButton: true }).setContent(popupContent);
+        const popup = L.popup({
+          maxWidth: 290,
+          closeButton: true,
+          className: "os-popup",
+        }).setContent(popupContent);
+
         marker.bindPopup(popup);
 
         marker.on("popupopen", () => {
           setTimeout(() => {
             document.querySelectorAll(".map-listing-item").forEach(el => {
+              (el as HTMLElement).onmouseenter = () => {
+                (el as HTMLElement).style.borderColor = OS_BLUE;
+                (el as HTMLElement).style.background = "#eef7fb";
+              };
+              (el as HTMLElement).onmouseleave = () => {
+                (el as HTMLElement).style.borderColor = "#d4e9df";
+                (el as HTMLElement).style.background = "#f7faf8";
+              };
               el.addEventListener("click", () => {
                 const id = el.getAttribute("data-id");
-                const slug = el.getAttribute("data-slug");
-                if (id && slug) {
-                  navigate(`/marketplace/listings/${id}`);
-                }
+                if (id) navigate(`/marketplace/listings/${id}`);
               });
             });
-          }, 100);
+          }, 80);
         });
 
         markersRef.current.push(marker);
@@ -172,30 +228,65 @@ export function MapView({ listings }: MapViewProps) {
     };
   }, []);
 
-  // Update markers when listings change
-  useEffect(() => {
-    if (!leafletMapRef.current || markersRef.current.length === 0) return;
-  }, [listings]);
-
   const unmapped = listings.length - mappable.length;
 
   return (
-    <div className="relative w-full" style={{ height: "calc(100vh - 340px)", minHeight: "480px" }}>
-      <div ref={mapRef} className="w-full h-full rounded-xl overflow-hidden border border-gray-200 shadow-sm" />
+    <div className="relative w-full" style={{ height: "calc(100vh - 320px)", minHeight: "500px" }}>
+      {/* Branded map border */}
+      <div
+        className="w-full h-full rounded-xl overflow-hidden shadow-md"
+        style={{ border: `2px solid hsl(155,42%,28%)` }}
+      >
+        <div ref={mapRef} className="w-full h-full" />
+      </div>
+
+      {/* "X of Y" badge — forest green */}
       {unmapped > 0 && (
-        <div className="absolute bottom-3 left-3 bg-white/90 backdrop-blur-sm text-xs text-gray-500 px-3 py-1.5 rounded-full shadow border border-gray-200">
-          {mappable.length} of {listings.length} listings shown on map
+        <div
+          className="absolute bottom-4 left-4 text-xs px-3 py-1.5 rounded-full shadow-md font-medium"
+          style={{
+            background: "white",
+            color: OS_GREEN,
+            border: `1.5px solid hsl(155,42%,70%)`,
+          }}
+        >
+          {mappable.length} of {listings.length} listings on map
         </div>
       )}
+
+      {/* Empty state */}
       {mappable.length === 0 && (
-        <div className="absolute inset-0 flex items-center justify-center bg-white/80 rounded-xl">
+        <div className="absolute inset-0 flex items-center justify-center rounded-xl bg-white/85">
           <div className="text-center">
-            <div className="text-4xl mb-3">📍</div>
-            <p className="text-gray-600 font-medium">No listings with map locations</p>
-            <p className="text-gray-400 text-sm mt-1">Switch to grid view to browse all listings</p>
+            <div className="text-5xl mb-3">📍</div>
+            <p className="font-semibold" style={{ color: OS_GREEN }}>No mapped listings</p>
+            <p className="text-sm text-gray-400 mt-1">Switch to grid view to browse all listings</p>
           </div>
         </div>
       )}
+
+      {/* Inject popup styles once */}
+      <style>{`
+        .os-popup .leaflet-popup-content-wrapper {
+          border-radius: 10px;
+          padding: 0;
+          overflow: hidden;
+          box-shadow: 0 4px 20px rgba(0,0,0,0.18);
+          border: 1.5px solid hsl(155,42%,82%);
+        }
+        .os-popup .leaflet-popup-content {
+          margin: 12px;
+        }
+        .os-popup .leaflet-popup-tip {
+          background: ${OS_GREEN};
+        }
+        .os-popup .leaflet-popup-close-button {
+          color: white !important;
+          font-size: 18px !important;
+          top: 6px !important;
+          right: 8px !important;
+        }
+      `}</style>
     </div>
   );
 }
