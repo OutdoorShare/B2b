@@ -198,31 +198,86 @@ export default function SignupPage() {
             </div>
           </Link>
 
-          {/* Center copy */}
+          {/* Center — storefront preview when logo uploaded, marketing copy otherwise */}
           <div className="flex-1 flex flex-col justify-center">
-            <p className="text-xs font-bold uppercase tracking-widest mb-4" style={{ color: OS_GREEN }}>
-              Your outdoor rental platform
-            </p>
-            <h2 className="text-4xl font-black text-white leading-tight mb-4">
-              Launch your branded<br />rental site today.
-            </h2>
-            <p className="text-white/70 text-base leading-relaxed max-w-sm">
-              ATVs, jet skis, e-bikes, snowmobiles — manage your entire fleet, take bookings, and grow your brand without the tech headache.
-            </p>
-
-            {/* Social proof */}
-            <div className="mt-8 flex flex-col gap-3">
-              {[
-                { stat: "500+", label: "Rental companies launched" },
-                { stat: "50k+", label: "Bookings processed" },
-                { stat: "14-day", label: "Free trial, no card required" },
-              ].map(item => (
-                <div key={item.stat} className="flex items-center gap-3">
-                  <span className="font-black text-lg" style={{ color: OS_GREEN }}>{item.stat}</span>
-                  <span className="text-white/60 text-sm">{item.label}</span>
+            {logoPreview ? (
+              /* Live branded storefront preview */
+              <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
+                <p className="text-xs font-bold uppercase tracking-widest mb-5" style={{ color: OS_GREEN }}>
+                  ✦ Your storefront preview
+                </p>
+                {/* Mock browser chrome */}
+                <div className="rounded-2xl overflow-hidden shadow-2xl" style={{ border: "1px solid rgba(255,255,255,0.12)", background: "rgba(0,0,0,0.55)", backdropFilter: "blur(12px)" }}>
+                  {/* Browser bar */}
+                  <div className="flex items-center gap-2 px-4 py-2.5" style={{ background: "rgba(255,255,255,0.06)", borderBottom: "1px solid rgba(255,255,255,0.08)" }}>
+                    <div className="flex gap-1.5">
+                      <div className="w-2.5 h-2.5 rounded-full" style={{ background: "rgba(255,255,255,0.15)" }} />
+                      <div className="w-2.5 h-2.5 rounded-full" style={{ background: "rgba(255,255,255,0.15)" }} />
+                      <div className="w-2.5 h-2.5 rounded-full" style={{ background: "rgba(255,255,255,0.15)" }} />
+                    </div>
+                    <div className="flex-1 mx-3 rounded-md px-3 py-1 text-xs text-white/30 text-center" style={{ background: "rgba(255,255,255,0.05)" }}>
+                      outdoorshare.rent/{slugPreview || "your-company"}
+                    </div>
+                  </div>
+                  {/* Storefront header */}
+                  <div className="px-5 py-4 flex items-center justify-between" style={{ background: "rgba(255,255,255,0.04)" }}>
+                    <div className="flex items-center gap-3">
+                      <img
+                        src={logoPreview}
+                        alt="Your logo"
+                        className="h-10 w-10 object-contain rounded-lg"
+                        style={{ background: "rgba(255,255,255,0.08)", border: "1px solid rgba(255,255,255,0.12)" }}
+                      />
+                      <span className="font-black text-white text-sm truncate max-w-[140px]">
+                        {form.companyName || "Your Company"}
+                      </span>
+                    </div>
+                    <div className="rounded-lg px-3 py-1.5 text-xs font-bold text-white" style={{ background: OS_GREEN }}>
+                      Book Now
+                    </div>
+                  </div>
+                  {/* Fake fleet grid */}
+                  <div className="p-4 grid grid-cols-3 gap-2">
+                    {["🛻", "🛥️", "🚵"].map((emoji, i) => (
+                      <div key={i} className="rounded-xl aspect-[4/3] flex flex-col items-center justify-center gap-1" style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.07)" }}>
+                        <span className="text-2xl">{emoji}</span>
+                        <span className="text-[10px] text-white/40">from $89/day</span>
+                      </div>
+                    ))}
+                  </div>
+                  {/* Powered by badge */}
+                  <div className="px-4 pb-3 flex justify-center">
+                    <span className="text-[9px] text-white/20 tracking-wider">Powered by OutdoorShare</span>
+                  </div>
                 </div>
-              ))}
-            </div>
+                <p className="text-white/40 text-xs mt-4 text-center">This is a preview of your branded rental site</p>
+              </div>
+            ) : (
+              /* Default marketing copy */
+              <>
+                <p className="text-xs font-bold uppercase tracking-widest mb-4" style={{ color: OS_GREEN }}>
+                  Your outdoor rental platform
+                </p>
+                <h2 className="text-4xl font-black text-white leading-tight mb-4">
+                  Launch your branded<br />rental site today.
+                </h2>
+                <p className="text-white/70 text-base leading-relaxed max-w-sm">
+                  ATVs, jet skis, e-bikes, snowmobiles — manage your entire fleet, take bookings, and grow your brand without the tech headache.
+                </p>
+                <div className="mt-8 flex flex-col gap-3">
+                  {[
+                    { stat: "500+", label: "Rental companies launched" },
+                    { stat: "50k+", label: "Bookings processed" },
+                    { stat: "14-day", label: "Free trial, no card required" },
+                  ].map(item => (
+                    <div key={item.stat} className="flex items-center gap-3">
+                      <span className="font-black text-lg" style={{ color: OS_GREEN }}>{item.stat}</span>
+                      <span className="text-white/60 text-sm">{item.label}</span>
+                    </div>
+                  ))}
+                </div>
+              </>
+            )}
           </div>
 
           {/* Bottom tagline */}
