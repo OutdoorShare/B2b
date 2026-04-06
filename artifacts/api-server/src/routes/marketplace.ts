@@ -305,7 +305,7 @@ router.get("/marketplace/stats", async (req, res) => {
   }
 });
 
-// GET /api/marketplace/renter/bookings?email=... — all bookings for a renter across all tenants
+// GET /api/marketplace/renter/bookings?customerId=... — all bookings for a renter across all tenants
 router.get("/marketplace/renter/bookings", async (req, res) => {
   try {
     const { customerId } = req.query as { customerId?: string };
@@ -313,6 +313,16 @@ router.get("/marketplace/renter/bookings", async (req, res) => {
 
     const id = parseInt(customerId);
     if (isNaN(id)) { res.status(400).json({ error: "Invalid customerId" }); return; }
+
+    // Bookings are keyed by customerEmail — look up the customer's email first
+    const customer = await db
+      .select({ email: customersTable.email })
+      .from(customersTable)
+      .where(eq(customersTable.id, id))
+      .limit(1);
+
+    if (!customer.length) { res.json([]); return; }
+    const email = customer[0].email;
 
     const bookings = await db
       .select({
@@ -336,7 +346,7 @@ router.get("/marketplace/renter/bookings", async (req, res) => {
       .leftJoin(listingsTable, eq(bookingsTable.listingId, listingsTable.id))
       .leftJoin(tenantsTable, eq(bookingsTable.tenantId, tenantsTable.id))
       .leftJoin(businessProfileTable, eq(businessProfileTable.tenantId, tenantsTable.id))
-      .where(eq(bookingsTable.customerId, id))
+      .where(eq(bookingsTable.customerEmail, email))
       .orderBy(desc(bookingsTable.createdAt))
       .limit(50);
 

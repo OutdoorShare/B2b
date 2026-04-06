@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useLocation } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/context/auth";
@@ -10,9 +10,14 @@ import { useToast } from "@/hooks/use-toast";
 import {
   User, LogOut, Calendar, ExternalLink, ArrowLeft,
   Settings, CreditCard, Lock, MapPin, Trash2, CheckCircle2,
-  Phone, Mail, Loader2, AlertCircle,
+  Phone, Mail, Loader2, AlertCircle, CalendarDays, List,
+  ChevronLeft, ChevronRight, Search, X,
 } from "lucide-react";
-import { format } from "date-fns";
+import {
+  format, startOfDay, startOfMonth, endOfMonth,
+  startOfWeek, endOfWeek, addDays, addMonths, subMonths,
+  isSameMonth, isSameDay, parseISO, differenceInDays,
+} from "date-fns";
 
 const API_UPLOAD_BASE = "/api/uploads/";
 function resolveImage(url: string) {
@@ -21,12 +26,63 @@ function resolveImage(url: string) {
   return `${API_UPLOAD_BASE}${url.split("/").pop()}`;
 }
 
-const statusColors: Record<string, string> = {
-  pending: "bg-yellow-100 text-yellow-800",
-  confirmed: "bg-blue-100 text-blue-800",
-  active: "bg-primary/10 text-primary",
-  completed: "bg-gray-100 text-gray-700",
-  cancelled: "bg-red-100 text-red-700",
+const STATUS_COLORS: Record<string, string> = {
+  pending:   "bg-amber-100  text-amber-900  border-amber-300",
+  confirmed: "bg-blue-100   text-blue-900   border-blue-300",
+  active:    "bg-green-100  text-green-900  border-green-300",
+  completed: "bg-gray-100   text-gray-600   border-gray-300",
+  cancelled: "bg-red-100    text-red-700    border-red-300",
+};
+
+const STATUS_DOT: Record<string, string> = {
+  pending:   "bg-amber-400",
+  confirmed: "bg-blue-500",
+  active:    "bg-green-500",
+  completed: "bg-gray-400",
+  cancelled: "bg-red-400",
+};
+
+const STATUS_BADGE: Record<string, string> = {
+  pending:   "bg-amber-100 text-amber-800 border-amber-200",
+  confirmed: "bg-blue-100 text-blue-800 border-blue-200",
+  active:    "bg-green-100 text-green-800 border-green-200",
+  completed: "bg-gray-100 text-gray-700 border-gray-200",
+  cancelled: "bg-red-100 text-red-700 border-red-200",
+};
+
+function getRentalTimeStatus(startStr: string, endStr: string, status: string) {
+  const skipped = ["cancelled", "completed", "no_show"];
+  if (skipped.includes(status)) return null;
+  const today = startOfDay(new Date());
+  const start = startOfDay(new Date(startStr + "T00:00:00"));
+  const end   = startOfDay(new Date(endStr   + "T00:00:00"));
+  const daysToStart = differenceInDays(start, today);
+  const daysToEnd   = differenceInDays(end,   today);
+  const totalDays   = Math.max(1, differenceInDays(end, start));
+  const elapsed     = Math.max(0, differenceInDays(today, start));
+  const pct         = Math.min(100, Math.round((elapsed / totalDays) * 100));
+  if (daysToStart > 1)  return { label: `Starts in ${daysToStart}d`, color: "text-blue-600 bg-blue-50 border-blue-200", pct: 0, bar: "bg-blue-400" };
+  if (daysToStart === 1) return { label: "Starts tomorrow",          color: "text-blue-600 bg-blue-50 border-blue-200", pct: 0, bar: "bg-blue-400" };
+  if (daysToStart === 0) return { label: "Pickup day!",              color: "text-green-700 bg-green-50 border-green-200", pct: 0, bar: "bg-green-500" };
+  if (daysToEnd > 1)    return { label: `${daysToEnd}d remaining`,  color: "text-green-700 bg-green-50 border-green-200", pct, bar: "bg-green-500" };
+  if (daysToEnd === 1)  return { label: "Returns tomorrow",          color: "text-amber-700 bg-amber-50 border-amber-200", pct, bar: "bg-amber-500" };
+  if (daysToEnd === 0)  return { label: "Due back today",            color: "text-amber-700 bg-amber-50 border-amber-200", pct: 100, bar: "bg-amber-500" };
+  return { label: `Overdue ${Math.abs(daysToEnd)}d`,                 color: "text-red-700 bg-red-50 border-red-300", pct: 100, bar: "bg-red-500" };
+}
+
+type RenterBooking = {
+  id: number;
+  status: string;
+  startDate: string;
+  endDate: string;
+  totalPrice: string;
+  listingTitle: string;
+  listingImage: string | null;
+  tenantSlug: string | null;
+  businessName: string | null;
+  businessLogoUrl: string | null;
+  businessPrimaryColor: string | null;
+  createdAt: string;
 };
 
 type Tab = "bookings" | "settings";
@@ -125,15 +181,126 @@ export function ProfilePage({ onAuthOpen }: { onAuthOpen: () => void }) {
   );
 }
 
+type BookingViewMode = "list" | "calendar";
+type BookingTabKey = "recent" | "upcoming" | "cancelled" | "all";
+
+const BOOKING_TABS: { key: BookingTabKey; label: string }[] = [
+  { key: "recent",    label: "Recent" },
+  { key: "upcoming",  label: "Upcoming" },
+  { key: "cancelled", label: "Cancelled" },
+  { key: "all",       label: "All" },
+];
+
 function BookingsTab({
-  bookings,
+  bookings: allBookings,
   isLoading,
   onBrowse,
 }: {
-  bookings: ReturnType<typeof api.marketplace.renterBookings> extends Promise<infer T> ? T | undefined : never;
+  bookings: RenterBooking[] | undefined;
   isLoading: boolean;
   onBrowse: () => void;
 }) {
+  const [view, setView]               = useState<BookingViewMode>("list");
+  const [activeTab, setActiveTab]     = useState<BookingTabKey>("recent");
+  const [search, setSearch]           = useState("");
+  const [calendarMonth, setCalMonth]  = useState(new Date());
+  const [expandedId, setExpandedId]   = useState<number | null>(null);
+
+  const today = startOfDay(new Date());
+
+  const bookings = allBookings ?? [];
+
+  const tabCounts = useMemo(() => ({
+    recent:    bookings.filter(b => b.status !== "cancelled").length,
+    upcoming:  bookings.filter(b => b.status !== "cancelled" && startOfDay(parseISO(b.startDate)) >= today).length,
+    cancelled: bookings.filter(b => b.status === "cancelled").length,
+    all:       bookings.length,
+  }), [bookings]);
+
+  const tabFiltered = useMemo(() => {
+    const all = [...bookings];
+    switch (activeTab) {
+      case "upcoming":
+        return all
+          .filter(b => b.status !== "cancelled" && startOfDay(parseISO(b.startDate)) >= today)
+          .sort((a, b) => parseISO(a.startDate).getTime() - parseISO(b.startDate).getTime());
+      case "cancelled":
+        return all
+          .filter(b => b.status === "cancelled")
+          .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+      case "all":
+        return all.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+      default:
+        return all
+          .filter(b => b.status !== "cancelled")
+          .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    }
+  }, [bookings, activeTab]);
+
+  const displayed = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return tabFiltered;
+    return tabFiltered.filter(b =>
+      (b.listingTitle ?? "").toLowerCase().includes(q) ||
+      (b.businessName ?? "").toLowerCase().includes(q) ||
+      (b.status ?? "").toLowerCase().includes(q) ||
+      String(b.id).includes(q) ||
+      (b.startDate ?? "").includes(q) ||
+      (b.endDate ?? "").includes(q)
+    );
+  }, [tabFiltered, search]);
+
+  // ── Calendar helpers ──────────────────────────────────────────────────
+  const calendarDays = useMemo(() => {
+    const start = startOfWeek(startOfMonth(calendarMonth));
+    const end   = endOfWeek(endOfMonth(calendarMonth));
+    const days: Date[] = [];
+    let cur = start;
+    while (cur <= end) { days.push(cur); cur = addDays(cur, 1); }
+    return days;
+  }, [calendarMonth]);
+
+  const calendarWeeks = useMemo(() => {
+    const weeks: Date[][] = [];
+    for (let i = 0; i < calendarDays.length; i += 7) weeks.push(calendarDays.slice(i, i + 7));
+    return weeks;
+  }, [calendarDays]);
+
+  type Bar = { booking: RenterBooking; startCol: number; endCol: number; isStart: boolean; isEnd: boolean };
+  type Lane = Bar[];
+
+  function computeLanes(week: Date[]): Lane[] {
+    const weekStart = startOfDay(week[0]);
+    const weekEnd   = startOfDay(week[6]);
+    const weekBookings = bookings
+      .filter(b => b.status !== "cancelled")
+      .filter(b => {
+        try {
+          const s = startOfDay(parseISO(b.startDate));
+          const e = startOfDay(parseISO(b.endDate));
+          return s <= weekEnd && e >= weekStart;
+        } catch { return false; }
+      })
+      .sort((a, b) => parseISO(a.startDate).getTime() - parseISO(b.startDate).getTime());
+    const lanes: Lane[] = [];
+    for (const b of weekBookings) {
+      const bStart  = startOfDay(parseISO(b.startDate));
+      const bEnd    = startOfDay(parseISO(b.endDate));
+      const startCol = Math.max(0, differenceInDays(bStart, weekStart)) + 1;
+      const endCol   = Math.min(6, differenceInDays(bEnd,   weekStart)) + 2;
+      const isStart  = bStart >= weekStart;
+      const isEnd    = bEnd <= weekEnd;
+      const entry: Bar = { booking: b, startCol, endCol, isStart, isEnd };
+      let placed = false;
+      for (const lane of lanes) {
+        const last = lane[lane.length - 1];
+        if (last.endCol <= startCol) { lane.push(entry); placed = true; break; }
+      }
+      if (!placed) lanes.push([entry]);
+    }
+    return lanes;
+  }
+
   if (isLoading) {
     return (
       <div className="space-y-4">
@@ -153,7 +320,7 @@ function BookingsTab({
     );
   }
 
-  if (!bookings || bookings.length === 0) {
+  if (bookings.length === 0) {
     return (
       <div className="text-center py-16 bg-white rounded-2xl border border-gray-200">
         <div className="text-4xl mb-3">📋</div>
@@ -166,52 +333,300 @@ function BookingsTab({
 
   return (
     <div className="space-y-4">
-      {bookings.map(booking => (
-        <div key={booking.id} className="bg-white rounded-2xl border border-gray-200 p-5 hover:shadow-sm transition-shadow">
-          <div className="flex gap-4 items-start">
-            <div className="h-20 w-24 flex-shrink-0 rounded-xl overflow-hidden bg-gray-100">
-              {booking.listingImage ? (
-                <img src={resolveImage(booking.listingImage)} alt={booking.listingTitle} className="w-full h-full object-cover" />
-              ) : (
-                <div className="w-full h-full flex items-center justify-center text-2xl">🏕️</div>
-              )}
-            </div>
-            <div className="flex-1 min-w-0">
-              <div className="flex items-start justify-between gap-2 flex-wrap">
-                <h3 className="font-semibold text-gray-800 text-sm line-clamp-1">{booking.listingTitle}</h3>
-                <Badge className={`text-xs ${statusColors[booking.status] || "bg-gray-100 text-gray-700"}`}>
-                  {booking.status}
-                </Badge>
-              </div>
-              {booking.businessName && (
-                <div className="flex items-center gap-1 text-xs text-gray-500 mt-1">
-                  {booking.businessLogoUrl && (
-                    <img src={resolveImage(booking.businessLogoUrl)} alt="" className="h-3.5 w-3.5 rounded-full object-cover" />
-                  )}
-                  <span>{booking.businessName}</span>
-                </div>
-              )}
-              <div className="flex items-center gap-1 text-xs text-gray-400 mt-1">
-                <Calendar className="h-3 w-3" />
-                <span>{format(new Date(booking.startDate), "MMM d")} – {format(new Date(booking.endDate), "MMM d, yyyy")}</span>
-              </div>
-              <div className="flex items-center justify-between mt-2">
-                <span className="text-sm font-semibold text-gray-800">${parseFloat(booking.totalPrice).toFixed(2)}</span>
-                {booking.tenantSlug && (
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="h-7 text-xs text-primary hover:text-primary gap-1 pr-0"
-                    onClick={() => window.open(`/${booking.tenantSlug}`, "_blank")}
+      {/* View toggle */}
+      <div className="flex items-center justify-between">
+        <p className="text-sm text-gray-500">{bookings.length} booking{bookings.length !== 1 ? "s" : ""}</p>
+        <div className="flex rounded-lg border bg-white overflow-hidden shadow-sm">
+          <button
+            onClick={() => setView("list")}
+            className={`flex items-center gap-1.5 px-3 py-2 text-sm font-medium transition-colors ${
+              view === "list" ? "bg-primary text-white" : "text-gray-500 hover:text-gray-700"
+            }`}
+          >
+            <List className="w-4 h-4" /> List
+          </button>
+          <button
+            onClick={() => setView("calendar")}
+            className={`flex items-center gap-1.5 px-3 py-2 text-sm font-medium transition-colors ${
+              view === "calendar" ? "bg-primary text-white" : "text-gray-500 hover:text-gray-700"
+            }`}
+          >
+            <CalendarDays className="w-4 h-4" /> Calendar
+          </button>
+        </div>
+      </div>
+
+      {/* ── LIST VIEW ── */}
+      {view === "list" && (
+        <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden">
+          {/* Tabs + Search */}
+          <div className="px-4 py-3 border-b bg-gray-50 flex flex-col gap-3">
+            <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+              <div className="flex items-center gap-1 flex-wrap">
+                {BOOKING_TABS.map(t => (
+                  <button
+                    key={t.key}
+                    onClick={() => setActiveTab(t.key)}
+                    className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-colors flex items-center gap-1.5 ${
+                      activeTab === t.key
+                        ? "bg-primary text-white"
+                        : "bg-white border border-gray-200 text-gray-500 hover:text-gray-700"
+                    }`}
                   >
-                    View company <ExternalLink className="h-3 w-3" />
-                  </Button>
+                    {t.label}
+                    <span className={`text-[10px] px-1.5 py-px rounded-full ${activeTab === t.key ? "bg-white/20 text-white" : "bg-gray-100 text-gray-500"}`}>
+                      {tabCounts[t.key]}
+                    </span>
+                  </button>
+                ))}
+              </div>
+              <div className="relative sm:ml-auto w-full sm:w-64">
+                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400 pointer-events-none" />
+                <input
+                  value={search}
+                  onChange={e => setSearch(e.target.value)}
+                  placeholder="Search listing, company, status…"
+                  className="w-full h-9 pl-8 pr-8 rounded-lg border border-gray-200 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+                />
+                {search && (
+                  <button onClick={() => setSearch("")} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
+                    <X className="w-3.5 h-3.5" />
+                  </button>
                 )}
               </div>
             </div>
           </div>
+
+          {/* Booking cards */}
+          {displayed.length === 0 ? (
+            <div className="py-16 text-center">
+              <CalendarDays className="w-10 h-10 text-gray-300 mx-auto mb-3" />
+              <p className="text-sm font-medium text-gray-500">{search ? "No bookings match your search" : "No bookings in this view"}</p>
+              {search && <button onClick={() => setSearch("")} className="mt-2 text-xs text-primary underline">Clear search</button>}
+            </div>
+          ) : (
+            <div className="divide-y divide-gray-100">
+              {displayed.map(booking => {
+                const ts = getRentalTimeStatus(booking.startDate, booking.endDate, booking.status);
+                const badgeCls = STATUS_BADGE[booking.status] ?? "bg-gray-100 text-gray-700 border-gray-200";
+                return (
+                  <div key={booking.id} className="p-4 hover:bg-gray-50 transition-colors">
+                    <div className="flex gap-4 items-start">
+                      <div className="h-20 w-24 flex-shrink-0 rounded-xl overflow-hidden bg-gray-100">
+                        {booking.listingImage ? (
+                          <img src={resolveImage(booking.listingImage)} alt={booking.listingTitle} className="w-full h-full object-cover" />
+                        ) : (
+                          <div className="w-full h-full flex items-center justify-center text-2xl">🏕️</div>
+                        )}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-start justify-between gap-2 flex-wrap">
+                          <h3 className="font-semibold text-gray-800 text-sm line-clamp-1">{booking.listingTitle}</h3>
+                          <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold border capitalize ${badgeCls}`}>
+                            {booking.status}
+                          </span>
+                        </div>
+                        {booking.businessName && (
+                          <div className="flex items-center gap-1 text-xs text-gray-500 mt-1">
+                            {booking.businessLogoUrl && (
+                              <img src={resolveImage(booking.businessLogoUrl)} alt="" className="h-3.5 w-3.5 rounded-full object-cover" />
+                            )}
+                            <span>{booking.businessName}</span>
+                          </div>
+                        )}
+                        <div className="flex items-center gap-1 text-xs text-gray-400 mt-1">
+                          <Calendar className="h-3 w-3" />
+                          <span>{format(parseISO(booking.startDate), "MMM d")} – {format(parseISO(booking.endDate), "MMM d, yyyy")}</span>
+                        </div>
+                        {ts && (
+                          <div className="mt-1.5 space-y-1">
+                            <span className={`inline-flex items-center text-[10px] font-semibold px-1.5 py-0.5 rounded border ${ts.color}`}>
+                              {ts.label}
+                            </span>
+                            {ts.pct > 0 && (
+                              <div className="h-1 w-full bg-gray-100 rounded-full overflow-hidden">
+                                <div className={`h-full rounded-full ${ts.bar}`} style={{ width: `${ts.pct}%` }} />
+                              </div>
+                            )}
+                          </div>
+                        )}
+                        <div className="flex items-center justify-between mt-2">
+                          <span className="text-sm font-semibold text-gray-800">${parseFloat(booking.totalPrice).toFixed(2)}</span>
+                          {booking.tenantSlug && (
+                            <button
+                              className="text-xs text-primary hover:underline flex items-center gap-1"
+                              onClick={() => window.open(`/${booking.tenantSlug}`, "_blank")}
+                            >
+                              View company <ExternalLink className="h-3 w-3" />
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+              <div className="px-4 py-2 text-xs text-gray-400 text-right">
+                {displayed.length} booking{displayed.length !== 1 ? "s" : ""}{search ? ` matching "${search}"` : ""}
+              </div>
+            </div>
+          )}
         </div>
-      ))}
+      )}
+
+      {/* ── CALENDAR VIEW ── */}
+      {view === "calendar" && (
+        <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden">
+          {/* Month navigation */}
+          <div className="flex items-center justify-between px-6 py-4 border-b">
+            <button
+              onClick={() => setCalMonth(m => subMonths(m, 1))}
+              className="w-9 h-9 rounded-full flex items-center justify-center hover:bg-gray-100 transition-colors"
+            >
+              <ChevronLeft className="w-5 h-5" />
+            </button>
+            <h3 className="text-base font-bold text-gray-800">{format(calendarMonth, "MMMM yyyy")}</h3>
+            <button
+              onClick={() => setCalMonth(m => addMonths(m, 1))}
+              className="w-9 h-9 rounded-full flex items-center justify-center hover:bg-gray-100 transition-colors"
+            >
+              <ChevronRight className="w-5 h-5" />
+            </button>
+          </div>
+
+          {/* Day-of-week headers */}
+          <div className="grid grid-cols-7 border-b bg-gray-50">
+            {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map(d => (
+              <div key={d} className="py-2 text-center text-xs font-semibold text-gray-400 uppercase tracking-wide">
+                {d}
+              </div>
+            ))}
+          </div>
+
+          {/* Calendar grid */}
+          <div className="divide-y divide-gray-100">
+            {calendarWeeks.map((week, wi) => {
+              const lanes = computeLanes(week);
+              return (
+                <div key={wi}>
+                  <div className="grid grid-cols-7 divide-x divide-gray-100 border-b border-gray-100">
+                    {week.map((day, di) => {
+                      const isToday = isSameDay(day, new Date());
+                      const inMonth = isSameMonth(day, calendarMonth);
+                      return (
+                        <div key={di} className={`py-1.5 px-2 flex items-center justify-end ${inMonth ? "" : "bg-gray-50/60"}`}>
+                          <span className={`w-7 h-7 flex items-center justify-center rounded-full text-sm font-medium ${
+                            isToday ? "bg-primary text-white" : inMonth ? "text-gray-700" : "text-gray-300"
+                          }`}>
+                            {format(day, "d")}
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  {/* Event bars */}
+                  <div
+                    className={`pb-1.5 pt-1 ${isSameMonth(week[3], calendarMonth) ? "" : "bg-gray-50/40"}`}
+                    style={{ minHeight: `${Math.max(32, lanes.length * 24 + 8)}px` }}
+                  >
+                    {lanes.length === 0 && <div className="h-5" />}
+                    {lanes.map((lane, li) => (
+                      <div
+                        key={li}
+                        className="relative grid mb-0.5"
+                        style={{ gridTemplateColumns: "repeat(7, 1fr)", height: "22px" }}
+                      >
+                        {lane.map(({ booking: b, startCol, endCol, isStart, isEnd }) => {
+                          const colorCls = STATUS_COLORS[b.status] ?? "bg-gray-100 text-gray-700 border-gray-200";
+                          const roundL = isStart  ? "rounded-l-full pl-2" : "rounded-l-none pl-1";
+                          const roundR = isEnd    ? "rounded-r-full pr-2" : "rounded-r-none pr-1";
+                          return (
+                            <button
+                              key={b.id}
+                              onClick={() => setExpandedId(expandedId === b.id ? null : b.id)}
+                              title={`${b.listingTitle} — ${b.startDate} → ${b.endDate}`}
+                              style={{ gridColumn: `${startCol} / ${endCol}` }}
+                              className={`h-full flex items-center gap-1 text-[11px] font-semibold border truncate transition-opacity hover:opacity-80 ${colorCls} ${roundL} ${roundR} ${!isStart ? "border-l-0" : ""} ${!isEnd ? "border-r-0" : ""}`}
+                            >
+                              {isStart && <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${STATUS_DOT[b.status] ?? "bg-gray-400"}`} />}
+                              <span className="truncate min-w-0">{isStart ? b.listingTitle : ""}</span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Expanded booking card (click on bar to open) */}
+                  {lanes.some(lane => lane.some(bar => bar.booking.id === expandedId)) && (() => {
+                    const b = bookings.find(x => x.id === expandedId)!;
+                    const ts = getRentalTimeStatus(b.startDate, b.endDate, b.status);
+                    const badgeCls = STATUS_BADGE[b.status] ?? "bg-gray-100 text-gray-700 border-gray-200";
+                    return (
+                      <div className="mx-4 mb-3 p-3 border border-gray-200 rounded-xl bg-white shadow-sm text-sm">
+                        <div className="flex items-start gap-3">
+                          <div className="h-14 w-16 flex-shrink-0 rounded-lg overflow-hidden bg-gray-100">
+                            {b.listingImage
+                              ? <img src={resolveImage(b.listingImage)} alt={b.listingTitle} className="w-full h-full object-cover" />
+                              : <div className="w-full h-full flex items-center justify-center text-xl">🏕️</div>
+                            }
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-start justify-between gap-2 flex-wrap">
+                              <p className="font-semibold text-gray-800 text-sm line-clamp-1">{b.listingTitle}</p>
+                              <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold border capitalize ${badgeCls}`}>
+                                {b.status}
+                              </span>
+                            </div>
+                            {b.businessName && (
+                              <p className="text-xs text-gray-500 mt-0.5">{b.businessName}</p>
+                            )}
+                            <p className="text-xs text-gray-400 mt-0.5">
+                              {format(parseISO(b.startDate), "MMM d")} – {format(parseISO(b.endDate), "MMM d, yyyy")}
+                            </p>
+                            {ts && (
+                              <span className={`mt-1 inline-flex items-center text-[10px] font-semibold px-1.5 py-0.5 rounded border ${ts.color}`}>
+                                {ts.label}
+                              </span>
+                            )}
+                            <div className="flex items-center justify-between mt-1.5">
+                              <span className="font-semibold text-gray-800">${parseFloat(b.totalPrice).toFixed(2)}</span>
+                              <div className="flex items-center gap-2">
+                                {b.tenantSlug && (
+                                  <button
+                                    className="text-xs text-primary hover:underline flex items-center gap-1"
+                                    onClick={() => window.open(`/${b.tenantSlug}`, "_blank")}
+                                  >
+                                    View company <ExternalLink className="h-3 w-3" />
+                                  </button>
+                                )}
+                                <button onClick={() => setExpandedId(null)} className="text-xs text-gray-400 hover:text-gray-600">
+                                  <X className="h-3.5 w-3.5" />
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })()}
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Legend */}
+          <div className="flex items-center gap-4 px-5 py-3 border-t bg-gray-50 flex-wrap">
+            {Object.entries(STATUS_COLORS).map(([status, cls]) => (
+              <div key={status} className="flex items-center gap-1.5">
+                <span className={`w-2.5 h-2.5 rounded-sm border ${cls}`} />
+                <span className="text-xs text-gray-500 capitalize">{status}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
