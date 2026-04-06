@@ -111,6 +111,69 @@ export interface Customer {
   createdAt: string;
 }
 
+export interface HostInfo {
+  hostTenantId: number;
+  slug: string;
+  name: string;
+}
+
+export interface HostListing {
+  id: number;
+  title: string;
+  description: string;
+  status: string;
+  pricePerDay: string;
+  imageUrls: string[];
+  location: string | null;
+  quantity: number;
+  condition: string | null;
+  brand: string | null;
+  model: string | null;
+  categoryId: number | null;
+  categoryName: string | null;
+  createdAt: string;
+}
+
+export interface HostBooking {
+  id: number;
+  status: string;
+  startDate: string;
+  endDate: string;
+  totalPrice: string;
+  listingTitle: string;
+  listingImage: string | null;
+  customerName: string;
+  customerEmail: string | null;
+  customerPhone: string | null;
+  createdAt: string;
+}
+
+export interface HostStats {
+  listings: { total: number; active: number };
+  bookings: { total: number; pending: number; confirmed: number; totalRevenue: string };
+}
+
+export interface HostMeResponse {
+  id: number;
+  slug: string;
+  name: string;
+  business: {
+    name: string;
+    city: string | null;
+    state: string | null;
+    description: string | null;
+    logoUrl: string | null;
+    phone: string | null;
+    website: string | null;
+  } | null;
+}
+
+export interface HostCategory {
+  id: number;
+  name: string;
+  slug: string;
+}
+
 async function get<T>(path: string): Promise<T> {
   const res = await fetch(`${API_BASE}${path}`);
   if (!res.ok) throw new Error(`API error ${res.status}`);
@@ -125,6 +188,56 @@ async function post<T>(path: string, body: unknown): Promise<T> {
   });
   const data = await res.json();
   if (!res.ok) throw new Error(data.error || `API error ${res.status}`);
+  return data;
+}
+
+function hostHeaders(customerId: number): Record<string, string> {
+  return {
+    "Content-Type": "application/json",
+    "X-Customer-Id": String(customerId),
+  };
+}
+
+async function hostGet<T>(path: string, customerId: number): Promise<T> {
+  const res = await fetch(`${API_BASE}${path}`, {
+    headers: { "X-Customer-Id": String(customerId) },
+  });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error((data as any).error || `API error ${res.status}`);
+  }
+  return res.json();
+}
+
+async function hostPost<T>(path: string, body: unknown, customerId: number): Promise<T> {
+  const res = await fetch(`${API_BASE}${path}`, {
+    method: "POST",
+    headers: hostHeaders(customerId),
+    body: JSON.stringify(body),
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error((data as any).error || `API error ${res.status}`);
+  return data;
+}
+
+async function hostPut<T>(path: string, body: unknown, customerId: number): Promise<T> {
+  const res = await fetch(`${API_BASE}${path}`, {
+    method: "PUT",
+    headers: hostHeaders(customerId),
+    body: JSON.stringify(body),
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error((data as any).error || `API error ${res.status}`);
+  return data;
+}
+
+async function hostDelete<T>(path: string, customerId: number): Promise<T> {
+  const res = await fetch(`${API_BASE}${path}`, {
+    method: "DELETE",
+    headers: { "X-Customer-Id": String(customerId) },
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error((data as any).error || `API error ${res.status}`);
   return data;
 }
 
@@ -163,5 +276,35 @@ export const api = {
       post<Customer>("/customers/login", { email, password }),
     register: (email: string, password: string, name: string, phone?: string) =>
       post<Customer>("/customers/register", { email, password, name, phone }),
+  },
+  host: {
+    become: (customerId: number, body: { displayName?: string; city?: string; state?: string }) =>
+      hostPost<HostInfo>("/host/become", body, customerId),
+    me: (customerId: number) =>
+      hostGet<HostMeResponse>("/host/me", customerId),
+    checkIsHost: async (customerId: number): Promise<boolean> => {
+      try {
+        await hostGet("/host/me", customerId);
+        return true;
+      } catch {
+        return false;
+      }
+    },
+    stats: (customerId: number) =>
+      hostGet<HostStats>("/host/stats", customerId),
+    listings: (customerId: number) =>
+      hostGet<HostListing[]>("/host/listings", customerId),
+    createListing: (customerId: number, body: Record<string, unknown>) =>
+      hostPost<HostListing>("/host/listings", body, customerId),
+    updateListing: (customerId: number, id: number, body: Record<string, unknown>) =>
+      hostPut<HostListing>(`/host/listings/${id}`, body, customerId),
+    deleteListing: (customerId: number, id: number) =>
+      hostDelete<{ success: boolean }>(`/host/listings/${id}`, customerId),
+    bookings: (customerId: number) =>
+      hostGet<HostBooking[]>("/host/bookings", customerId),
+    updateSettings: (customerId: number, body: Record<string, unknown>) =>
+      hostPut<{ success: boolean }>("/host/settings", body, customerId),
+    categories: () =>
+      get<HostCategory[]>("/host/categories"),
   },
 };

@@ -13,6 +13,7 @@ import productsRouter from "./routes/products";
 import docsRouter from "./routes/docs";
 import developerRouter from "./routes/superadmin-developer";
 import marketplaceRouter from "./routes/marketplace";
+import hostRouter from "./routes/host";
 import { logger } from "./lib/logger";
 import { resolveTenant } from "./middleware/admin-auth";
 import { errorLoggerMiddleware, captureUnhandledErrors } from "./middleware/error-logger";
@@ -65,6 +66,7 @@ app.use("/api", protectionPlansRouter);
 app.use("/api", productsRouter);
 app.use("/api", docsRouter);
 app.use("/api", marketplaceRouter);
+app.use("/api", hostRouter);
 app.use("/api", router);
 
 export default app;

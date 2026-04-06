@@ -11,9 +11,11 @@ This project is a white-label rental management platform, designed as a B2B SaaS
 - Multi-step customer booking process with add-ons and agreements.
 - Admin dashboard for live analytics, booking management, custom quotes, and staff management.
 - Multi-tenancy architecture to support multiple independent rental businesses.
+- **Host role:** Marketplace renters can become Hosts — creating a micro-tenant (`is_host=true`) linked to their customer account. Hosts get a simplified dashboard (Listings, Bookings, Stats, Settings) with no branding/white-label access. Their listings appear on the OutdoorShare marketplace. Dashboard at `/marketplace/host`.
 - AI Assistant (OutdoorBot) for both admin and customer support.
 - Fully customizable branding and theming options.
 - Integrated documentation portal.
+- Consumer-facing marketplace (`/marketplace/`) with map view, category filters, and company browsing.
 
 ## User Preferences
 

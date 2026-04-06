@@ -1,0 +1,433 @@
+import { Router, type IRouter, type Request, type Response, type NextFunction } from "express";
+import { db } from "@workspace/db";
+import {
+  listingsTable,
+  tenantsTable,
+  businessProfileTable,
+  categoriesTable,
+  customersTable,
+  bookingsTable,
+} from "@workspace/db/schema";
+import { eq, and, desc, sql } from "drizzle-orm";
+import { randomBytes, scrypt } from "crypto";
+import { promisify } from "util";
+
+const scryptAsync = promisify(scrypt);
+
+async function hashPassword(password: string): Promise<string> {
+  const salt = randomBytes(16).toString("hex");
+  const hash = (await scryptAsync(password, salt, 64)) as Buffer;
+  return `${salt}:${hash.toString("hex")}`;
+}
+
+const router: IRouter = Router();
+
+// ── Auth middleware ────────────────────────────────────────────────────────────
+// Reads X-Customer-Id header and looks up the associated host tenant.
+// Attaches req.hostCustomerId and req.hostTenantId to the request.
+declare global {
+  namespace Express {
+    interface Request {
+      hostCustomerId?: number;
+      hostTenantId?: number;
+    }
+  }
+}
+
+async function requireHostAuth(req: Request, res: Response, next: NextFunction): Promise<void> {
+  const rawId = req.headers["x-customer-id"];
+  if (!rawId) {
+    res.status(401).json({ error: "Authentication required" });
+    return;
+  }
+  const customerId = parseInt(String(rawId));
+  if (isNaN(customerId)) {
+    res.status(401).json({ error: "Invalid customer ID" });
+    return;
+  }
+  const tenant = await db
+    .select({ id: tenantsTable.id })
+    .from(tenantsTable)
+    .where(and(eq(tenantsTable.isHost, true), eq(tenantsTable.hostCustomerId, customerId)))
+    .limit(1);
+
+  if (!tenant[0]) {
+    res.status(403).json({ error: "Host account not found" });
+    return;
+  }
+  req.hostCustomerId = customerId;
+  req.hostTenantId = tenant[0].id;
+  next();
+}
+
+// ── POST /api/host/become ─────────────────────────────────────────────────────
+// Create a host micro-tenant for a logged-in marketplace customer.
+router.post("/host/become", async (req, res) => {
+  try {
+    const rawId = req.headers["x-customer-id"];
+    if (!rawId) { res.status(401).json({ error: "Authentication required" }); return; }
+    const customerId = parseInt(String(rawId));
+    if (isNaN(customerId)) { res.status(401).json({ error: "Invalid customer ID" }); return; }
+
+    const customer = await db
+      .select()
+      .from(customersTable)
+      .where(eq(customersTable.id, customerId))
+      .limit(1);
+    if (!customer[0]) { res.status(404).json({ error: "Customer not found" }); return; }
+
+    const existing = await db
+      .select({ id: tenantsTable.id })
+      .from(tenantsTable)
+      .where(and(eq(tenantsTable.isHost, true), eq(tenantsTable.hostCustomerId, customerId)))
+      .limit(1);
+    if (existing[0]) {
+      res.status(409).json({ error: "Host account already exists" });
+      return;
+    }
+
+    const c = customer[0];
+    const slug = `host-${customerId}`;
+    const syntheticEmail = `host-${customerId}@outdoorshare.internal`;
+    const randomPassword = await hashPassword(Math.random().toString(36) + Date.now());
+
+    const { displayName, city, state } = req.body as {
+      displayName?: string;
+      city?: string;
+      state?: string;
+    };
+
+    const [newTenant] = await db
+      .insert(tenantsTable)
+      .values({
+        name: displayName || `${c.name}'s Rentals`,
+        slug,
+        email: syntheticEmail,
+        adminPasswordHash: randomPassword,
+        plan: "starter",
+        status: "active",
+        testMode: false,
+        emailVerified: true,
+        isHost: true,
+        hostCustomerId: customerId,
+        maxListings: 20,
+      })
+      .returning();
+
+    await db.insert(businessProfileTable).values({
+      tenantId: newTenant.id,
+      name: displayName || `${c.name}'s Rentals`,
+      email: c.email,
+      city: city || c.billingCity,
+      state: state || c.billingState,
+      primaryColor: "#2d6a4f",
+      accentColor: "#52b788",
+    });
+
+    res.status(201).json({
+      hostTenantId: newTenant.id,
+      slug: newTenant.slug,
+      name: newTenant.name,
+    });
+  } catch (err) {
+    req.log.error(err);
+    res.status(500).json({ error: "Failed to create host account" });
+  }
+});
+
+// ── GET /api/host/me ──────────────────────────────────────────────────────────
+router.get("/host/me", requireHostAuth, async (req, res) => {
+  try {
+    const tenant = await db
+      .select({
+        id: tenantsTable.id,
+        slug: tenantsTable.slug,
+        name: tenantsTable.name,
+        business: {
+          name: businessProfileTable.name,
+          city: businessProfileTable.city,
+          state: businessProfileTable.state,
+          description: businessProfileTable.description,
+          logoUrl: businessProfileTable.logoUrl,
+          phone: businessProfileTable.phone,
+          website: businessProfileTable.website,
+        },
+      })
+      .from(tenantsTable)
+      .leftJoin(businessProfileTable, eq(businessProfileTable.tenantId, tenantsTable.id))
+      .where(eq(tenantsTable.id, req.hostTenantId!))
+      .limit(1);
+
+    if (!tenant[0]) { res.status(404).json({ error: "Host not found" }); return; }
+    res.json(tenant[0]);
+  } catch (err) {
+    req.log.error(err);
+    res.status(500).json({ error: "Failed to fetch host info" });
+  }
+});
+
+// ── GET /api/host/stats ───────────────────────────────────────────────────────
+router.get("/host/stats", requireHostAuth, async (req, res) => {
+  try {
+    const tenantId = req.hostTenantId!;
+
+    const [listingStats] = await db
+      .select({
+        total: sql<number>`count(*)::int`,
+        active: sql<number>`count(*) filter (where ${listingsTable.status} = 'active')::int`,
+      })
+      .from(listingsTable)
+      .where(eq(listingsTable.tenantId, tenantId));
+
+    const [bookingStats] = await db
+      .select({
+        total: sql<number>`count(*)::int`,
+        pending: sql<number>`count(*) filter (where ${bookingsTable.status} = 'pending')::int`,
+        confirmed: sql<number>`count(*) filter (where ${bookingsTable.status} = 'confirmed')::int`,
+        totalRevenue: sql<string>`coalesce(sum(${bookingsTable.totalPrice}), 0)::text`,
+      })
+      .from(bookingsTable)
+      .where(eq(bookingsTable.tenantId, tenantId));
+
+    res.json({
+      listings: listingStats,
+      bookings: bookingStats,
+    });
+  } catch (err) {
+    req.log.error(err);
+    res.status(500).json({ error: "Failed to fetch stats" });
+  }
+});
+
+// ── GET /api/host/listings ────────────────────────────────────────────────────
+router.get("/host/listings", requireHostAuth, async (req, res) => {
+  try {
+    const rows = await db
+      .select({
+        id: listingsTable.id,
+        title: listingsTable.title,
+        description: listingsTable.description,
+        status: listingsTable.status,
+        pricePerDay: listingsTable.pricePerDay,
+        imageUrls: listingsTable.imageUrls,
+        location: listingsTable.location,
+        quantity: listingsTable.quantity,
+        condition: listingsTable.condition,
+        brand: listingsTable.brand,
+        model: listingsTable.model,
+        categoryId: listingsTable.categoryId,
+        categoryName: categoriesTable.name,
+        createdAt: listingsTable.createdAt,
+      })
+      .from(listingsTable)
+      .leftJoin(categoriesTable, eq(listingsTable.categoryId, categoriesTable.id))
+      .where(eq(listingsTable.tenantId, req.hostTenantId!))
+      .orderBy(desc(listingsTable.createdAt));
+
+    res.json(rows);
+  } catch (err) {
+    req.log.error(err);
+    res.status(500).json({ error: "Failed to fetch listings" });
+  }
+});
+
+// ── POST /api/host/listings ───────────────────────────────────────────────────
+router.post("/host/listings", requireHostAuth, async (req, res) => {
+  try {
+    const {
+      title, description, categoryId, pricePerDay, weekendPrice, pricePerWeek,
+      depositAmount, halfDayEnabled, halfDayRate, quantity, imageUrls,
+      location, condition, brand, model, includedItems, requirements,
+      status,
+    } = req.body;
+
+    if (!title || !description || !pricePerDay) {
+      res.status(400).json({ error: "title, description, and pricePerDay are required" });
+      return;
+    }
+
+    const [listing] = await db
+      .insert(listingsTable)
+      .values({
+        tenantId: req.hostTenantId!,
+        title,
+        description,
+        categoryId: categoryId ? Number(categoryId) : null,
+        pricePerDay: String(pricePerDay),
+        weekendPrice: weekendPrice ? String(weekendPrice) : null,
+        pricePerWeek: pricePerWeek ? String(pricePerWeek) : null,
+        depositAmount: depositAmount ? String(depositAmount) : null,
+        halfDayEnabled: !!halfDayEnabled,
+        halfDayRate: halfDayRate ? String(halfDayRate) : null,
+        quantity: quantity ? Number(quantity) : 1,
+        imageUrls: imageUrls ?? [],
+        location: location ?? null,
+        condition: condition ?? null,
+        brand: brand ?? null,
+        model: model ?? null,
+        includedItems: includedItems ?? [],
+        requirements: requirements ?? null,
+        status: status ?? "active",
+      })
+      .returning();
+
+    res.status(201).json(listing);
+  } catch (err) {
+    req.log.error(err);
+    res.status(500).json({ error: "Failed to create listing" });
+  }
+});
+
+// ── PUT /api/host/listings/:id ────────────────────────────────────────────────
+router.put("/host/listings/:id", requireHostAuth, async (req, res) => {
+  try {
+    const listingId = parseInt(req.params.id);
+    const existing = await db
+      .select({ id: listingsTable.id })
+      .from(listingsTable)
+      .where(and(eq(listingsTable.id, listingId), eq(listingsTable.tenantId, req.hostTenantId!)))
+      .limit(1);
+
+    if (!existing[0]) { res.status(404).json({ error: "Listing not found" }); return; }
+
+    const {
+      title, description, categoryId, pricePerDay, weekendPrice, pricePerWeek,
+      depositAmount, halfDayEnabled, halfDayRate, quantity, imageUrls,
+      location, condition, brand, model, includedItems, requirements, status,
+    } = req.body;
+
+    const [updated] = await db
+      .update(listingsTable)
+      .set({
+        title, description,
+        categoryId: categoryId ? Number(categoryId) : null,
+        pricePerDay: pricePerDay ? String(pricePerDay) : undefined,
+        weekendPrice: weekendPrice ? String(weekendPrice) : null,
+        pricePerWeek: pricePerWeek ? String(pricePerWeek) : null,
+        depositAmount: depositAmount ? String(depositAmount) : null,
+        halfDayEnabled: halfDayEnabled !== undefined ? !!halfDayEnabled : undefined,
+        halfDayRate: halfDayRate ? String(halfDayRate) : null,
+        quantity: quantity ? Number(quantity) : undefined,
+        imageUrls: imageUrls ?? undefined,
+        location: location ?? null,
+        condition: condition ?? null,
+        brand: brand ?? null,
+        model: model ?? null,
+        includedItems: includedItems ?? undefined,
+        requirements: requirements ?? null,
+        status: status ?? undefined,
+        updatedAt: new Date(),
+      })
+      .where(eq(listingsTable.id, listingId))
+      .returning();
+
+    res.json(updated);
+  } catch (err) {
+    req.log.error(err);
+    res.status(500).json({ error: "Failed to update listing" });
+  }
+});
+
+// ── DELETE /api/host/listings/:id ─────────────────────────────────────────────
+router.delete("/host/listings/:id", requireHostAuth, async (req, res) => {
+  try {
+    const listingId = parseInt(req.params.id);
+    const existing = await db
+      .select({ id: listingsTable.id })
+      .from(listingsTable)
+      .where(and(eq(listingsTable.id, listingId), eq(listingsTable.tenantId, req.hostTenantId!)))
+      .limit(1);
+
+    if (!existing[0]) { res.status(404).json({ error: "Listing not found" }); return; }
+
+    await db.delete(listingsTable).where(eq(listingsTable.id, listingId));
+    res.json({ success: true });
+  } catch (err) {
+    req.log.error(err);
+    res.status(500).json({ error: "Failed to delete listing" });
+  }
+});
+
+// ── GET /api/host/bookings ────────────────────────────────────────────────────
+router.get("/host/bookings", requireHostAuth, async (req, res) => {
+  try {
+    const bookings = await db
+      .select({
+        booking: bookingsTable,
+        listing: {
+          id: listingsTable.id,
+          title: listingsTable.title,
+          imageUrls: listingsTable.imageUrls,
+        },
+        customer: {
+          id: customersTable.id,
+          name: customersTable.name,
+          email: customersTable.email,
+          phone: customersTable.phone,
+        },
+      })
+      .from(bookingsTable)
+      .leftJoin(listingsTable, eq(bookingsTable.listingId, listingsTable.id))
+      .leftJoin(customersTable, eq(bookingsTable.customerId, customersTable.id))
+      .where(eq(bookingsTable.tenantId, req.hostTenantId!))
+      .orderBy(desc(bookingsTable.createdAt))
+      .limit(100);
+
+    res.json(bookings.map(r => ({
+      ...r.booking,
+      listingTitle: r.listing?.title ?? "Unknown",
+      listingImage: r.listing?.imageUrls?.[0] ?? null,
+      customerName: r.customer?.name ?? "Unknown",
+      customerEmail: r.customer?.email ?? null,
+      customerPhone: r.customer?.phone ?? null,
+    })));
+  } catch (err) {
+    req.log.error(err);
+    res.status(500).json({ error: "Failed to fetch bookings" });
+  }
+});
+
+// ── PUT /api/host/settings ────────────────────────────────────────────────────
+router.put("/host/settings", requireHostAuth, async (req, res) => {
+  try {
+    const { displayName, description, city, state, phone, website } = req.body;
+
+    await db
+      .update(businessProfileTable)
+      .set({ name: displayName, description, city, state, phone, website })
+      .where(eq(businessProfileTable.tenantId, req.hostTenantId!));
+
+    if (displayName) {
+      await db
+        .update(tenantsTable)
+        .set({ name: displayName, updatedAt: new Date() })
+        .where(eq(tenantsTable.id, req.hostTenantId!));
+    }
+
+    res.json({ success: true });
+  } catch (err) {
+    req.log.error(err);
+    res.status(500).json({ error: "Failed to update settings" });
+  }
+});
+
+// ── GET /api/host/categories ──────────────────────────────────────────────────
+router.get("/host/categories", async (req, res) => {
+  try {
+    const rows = await db
+      .select({
+        id: sql<number>`min(${categoriesTable.id})::int`,
+        name: categoriesTable.name,
+        slug: categoriesTable.slug,
+      })
+      .from(categoriesTable)
+      .groupBy(categoriesTable.name, categoriesTable.slug)
+      .orderBy(categoriesTable.name);
+    res.json(rows);
+  } catch (err) {
+    req.log.error(err);
+    res.status(500).json({ error: "Failed to fetch categories" });
+  }
+});
+
+export default router;

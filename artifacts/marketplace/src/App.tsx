@@ -13,6 +13,12 @@ import { CompaniesPage } from "@/pages/companies";
 import NotFound from "@/pages/not-found";
 import { initPreviewMode } from "@/lib/preview";
 import { Eye } from "lucide-react";
+import { BecomeHostPage } from "@/pages/host/become-host";
+import { HostDashboardPage } from "@/pages/host/dashboard";
+import { HostListingsPage } from "@/pages/host/listings";
+import { HostListingFormPage } from "@/pages/host/listing-form";
+import { HostBookingsPage } from "@/pages/host/bookings";
+import { HostSettingsPage } from "@/pages/host/settings";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -44,9 +50,17 @@ function ScrollToTop() {
   return null;
 }
 
+// Host routes don't render the shared navbar (they have their own sidebar)
+const HOST_PATHS = ["/host", "/host/listings", "/host/listings/new", "/host/bookings", "/host/settings"];
+
+function isHostPath(loc: string) {
+  return loc === "/host" || loc.startsWith("/host/");
+}
+
 function AppContent() {
   const [authOpen, setAuthOpen] = useState(false);
   const [preview, setPreview] = useState(false);
+  const [location] = useLocation();
 
   useEffect(() => {
     const active = initPreviewMode();
@@ -56,16 +70,25 @@ function AppContent() {
     }
   }, []);
 
+  const onHostPath = isHostPath(location);
+
   return (
     <>
       <ScrollToTop />
-      <Navbar onAuthOpen={() => setAuthOpen(true)} />
-      {preview && <PreviewBanner />}
+      {!onHostPath && <Navbar onAuthOpen={() => setAuthOpen(true)} />}
+      {!onHostPath && preview && <PreviewBanner />}
       <Switch>
         <Route path="/" component={() => <HomePage onAuthOpen={() => setAuthOpen(true)} />} />
         <Route path="/listings/:id" component={ListingDetailPage} />
         <Route path="/profile" component={() => <ProfilePage onAuthOpen={() => setAuthOpen(true)} />} />
         <Route path="/companies" component={CompaniesPage} />
+        <Route path="/become-host" component={() => <BecomeHostPage onAuthOpen={() => setAuthOpen(true)} />} />
+        <Route path="/host" component={HostDashboardPage} />
+        <Route path="/host/listings" component={HostListingsPage} />
+        <Route path="/host/listings/new" component={() => <HostListingFormPage />} />
+        <Route path="/host/listings/:id/edit" component={() => <HostListingFormPage />} />
+        <Route path="/host/bookings" component={HostBookingsPage} />
+        <Route path="/host/settings" component={HostSettingsPage} />
         <Route component={NotFound} />
       </Switch>
       <AuthModal open={authOpen} onClose={() => setAuthOpen(false)} />

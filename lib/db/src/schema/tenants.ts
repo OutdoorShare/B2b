@@ -30,6 +30,8 @@ export const tenantsTable = pgTable("tenants", {
   emailVerified: boolean("email_verified").default(false).notNull(),
   emailVerificationToken: text("email_verification_token"),
   emailVerificationExpiresAt: timestamp("email_verification_expires_at"),
+  isHost: boolean("is_host").default(false).notNull(),
+  hostCustomerId: integer("host_customer_id"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
