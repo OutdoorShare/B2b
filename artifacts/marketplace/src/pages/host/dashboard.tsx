@@ -11,6 +11,8 @@ import {
   Plus,
   ArrowRight,
   Clock,
+  Building2,
+  ChevronRight,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
@@ -72,6 +74,27 @@ export function HostDashboardPage() {
             color="text-emerald-600"
             bg="bg-emerald-50"
           />
+        </div>
+
+        {/* Upgrade to Business banner */}
+        <div className="mb-8 rounded-2xl overflow-hidden border border-primary/20 bg-gradient-to-r from-primary/10 via-primary/5 to-transparent flex items-center gap-6 px-6 py-5">
+          <div className="bg-primary/15 rounded-xl p-3 flex-shrink-0 hidden sm:block">
+            <Building2 className="h-7 w-7 text-primary" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="font-semibold text-gray-900 text-sm">Ready to grow beyond a personal host?</p>
+            <p className="text-xs text-gray-500 mt-0.5">
+              Register as a business to get your own branded storefront, custom domain, team management, and full analytics.
+            </p>
+          </div>
+          <a
+            href="/"
+            onClick={(e) => { e.preventDefault(); window.open("/", "_blank"); }}
+            className="flex-shrink-0 flex items-center gap-1.5 bg-primary hover:bg-primary/90 text-white text-xs font-semibold px-4 py-2 rounded-lg transition-colors whitespace-nowrap"
+          >
+            Register as a Business
+            <ChevronRight className="h-3.5 w-3.5" />
+          </a>
         </div>
 
         {/* Quick actions */}

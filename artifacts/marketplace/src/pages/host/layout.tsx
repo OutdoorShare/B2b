@@ -9,6 +9,7 @@ import {
   ArrowLeft,
   Menu,
   Package2,
+  Building2,
 } from "lucide-react";
 import { useState } from "react";
 
@@ -89,6 +90,26 @@ export function HostLayout({ children }: { children: React.ReactNode }) {
           );
         })}
       </nav>
+
+      {/* Upgrade to Business CTA */}
+      <div className="px-3 pb-2">
+        <div className="rounded-xl bg-gradient-to-br from-primary/10 to-primary/5 border border-primary/20 p-3">
+          <div className="flex items-center gap-2 mb-1.5">
+            <Building2 className="h-4 w-4 text-primary flex-shrink-0" />
+            <span className="text-xs font-semibold text-primary">Grow your business</span>
+          </div>
+          <p className="text-[11px] text-gray-500 mb-2.5 leading-snug">
+            Get your own storefront, custom branding, and full rental management.
+          </p>
+          <a
+            href="/"
+            onClick={(e) => { e.preventDefault(); window.open("/", "_blank"); setSidebarOpen(false); }}
+            className="block w-full text-center bg-primary hover:bg-primary/90 text-white text-[11px] font-semibold py-1.5 px-2 rounded-lg transition-colors"
+          >
+            Register as a Business →
+          </a>
+        </div>
+      </div>
 
       <div className="p-3 border-t border-gray-100">
         <button
