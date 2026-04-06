@@ -4,6 +4,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AuthProvider } from "@/context/auth";
+import { FavoritesProvider } from "@/context/favorites";
 import { Navbar } from "@/components/navbar";
 import { AuthModal } from "@/components/auth-modal";
 import { HomePage } from "@/pages/home";
@@ -77,7 +78,7 @@ function AppContent() {
   const onHostPath = isHostPath(location);
 
   return (
-    <>
+    <FavoritesProvider onAuthOpen={() => setAuthOpen(true)}>
       <ScrollToTop />
       {!onHostPath && <Navbar onAuthOpen={() => setAuthOpen(true)} />}
       {!onHostPath && preview && <PreviewBanner />}
@@ -99,7 +100,7 @@ function AppContent() {
         <Route component={NotFound} />
       </Switch>
       <AuthModal open={authOpen} onClose={() => setAuthOpen(false)} />
-    </>
+    </FavoritesProvider>
   );
 }
 

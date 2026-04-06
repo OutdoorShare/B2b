@@ -1,6 +1,8 @@
 import { useLocation } from "wouter";
 import type { MarketplaceListing } from "@/lib/api";
-import { MapPin, Building2 } from "lucide-react";
+import { MapPin, Building2, Heart } from "lucide-react";
+import { useFavorites } from "@/context/favorites";
+import { cn } from "@/lib/utils";
 
 const API_UPLOAD_BASE = "/api/uploads/";
 
@@ -17,15 +19,17 @@ interface ListingCardProps {
 
 export function ListingCard({ listing }: ListingCardProps) {
   const [, setLocation] = useLocation();
+  const { isFavorite, toggleFavorite } = useFavorites();
   const image = listing.imageUrls?.[0] ? resolveImage(listing.imageUrls[0]) : null;
+  const fav = isFavorite(listing.id);
 
   return (
-    <button
-      onClick={() => setLocation(`/listings/${listing.id}`)}
-      className="group text-left bg-white rounded-2xl border border-gray-200 overflow-hidden hover:shadow-lg hover:-translate-y-0.5 transition-all duration-200"
-    >
+    <div className="group relative text-left bg-white rounded-2xl border border-gray-200 overflow-hidden hover:shadow-lg hover:-translate-y-0.5 transition-all duration-200">
       {/* Image */}
-      <div className="relative h-48 bg-gray-100 overflow-hidden">
+      <button
+        onClick={() => setLocation(`/listings/${listing.id}`)}
+        className="block w-full relative h-48 bg-gray-100 overflow-hidden"
+      >
         {image ? (
           <img src={image} alt={listing.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
         ) : (
@@ -40,10 +44,27 @@ export function ListingCard({ listing }: ListingCardProps) {
           </span>
         )}
         <div className="absolute bottom-0 left-0 right-0 h-1 bg-primary" />
-      </div>
+      </button>
+
+      {/* Heart button */}
+      <button
+        onClick={(e) => { e.stopPropagation(); toggleFavorite(listing.id); }}
+        className={cn(
+          "absolute top-2.5 right-2.5 z-10 flex h-8 w-8 items-center justify-center rounded-full shadow-md transition-all duration-150",
+          fav
+            ? "bg-red-500 text-white hover:bg-red-600 scale-110"
+            : "bg-white/90 backdrop-blur-sm text-gray-400 hover:text-red-500 hover:scale-110",
+        )}
+        aria-label={fav ? "Remove from favorites" : "Add to favorites"}
+      >
+        <Heart className={cn("h-4 w-4", fav && "fill-current")} />
+      </button>
 
       {/* Content */}
-      <div className="p-4">
+      <button
+        onClick={() => setLocation(`/listings/${listing.id}`)}
+        className="block w-full text-left p-4"
+      >
         <h3 className="font-semibold text-gray-900 text-sm leading-snug mb-1 line-clamp-2 group-hover:text-primary transition-colors">
           {listing.title}
         </h3>
@@ -82,7 +103,7 @@ export function ListingCard({ listing }: ListingCardProps) {
             Book Now
           </span>
         </div>
-      </div>
-    </button>
+      </button>
+    </div>
   );
 }

@@ -11,8 +11,10 @@ import {
   User, LogOut, Calendar, ExternalLink, ArrowLeft,
   Settings, CreditCard, Lock, MapPin, Trash2, CheckCircle2,
   Phone, Mail, Loader2, AlertCircle, CalendarDays, List,
-  ChevronLeft, ChevronRight, Search, X, Mountain, Plus, Globe,
+  ChevronLeft, ChevronRight, Search, X, Mountain, Plus, Globe, Heart,
 } from "lucide-react";
+import { ListingCard } from "@/components/listing-card";
+import { useFavorites } from "@/context/favorites";
 import { Memory, MemoryCard, CreateMemoryModal } from "@/pages/memories";
 import {
   format, startOfDay, startOfMonth, endOfMonth,
@@ -86,7 +88,7 @@ type RenterBooking = {
   createdAt: string;
 };
 
-type Tab = "bookings" | "memories" | "settings";
+type Tab = "bookings" | "favorites" | "memories" | "settings";
 
 export function ProfilePage({ onAuthOpen }: { onAuthOpen: () => void }) {
   const { customer, updateCustomer, logout } = useAuth();
@@ -94,8 +96,11 @@ export function ProfilePage({ onAuthOpen }: { onAuthOpen: () => void }) {
   const { toast } = useToast();
   const [tab, setTab] = useState<Tab>(() => {
     const params = new URLSearchParams(window.location.search);
-    return params.get("tab") === "settings" ? "settings" : "bookings";
+    if (params.get("tab") === "settings") return "settings";
+    if (params.get("tab") === "favorites") return "favorites";
+    return "bookings";
   });
+  const { favoriteIds } = useFavorites();
 
   const { data: bookings, isLoading: bookingsLoading } = useQuery({
     queryKey: ["renter-bookings", customer?.id],
@@ -162,6 +167,16 @@ export function ProfilePage({ onAuthOpen }: { onAuthOpen: () => void }) {
             {bookings && <span className="text-xs text-gray-400">({bookings.length})</span>}
           </button>
           <button
+            onClick={() => setTab("favorites")}
+            className={`flex-1 flex items-center justify-center gap-2 text-sm font-medium py-2 rounded-lg transition-all ${
+              tab === "favorites" ? "bg-white shadow text-gray-900" : "text-gray-500 hover:text-gray-700"
+            }`}
+          >
+            <Heart className={`h-4 w-4 ${tab === "favorites" ? "fill-red-500 text-red-500" : ""}`} />
+            <span>Favorites</span>
+            {favoriteIds.size > 0 && <span className="text-xs text-gray-400">({favoriteIds.size})</span>}
+          </button>
+          <button
             onClick={() => setTab("memories")}
             className={`flex-1 flex items-center justify-center gap-2 text-sm font-medium py-2 rounded-lg transition-all ${
               tab === "memories" ? "bg-white shadow text-gray-900" : "text-gray-500 hover:text-gray-700"
@@ -186,6 +201,10 @@ export function ProfilePage({ onAuthOpen }: { onAuthOpen: () => void }) {
           <BookingsTab bookings={bookings} isLoading={bookingsLoading} onBrowse={() => setLocation("/")} />
         )}
 
+        {tab === "favorites" && (
+          <FavoritesTab customerId={customer.id} onBrowse={() => setLocation("/")} />
+        )}
+
         {tab === "memories" && (
           <MemoriesTab customer={customer} />
         )}
@@ -199,6 +218,54 @@ export function ProfilePage({ onAuthOpen }: { onAuthOpen: () => void }) {
 }
 
 type BookingViewMode = "list" | "calendar";
+
+// ─── Favorites Tab ────────────────────────────────────────────────────────────
+
+function FavoritesTab({ customerId, onBrowse }: { customerId: number; onBrowse: () => void }) {
+  const { data: listings = [], isLoading } = useQuery<import("@/lib/api").MarketplaceListing[]>({
+    queryKey: ["favorite-listings", customerId],
+    queryFn: () =>
+      fetch(`/api/marketplace/favorites/listings?customerId=${customerId}`)
+        .then(r => r.ok ? r.json() : []),
+    staleTime: 30_000,
+  });
+
+  if (isLoading) {
+    return (
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        {[1, 2, 3, 4].map(i => (
+          <div key={i} className="bg-white rounded-2xl border border-gray-200 h-64 animate-pulse" />
+        ))}
+      </div>
+    );
+  }
+
+  if (listings.length === 0) {
+    return (
+      <div className="bg-white rounded-2xl border border-gray-200 p-16 text-center">
+        <Heart className="h-12 w-12 text-gray-200 mx-auto mb-4" />
+        <h2 className="text-lg font-semibold text-gray-700 mb-2">No favorites yet</h2>
+        <p className="text-gray-400 text-sm mb-6">
+          Tap the heart on any listing to save it here for later.
+        </p>
+        <Button onClick={onBrowse} className="bg-primary hover:bg-primary/90 text-white">
+          Browse Listings
+        </Button>
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      <p className="text-sm text-gray-500 mb-4">{listings.length} saved listing{listings.length !== 1 ? "s" : ""}</p>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        {listings.map(listing => (
+          <ListingCard key={listing.id} listing={listing} />
+        ))}
+      </div>
+    </div>
+  );
+}
 
 // ─── Memories Tab ─────────────────────────────────────────────────────────────
 

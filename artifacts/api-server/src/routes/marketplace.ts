@@ -7,6 +7,7 @@ import {
   categoriesTable,
   customersTable,
   bookingsTable,
+  customerFavoritesTable,
 } from "@workspace/db/schema";
 import { eq, and, sql, ilike, gte, lte, or, desc, inArray } from "drizzle-orm";
 
@@ -376,6 +377,126 @@ router.get("/marketplace/renter/bookings", async (req, res) => {
   } catch (err) {
     req.log.error(err);
     res.status(500).json({ error: "Failed to fetch bookings" });
+  }
+});
+
+// ── Favorites ─────────────────────────────────────────────────────────────────
+
+// GET /api/marketplace/favorites?customerId=X — returns array of favorited listing IDs
+router.get("/marketplace/favorites", async (req, res) => {
+  const customerId = parseInt(req.query.customerId as string);
+  if (isNaN(customerId)) { res.status(400).json({ error: "customerId required" }); return; }
+  try {
+    const rows = await db
+      .select({ listingId: customerFavoritesTable.listingId })
+      .from(customerFavoritesTable)
+      .where(eq(customerFavoritesTable.customerId, customerId));
+    res.json(rows.map(r => r.listingId));
+  } catch (err) {
+    req.log.error(err);
+    res.status(500).json({ error: "Failed to fetch favorites" });
+  }
+});
+
+// POST /api/marketplace/favorites/:listingId — add to favorites
+router.post("/marketplace/favorites/:listingId", async (req, res) => {
+  const listingId = parseInt(req.params.listingId);
+  const { customerId } = req.body as { customerId?: number };
+  if (isNaN(listingId) || !customerId) { res.status(400).json({ error: "listingId and customerId required" }); return; }
+  try {
+    await db.insert(customerFavoritesTable)
+      .values({ customerId, listingId })
+      .onConflictDoNothing();
+    const [{ count }] = await db
+      .select({ count: sql<number>`count(*)::int` })
+      .from(customerFavoritesTable)
+      .where(eq(customerFavoritesTable.customerId, customerId));
+    res.json({ success: true, count });
+  } catch (err) {
+    req.log.error(err);
+    res.status(500).json({ error: "Failed to add favorite" });
+  }
+});
+
+// DELETE /api/marketplace/favorites/:listingId?customerId=X — remove from favorites
+router.delete("/marketplace/favorites/:listingId", async (req, res) => {
+  const listingId = parseInt(req.params.listingId);
+  const customerId = parseInt(req.query.customerId as string);
+  if (isNaN(listingId) || isNaN(customerId)) { res.status(400).json({ error: "listingId and customerId required" }); return; }
+  try {
+    await db.delete(customerFavoritesTable)
+      .where(and(
+        eq(customerFavoritesTable.customerId, customerId),
+        eq(customerFavoritesTable.listingId, listingId),
+      ));
+    const [{ count }] = await db
+      .select({ count: sql<number>`count(*)::int` })
+      .from(customerFavoritesTable)
+      .where(eq(customerFavoritesTable.customerId, customerId));
+    res.json({ success: true, count });
+  } catch (err) {
+    req.log.error(err);
+    res.status(500).json({ error: "Failed to remove favorite" });
+  }
+});
+
+// GET /api/marketplace/favorites/listings?customerId=X — return full listing objects for all favorites
+router.get("/marketplace/favorites/listings", async (req, res) => {
+  const customerId = parseInt(req.query.customerId as string);
+  const preview = isPreview(req);
+  if (isNaN(customerId)) { res.status(400).json({ error: "customerId required" }); return; }
+  try {
+    const favRows = await db
+      .select({ listingId: customerFavoritesTable.listingId })
+      .from(customerFavoritesTable)
+      .where(eq(customerFavoritesTable.customerId, customerId));
+
+    if (!favRows.length) { res.json([]); return; }
+    const listingIds = favRows.map(r => r.listingId);
+
+    const rows = await db
+      .select({
+        listing: listingsTable,
+        tenant: { id: tenantsTable.id, slug: tenantsTable.slug, name: tenantsTable.name, status: tenantsTable.status },
+        business: {
+          name: businessProfileTable.name,
+          logoUrl: businessProfileTable.logoUrl,
+          primaryColor: businessProfileTable.primaryColor,
+          accentColor: businessProfileTable.accentColor,
+          city: businessProfileTable.city,
+          state: businessProfileTable.state,
+          location: businessProfileTable.location,
+        },
+        category: { id: categoriesTable.id, name: categoriesTable.name, slug: categoriesTable.slug, icon: categoriesTable.icon },
+      })
+      .from(listingsTable)
+      .innerJoin(tenantsTable, eq(listingsTable.tenantId, tenantsTable.id))
+      .leftJoin(businessProfileTable, eq(businessProfileTable.tenantId, tenantsTable.id))
+      .leftJoin(categoriesTable, eq(listingsTable.categoryId, categoriesTable.id))
+      .where(and(
+        inArray(listingsTable.id, listingIds),
+        eq(tenantsTable.status, "active"),
+        ...(preview ? [] : [eq(tenantsTable.testMode, false)]),
+      ));
+
+    res.json(rows.map(r => ({
+      ...r.listing,
+      tenantSlug: r.tenant.slug,
+      tenantName: r.tenant.name,
+      businessName: r.business?.name ?? r.tenant.name,
+      businessLogoUrl: r.business?.logoUrl ?? null,
+      businessPrimaryColor: r.business?.primaryColor ?? "#2d6a4f",
+      businessAccentColor: r.business?.accentColor ?? "#52b788",
+      businessCity: r.business?.city ?? null,
+      businessState: r.business?.state ?? null,
+      businessLocation: r.business?.location ?? null,
+      categoryName: r.category?.name ?? null,
+      categorySlug: r.category?.slug ?? null,
+      categoryIcon: r.category?.icon ?? null,
+    })));
+  } catch (err) {
+    req.log.error(err);
+    res.status(500).json({ error: "Failed to fetch favorite listings" });
   }
 });
 
