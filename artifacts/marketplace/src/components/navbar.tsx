@@ -21,33 +21,24 @@ export function Navbar({ onAuthOpen }: { onAuthOpen: () => void }) {
   return (
     <header className="sticky top-0 z-40 bg-white border-b border-gray-200 shadow-sm">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex items-center justify-between h-16">
+        <div className="flex items-center justify-between h-[72px]">
           {/* Logo */}
           <button
             onClick={() => setLocation("/")}
-            className="flex items-center gap-3 hover:opacity-90 transition-opacity"
+            className="flex items-center gap-2 hover:opacity-90 transition-opacity"
           >
             <img
               src={`${BASE_URL}/outdoorshare-logo-transparent.png`}
               alt="OutdoorShare"
-              className="h-8 object-contain"
+              className="h-14 w-14 object-contain flex-shrink-0"
               onError={(e) => {
-                const target = e.currentTarget;
-                target.style.display = "none";
-                const fallback = target.nextElementSibling as HTMLElement;
-                if (fallback) fallback.style.display = "flex";
+                (e.currentTarget as HTMLImageElement).style.display = "none";
               }}
             />
-            <span
-              className="hidden items-center gap-2 font-bold text-xl text-primary"
-              style={{ display: "none" }}
-            >
-              <span className="text-2xl">🌲</span>
-              OutdoorShare
-            </span>
-            <span className="text-xs font-normal text-gray-400 border-l border-gray-200 pl-3 ml-0 hidden sm:block">
-              Marketplace
-            </span>
+            <div className="flex flex-col items-start leading-none">
+              <span className="font-bold text-lg text-primary tracking-tight">OutdoorShare</span>
+              <span className="text-[11px] font-normal text-gray-400 tracking-wide">Marketplace</span>
+            </div>
           </button>
 
           {/* Desktop Nav */}
