@@ -292,10 +292,10 @@ export function HomePage({ onAuthOpen }: { onAuthOpen: () => void }) {
           {/* Headline */}
           <div className="text-center max-w-3xl mx-auto">
             <h1 className="text-4xl md:text-5xl font-bold mb-3 leading-tight">
-              Rent outdoor adventures from local companies
+              Your adventure starts here.
             </h1>
             <p className="text-white/75 text-lg mb-8">
-              Browse listings from verified outdoor rental companies — one account, every adventure.
+              Find the perfect outdoor experience today!
             </p>
 
             {/* ── SEARCH + FILTER ROW ── */}
