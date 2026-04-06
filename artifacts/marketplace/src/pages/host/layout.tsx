@@ -10,12 +10,14 @@ import {
   Menu,
   Package2,
   Building2,
+  Rocket,
 } from "lucide-react";
 import { useState } from "react";
 
 const BASE_URL = import.meta.env.BASE_URL.replace(/\/$/, "");
 
 const NAV_ITEMS = [
+  { label: "Launchpad", icon: Rocket, path: "/host/launchpad" },
   { label: "Dashboard", icon: LayoutDashboard, path: "/host" },
   { label: "My Listings", icon: Package, path: "/host/listings" },
   { label: "Bundles", icon: Package2, path: "/host/bundles" },

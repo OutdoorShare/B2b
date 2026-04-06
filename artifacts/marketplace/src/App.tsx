@@ -15,6 +15,7 @@ import { initPreviewMode } from "@/lib/preview";
 import { Eye } from "lucide-react";
 import { BecomeHostPage } from "@/pages/host/become-host";
 import { HostDashboardPage } from "@/pages/host/dashboard";
+import { HostLaunchpadPage } from "@/pages/host/launchpad";
 import { HostListingsPage } from "@/pages/host/listings";
 import { HostListingFormPage } from "@/pages/host/listing-form";
 import { HostBookingsPage } from "@/pages/host/bookings";
@@ -87,6 +88,7 @@ function AppContent() {
         <Route path="/memories" component={() => <MemoriesPage onAuthOpen={() => setAuthOpen(true)} />} />
         <Route path="/become-host" component={() => <BecomeHostPage onAuthOpen={() => setAuthOpen(true)} />} />
         <Route path="/host" component={HostDashboardPage} />
+        <Route path="/host/launchpad" component={HostLaunchpadPage} />
         <Route path="/host/listings" component={HostListingsPage} />
         <Route path="/host/listings/new" component={() => <HostListingFormPage />} />
         <Route path="/host/listings/:id/edit" component={() => <HostListingFormPage />} />
