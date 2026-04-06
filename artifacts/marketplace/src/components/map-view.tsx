@@ -2,6 +2,20 @@ import { useEffect, useRef } from "react";
 import { useLocation } from "wouter";
 import "leaflet/dist/leaflet.css";
 
+/**
+ * Returns a stable ±~1.5 km offset for a given seed value.
+ * Uses a deterministic hash so the same business always gets
+ * the same nudge — approximate but never exact or random per load.
+ */
+function stableOffset(seed: number): number {
+  let s = (Math.abs(Math.round(seed * 1e5)) | 0) + 1;
+  s = Math.imul(s ^ (s >>> 16), 0x45d9f3b);
+  s = Math.imul(s ^ (s >>> 16), 0x45d9f3b);
+  s = s ^ (s >>> 16);
+  // Normalise to [-1, 1] then scale to ±0.014° (≈ ±1.5 km)
+  return ((s >>> 0) / 0xffffffff - 0.5) * 0.028;
+}
+
 // OutdoorShare brand colors (matching logo exactly)
 const OS_GREEN = "hsl(127,55%,38%)";        // Vivid logo green — primary
 const OS_GREEN_MID = "hsl(127,55%,30%)";    // Darker logo green — hover/ring
@@ -72,7 +86,13 @@ export function MapView({ listings }: MapViewProps) {
 
       grouped.forEach((group, key) => {
         const [lat, lng] = key.split(",").map(Number);
-        bounds.push([lat, lng]);
+
+        // Offset the pin by ±~1.5 km so the exact address isn't revealed.
+        // stableOffset() is deterministic — same business always gets the same nudge.
+        const approxLat = lat + stableOffset(lat);
+        const approxLng = lng + stableOffset(lng + 0.5); // different seed per axis
+
+        bounds.push([approxLat, approxLng]);
 
         const count = group.length;
         const first = group[0];
@@ -115,7 +135,7 @@ export function MapView({ listings }: MapViewProps) {
           iconAnchor: [21, 46],
         });
 
-        const marker = L.marker([lat, lng], { icon }).addTo(map);
+        const marker = L.marker([approxLat, approxLng], { icon }).addTo(map);
 
         const location = [first.businessCity, first.businessState].filter(Boolean).join(", ");
 
