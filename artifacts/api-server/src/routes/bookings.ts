@@ -167,11 +167,11 @@ router.get("/bookings", async (req, res) => {
     const { status, listingId, startDate, endDate, customerEmail } = req.query;
     const conditions = [];
 
-    // When searching by customerEmail (renter's my-bookings view), include
-    // null-tenant bookings alongside the scoped ones so customers always see
-    // every booking they made, even if it was created without tenant context.
-    if (req.tenantId && customerEmail) {
-      conditions.push(or(eq(bookingsTable.tenantId, req.tenantId), isNull(bookingsTable.tenantId))!);
+    // When searching by customerEmail (renter's cross-tenant self-service view),
+    // skip tenant scoping entirely so the renter sees ALL their bookings from
+    // every company on the platform.  Tenant scoping only applies to admin views.
+    if (customerEmail) {
+      // No tenant filter — return across all tenants for this email
     } else if (req.tenantId) {
       conditions.push(eq(bookingsTable.tenantId, req.tenantId));
     }
@@ -197,7 +197,31 @@ router.get("/bookings", async (req, res) => {
       : [];
     const titleMap = Object.fromEntries(listings.map(l => [l.id, l.title]));
 
-    res.json(bookings.map(b => formatBooking(b, titleMap[b.listingId] ?? "Unknown")));
+    // When returning cross-tenant results, enrich each booking with the business
+    // name and tenant slug so the UI can show which company the booking is with.
+    let businessMap: Record<number, { name: string; slug: string }> = {};
+    if (customerEmail) {
+      const tenantIds = [...new Set(bookings.map(b => b.tenantId).filter((id): id is number => id != null))];
+      if (tenantIds.length > 0) {
+        const profiles = await db
+          .select({
+            tenantId: businessProfileTable.tenantId,
+            businessName: businessProfileTable.businessName,
+            slug: tenantsTable.slug,
+          })
+          .from(businessProfileTable)
+          .innerJoin(tenantsTable, eq(tenantsTable.id, businessProfileTable.tenantId))
+          .where(or(...tenantIds.map(id => eq(businessProfileTable.tenantId, id))));
+        businessMap = Object.fromEntries(profiles.map(p => [p.tenantId, { name: p.businessName ?? "", slug: p.slug ?? "" }]));
+      }
+    }
+
+    res.json(bookings.map(b => ({
+      ...formatBooking(b, titleMap[b.listingId] ?? "Unknown"),
+      ...(customerEmail && b.tenantId && businessMap[b.tenantId]
+        ? { companyName: businessMap[b.tenantId].name, companySlug: businessMap[b.tenantId].slug }
+        : {}),
+    })));
   } catch (err) {
     req.log.error(err);
     res.status(500).json({ error: "Failed to fetch bookings" });
@@ -465,15 +489,31 @@ router.patch("/bookings/:id/seen", async (req, res) => {
 router.get("/bookings/:id", async (req, res) => {
   try {
     const bookingId = Number(req.params.id);
+    const { customerEmail } = req.query;
 
-    // Require either tenant context (admin) or a valid customer token before returning booking data
-    if (!req.tenantId) {
+    // Allow two auth paths:
+    //  1. Admin path — requires tenant context, scopes to that tenant
+    //  2. Customer path — requires customerEmail query param, verifies ownership by email
+    if (!req.tenantId && !customerEmail) {
       res.status(401).json({ error: "Unauthorized" });
       return;
     }
 
-    const [booking] = await db.select().from(bookingsTable)
-      .where(and(eq(bookingsTable.id, bookingId), eq(bookingsTable.tenantId, req.tenantId)));
+    // Fetch the booking — admin path scopes to tenant, customer path fetches globally
+    const [booking] = req.tenantId
+      ? await db.select().from(bookingsTable)
+          .where(and(eq(bookingsTable.id, bookingId), eq(bookingsTable.tenantId, req.tenantId)))
+      : await db.select().from(bookingsTable)
+          .where(eq(bookingsTable.id, bookingId));
+
+    // Customer path: verify the booking belongs to this customer by email
+    if (!req.tenantId && booking) {
+      const normalCustomerEmail = String(customerEmail).toLowerCase().trim();
+      if ((booking.customerEmail ?? "").toLowerCase().trim() !== normalCustomerEmail) {
+        res.status(403).json({ error: "Forbidden" });
+        return;
+      }
+    }
 
     if (!booking) { res.status(404).json({ error: "Not found" }); return; }
 

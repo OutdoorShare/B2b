@@ -8,7 +8,7 @@ import { Label } from "@/components/ui/label";
 import {
   Calendar, ChevronRight, Package, Clock, CheckCircle2,
   XCircle, AlertCircle, User, LogOut, ArrowRight, RotateCcw,
-  MessageSquarePlus, Star
+  MessageSquarePlus, Star, Building2
 } from "lucide-react";
 import { format, differenceInDays, startOfDay } from "date-fns";
 
@@ -69,9 +69,9 @@ export default function MyBookings() {
     }
     setSession(s);
 
-    fetch(`${BASE}/api/bookings?customerEmail=${encodeURIComponent(s.email)}`, {
-      headers: { "x-tenant-slug": slug ?? "" }
-    })
+    // No x-tenant-slug header — this returns bookings from all companies
+    // for this renter's email so they see their complete history.
+    fetch(`${BASE}/api/bookings?customerEmail=${encodeURIComponent(s.email)}`)
       .then(r => r.json())
       .then(data => {
         if (Array.isArray(data)) {
@@ -226,16 +226,19 @@ function BookingCard({ booking, base, showRebook }: { booking: any; base: string
   const nights = Math.max(1, Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24)));
   const timeChip = getRentalTimeChip(startDate, endDate, booking.status);
 
+  // If this booking belongs to a different company, link to that company's detail page
+  const bookingBase = booking.companySlug ? `/${booking.companySlug}` : base;
+
   const handleRebook = (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    setLocation(`${base}/book?listingId=${booking.listingId}`);
+    setLocation(`${bookingBase}/book?listingId=${booking.listingId}`);
   };
 
   const hasUpdate = (booking as any).seenByRenter === false;
 
   return (
-    <Link href={`${base}/my-bookings/${booking.id}`}>
+    <Link href={`${bookingBase}/my-bookings/${booking.id}`}>
       <div className={`group rounded-2xl border hover:shadow-sm transition-all cursor-pointer p-5 ${hasUpdate ? "bg-blue-50/40 border-blue-200 dark:bg-blue-950/20 dark:border-blue-800" : "bg-background hover:border-primary/40"}`}>
         {hasUpdate && (
           <div className="flex items-center gap-1.5 mb-2.5">
@@ -245,6 +248,12 @@ function BookingCard({ booking, base, showRebook }: { booking: any; base: string
         )}
         <div className="flex items-start justify-between gap-3">
           <div className="flex-1 min-w-0">
+            {booking.companyName && (
+              <div className="text-xs text-muted-foreground font-medium mb-1 flex items-center gap-1">
+                <Building2 className="w-3 h-3" />
+                {booking.companyName}
+              </div>
+            )}
             <div className="flex items-center gap-2 flex-wrap">
               <StatusIcon status={booking.status} />
               <span className={`truncate ${hasUpdate ? "font-bold" : "font-semibold"}`}>{booking.listingTitle ?? "Rental"}</span>

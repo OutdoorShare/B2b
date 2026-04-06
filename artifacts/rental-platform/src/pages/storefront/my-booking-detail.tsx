@@ -100,13 +100,13 @@ export default function MyBookingDetail() {
     }
     setSession(s);
 
-    fetch(`${BASE}/api/bookings/${id}`, {
-      headers: { "x-tenant-slug": slug ?? "" }
-    })
+    // Pass customerEmail as query param so the API can verify ownership
+    // across any tenant without requiring x-tenant-slug match.
+    fetch(`${BASE}/api/bookings/${id}?customerEmail=${encodeURIComponent(s.email)}`)
       .then(r => r.json())
       .then(data => {
         if (data.error) { setError("Booking not found."); return; }
-        // Verify it belongs to this customer (trim + lowercase for safety)
+        // Double-check ownership on the frontend as well
         if ((data.customerEmail ?? "").toLowerCase().trim() !== s.email.toLowerCase().trim()) {
           setError("You don't have permission to view this booking.");
           return;
@@ -116,7 +116,7 @@ export default function MyBookingDetail() {
         if (data.seenByRenter === false) {
           fetch(`${BASE}/api/bookings/${id}/seen`, {
             method: "PATCH",
-            headers: { "Content-Type": "application/json", "x-tenant-slug": slug ?? "" },
+            headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ viewer: "renter" }),
           }).catch(() => {});
         }
