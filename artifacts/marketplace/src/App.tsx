@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Switch, Route, Router as WouterRouter } from "wouter";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
@@ -11,6 +11,8 @@ import { ListingDetailPage } from "@/pages/listing-detail";
 import { ProfilePage } from "@/pages/profile";
 import { CompaniesPage } from "@/pages/companies";
 import NotFound from "@/pages/not-found";
+import { initPreviewMode } from "@/lib/preview";
+import { Eye } from "lucide-react";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -23,12 +25,33 @@ const queryClient = new QueryClient({
   },
 });
 
+function PreviewBanner() {
+  return (
+    <div className="sticky top-[72px] z-30 bg-amber-500 text-white text-xs font-medium px-4 py-2 flex items-center justify-center gap-2 shadow-sm">
+      <Eye className="h-3.5 w-3.5 flex-shrink-0" />
+      <span>
+        <strong>Demo Preview Mode</strong> — You are viewing all tenants including demo accounts. This view is only accessible from the Super Admin.
+      </span>
+    </div>
+  );
+}
+
 function AppContent() {
   const [authOpen, setAuthOpen] = useState(false);
+  const [preview, setPreview] = useState(false);
+
+  useEffect(() => {
+    const active = initPreviewMode();
+    if (active) {
+      setPreview(true);
+      queryClient.invalidateQueries();
+    }
+  }, []);
 
   return (
     <>
       <Navbar onAuthOpen={() => setAuthOpen(true)} />
+      {preview && <PreviewBanner />}
       <Switch>
         <Route path="/" component={() => <HomePage onAuthOpen={() => setAuthOpen(true)} />} />
         <Route path="/listings/:id" component={ListingDetailPage} />

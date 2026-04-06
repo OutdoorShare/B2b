@@ -1,5 +1,11 @@
 const API_BASE = "/api";
 
+function previewParam(): Record<string, string> {
+  try {
+    return sessionStorage.getItem("os_marketplace_preview") === "true" ? { preview: "true" } : {};
+  } catch { return {}; }
+}
+
 export interface MarketplaceListing {
   id: number;
   title: string;
@@ -125,13 +131,30 @@ async function post<T>(path: string, body: unknown): Promise<T> {
 export const api = {
   marketplace: {
     listings: (params?: Record<string, string>) => {
-      const qs = params ? "?" + new URLSearchParams(params).toString() : "";
+      const merged = { ...previewParam(), ...(params ?? {}) };
+      const qs = Object.keys(merged).length ? "?" + new URLSearchParams(merged).toString() : "";
       return get<MarketplaceListing[]>(`/marketplace/listings${qs}`);
     },
-    listing: (id: number) => get<MarketplaceListingDetail>(`/marketplace/listings/${id}`),
-    categories: () => get<MarketplaceCategory[]>("/marketplace/categories"),
-    companies: () => get<MarketplaceCompany[]>("/marketplace/companies"),
-    stats: () => get<MarketplaceStats>("/marketplace/stats"),
+    listing: (id: number) => {
+      const p = previewParam();
+      const qs = Object.keys(p).length ? "?" + new URLSearchParams(p).toString() : "";
+      return get<MarketplaceListingDetail>(`/marketplace/listings/${id}${qs}`);
+    },
+    categories: () => {
+      const p = previewParam();
+      const qs = Object.keys(p).length ? "?" + new URLSearchParams(p).toString() : "";
+      return get<MarketplaceCategory[]>(`/marketplace/categories${qs}`);
+    },
+    companies: () => {
+      const p = previewParam();
+      const qs = Object.keys(p).length ? "?" + new URLSearchParams(p).toString() : "";
+      return get<MarketplaceCompany[]>(`/marketplace/companies${qs}`);
+    },
+    stats: () => {
+      const p = previewParam();
+      const qs = Object.keys(p).length ? "?" + new URLSearchParams(p).toString() : "";
+      return get<MarketplaceStats>(`/marketplace/stats${qs}`);
+    },
     renterBookings: (customerId: number) =>
       get<RenterBooking[]>(`/marketplace/renter/bookings?customerId=${customerId}`),
   },

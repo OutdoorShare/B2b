@@ -12,10 +12,16 @@ import { eq, and, sql, ilike, gte, lte, or, desc, inArray } from "drizzle-orm";
 
 const router: IRouter = Router();
 
+// Helper: should this request bypass testMode filter?
+function isPreview(req: import("express").Request): boolean {
+  return req.query.preview === "true";
+}
+
 // GET /api/marketplace/listings — all active listings across all tenants
 router.get("/marketplace/listings", async (req, res) => {
   try {
     const { search, categoryId, minPrice, maxPrice, location, tenantSlug, limit = "100", offset = "0" } = req.query as Record<string, string>;
+    const preview = isPreview(req);
 
     const conditions = [eq(listingsTable.status, "active")];
 
@@ -71,7 +77,7 @@ router.get("/marketplace/listings", async (req, res) => {
       .innerJoin(tenantsTable, eq(listingsTable.tenantId, tenantsTable.id))
       .leftJoin(businessProfileTable, eq(businessProfileTable.tenantId, tenantsTable.id))
       .leftJoin(categoriesTable, eq(listingsTable.categoryId, categoriesTable.id))
-      .where(and(...conditions, eq(tenantsTable.status, "active"), eq(tenantsTable.testMode, false)))
+      .where(and(...conditions, eq(tenantsTable.status, "active"), ...(preview ? [] : [eq(tenantsTable.testMode, false)])))
       .orderBy(desc(listingsTable.createdAt))
       .limit(parseInt(limit as string))
       .offset(parseInt(offset as string));
@@ -104,6 +110,7 @@ router.get("/marketplace/listings/:id", async (req, res) => {
   try {
     const id = parseInt(req.params.id);
     if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
+    const preview = isPreview(req);
 
     const [row] = await db
       .select({
@@ -139,7 +146,7 @@ router.get("/marketplace/listings/:id", async (req, res) => {
       .innerJoin(tenantsTable, eq(listingsTable.tenantId, tenantsTable.id))
       .leftJoin(businessProfileTable, eq(businessProfileTable.tenantId, tenantsTable.id))
       .leftJoin(categoriesTable, eq(listingsTable.categoryId, categoriesTable.id))
-      .where(and(eq(listingsTable.id, id), eq(listingsTable.status, "active"), eq(tenantsTable.status, "active"), eq(tenantsTable.testMode, false)));
+      .where(and(eq(listingsTable.id, id), eq(listingsTable.status, "active"), eq(tenantsTable.status, "active"), ...(preview ? [] : [eq(tenantsTable.testMode, false)])));
 
     if (!row) { res.status(404).json({ error: "Listing not found" }); return; }
 
@@ -177,6 +184,7 @@ router.get("/marketplace/listings/:id", async (req, res) => {
 // GET /api/marketplace/categories — all categories that have at least one active listing
 router.get("/marketplace/categories", async (req, res) => {
   try {
+    const preview = isPreview(req);
     const rows = await db
       .select({
         id: categoriesTable.id,
@@ -193,7 +201,7 @@ router.get("/marketplace/categories", async (req, res) => {
       .innerJoin(tenantsTable, and(
         eq(listingsTable.tenantId, tenantsTable.id),
         eq(tenantsTable.status, "active"),
-        eq(tenantsTable.testMode, false)
+        ...(preview ? [] : [eq(tenantsTable.testMode, false)])
       ))
       .groupBy(categoriesTable.id, categoriesTable.name, categoriesTable.slug, categoriesTable.icon)
       .orderBy(desc(sql<number>`count(${listingsTable.id})`));
@@ -208,6 +216,7 @@ router.get("/marketplace/categories", async (req, res) => {
 // GET /api/marketplace/companies — all active tenants with a listing count
 router.get("/marketplace/companies", async (req, res) => {
   try {
+    const preview = isPreview(req);
     const rows = await db
       .select({
         tenantId: tenantsTable.id,
@@ -227,7 +236,7 @@ router.get("/marketplace/companies", async (req, res) => {
         listingsTable,
         and(eq(listingsTable.tenantId, tenantsTable.id), eq(listingsTable.status, "active"))
       )
-      .where(and(eq(tenantsTable.status, "active"), eq(tenantsTable.testMode, false)))
+      .where(and(eq(tenantsTable.status, "active"), ...(preview ? [] : [eq(tenantsTable.testMode, false)])))
       .groupBy(
         tenantsTable.id,
         tenantsTable.slug,
@@ -251,16 +260,18 @@ router.get("/marketplace/companies", async (req, res) => {
 // GET /api/marketplace/stats — platform-wide stats
 router.get("/marketplace/stats", async (req, res) => {
   try {
+    const preview = isPreview(req);
+
     const [{ listings }] = await db
       .select({ listings: sql<number>`count(*)::int` })
       .from(listingsTable)
-      .innerJoin(tenantsTable, and(eq(listingsTable.tenantId, tenantsTable.id), eq(tenantsTable.status, "active"), eq(tenantsTable.testMode, false)))
+      .innerJoin(tenantsTable, and(eq(listingsTable.tenantId, tenantsTable.id), eq(tenantsTable.status, "active"), ...(preview ? [] : [eq(tenantsTable.testMode, false)])))
       .where(eq(listingsTable.status, "active"));
 
     const [{ companies }] = await db
       .select({ companies: sql<number>`count(*)::int` })
       .from(tenantsTable)
-      .where(and(eq(tenantsTable.status, "active"), eq(tenantsTable.testMode, false)));
+      .where(and(eq(tenantsTable.status, "active"), ...(preview ? [] : [eq(tenantsTable.testMode, false)])));
 
     const [{ customers }] = await db
       .select({ customers: sql<number>`count(*)::int` })
