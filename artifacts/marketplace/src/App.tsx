@@ -22,6 +22,7 @@ import { HostBookingsPage } from "@/pages/host/bookings";
 import { HostSettingsPage } from "@/pages/host/settings";
 import { HostBundlesPage } from "@/pages/host/bundles";
 import { MemoriesPage } from "@/pages/memories";
+import { OutdoorBot } from "@/components/OutdoorBot";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -110,6 +111,7 @@ function App() {
           <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
             <AppContent />
           </WouterRouter>
+          <OutdoorBot />
           <Toaster />
         </TooltipProvider>
       </AuthProvider>

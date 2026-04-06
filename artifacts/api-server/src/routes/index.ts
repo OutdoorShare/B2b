@@ -20,6 +20,7 @@ import aiRouter from "./ai";
 import contactCardsRouter from "./contact-cards";
 import notificationsRouter from "./notifications";
 import chatRouter from "./chat";
+import openaiRouter from "./openai";
 
 const router: IRouter = Router();
 
@@ -44,5 +45,6 @@ router.use(aiRouter);
 router.use(contactCardsRouter);
 router.use(notificationsRouter);
 router.use(chatRouter);
+router.use(openaiRouter);
 
 export default router;
