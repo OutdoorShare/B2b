@@ -88,7 +88,7 @@ type RenterBooking = {
   createdAt: string;
 };
 
-type Tab = "bookings" | "favorites" | "memories" | "settings";
+type Tab = "profile" | "bookings" | "favorites" | "memories" | "settings";
 
 export function ProfilePage({ onAuthOpen }: { onAuthOpen: () => void }) {
   const { customer, updateCustomer, logout } = useAuth();
@@ -96,7 +96,8 @@ export function ProfilePage({ onAuthOpen }: { onAuthOpen: () => void }) {
   const { toast } = useToast();
   const [tab, setTab] = useState<Tab>(() => {
     const params = new URLSearchParams(window.location.search);
-    if (params.get("tab") === "settings") return "settings";
+    if (params.get("tab") === "profile")   return "profile";
+    if (params.get("tab") === "settings")  return "settings";
     if (params.get("tab") === "favorites") return "favorites";
     return "bookings";
   });
@@ -156,6 +157,16 @@ export function ProfilePage({ onAuthOpen }: { onAuthOpen: () => void }) {
         {/* Tabs */}
         <div className="flex gap-1 bg-gray-100 rounded-xl p-1 mb-6">
           <button
+            onClick={() => setTab("profile")}
+            className={`flex-1 flex items-center justify-center gap-2 text-sm font-medium py-2 rounded-lg transition-all ${
+              tab === "profile" ? "bg-white shadow text-gray-900" : "text-gray-500 hover:text-gray-700"
+            }`}
+          >
+            <User className="h-4 w-4" />
+            <span className="hidden sm:inline">My Profile</span>
+            <span className="sm:hidden">Profile</span>
+          </button>
+          <button
             onClick={() => setTab("bookings")}
             className={`flex-1 flex items-center justify-center gap-2 text-sm font-medium py-2 rounded-lg transition-all ${
               tab === "bookings" ? "bg-white shadow text-gray-900" : "text-gray-500 hover:text-gray-700"
@@ -197,6 +208,10 @@ export function ProfilePage({ onAuthOpen }: { onAuthOpen: () => void }) {
           </button>
         </div>
 
+        {tab === "profile" && (
+          <MyProfileTab customer={customer} bookings={bookings} onEditProfile={() => setTab("settings")} />
+        )}
+
         {tab === "bookings" && (
           <BookingsTab bookings={bookings} isLoading={bookingsLoading} onBrowse={() => setLocation("/")} />
         )}
@@ -212,6 +227,70 @@ export function ProfilePage({ onAuthOpen }: { onAuthOpen: () => void }) {
         {tab === "settings" && (
           <SettingsTab customer={customer} updateCustomer={updateCustomer} toast={toast} />
         )}
+      </div>
+    </div>
+  );
+}
+
+// ─── My Profile Tab ───────────────────────────────────────────────────────────
+
+function MyProfileTab({
+  customer,
+  bookings,
+  onEditProfile,
+}: {
+  customer: NonNullable<ReturnType<typeof useAuth>["customer"]>;
+  bookings: RenterBooking[] | undefined;
+  onEditProfile: () => void;
+}) {
+  const { favoriteIds } = useFavorites();
+  const memberSince = customer.createdAt
+    ? new Date(customer.createdAt).toLocaleDateString("en-US", { month: "long", year: "numeric" })
+    : null;
+
+  const totalSpent = bookings
+    ? bookings.reduce((sum, b) => sum + parseFloat(b.totalPrice || "0"), 0)
+    : null;
+
+  return (
+    <div className="space-y-4">
+      {/* Avatar + name card */}
+      <div className="bg-white rounded-2xl border border-gray-200 p-8 flex flex-col items-center text-center gap-3">
+        <div className="h-24 w-24 rounded-full bg-primary flex items-center justify-center text-white font-bold text-4xl shadow-sm">
+          {customer.name[0]?.toUpperCase()}
+        </div>
+        <div>
+          <h2 className="text-2xl font-bold text-gray-900">{customer.name}</h2>
+          <p className="text-sm text-gray-500 mt-0.5">{customer.email}</p>
+          {customer.phone && <p className="text-sm text-gray-400 mt-0.5">{customer.phone}</p>}
+          {memberSince && (
+            <p className="text-xs text-gray-400 mt-2 flex items-center justify-center gap-1">
+              <Calendar className="h-3.5 w-3.5" /> Member since {memberSince}
+            </p>
+          )}
+        </div>
+        <Button variant="outline" size="sm" onClick={onEditProfile} className="mt-1 gap-2">
+          <Settings className="h-4 w-4" />
+          Edit Profile
+        </Button>
+      </div>
+
+      {/* Stats row */}
+      <div className="grid grid-cols-3 gap-3">
+        <div className="bg-white rounded-xl border border-gray-200 p-4 text-center">
+          <p className="text-2xl font-bold text-gray-900">{bookings?.length ?? "—"}</p>
+          <p className="text-xs text-gray-500 mt-0.5">Adventures Booked</p>
+        </div>
+        <div className="bg-white rounded-xl border border-gray-200 p-4 text-center">
+          <p className="text-2xl font-bold text-gray-900">{favoriteIds.size}</p>
+          <p className="text-xs text-gray-500 mt-0.5">Favorites Saved</p>
+        </div>
+        <div className="bg-white rounded-xl border border-gray-200 p-4 text-center">
+          <p className="text-2xl font-bold text-gray-900">
+            {totalSpent !== null ? `$${totalSpent.toFixed(0)}` : "—"}
+          </p>
+          <p className="text-xs text-gray-500 mt-0.5">Total Spent</p>
+        </div>
       </div>
     </div>
   );

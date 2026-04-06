@@ -9,7 +9,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { User, ChevronDown, LogOut, BookOpen, Menu, X, LayoutDashboard, Home, Mountain } from "lucide-react";
+import { User, ChevronDown, LogOut, BookOpen, Menu, X, LayoutDashboard, Home, Mountain, Settings } from "lucide-react";
 
 const BASE_URL = import.meta.env.BASE_URL.replace(/\/$/, "");
 
@@ -145,12 +145,16 @@ export function Navbar({
                     </Button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end" className="w-52">
+                    <DropdownMenuItem onClick={() => setLocation("/profile?tab=profile")}>
+                      <User className="h-4 w-4 mr-2" />
+                      My Profile
+                    </DropdownMenuItem>
                     <DropdownMenuItem onClick={() => setLocation("/profile")}>
                       <BookOpen className="h-4 w-4 mr-2" />
                       Booked Adventures
                     </DropdownMenuItem>
                     <DropdownMenuItem onClick={() => setLocation("/profile?tab=settings")}>
-                      <User className="h-4 w-4 mr-2" />
+                      <Settings className="h-4 w-4 mr-2" />
                       Account Settings
                     </DropdownMenuItem>
                     {isHost ? (
@@ -241,6 +245,14 @@ export function Navbar({
             </button>
             {customer ? (
               <>
+                <button
+                  onClick={() => { setLocation("/profile?tab=profile"); setMobileOpen(false); }}
+                  className={`block w-full text-left px-2 py-2 text-sm rounded-md ${
+                    transparent ? "text-white/90 hover:bg-white/10" : "text-gray-700 hover:bg-gray-50"
+                  }`}
+                >
+                  My Profile
+                </button>
                 <button
                   onClick={() => { setLocation("/profile"); setMobileOpen(false); }}
                   className={`block w-full text-left px-2 py-2 text-sm rounded-md ${
