@@ -3,16 +3,71 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1" />
-    <title>OutdoorShare Marketplace — Rent Outdoor Gear</title>
-    <meta name="description" content="Browse and book outdoor rental gear from verified companies. Jet skis, ATVs, campers, UTVs, and more — one account, every adventure." />
-    <meta property="og:title" content="OutdoorShare Marketplace" />
-    <meta property="og:description" content="Rent outdoor gear from local companies. One account, every adventure." />
-    <meta property="og:type" content="website" />
+
+    <!-- ── Primary SEO ─────────────────────────────────────── -->
+    <title>OutdoorShare — Rent Jet Skis, ATVs, Campers &amp; More from Local Companies</title>
+    <meta name="title" content="OutdoorShare — Rent Jet Skis, ATVs, Campers &amp; More from Local Companies" />
+    <meta name="description" content="Browse and book outdoor rentals from verified local companies. Jet skis, ATVs, side-by-sides, campers, boats, dirt bikes, snowmobiles and more — one free account, every adventure." />
+    <meta name="keywords" content="outdoor rentals, jet ski rental, ATV rental, camper rental, UTV rental, side-by-side rental, boat rental, snowmobile rental, dirt bike rental, ebike rental, adventure rentals near me, outdoor gear rental" />
+    <meta name="author" content="OutdoorShare" />
+    <meta name="robots" content="index, follow" />
     <meta name="theme-color" content="#1a4731" />
+
+    <!-- ── Open Graph / Facebook ───────────────────────────── -->
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="OutdoorShare Marketplace" />
+    <meta property="og:title" content="OutdoorShare — Rent Outdoor Adventures from Local Companies" />
+    <meta property="og:description" content="Browse and book jet skis, ATVs, campers, boats, snowmobiles and more from verified outdoor rental companies near you. One free account for every adventure." />
+    <meta property="og:image" content="outdoorshare-logo.png" />
+    <meta property="og:image:width" content="256" />
+    <meta property="og:image:height" content="256" />
+    <meta property="og:image:alt" content="OutdoorShare — Outdoor Rental Marketplace" />
+
+    <!-- ── Twitter Card ────────────────────────────────────── -->
+    <meta name="twitter:card" content="summary" />
+    <meta name="twitter:title" content="OutdoorShare — Rent Outdoor Adventures from Local Companies" />
+    <meta name="twitter:description" content="Browse jet skis, ATVs, campers, boats, and more from verified outdoor rental companies. One account, every adventure." />
+    <meta name="twitter:image" content="outdoorshare-logo.png" />
+    <meta name="twitter:image:alt" content="OutdoorShare Logo" />
+
+    <!-- ── Favicons ────────────────────────────────────────── -->
     <link rel="icon" type="image/svg+xml" href="favicon.svg" />
+    <link rel="icon" type="image/png" sizes="256x256" href="outdoorshare-logo.png" />
+    <link rel="apple-touch-icon" sizes="180x180" href="outdoorshare-logo.png" />
+    <link rel="shortcut icon" href="favicon.svg" />
+
+    <!-- ── Fonts ───────────────────────────────────────────── -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,400;0,14..32,500;0,14..32,600;0,14..32,700;1,14..32,400&display=swap" rel="stylesheet">
+
+    <!-- ── Structured Data ────────────────────────────────── -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "WebSite",
+      "name": "OutdoorShare Marketplace",
+      "description": "Browse and book outdoor rentals from verified local companies. Jet skis, ATVs, campers, boats, and more.",
+      "potentialAction": {
+        "@type": "SearchAction",
+        "target": {
+          "@type": "EntryPoint",
+          "urlTemplate": "/?search={search_term_string}"
+        },
+        "query-input": "required name=search_term_string"
+      }
+    }
+    </script>
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "Organization",
+      "name": "OutdoorShare",
+      "description": "Outdoor rental marketplace connecting renters with verified local equipment companies.",
+      "logo": "outdoorshare-logo.png",
+      "sameAs": []
+    }
+    </script>
   </head>
   <body>
     <div id="root"></div>

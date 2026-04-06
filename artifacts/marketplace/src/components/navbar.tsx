@@ -21,23 +21,23 @@ export function Navbar({ onAuthOpen }: { onAuthOpen: () => void }) {
   return (
     <header className="sticky top-0 z-40 bg-white border-b border-gray-200 shadow-sm">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex items-center justify-between h-[72px]">
+        <div className="flex items-center justify-between h-[80px]">
           {/* Logo */}
           <button
             onClick={() => setLocation("/")}
-            className="flex items-center gap-2 hover:opacity-90 transition-opacity"
+            className="flex items-center gap-2.5 hover:opacity-90 transition-opacity"
           >
             <img
               src={`${BASE_URL}/outdoorshare-logo-transparent.png`}
               alt="OutdoorShare"
-              className="h-20 w-auto object-contain flex-shrink-0 -my-2"
+              className="h-[68px] w-auto object-contain flex-shrink-0"
               onError={(e) => {
                 (e.currentTarget as HTMLImageElement).style.display = "none";
               }}
             />
-            <div className="flex flex-col items-start leading-none">
-              <span className="font-bold text-lg text-primary tracking-tight">OutdoorShare</span>
-              <span className="text-[11px] font-normal text-brand-blue tracking-wide">Marketplace</span>
+            <div className="flex flex-col items-start leading-none gap-0.5">
+              <span className="font-bold text-xl text-primary tracking-tight">OutdoorShare</span>
+              <span className="text-[11px] font-semibold text-brand-blue tracking-widest uppercase">Marketplace</span>
             </div>
           </button>
 
