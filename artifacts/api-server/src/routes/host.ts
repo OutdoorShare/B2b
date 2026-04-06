@@ -238,10 +238,13 @@ router.get("/host/listings", requireHostAuth, async (req, res) => {
 router.post("/host/listings", requireHostAuth, async (req, res) => {
   try {
     const {
-      title, description, categoryId, pricePerDay, weekendPrice, pricePerWeek,
-      depositAmount, halfDayEnabled, halfDayRate, quantity, imageUrls,
-      location, condition, brand, model, includedItems, requirements,
-      status,
+      title, description, categoryId, pricePerDay, weekendPrice, holidayPrice, pricePerWeek,
+      pricePerHour, depositAmount,
+      halfDayEnabled, halfDayDurationHours, halfDayRate,
+      hourlyEnabled, hourlySlots, hourlyPerHourEnabled, hourlyMinimumHours,
+      timeSlots,
+      quantity, imageUrls, location, condition, brand, model,
+      weight, dimensions, includedItems, requirements, ageRestriction, status,
     } = req.body;
 
     if (!title || !description || !pricePerDay) {
@@ -258,18 +261,29 @@ router.post("/host/listings", requireHostAuth, async (req, res) => {
         categoryId: categoryId ? Number(categoryId) : null,
         pricePerDay: String(pricePerDay),
         weekendPrice: weekendPrice ? String(weekendPrice) : null,
+        holidayPrice: holidayPrice ? String(holidayPrice) : null,
         pricePerWeek: pricePerWeek ? String(pricePerWeek) : null,
+        pricePerHour: pricePerHour ? String(pricePerHour) : null,
         depositAmount: depositAmount ? String(depositAmount) : null,
         halfDayEnabled: !!halfDayEnabled,
+        halfDayDurationHours: halfDayDurationHours ? Number(halfDayDurationHours) : null,
         halfDayRate: halfDayRate ? String(halfDayRate) : null,
+        hourlyEnabled: !!hourlyEnabled,
+        hourlySlots: hourlySlots ?? [],
+        hourlyPerHourEnabled: !!hourlyPerHourEnabled,
+        hourlyMinimumHours: hourlyMinimumHours ? Number(hourlyMinimumHours) : null,
+        timeSlots: timeSlots ?? [],
         quantity: quantity ? Number(quantity) : 1,
         imageUrls: imageUrls ?? [],
         location: location ?? null,
         condition: condition ?? null,
         brand: brand ?? null,
         model: model ?? null,
+        weight: weight ?? null,
+        dimensions: dimensions ?? null,
         includedItems: includedItems ?? [],
         requirements: requirements ?? null,
+        ageRestriction: ageRestriction ? Number(ageRestriction) : null,
         status: status ?? "active",
       })
       .returning();
@@ -294,9 +308,13 @@ router.put("/host/listings/:id", requireHostAuth, async (req, res) => {
     if (!existing[0]) { res.status(404).json({ error: "Listing not found" }); return; }
 
     const {
-      title, description, categoryId, pricePerDay, weekendPrice, pricePerWeek,
-      depositAmount, halfDayEnabled, halfDayRate, quantity, imageUrls,
-      location, condition, brand, model, includedItems, requirements, status,
+      title, description, categoryId, pricePerDay, weekendPrice, holidayPrice, pricePerWeek,
+      pricePerHour, depositAmount,
+      halfDayEnabled, halfDayDurationHours, halfDayRate,
+      hourlyEnabled, hourlySlots, hourlyPerHourEnabled, hourlyMinimumHours,
+      timeSlots,
+      quantity, imageUrls, location, condition, brand, model,
+      weight, dimensions, includedItems, requirements, ageRestriction, status,
     } = req.body;
 
     const [updated] = await db
@@ -306,18 +324,29 @@ router.put("/host/listings/:id", requireHostAuth, async (req, res) => {
         categoryId: categoryId ? Number(categoryId) : null,
         pricePerDay: pricePerDay ? String(pricePerDay) : undefined,
         weekendPrice: weekendPrice ? String(weekendPrice) : null,
+        holidayPrice: holidayPrice ? String(holidayPrice) : null,
         pricePerWeek: pricePerWeek ? String(pricePerWeek) : null,
+        pricePerHour: pricePerHour ? String(pricePerHour) : null,
         depositAmount: depositAmount ? String(depositAmount) : null,
         halfDayEnabled: halfDayEnabled !== undefined ? !!halfDayEnabled : undefined,
+        halfDayDurationHours: halfDayDurationHours ? Number(halfDayDurationHours) : null,
         halfDayRate: halfDayRate ? String(halfDayRate) : null,
+        hourlyEnabled: hourlyEnabled !== undefined ? !!hourlyEnabled : undefined,
+        hourlySlots: hourlySlots ?? undefined,
+        hourlyPerHourEnabled: hourlyPerHourEnabled !== undefined ? !!hourlyPerHourEnabled : undefined,
+        hourlyMinimumHours: hourlyMinimumHours ? Number(hourlyMinimumHours) : null,
+        timeSlots: timeSlots ?? undefined,
         quantity: quantity ? Number(quantity) : undefined,
         imageUrls: imageUrls ?? undefined,
         location: location ?? null,
         condition: condition ?? null,
         brand: brand ?? null,
         model: model ?? null,
+        weight: weight ?? null,
+        dimensions: dimensions ?? null,
         includedItems: includedItems ?? undefined,
         requirements: requirements ?? null,
+        ageRestriction: ageRestriction ? Number(ageRestriction) : null,
         status: status ?? undefined,
         updatedAt: new Date(),
       })
