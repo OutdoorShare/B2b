@@ -14,7 +14,29 @@ import {
   Eye,
   EyeOff,
   AlertCircle,
+  Link2,
+  Check,
 } from "lucide-react";
+
+const BASE_URL = import.meta.env.BASE_URL.replace(/\/$/, "");
+
+function useShareLink() {
+  const [copiedId, setCopiedId] = useState<number | null>(null);
+  const { toast } = useToast();
+
+  function share(listingId: number) {
+    const url = `${window.location.origin}${BASE_URL}/listings/${listingId}`;
+    navigator.clipboard.writeText(url).then(() => {
+      setCopiedId(listingId);
+      toast({ title: "Link copied!", description: "Share this link with anyone to view your listing." });
+      setTimeout(() => setCopiedId(null), 2000);
+    }).catch(() => {
+      toast({ title: "Copy failed", description: url, variant: "destructive" });
+    });
+  }
+
+  return { share, copiedId };
+}
 
 export function HostListingsPage() {
   const { customer } = useAuth();
@@ -22,6 +44,7 @@ export function HostListingsPage() {
   const { toast } = useToast();
   const qc = useQueryClient();
   const [deletingId, setDeletingId] = useState<number | null>(null);
+  const { share, copiedId } = useShareLink();
 
   const { data: listings = [], isLoading } = useQuery({
     queryKey: ["host-listings", customer?.id],
@@ -129,6 +152,16 @@ export function HostListingsPage() {
                 </div>
 
                 <div className="flex items-center gap-2 flex-shrink-0">
+                  <button
+                    onClick={() => share(listing.id)}
+                    className="p-2 text-gray-400 hover:text-brand-blue rounded-lg hover:bg-blue-50 transition-colors"
+                    title="Copy share link"
+                  >
+                    {copiedId === listing.id
+                      ? <Check className="h-4 w-4 text-emerald-500" />
+                      : <Link2 className="h-4 w-4" />
+                    }
+                  </button>
                   <button
                     onClick={() => toggleStatus.mutate({
                       id: listing.id,
