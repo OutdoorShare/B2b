@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Switch, Route, Router as WouterRouter } from "wouter";
+import { Switch, Route, Router as WouterRouter, useLocation } from "wouter";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -36,6 +36,14 @@ function PreviewBanner() {
   );
 }
 
+function ScrollToTop() {
+  const [location] = useLocation();
+  useEffect(() => {
+    window.scrollTo({ top: 0, behavior: "instant" });
+  }, [location]);
+  return null;
+}
+
 function AppContent() {
   const [authOpen, setAuthOpen] = useState(false);
   const [preview, setPreview] = useState(false);
@@ -50,6 +58,7 @@ function AppContent() {
 
   return (
     <>
+      <ScrollToTop />
       <Navbar onAuthOpen={() => setAuthOpen(true)} />
       {preview && <PreviewBanner />}
       <Switch>
