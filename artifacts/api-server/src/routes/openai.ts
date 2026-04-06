@@ -33,9 +33,9 @@ async function getListingContext(): Promise<string> {
   try {
     const listings = await db
       .select({
-        name: listingsTable.name,
+        name: listingsTable.title,
         category: categoriesTable.name,
-        dailyRate: listingsTable.dailyRate,
+        dailyRate: listingsTable.pricePerDay,
         location: businessProfileTable.city,
       })
       .from(listingsTable)

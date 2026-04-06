@@ -2,7 +2,7 @@ import { useState, useRef, useEffect, useCallback } from "react";
 import { MessageCircle, X, Send, Trash2, Bot, ChevronDown } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-const API_BASE = import.meta.env.BASE_URL?.replace(/\/$/, "") || "";
+const API_BASE = "";
 
 interface Message {
   id: number | string;
