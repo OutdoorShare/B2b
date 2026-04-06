@@ -65,6 +65,8 @@ router.get("/marketplace/listings", async (req, res) => {
           city: businessProfileTable.city,
           state: businessProfileTable.state,
           location: businessProfileTable.location,
+          lat: businessProfileTable.lat,
+          lng: businessProfileTable.lng,
         },
         category: {
           id: categoriesTable.id,
@@ -93,6 +95,8 @@ router.get("/marketplace/listings", async (req, res) => {
       businessCity: r.business?.city ?? null,
       businessState: r.business?.state ?? null,
       businessLocation: r.business?.location ?? null,
+      businessLat: r.business?.lat ? parseFloat(r.business.lat) : null,
+      businessLng: r.business?.lng ? parseFloat(r.business.lng) : null,
       categoryName: r.category?.name ?? null,
       categorySlug: r.category?.slug ?? null,
       categoryIcon: r.category?.icon ?? null,

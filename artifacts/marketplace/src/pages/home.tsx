@@ -1,11 +1,11 @@
 import { useState, useEffect } from "react";
-import { useLocation } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import { ListingCard } from "@/components/listing-card";
+import { MapView } from "@/components/map-view";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Search, SlidersHorizontal, X } from "lucide-react";
+import { Search, SlidersHorizontal, X, LayoutGrid, Map } from "lucide-react";
 
 export function HomePage({ onAuthOpen }: { onAuthOpen: () => void }) {
   const [search, setSearch] = useState("");
@@ -14,6 +14,7 @@ export function HomePage({ onAuthOpen }: { onAuthOpen: () => void }) {
   const [maxPrice, setMaxPrice] = useState("");
   const [showFilters, setShowFilters] = useState(false);
   const [debouncedSearch, setDebouncedSearch] = useState("");
+  const [viewMode, setViewMode] = useState<"grid" | "map">("grid");
 
   useEffect(() => {
     const t = setTimeout(() => setDebouncedSearch(search), 350);
@@ -153,48 +154,82 @@ export function HomePage({ onAuthOpen }: { onAuthOpen: () => void }) {
           </div>
         )}
 
-        {/* Results header */}
+        {/* Results header with view toggle */}
         <div className="flex items-center justify-between mb-4">
           <p className="text-sm text-gray-500">
             {isLoading ? "Loading..." : `${listings?.length ?? 0} listings`}
             {hasFilters && " matching your filters"}
           </p>
-          {hasFilters && (
-            <button onClick={clearFilters} className="text-sm text-primary hover:underline">
-              Clear filters
-            </button>
-          )}
+          <div className="flex items-center gap-2">
+            {hasFilters && (
+              <button onClick={clearFilters} className="text-sm text-primary hover:underline mr-2">
+                Clear filters
+              </button>
+            )}
+            {/* Grid / Map toggle */}
+            <div className="flex items-center bg-white border border-gray-200 rounded-lg p-0.5 shadow-sm">
+              <button
+                onClick={() => setViewMode("grid")}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition-all ${
+                  viewMode === "grid"
+                    ? "bg-primary text-white shadow-sm"
+                    : "text-gray-500 hover:text-gray-700"
+                }`}
+              >
+                <LayoutGrid className="h-4 w-4" />
+                Grid
+              </button>
+              <button
+                onClick={() => setViewMode("map")}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition-all ${
+                  viewMode === "map"
+                    ? "bg-primary text-white shadow-sm"
+                    : "text-gray-500 hover:text-gray-700"
+                }`}
+              >
+                <Map className="h-4 w-4" />
+                Map
+              </button>
+            </div>
+          </div>
         </div>
 
-        {/* Listings grid */}
-        {isLoading ? (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
-            {Array.from({ length: 8 }).map((_, i) => (
-              <div key={i} className="bg-white rounded-2xl border border-gray-200 overflow-hidden animate-pulse">
-                <div className="h-48 bg-gray-200" />
-                <div className="p-4 space-y-2">
-                  <div className="h-4 bg-gray-200 rounded w-3/4" />
-                  <div className="h-3 bg-gray-200 rounded w-1/2" />
-                  <div className="h-6 bg-gray-200 rounded w-1/3 mt-3" />
+        {/* Map view */}
+        {viewMode === "map" && !isLoading && listings && (
+          <MapView listings={listings as any} />
+        )}
+
+        {/* Grid view */}
+        {viewMode === "grid" && (
+          isLoading ? (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
+              {Array.from({ length: 8 }).map((_, i) => (
+                <div key={i} className="bg-white rounded-2xl border border-gray-200 overflow-hidden animate-pulse">
+                  <div className="h-48 bg-gray-200" />
+                  <div className="p-4 space-y-2">
+                    <div className="h-4 bg-gray-200 rounded w-3/4" />
+                    <div className="h-3 bg-gray-200 rounded w-1/2" />
+                    <div className="h-6 bg-gray-200 rounded w-1/3 mt-3" />
+                  </div>
                 </div>
-              </div>
-            ))}
-          </div>
-        ) : listings && listings.length > 0 ? (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
-            {listings.map(listing => (
-              <ListingCard key={listing.id} listing={listing} />
-            ))}
-          </div>
-        ) : (
-          <div className="text-center py-20">
-            <div className="text-5xl mb-4">🔍</div>
-            <h3 className="text-lg font-semibold text-gray-700 mb-2">No listings found</h3>
-            <p className="text-gray-400 mb-4">Try adjusting your search or filters</p>
-            {hasFilters && (
-              <Button variant="outline" onClick={clearFilters}>Clear filters</Button>
-            )}
-          </div>
+              ))}
+            </div>
+          ) : listings && listings.length > 0 ? (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
+              {listings.map(listing => (
+                <ListingCard key={listing.id} listing={listing} />
+              ))}
+            </div>
+          ) : (
+            <div className="text-center py-20">
+              <div className="text-5xl mb-4">🔍</div>
+              <h3 className="text-lg font-semibold text-gray-700 mb-2">No listings found</h3>
+              <p className="text-gray-400 mb-4">Try adjusting your search or filters</p>
+              {hasFilters && (
+                <Button variant="outline" onClick={clearFilters}>Clear filters</Button>
+              )}
+            </div>
+          )
         )}
 
         {/* CTA for non-logged-in */}

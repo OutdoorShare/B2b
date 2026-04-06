@@ -35,6 +35,8 @@ export const businessProfileTable = pgTable("business_profile", {
   kioskModeEnabled: boolean("kiosk_mode_enabled").notNull().default(false),
   instantBooking: boolean("instant_booking").notNull().default(false),
   embedCode: text("embed_code"),
+  lat: decimal("lat", { precision: 10, scale: 6 }),
+  lng: decimal("lng", { precision: 10, scale: 6 }),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
