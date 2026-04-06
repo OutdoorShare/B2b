@@ -75,17 +75,17 @@ export function AuthModal({ open, onClose }: AuthModalProps) {
             </div>
           )}
           {error && <p className="text-sm text-red-600">{error}</p>}
-          <Button type="submit" className="w-full bg-green-700 hover:bg-green-800 text-white" disabled={loading}>
+          <Button type="submit" className="w-full bg-primary hover:bg-primary/90 text-white" disabled={loading}>
             {loading ? "Please wait…" : mode === "login" ? "Sign In" : "Create Account"}
           </Button>
           <p className="text-center text-sm text-gray-500">
             {mode === "login" ? (
               <>Don't have an account?{" "}
-                <button type="button" onClick={() => { setMode("register"); setError(""); }} className="text-green-700 hover:underline font-medium">Sign up</button>
+                <button type="button" onClick={() => { setMode("register"); setError(""); }} className="text-primary hover:underline font-medium">Sign up</button>
               </>
             ) : (
               <>Already have an account?{" "}
-                <button type="button" onClick={() => { setMode("login"); setError(""); }} className="text-green-700 hover:underline font-medium">Sign in</button>
+                <button type="button" onClick={() => { setMode("login"); setError(""); }} className="text-primary hover:underline font-medium">Sign in</button>
               </>
             )}
           </p>

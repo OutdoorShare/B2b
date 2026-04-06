@@ -11,7 +11,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { User, ChevronDown, LogOut, BookOpen, Menu, X } from "lucide-react";
 
-const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
+const BASE_URL = import.meta.env.BASE_URL.replace(/\/$/, "");
 
 export function Navbar({ onAuthOpen }: { onAuthOpen: () => void }) {
   const { customer, logout } = useAuth();
@@ -25,17 +25,45 @@ export function Navbar({ onAuthOpen }: { onAuthOpen: () => void }) {
           {/* Logo */}
           <button
             onClick={() => setLocation("/")}
-            className="flex items-center gap-2 font-bold text-xl text-green-800 hover:text-green-700 transition-colors"
+            className="flex items-center gap-3 hover:opacity-90 transition-opacity"
           >
-            <span className="text-2xl">🌲</span>
-            <span>OutdoorShare</span>
-            <span className="text-xs font-normal text-gray-400 ml-1 hidden sm:block">Marketplace</span>
+            <img
+              src={`${BASE_URL}/outdoorshare-logo-transparent.png`}
+              alt="OutdoorShare"
+              className="h-8 object-contain"
+              onError={(e) => {
+                const target = e.currentTarget;
+                target.style.display = "none";
+                const fallback = target.nextElementSibling as HTMLElement;
+                if (fallback) fallback.style.display = "flex";
+              }}
+            />
+            <span
+              className="hidden items-center gap-2 font-bold text-xl text-primary"
+              style={{ display: "none" }}
+            >
+              <span className="text-2xl">🌲</span>
+              OutdoorShare
+            </span>
+            <span className="text-xs font-normal text-gray-400 border-l border-gray-200 pl-3 ml-0 hidden sm:block">
+              Marketplace
+            </span>
           </button>
 
           {/* Desktop Nav */}
           <nav className="hidden md:flex items-center gap-6">
-            <button onClick={() => setLocation("/")} className="text-sm font-medium text-gray-600 hover:text-gray-900 transition-colors">Browse</button>
-            <button onClick={() => setLocation("/companies")} className="text-sm font-medium text-gray-600 hover:text-gray-900 transition-colors">Companies</button>
+            <button
+              onClick={() => setLocation("/")}
+              className="text-sm font-medium text-gray-600 hover:text-gray-900 transition-colors"
+            >
+              Browse
+            </button>
+            <button
+              onClick={() => setLocation("/companies")}
+              className="text-sm font-medium text-gray-600 hover:text-gray-900 transition-colors"
+            >
+              Companies
+            </button>
           </nav>
 
           {/* Auth */}
@@ -62,25 +90,45 @@ export function Navbar({ onAuthOpen }: { onAuthOpen: () => void }) {
                 </DropdownMenuContent>
               </DropdownMenu>
             ) : (
-              <Button size="sm" onClick={onAuthOpen} className="bg-green-700 hover:bg-green-800 text-white">
+              <Button
+                size="sm"
+                onClick={onAuthOpen}
+                className="bg-primary hover:bg-primary/90 text-primary-foreground"
+              >
                 Sign In
               </Button>
             )}
             <button
               className="md:hidden p-1 text-gray-500 hover:text-gray-900"
-              onClick={() => setMobileOpen(v => !v)}
+              onClick={() => setMobileOpen((v) => !v)}
             >
               {mobileOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
             </button>
           </div>
         </div>
+
         {/* Mobile menu */}
         {mobileOpen && (
           <div className="md:hidden border-t border-gray-100 py-3 space-y-1">
-            <button onClick={() => { setLocation("/"); setMobileOpen(false); }} className="block w-full text-left px-2 py-2 text-sm text-gray-700 hover:bg-gray-50 rounded-md">Browse</button>
-            <button onClick={() => { setLocation("/companies"); setMobileOpen(false); }} className="block w-full text-left px-2 py-2 text-sm text-gray-700 hover:bg-gray-50 rounded-md">Companies</button>
+            <button
+              onClick={() => { setLocation("/"); setMobileOpen(false); }}
+              className="block w-full text-left px-2 py-2 text-sm text-gray-700 hover:bg-gray-50 rounded-md"
+            >
+              Browse
+            </button>
+            <button
+              onClick={() => { setLocation("/companies"); setMobileOpen(false); }}
+              className="block w-full text-left px-2 py-2 text-sm text-gray-700 hover:bg-gray-50 rounded-md"
+            >
+              Companies
+            </button>
             {customer && (
-              <button onClick={() => { setLocation("/profile"); setMobileOpen(false); }} className="block w-full text-left px-2 py-2 text-sm text-gray-700 hover:bg-gray-50 rounded-md">My Bookings</button>
+              <button
+                onClick={() => { setLocation("/profile"); setMobileOpen(false); }}
+                className="block w-full text-left px-2 py-2 text-sm text-gray-700 hover:bg-gray-50 rounded-md"
+              >
+                My Bookings
+              </button>
             )}
           </div>
         )}

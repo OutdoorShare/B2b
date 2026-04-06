@@ -56,13 +56,13 @@ export function HomePage({ onAuthOpen }: { onAuthOpen: () => void }) {
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Hero */}
-      <div className="bg-gradient-to-br from-green-900 via-green-800 to-emerald-700 text-white">
+      <div className="text-white" style={{ background: "linear-gradient(135deg, hsl(155,42%,10%) 0%, hsl(155,42%,18%) 60%, hsl(155,42%,25%) 100%)" }}>
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16 md:py-20">
           <div className="max-w-2xl">
             <h1 className="text-4xl md:text-5xl font-bold mb-4 leading-tight">
               Rent outdoor gear from local companies
             </h1>
-            <p className="text-green-100 text-lg mb-8">
+            <p className="text-white/80 text-lg mb-8">
               Browse thousands of listings from verified outdoor rental companies — one account, every adventure.
             </p>
 
@@ -89,7 +89,7 @@ export function HomePage({ onAuthOpen }: { onAuthOpen: () => void }) {
 
             {/* Stats */}
             {stats && (
-              <div className="flex gap-6 mt-6 text-green-100 text-sm">
+              <div className="flex gap-6 mt-6 text-white/70 text-sm">
                 <span><strong className="text-white">{stats.listings.toLocaleString()}</strong> listings</span>
                 <span><strong className="text-white">{stats.companies.toLocaleString()}</strong> companies</span>
                 <span><strong className="text-white">{stats.customers.toLocaleString()}</strong> renters</span>
@@ -129,8 +129,8 @@ export function HomePage({ onAuthOpen }: { onAuthOpen: () => void }) {
               onClick={() => setSelectedCategory(null)}
               className={`flex-shrink-0 px-4 py-2 rounded-full text-sm font-medium border transition-all ${
                 !selectedCategory
-                  ? "bg-green-700 text-white border-green-700"
-                  : "bg-white text-gray-600 border-gray-200 hover:border-green-400"
+                  ? "bg-primary text-primary-foreground border-primary"
+                  : "bg-white text-gray-600 border-gray-200 hover:border-primary/40"
               }`}
             >
               All
@@ -141,8 +141,8 @@ export function HomePage({ onAuthOpen }: { onAuthOpen: () => void }) {
                 onClick={() => setSelectedCategory(cat.id.toString() === selectedCategory ? null : cat.id.toString())}
                 className={`flex-shrink-0 flex items-center gap-1.5 px-4 py-2 rounded-full text-sm font-medium border transition-all ${
                   selectedCategory === cat.id.toString()
-                    ? "bg-green-700 text-white border-green-700"
-                    : "bg-white text-gray-600 border-gray-200 hover:border-green-400"
+                    ? "bg-primary text-primary-foreground border-primary"
+                    : "bg-white text-gray-600 border-gray-200 hover:border-primary/40"
                 }`}
               >
                 {cat.icon && <span>{cat.icon}</span>}
@@ -160,7 +160,7 @@ export function HomePage({ onAuthOpen }: { onAuthOpen: () => void }) {
             {hasFilters && " matching your filters"}
           </p>
           {hasFilters && (
-            <button onClick={clearFilters} className="text-sm text-green-700 hover:underline">
+            <button onClick={clearFilters} className="text-sm text-primary hover:underline">
               Clear filters
             </button>
           )}
@@ -198,10 +198,10 @@ export function HomePage({ onAuthOpen }: { onAuthOpen: () => void }) {
         )}
 
         {/* CTA for non-logged-in */}
-        <div className="mt-16 bg-gradient-to-r from-green-800 to-emerald-700 rounded-2xl p-8 text-center text-white">
+        <div className="mt-16 rounded-2xl p-8 text-center text-white" style={{ background: "linear-gradient(135deg, hsl(155,42%,12%) 0%, hsl(155,42%,20%) 100%)" }}>
           <h2 className="text-2xl font-bold mb-2">One account, every company</h2>
-          <p className="text-green-100 mb-6">Create a free renter account to book across all OutdoorShare companies, track your rentals, and get receipts in one place.</p>
-          <Button onClick={onAuthOpen} size="lg" className="bg-white text-green-800 hover:bg-green-50 font-semibold">
+          <p className="text-white/80 mb-6">Create a free renter account to book across all OutdoorShare companies, track your rentals, and get receipts in one place.</p>
+          <Button onClick={onAuthOpen} size="lg" className="bg-white text-primary hover:bg-white/90 font-semibold">
             Create Free Account
           </Button>
         </div>
@@ -209,7 +209,7 @@ export function HomePage({ onAuthOpen }: { onAuthOpen: () => void }) {
         {/* Footer */}
         <div className="mt-12 text-center text-xs text-gray-400 pb-8">
           <span>Powered by </span>
-          <a href="/" className="font-semibold hover:underline text-green-700">OutdoorShare</a>
+          <a href="/" className="font-semibold hover:underline text-primary">OutdoorShare</a>
           <span> · </span>
           <a href="/docs/" className="hover:underline">Docs</a>
         </div>

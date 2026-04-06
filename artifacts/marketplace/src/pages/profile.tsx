@@ -17,7 +17,7 @@ function resolveImage(url: string) {
 const statusColors: Record<string, string> = {
   pending: "bg-yellow-100 text-yellow-800",
   confirmed: "bg-blue-100 text-blue-800",
-  active: "bg-green-100 text-green-800",
+  active: "bg-primary/10 text-primary",
   completed: "bg-gray-100 text-gray-700",
   cancelled: "bg-red-100 text-red-700",
 };
@@ -39,7 +39,7 @@ export function ProfilePage({ onAuthOpen }: { onAuthOpen: () => void }) {
           <div className="text-5xl mb-4">👤</div>
           <h2 className="text-xl font-semibold text-gray-800 mb-2">Sign in to view your profile</h2>
           <p className="text-gray-500 mb-6">Track bookings across all OutdoorShare companies</p>
-          <Button onClick={onAuthOpen} className="bg-green-700 hover:bg-green-800 text-white">Sign In</Button>
+          <Button onClick={onAuthOpen} className="bg-primary hover:bg-primary/90 text-white">Sign In</Button>
         </div>
       </div>
     );
@@ -60,7 +60,7 @@ export function ProfilePage({ onAuthOpen }: { onAuthOpen: () => void }) {
         <div className="bg-white rounded-2xl border border-gray-200 p-6 mb-8">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
-              <div className="h-14 w-14 rounded-full bg-green-700 flex items-center justify-center text-white font-bold text-xl">
+              <div className="h-14 w-14 rounded-full bg-primary flex items-center justify-center text-white font-bold text-xl">
                 {customer.name[0]?.toUpperCase()}
               </div>
               <div>
@@ -79,7 +79,7 @@ export function ProfilePage({ onAuthOpen }: { onAuthOpen: () => void }) {
         {/* Bookings */}
         <div>
           <h2 className="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
-            <Calendar className="h-5 w-5 text-green-600" />
+            <Calendar className="h-5 w-5 text-primary" />
             My Bookings
             {bookings && <span className="text-sm font-normal text-gray-400">({bookings.length})</span>}
           </h2>
@@ -138,7 +138,7 @@ export function ProfilePage({ onAuthOpen }: { onAuthOpen: () => void }) {
                           <Button
                             variant="ghost"
                             size="sm"
-                            className="h-7 text-xs text-green-700 hover:text-green-800 gap-1 pr-0"
+                            className="h-7 text-xs text-primary hover:text-primary gap-1 pr-0"
                             onClick={() => window.open(`/${booking.tenantSlug}`, "_blank")}
                           >
                             View company <ExternalLink className="h-3 w-3" />
@@ -155,7 +155,7 @@ export function ProfilePage({ onAuthOpen }: { onAuthOpen: () => void }) {
               <div className="text-4xl mb-3">📋</div>
               <h3 className="font-semibold text-gray-700 mb-1">No bookings yet</h3>
               <p className="text-sm text-gray-400 mb-5">When you book a rental, it'll appear here</p>
-              <Button onClick={() => setLocation("/")} className="bg-green-700 hover:bg-green-800 text-white">Browse Listings</Button>
+              <Button onClick={() => setLocation("/")} className="bg-primary hover:bg-primary/90 text-white">Browse Listings</Button>
             </div>
           )}
         </div>

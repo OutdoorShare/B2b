@@ -32,7 +32,7 @@ export function ListingDetailPage() {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="text-center">
-          <div className="h-10 w-10 border-4 border-green-600 border-t-transparent rounded-full animate-spin mx-auto mb-3" />
+          <div className="h-10 w-10 border-4 border-primary border-t-transparent rounded-full animate-spin mx-auto mb-3" />
           <p className="text-gray-500">Loading listing…</p>
         </div>
       </div>
@@ -132,7 +132,7 @@ export function ListingDetailPage() {
                     key={i}
                     onClick={() => setImgIndex(i)}
                     className={`flex-shrink-0 h-16 w-20 rounded-lg overflow-hidden border-2 transition-all ${
-                      i === imgIndex ? "border-green-600" : "border-transparent opacity-70 hover:opacity-100"
+                      i === imgIndex ? "border-primary" : "border-transparent opacity-70 hover:opacity-100"
                     }`}
                   >
                     <img src={resolveImage(img)} alt="" className="w-full h-full object-cover" />
@@ -176,12 +176,12 @@ export function ListingDetailPage() {
             {listing.includedItems && listing.includedItems.length > 0 && (
               <div>
                 <h3 className="font-semibold text-gray-800 mb-3 flex items-center gap-2">
-                  <CheckCircle2 className="h-4 w-4 text-green-600" /> What's Included
+                  <CheckCircle2 className="h-4 w-4 text-primary" /> What's Included
                 </h3>
                 <ul className="space-y-1.5">
                   {listing.includedItems.map((item, i) => (
                     <li key={i} className="flex items-start gap-2 text-sm text-gray-600">
-                      <CheckCircle2 className="h-4 w-4 text-green-500 mt-0.5 flex-shrink-0" />
+                      <CheckCircle2 className="h-4 w-4 text-primary mt-0.5 flex-shrink-0" />
                       {item}
                     </li>
                   ))}
@@ -280,7 +280,7 @@ export function ListingDetailPage() {
 
               <Separator className="my-4" />
               <div className="flex items-center gap-2 text-xs text-gray-400">
-                <Shield className="h-3.5 w-3.5 text-green-500" />
+                <Shield className="h-3.5 w-3.5 text-primary" />
                 <span>Secure booking through OutdoorShare</span>
               </div>
             </div>
