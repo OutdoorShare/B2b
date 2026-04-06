@@ -30,7 +30,7 @@ export function Navbar({ onAuthOpen }: { onAuthOpen: () => void }) {
             <img
               src={`${BASE_URL}/outdoorshare-logo-transparent.png`}
               alt="OutdoorShare"
-              className="h-14 w-14 object-contain flex-shrink-0"
+              className="h-20 w-auto object-contain flex-shrink-0 -my-2"
               onError={(e) => {
                 (e.currentTarget as HTMLImageElement).style.display = "none";
               }}
