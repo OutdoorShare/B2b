@@ -86,7 +86,7 @@ function AppContent() {
         <Route path="/" component={() => <HomePage onAuthOpen={() => setAuthOpen(true)} />} />
         <Route path="/listings/:id" component={ListingDetailPage} />
         <Route path="/profile" component={() => <ProfilePage onAuthOpen={() => setAuthOpen(true)} />} />
-        <Route path="/companies" component={CompaniesPage} />
+        <Route path="/companies" component={() => { window.location.replace(import.meta.env.BASE_URL.replace(/\/$/, "") || "/"); return null; }} />
         <Route path="/memories" component={() => <MemoriesPage onAuthOpen={() => setAuthOpen(true)} />} />
         <Route path="/become-host" component={() => <BecomeHostPage onAuthOpen={() => setAuthOpen(true)} />} />
         <Route path="/host" component={HostDashboardPage} />

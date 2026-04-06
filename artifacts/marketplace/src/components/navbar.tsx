@@ -86,9 +86,6 @@ export function Navbar({
             <button onClick={() => setLocation("/")} className={linkClass}>
               Browse
             </button>
-            <button onClick={() => setLocation("/companies")} className={linkClass}>
-              Companies
-            </button>
             <button
               onClick={() => setLocation("/memories")}
               className={`${linkClass} flex items-center gap-1`}
@@ -233,14 +230,6 @@ export function Navbar({
               }`}
             >
               Browse
-            </button>
-            <button
-              onClick={() => { setLocation("/companies"); setMobileOpen(false); }}
-              className={`block w-full text-left px-2 py-2 text-sm rounded-md ${
-                transparent ? "text-white/90 hover:bg-white/10" : "text-gray-700 hover:bg-gray-50"
-              }`}
-            >
-              Companies
             </button>
             <button
               onClick={() => { setLocation("/memories"); setMobileOpen(false); }}
