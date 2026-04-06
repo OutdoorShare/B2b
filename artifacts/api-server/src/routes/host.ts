@@ -12,6 +12,7 @@ import {
 import { eq, and, desc, sql } from "drizzle-orm";
 import { randomBytes, scrypt } from "crypto";
 import { promisify } from "util";
+import { getStripeForTenant } from "../services/stripe";
 
 const scryptAsync = promisify(scrypt);
 
@@ -112,6 +113,7 @@ router.post("/host/become", async (req, res) => {
         isHost: true,
         hostCustomerId: customerId,
         maxListings: 20,
+        platformFeePercent: "20", // OutdoorShare keeps 20% of rental subtotal + full protection fee
       })
       .returning();
 
@@ -510,6 +512,124 @@ router.delete("/host/bundles/:id", requireHostAuth, async (req, res) => {
   } catch (err) {
     req.log.error(err);
     res.status(500).json({ error: "Failed to delete bundle" });
+  }
+});
+
+// ── HOST STRIPE CONNECT ───────────────────────────────────────────────────────
+
+// POST /api/host/stripe/connect — start or resume Stripe Express onboarding
+router.post("/host/stripe/connect", requireHostAuth, async (req, res) => {
+  try {
+    const tenant = await db.query.tenantsTable.findFirst({
+      where: eq(tenantsTable.id, req.hostTenantId!),
+    });
+    if (!tenant) { res.status(404).json({ error: "Tenant not found" }); return; }
+
+    const stripeClient = getStripeForTenant(!!tenant.testMode);
+    const protocol = req.protocol;
+    const host = req.get("host");
+    const returnUrl = `${protocol}://${host}/marketplace/host/settings?stripe=connected`;
+    const refreshUrl = `${protocol}://${host}/marketplace/host/settings?stripe=refresh`;
+
+    let accountId = tenant.stripeAccountId;
+    if (!accountId) {
+      const account = await stripeClient.accounts.create({
+        type: "express",
+        email: tenant.email ?? undefined,
+        capabilities: { card_payments: { requested: true }, transfers: { requested: true } },
+        business_type: "individual",
+        metadata: { tenant_id: String(tenant.id), tenant_slug: tenant.slug, is_host: "true" },
+      });
+      accountId = account.id;
+      await db.update(tenantsTable).set({
+        stripeAccountId: accountId,
+        stripeAccountStatus: "onboarding",
+      }).where(eq(tenantsTable.id, tenant.id));
+    }
+
+    const accountLink = await stripeClient.accountLinks.create({
+      account: accountId,
+      refresh_url: refreshUrl,
+      return_url: returnUrl,
+      type: "account_onboarding",
+    });
+
+    res.json({ url: accountLink.url });
+  } catch (e: any) {
+    req.log.error(e, "[host/stripe/connect]");
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// GET /api/host/stripe/status — check Stripe Connect status
+router.get("/host/stripe/status", requireHostAuth, async (req, res) => {
+  try {
+    const tenant = await db.query.tenantsTable.findFirst({
+      where: eq(tenantsTable.id, req.hostTenantId!),
+    });
+    if (!tenant) { res.status(404).json({ error: "Tenant not found" }); return; }
+
+    if (!tenant.stripeAccountId) {
+      res.json({ connected: false, status: "not_started" });
+      return;
+    }
+
+    const stripeClient = getStripeForTenant(!!tenant.testMode);
+    const account = await stripeClient.accounts.retrieve(tenant.stripeAccountId);
+    const chargesEnabled = account.charges_enabled;
+    const payoutsEnabled = account.payouts_enabled;
+
+    if (chargesEnabled) {
+      await db.update(tenantsTable).set({
+        stripeAccountStatus: "active",
+        stripeChargesEnabled: chargesEnabled,
+        stripePayoutsEnabled: payoutsEnabled,
+      }).where(eq(tenantsTable.id, tenant.id));
+    }
+
+    // Fetch payout balance if connected
+    let balance = null;
+    if (chargesEnabled) {
+      try {
+        const b = await stripeClient.balance.retrieve({ stripeAccount: tenant.stripeAccountId });
+        balance = {
+          available: (b.available[0]?.amount ?? 0) / 100,
+          pending: (b.pending[0]?.amount ?? 0) / 100,
+          currency: b.available[0]?.currency?.toUpperCase() ?? "USD",
+        };
+      } catch { /* balance not available yet */ }
+    }
+
+    res.json({
+      connected: chargesEnabled,
+      status: chargesEnabled ? "active" : "onboarding",
+      chargesEnabled,
+      payoutsEnabled,
+      accountId: tenant.stripeAccountId,
+      balance,
+      feePercent: parseFloat(tenant.platformFeePercent ?? "20"),
+    });
+  } catch (e: any) {
+    req.log.error(e, "[host/stripe/status]");
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// GET /api/host/stripe/dashboard — Stripe Express dashboard login link
+router.get("/host/stripe/dashboard", requireHostAuth, async (req, res) => {
+  try {
+    const tenant = await db.query.tenantsTable.findFirst({
+      where: eq(tenantsTable.id, req.hostTenantId!),
+    });
+    if (!tenant?.stripeAccountId) {
+      res.status(400).json({ error: "No Stripe account connected" }); return;
+    }
+    const stripeClient = getStripeForTenant(!!tenant.testMode);
+    const link = await stripeClient.accounts.createLoginLink(tenant.stripeAccountId);
+    res.json({ url: link.url });
+  } catch (e: any) {
+    req.log.error(e, "[host/stripe/dashboard]");
+    res.status(500).json({ error: e.message });
   }
 });
 

@@ -1277,6 +1277,8 @@ export default function StorefrontBook() {
           customerName: name,
           bookingMeta: { listing_id: String(listingId) },
           customerId: session?.id ?? undefined,
+          // For host tenants: pass protection fee separately so OutdoorShare keeps 100% of it
+          protectionFeeCents: platformProtectionFee > 0 ? Math.round(platformProtectionFee * (dateRange?.days ?? 1) * 100) : undefined,
         }),
       });
       if (!res.ok) {

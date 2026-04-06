@@ -6,7 +6,7 @@ import { api } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
-import { Loader2, Camera, Upload, X } from "lucide-react";
+import { Loader2, Camera, Upload, X, CreditCard, CheckCircle2, AlertCircle, ExternalLink, DollarSign, ArrowRight } from "lucide-react";
 
 const API_BASE = "/api";
 
@@ -147,6 +147,178 @@ function CoverUpload({
   );
 }
 
+function PayoutsSection({ customerId }: { customerId: number }) {
+  const { toast } = useToast();
+  const [connecting, setConnecting] = useState(false);
+  const [loadingDashboard, setLoadingDashboard] = useState(false);
+
+  const { data: stripeStatus, isLoading } = useQuery({
+    queryKey: ["host-stripe-status", customerId],
+    queryFn: async () => {
+      const res = await fetch(`${API_BASE}/host/stripe/status`, {
+        headers: { "x-customer-id": String(customerId) },
+      });
+      return res.json();
+    },
+    enabled: !!customerId,
+    refetchInterval: 30000,
+  });
+
+  const handleConnect = async () => {
+    setConnecting(true);
+    try {
+      const res = await fetch(`${API_BASE}/host/stripe/connect`, {
+        method: "POST",
+        headers: { "x-customer-id": String(customerId), "Content-Type": "application/json" },
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Failed to start onboarding");
+      window.location.href = data.url;
+    } catch (err: any) {
+      toast({ title: "Error", description: err.message, variant: "destructive" });
+      setConnecting(false);
+    }
+  };
+
+  const handleDashboard = async () => {
+    setLoadingDashboard(true);
+    try {
+      const res = await fetch(`${API_BASE}/host/stripe/dashboard`, {
+        headers: { "x-customer-id": String(customerId) },
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Failed to open dashboard");
+      window.open(data.url, "_blank");
+    } catch (err: any) {
+      toast({ title: "Error", description: err.message, variant: "destructive" });
+    } finally {
+      setLoadingDashboard(false);
+    }
+  };
+
+  const isConnected = stripeStatus?.connected;
+  const isOnboarding = stripeStatus?.status === "onboarding";
+
+  return (
+    <section className="bg-white rounded-xl border border-gray-200 p-6">
+      <div className="flex items-center gap-2 mb-1">
+        <CreditCard className="h-4 w-4 text-primary" />
+        <h2 className="font-semibold text-gray-900">Payouts</h2>
+      </div>
+      <p className="text-xs text-gray-400 mb-5">
+        Connect your Stripe account to receive payouts from bookings. OutdoorShare keeps 20% of each rental fee plus the full protection plan amount.
+      </p>
+
+      {isLoading ? (
+        <div className="flex items-center gap-2 text-gray-400 text-sm">
+          <Loader2 className="h-4 w-4 animate-spin" /> Checking payout status...
+        </div>
+      ) : isConnected ? (
+        <div className="space-y-4">
+          {/* Connected status */}
+          <div className="flex items-center gap-3 bg-emerald-50 border border-emerald-200 rounded-xl px-4 py-3">
+            <CheckCircle2 className="h-5 w-5 text-emerald-500 flex-shrink-0" />
+            <div className="flex-1">
+              <p className="text-sm font-semibold text-emerald-700">Stripe account connected</p>
+              <p className="text-xs text-emerald-600">
+                Payouts are enabled. Funds are transferred automatically after each booking.
+              </p>
+            </div>
+          </div>
+
+          {/* Balance summary */}
+          {stripeStatus?.balance && (
+            <div className="grid grid-cols-2 gap-3">
+              <div className="bg-gray-50 rounded-xl p-4">
+                <div className="flex items-center gap-1.5 mb-1">
+                  <DollarSign className="h-3.5 w-3.5 text-emerald-500" />
+                  <p className="text-xs font-medium text-gray-500">Available</p>
+                </div>
+                <p className="text-xl font-bold text-gray-900">
+                  ${stripeStatus.balance.available.toFixed(2)}
+                </p>
+                <p className="text-[11px] text-gray-400">{stripeStatus.balance.currency}</p>
+              </div>
+              <div className="bg-gray-50 rounded-xl p-4">
+                <div className="flex items-center gap-1.5 mb-1">
+                  <Loader2 className="h-3.5 w-3.5 text-amber-500" />
+                  <p className="text-xs font-medium text-gray-500">Pending</p>
+                </div>
+                <p className="text-xl font-bold text-gray-900">
+                  ${stripeStatus.balance.pending.toFixed(2)}
+                </p>
+                <p className="text-[11px] text-gray-400">Arrives in 2–7 days</p>
+              </div>
+            </div>
+          )}
+
+          {/* Fee summary */}
+          <div className="bg-primary/5 rounded-xl px-4 py-3 text-xs text-gray-600">
+            <p className="font-medium text-gray-700 mb-1">Your payout breakdown per booking:</p>
+            <ul className="space-y-0.5">
+              <li>• You keep <span className="font-semibold text-primary">80%</span> of the rental fee</li>
+              <li>• OutdoorShare keeps <span className="font-semibold">20%</span> of the rental fee</li>
+              <li>• Protection plan fee goes entirely to OutdoorShare</li>
+            </ul>
+          </div>
+
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleDashboard}
+            disabled={loadingDashboard}
+            className="flex items-center gap-2"
+          >
+            {loadingDashboard ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ExternalLink className="h-3.5 w-3.5" />}
+            Open Stripe Dashboard
+          </Button>
+        </div>
+      ) : isOnboarding ? (
+        <div className="space-y-4">
+          <div className="flex items-center gap-3 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3">
+            <AlertCircle className="h-5 w-5 text-amber-500 flex-shrink-0" />
+            <div className="flex-1">
+              <p className="text-sm font-semibold text-amber-700">Stripe setup incomplete</p>
+              <p className="text-xs text-amber-600">
+                Your Stripe account is created but not fully set up. Continue onboarding to receive payouts.
+              </p>
+            </div>
+          </div>
+          <Button
+            onClick={handleConnect}
+            disabled={connecting}
+            className="bg-primary hover:bg-primary/90 text-white flex items-center gap-2"
+          >
+            {connecting ? <Loader2 className="h-4 w-4 animate-spin" /> : <ArrowRight className="h-4 w-4" />}
+            Continue Stripe Setup
+          </Button>
+        </div>
+      ) : (
+        <div className="space-y-4">
+          <div className="bg-gray-50 rounded-xl px-4 py-4 text-sm text-gray-600">
+            <p className="font-medium text-gray-700 mb-2">How payouts work</p>
+            <ul className="space-y-1 text-xs">
+              <li>• Connect a free Stripe Express account in minutes</li>
+              <li>• You keep <span className="font-semibold text-primary">80%</span> of each rental fee</li>
+              <li>• OutdoorShare keeps 20% + the protection plan fee</li>
+              <li>• Funds are transferred automatically after each confirmed booking</li>
+              <li>• Payouts arrive in your bank in 2–7 business days</li>
+            </ul>
+          </div>
+          <Button
+            onClick={handleConnect}
+            disabled={connecting}
+            className="bg-primary hover:bg-primary/90 text-white flex items-center gap-2"
+          >
+            {connecting ? <Loader2 className="h-4 w-4 animate-spin" /> : <CreditCard className="h-4 w-4" />}
+            Connect Stripe Account
+          </Button>
+        </div>
+      )}
+    </section>
+  );
+}
+
 export function HostSettingsPage() {
   const { customer } = useAuth();
   const { toast } = useToast();
@@ -274,6 +446,9 @@ export function HostSettingsPage() {
               </div>
             </div>
           </section>
+
+          {/* Payouts */}
+          {customer && <PayoutsSection customerId={customer.id} />}
 
           {/* Account */}
           <section className="bg-white rounded-xl border border-gray-200 p-6">
