@@ -665,6 +665,7 @@ export default function StorefrontBook() {
   }>>([]);
   const sigCanvasRef = useRef<HTMLCanvasElement>(null);
   const isDrawingRef = useRef(false);
+  const handleStartVerificationRef = useRef<(() => Promise<void>) | null>(null);
   const [sigHasContent, setSigHasContent] = useState(false);
   const [listingRules, setListingRules] = useState<ListingRule[]>([]);
   const [ruleInitials, setRuleInitials] = useState<Record<number, string>>({});
@@ -1313,6 +1314,22 @@ export default function StorefrontBook() {
     createPaymentIntent(cents);
   }, [session, isKiosk, email, name, discountedTotal, clientSecret, paymentConfirmed, dateRange, createPaymentIntent]);
 
+  // Auto-launch Stripe Identity popup as soon as the session is ready — no extra button tap
+  // Placed here (before early returns) so it's always called unconditionally; the handler
+  // is referenced via handleStartVerificationRef to avoid a temporal dead zone.
+  useEffect(() => {
+    if (
+      completePhase === "verification" &&
+      identityClientSecret &&
+      !identitySessionLoading &&
+      !identitySessionFailed &&
+      identityStatus === "idle"
+    ) {
+      handleStartVerificationRef.current?.();
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [completePhase, identityClientSecret, identitySessionLoading, identitySessionFailed, identityStatus]);
+
   if (!listingIdStr) {
     return (
       <div className="container mx-auto px-4 py-16 text-center">
@@ -1559,20 +1576,8 @@ export default function StorefrontBook() {
     }
   };
 
-  // Auto-launch Stripe Identity popup as soon as the session is ready — no extra button tap
-  // Declared here (after handleStartVerification) to avoid temporal dead zone during HMR
-  useEffect(() => {
-    if (
-      completePhase === "verification" &&
-      identityClientSecret &&
-      !identitySessionLoading &&
-      !identitySessionFailed &&
-      identityStatus === "idle"
-    ) {
-      handleStartVerification();
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [completePhase, identityClientSecret, identitySessionLoading, identitySessionFailed, identityStatus]);
+  // Keep the ref up-to-date with the latest version of the handler (safe to set in render body)
+  handleStartVerificationRef.current = handleStartVerification;
 
   const handleRetryVerification = async () => {
     setIdentityStatus("idle");
