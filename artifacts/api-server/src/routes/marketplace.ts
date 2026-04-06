@@ -20,7 +20,7 @@ function isPreview(req: import("express").Request): boolean {
 // GET /api/marketplace/listings — all active listings across all tenants
 router.get("/marketplace/listings", async (req, res) => {
   try {
-    const { search, categoryId, minPrice, maxPrice, location, tenantSlug, limit = "100", offset = "0" } = req.query as Record<string, string>;
+    const { search, categoryId, minPrice, maxPrice, location, tenantSlug, startDate, endDate, limit = "100", offset = "0" } = req.query as Record<string, string>;
     const preview = isPreview(req);
 
     const conditions = [eq(listingsTable.status, "active")];
@@ -37,6 +37,19 @@ router.get("/marketplace/listings", async (req, res) => {
     if (minPrice) conditions.push(gte(listingsTable.pricePerDay, minPrice));
     if (maxPrice) conditions.push(lte(listingsTable.pricePerDay, maxPrice));
     if (location) conditions.push(ilike(listingsTable.location, `%${location}%`));
+
+    // Availability filter: exclude listings where all units are booked during the requested range
+    if (startDate && endDate) {
+      conditions.push(
+        sql`(
+          SELECT COUNT(*)::int FROM bookings b
+          WHERE b.listing_id = ${listingsTable.id}
+            AND b.status IN ('pending', 'confirmed', 'active')
+            AND b.start_date <= ${endDate}
+            AND b.end_date >= ${startDate}
+        ) < ${listingsTable.quantity}`
+      );
+    }
 
     // Resolve tenantSlug filter to a tenantId
     if (tenantSlug) {
