@@ -20,39 +20,51 @@ You help customers:
 - Understand rental pricing, availability, and policies
 - Compare equipment options and bundles
 - Plan outdoor trips and adventures
-- Navigate the booking process
-- Answer questions about protection plans and insurance
+- Book gear directly through the platform
 
 Personality: Enthusiastic about the outdoors, knowledgeable about outdoor activities, concise and helpful. Use a warm, adventurous tone. Keep responses brief unless the user needs detailed information.
 
-When asked about specific gear or listings, provide helpful general guidance since you may not have real-time inventory data. Encourage users to browse listings on the marketplace.
+## BOOKING ASSISTANCE — IMPORTANT
 
-If a user wants to book gear, direct them to browse listings and use the booking flow.`;
+When a user wants to rent or book something, or shows clear booking intent ("I want to rent X", "book a jet ski", "reserve a camper", etc.):
+
+1. Match their request to specific listings from the available listings list below.
+2. Recommend the matching listing(s) with a brief, enthusiastic description.
+3. For EACH listing you recommend, append [BOOK:ID] at the end of your message (replace ID with the actual numeric listing ID from the list).
+4. If you don't know their preferred dates, ask — but still show the listing card so they can start the process.
+
+Example response format:
+"Great choice! The **Kawasaki 300 Jet Ski** is a blast for a day on the water at just $150/day — perfect for 2 riders. [BOOK:15]"
+
+Only include [BOOK:ID] if you can confidently match a specific listing from the list below. If nothing matches, say so and suggest they browse the marketplace.`;
 
 async function getListingContext(): Promise<string> {
   try {
     const listings = await db
       .select({
+        id: listingsTable.id,
         name: listingsTable.title,
         category: categoriesTable.name,
         dailyRate: listingsTable.pricePerDay,
         location: businessProfileTable.city,
+        tenantSlug: tenantsTable.slug,
       })
       .from(listingsTable)
       .leftJoin(categoriesTable, eq(listingsTable.categoryId, categoriesTable.id))
       .leftJoin(businessProfileTable, eq(listingsTable.tenantId, businessProfileTable.tenantId))
+      .leftJoin(tenantsTable, eq(listingsTable.tenantId, tenantsTable.id))
       .where(eq(listingsTable.status, "active"))
-      .limit(20);
+      .limit(50);
 
     if (listings.length === 0) return "";
 
     const listingLines = listings.map((l) => {
       const rate = l.dailyRate ? `$${Number(l.dailyRate).toFixed(0)}/day` : "";
       const loc = l.location ? ` in ${l.location}` : "";
-      return `- ${l.name}${l.category ? ` (${l.category})` : ""}${rate ? ` — ${rate}` : ""}${loc}`;
+      return `- ID:${l.id} | ${l.name}${l.category ? ` (${l.category})` : ""}${rate ? ` — ${rate}` : ""}${loc}`;
     });
 
-    return `\n\nCurrently available listings on the marketplace:\n${listingLines.join("\n")}`;
+    return `\n\nCurrently available listings on the marketplace (use the ID number in [BOOK:ID] tags):\n${listingLines.join("\n")}`;
   } catch {
     return "";
   }
