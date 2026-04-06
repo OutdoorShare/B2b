@@ -71,7 +71,7 @@ router.get("/marketplace/listings", async (req, res) => {
       .innerJoin(tenantsTable, eq(listingsTable.tenantId, tenantsTable.id))
       .leftJoin(businessProfileTable, eq(businessProfileTable.tenantId, tenantsTable.id))
       .leftJoin(categoriesTable, eq(listingsTable.categoryId, categoriesTable.id))
-      .where(and(...conditions, eq(tenantsTable.status, "active")))
+      .where(and(...conditions, eq(tenantsTable.status, "active"), eq(tenantsTable.testMode, false)))
       .orderBy(desc(listingsTable.createdAt))
       .limit(parseInt(limit as string))
       .offset(parseInt(offset as string));
@@ -139,7 +139,7 @@ router.get("/marketplace/listings/:id", async (req, res) => {
       .innerJoin(tenantsTable, eq(listingsTable.tenantId, tenantsTable.id))
       .leftJoin(businessProfileTable, eq(businessProfileTable.tenantId, tenantsTable.id))
       .leftJoin(categoriesTable, eq(listingsTable.categoryId, categoriesTable.id))
-      .where(and(eq(listingsTable.id, id), eq(listingsTable.status, "active"), eq(tenantsTable.status, "active")));
+      .where(and(eq(listingsTable.id, id), eq(listingsTable.status, "active"), eq(tenantsTable.status, "active"), eq(tenantsTable.testMode, false)));
 
     if (!row) { res.status(404).json({ error: "Listing not found" }); return; }
 
@@ -192,7 +192,8 @@ router.get("/marketplace/categories", async (req, res) => {
       ))
       .innerJoin(tenantsTable, and(
         eq(listingsTable.tenantId, tenantsTable.id),
-        eq(tenantsTable.status, "active")
+        eq(tenantsTable.status, "active"),
+        eq(tenantsTable.testMode, false)
       ))
       .groupBy(categoriesTable.id, categoriesTable.name, categoriesTable.slug, categoriesTable.icon)
       .orderBy(desc(sql<number>`count(${listingsTable.id})`));
@@ -226,7 +227,7 @@ router.get("/marketplace/companies", async (req, res) => {
         listingsTable,
         and(eq(listingsTable.tenantId, tenantsTable.id), eq(listingsTable.status, "active"))
       )
-      .where(eq(tenantsTable.status, "active"))
+      .where(and(eq(tenantsTable.status, "active"), eq(tenantsTable.testMode, false)))
       .groupBy(
         tenantsTable.id,
         tenantsTable.slug,
@@ -253,13 +254,13 @@ router.get("/marketplace/stats", async (req, res) => {
     const [{ listings }] = await db
       .select({ listings: sql<number>`count(*)::int` })
       .from(listingsTable)
-      .innerJoin(tenantsTable, and(eq(listingsTable.tenantId, tenantsTable.id), eq(tenantsTable.status, "active")))
+      .innerJoin(tenantsTable, and(eq(listingsTable.tenantId, tenantsTable.id), eq(tenantsTable.status, "active"), eq(tenantsTable.testMode, false)))
       .where(eq(listingsTable.status, "active"));
 
     const [{ companies }] = await db
       .select({ companies: sql<number>`count(*)::int` })
       .from(tenantsTable)
-      .where(eq(tenantsTable.status, "active"));
+      .where(and(eq(tenantsTable.status, "active"), eq(tenantsTable.testMode, false)));
 
     const [{ customers }] = await db
       .select({ customers: sql<number>`count(*)::int` })
