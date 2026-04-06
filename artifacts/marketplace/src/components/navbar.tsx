@@ -61,12 +61,12 @@ export function Navbar({
           {/* Logo */}
           <button
             onClick={() => setLocation("/")}
-            className="flex items-center gap-2.5 hover:opacity-90 transition-opacity"
+            className="flex items-center gap-1.5 hover:opacity-90 transition-opacity"
           >
             <img
-              src={`${BASE_URL}/outdoorshare-logo-transparent.png`}
+              src={`${BASE_URL}/outdoorshare-icon.png`}
               alt="OutdoorShare"
-              className="h-[68px] w-auto object-contain flex-shrink-0"
+              className="h-[46px] w-auto object-contain flex-shrink-0"
               onError={(e) => {
                 (e.currentTarget as HTMLImageElement).style.display = "none";
               }}
