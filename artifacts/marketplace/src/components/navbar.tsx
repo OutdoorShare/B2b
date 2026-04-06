@@ -103,6 +103,10 @@ export function Navbar({ onAuthOpen }: { onAuthOpen: () => void }) {
                       <BookOpen className="h-4 w-4 mr-2" />
                       My Bookings
                     </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => setLocation("/profile?tab=settings")}>
+                      <User className="h-4 w-4 mr-2" />
+                      Account Settings
+                    </DropdownMenuItem>
                     {isHost ? (
                       <DropdownMenuItem onClick={() => setLocation("/host")}>
                         <LayoutDashboard className="h-4 w-4 mr-2" />

@@ -110,6 +110,12 @@ export interface Customer {
   phone: string | null;
   tenantSlug: string | null;
   identityVerificationStatus: string;
+  billingAddress: string | null;
+  billingCity: string | null;
+  billingState: string | null;
+  billingZip: string | null;
+  cardLastFour: string | null;
+  cardBrand: string | null;
   createdAt: string;
 }
 
@@ -207,6 +213,17 @@ async function post<T>(path: string, body: unknown): Promise<T> {
   return data;
 }
 
+async function put<T>(path: string, body: unknown): Promise<T> {
+  const res = await fetch(`${API_BASE}${path}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || `API error ${res.status}`);
+  return data;
+}
+
 function hostHeaders(customerId: number): Record<string, string> {
   return {
     "Content-Type": "application/json",
@@ -292,6 +309,12 @@ export const api = {
       post<Customer>("/customers/login", { email, password }),
     register: (email: string, password: string, name: string, phone?: string) =>
       post<Customer>("/customers/register", { email, password, name, phone }),
+    updateProfile: (id: number, body: Partial<Pick<Customer, "name" | "phone" | "billingAddress" | "billingCity" | "billingState" | "billingZip">>) =>
+      put<Customer>(`/customers/${id}`, body),
+    removeCard: (id: number) =>
+      put<Customer>(`/customers/${id}`, { cardLastFour: null, cardBrand: null }),
+    changePassword: (id: number, currentPassword: string, newPassword: string) =>
+      post<{ ok: boolean }>(`/customers/${id}/change-password`, { currentPassword, newPassword }),
   },
   host: {
     become: (customerId: number, body: { displayName?: string; city?: string; state?: string }) =>

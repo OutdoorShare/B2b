@@ -8,6 +8,7 @@ interface AuthContextValue {
   isHost: boolean;
   login: (c: Customer) => void;
   logout: () => void;
+  updateCustomer: (c: Customer) => void;
   setHostInfo: (info: HostInfo | null) => void;
   loading: boolean;
 }
@@ -18,6 +19,7 @@ const AuthContext = createContext<AuthContextValue>({
   isHost: false,
   login: () => {},
   logout: () => {},
+  updateCustomer: () => {},
   setHostInfo: () => {},
   loading: true,
 });
@@ -72,6 +74,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     localStorage.removeItem(HOST_STORAGE_KEY);
   }, []);
 
+  const updateCustomer = useCallback((c: Customer) => {
+    setCustomer(c);
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(c));
+  }, []);
+
   const setHostInfo = useCallback((info: HostInfo | null) => {
     setHostInfoState(info);
     if (info) {
@@ -82,7 +89,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   return (
-    <AuthContext.Provider value={{ customer, hostInfo, isHost: !!hostInfo, login, logout, setHostInfo, loading }}>
+    <AuthContext.Provider value={{ customer, hostInfo, isHost: !!hostInfo, login, logout, updateCustomer, setHostInfo, loading }}>
       {children}
     </AuthContext.Provider>
   );
