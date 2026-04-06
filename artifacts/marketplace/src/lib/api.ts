@@ -148,11 +148,15 @@ export interface HostBooking {
   startDate: string;
   endDate: string;
   totalPrice: string;
+  listingId: number | null;
   listingTitle: string;
   listingImage: string | null;
   customerName: string;
   customerEmail: string | null;
   customerPhone: string | null;
+  source: string | null;
+  notes: string | null;
+  quantity: number | null;
   createdAt: string;
 }
 
@@ -264,6 +268,17 @@ async function hostPut<T>(path: string, body: unknown, customerId: number): Prom
   return data;
 }
 
+async function hostPatch<T>(path: string, body: unknown, customerId: number): Promise<T> {
+  const res = await fetch(`${API_BASE}${path}`, {
+    method: "PATCH",
+    headers: hostHeaders(customerId),
+    body: JSON.stringify(body),
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error((data as any).error || `API error ${res.status}`);
+  return data;
+}
+
 async function hostDelete<T>(path: string, customerId: number): Promise<T> {
   const res = await fetch(`${API_BASE}${path}`, {
     method: "DELETE",
@@ -341,6 +356,8 @@ export const api = {
       hostDelete<{ success: boolean }>(`/host/listings/${id}`, customerId),
     bookings: (customerId: number) =>
       hostGet<HostBooking[]>("/host/bookings", customerId),
+    updateBookingStatus: (bookingId: number, status: string, customerId: number) =>
+      hostPatch<{ id: number; status: string }>(`/host/bookings/${bookingId}/status`, { status }, customerId),
     updateSettings: (customerId: number, body: Record<string, unknown>) =>
       hostPut<{ success: boolean }>("/host/settings", body, customerId),
     categories: () =>

@@ -362,31 +362,45 @@ router.get("/host/bookings", requireHostAuth, async (req, res) => {
           title: listingsTable.title,
           imageUrls: listingsTable.imageUrls,
         },
-        customer: {
-          id: customersTable.id,
-          name: customersTable.name,
-          email: customersTable.email,
-          phone: customersTable.phone,
-        },
       })
       .from(bookingsTable)
       .leftJoin(listingsTable, eq(bookingsTable.listingId, listingsTable.id))
-      .leftJoin(customersTable, eq(bookingsTable.customerId, customersTable.id))
       .where(eq(bookingsTable.tenantId, req.hostTenantId!))
       .orderBy(desc(bookingsTable.createdAt))
-      .limit(100);
+      .limit(200);
 
     res.json(bookings.map(r => ({
       ...r.booking,
       listingTitle: r.listing?.title ?? "Unknown",
-      listingImage: r.listing?.imageUrls?.[0] ?? null,
-      customerName: r.customer?.name ?? "Unknown",
-      customerEmail: r.customer?.email ?? null,
-      customerPhone: r.customer?.phone ?? null,
+      listingImage: (r.listing?.imageUrls as string[] | null)?.[0] ?? null,
     })));
   } catch (err) {
     req.log.error(err);
     res.status(500).json({ error: "Failed to fetch bookings" });
+  }
+});
+
+// ── PATCH /api/host/bookings/:id/status ──────────────────────────────────────
+router.patch("/host/bookings/:id/status", requireHostAuth, async (req, res) => {
+  try {
+    const id = parseInt(req.params.id, 10);
+    const { status } = req.body as { status?: string };
+    const allowed = ["pending", "confirmed", "active", "completed", "cancelled"];
+    if (!status || !allowed.includes(status)) {
+      return void res.status(400).json({ error: "Invalid status" });
+    }
+
+    const [updated] = await db
+      .update(bookingsTable)
+      .set({ status })
+      .where(and(eq(bookingsTable.id, id), eq(bookingsTable.tenantId, req.hostTenantId!)))
+      .returning({ id: bookingsTable.id });
+
+    if (!updated) return void res.status(404).json({ error: "Booking not found" });
+    res.json({ id: updated.id, status });
+  } catch (err) {
+    req.log.error(err);
+    res.status(500).json({ error: "Failed to update booking status" });
   }
 });
 
