@@ -594,18 +594,45 @@ export function MemoriesPage({ onAuthOpen }: { onAuthOpen: () => void }) {
   return (
     <div className="min-h-screen bg-gray-50 pb-16">
       {/* Hero banner */}
-      <div className="bg-gradient-to-br from-primary to-primary/80 text-white">
-        <div className="max-w-5xl mx-auto px-4 py-10 text-center">
-          <div className="flex items-center justify-center gap-2 mb-3">
-            <Mountain className="h-7 w-7 opacity-90" />
-            <h1 className="text-3xl font-extrabold tracking-tight">Adventure Wall</h1>
+      <div
+        className="relative text-white overflow-hidden"
+        style={{ background: "linear-gradient(135deg, #1a4731 0%, hsl(127,55%,38%) 55%, hsl(197,78%,48%) 100%)" }}
+      >
+        {/* Decorative mountain silhouette */}
+        <svg
+          className="absolute inset-x-0 bottom-0 w-full opacity-10"
+          viewBox="0 0 1440 120"
+          preserveAspectRatio="none"
+          xmlns="http://www.w3.org/2000/svg"
+        >
+          <path d="M0,80 L180,20 L360,70 L540,10 L720,60 L900,5 L1080,55 L1260,15 L1440,50 L1440,120 L0,120 Z" fill="white" />
+        </svg>
+        {/* Scattered dots texture */}
+        <div className="absolute inset-0 opacity-5" style={{
+          backgroundImage: "radial-gradient(circle, white 1px, transparent 1px)",
+          backgroundSize: "28px 28px"
+        }} />
+
+        <div className="relative max-w-5xl mx-auto px-4 py-14 text-center">
+          {/* Logo + brand line */}
+          <div className="flex items-center justify-center gap-2.5 mb-4">
+            <img
+              src={`${BASE_URL}/outdoorshare-icon.png`}
+              alt="OutdoorShare"
+              className="h-10 w-10 object-contain drop-shadow-md"
+            />
+            <span className="text-xs font-bold tracking-[0.2em] uppercase text-white/70">OutdoorShare</span>
           </div>
-          <p className="text-primary-foreground/80 text-sm max-w-md mx-auto mb-6">
+
+          <h1 className="text-4xl font-extrabold tracking-tight mb-2 drop-shadow-sm">
+            Adventure Wall
+          </h1>
+          <p className="text-white/75 text-sm max-w-md mx-auto mb-7 leading-relaxed">
             Share photos from your outdoor adventures, tag companies and hosts, and inspire the next great trip.
           </p>
           <Button
             onClick={handlePostClick}
-            className="bg-white text-primary hover:bg-white/90 font-semibold shadow-md"
+            className="bg-white text-primary hover:bg-white/90 font-semibold shadow-lg px-6 py-2.5 h-auto text-sm"
           >
             <Camera className="h-4 w-4 mr-2" />
             Share a Memory
@@ -618,24 +645,24 @@ export function MemoriesPage({ onAuthOpen }: { onAuthOpen: () => void }) {
         <div className="flex items-center gap-1 bg-white border border-gray-200 rounded-xl p-1 w-fit mb-6 shadow-sm">
           <button
             onClick={() => handleTabChange("all")}
-            className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+            className={`flex items-center gap-1.5 px-4 py-1.5 rounded-lg text-sm font-medium transition-colors ${
               tab === "all"
                 ? "bg-primary text-white shadow-sm"
                 : "text-gray-500 hover:text-gray-900"
             }`}
           >
-            <Globe className="h-3.5 w-3.5 inline mr-1.5 -mt-0.5" />
+            <Globe className="h-3.5 w-3.5" />
             Social Wall
           </button>
           <button
             onClick={() => handleTabChange("my")}
-            className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+            className={`flex items-center gap-1.5 px-4 py-1.5 rounded-lg text-sm font-medium transition-colors ${
               tab === "my"
                 ? "bg-primary text-white shadow-sm"
                 : "text-gray-500 hover:text-gray-900"
             }`}
           >
-            <MapPin className="h-3.5 w-3.5 inline mr-1.5 -mt-0.5" />
+            <MapPin className="h-3.5 w-3.5" />
             My Memories
           </button>
         </div>
