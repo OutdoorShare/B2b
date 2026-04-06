@@ -80,7 +80,7 @@ function AppContent() {
   return (
     <FavoritesProvider onAuthOpen={() => setAuthOpen(true)}>
       <ScrollToTop />
-      {!onHostPath && <Navbar onAuthOpen={() => setAuthOpen(true)} />}
+      {!onHostPath && <Navbar onAuthOpen={() => setAuthOpen(true)} heroMode={location === "/"} />}
       {!onHostPath && preview && <PreviewBanner />}
       <Switch>
         <Route path="/" component={() => <HomePage onAuthOpen={() => setAuthOpen(true)} />} />
