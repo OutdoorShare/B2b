@@ -18,7 +18,6 @@ interface ListingCardProps {
 export function ListingCard({ listing }: ListingCardProps) {
   const [, setLocation] = useLocation();
   const image = listing.imageUrls?.[0] ? resolveImage(listing.imageUrls[0]) : null;
-  const color = listing.businessPrimaryColor || "#2d6a4f";
 
   return (
     <button
@@ -40,10 +39,7 @@ export function ListingCard({ listing }: ListingCardProps) {
             {listing.categoryName}
           </span>
         )}
-        <div
-          className="absolute bottom-0 left-0 right-0 h-1"
-          style={{ backgroundColor: color }}
-        />
+        <div className="absolute bottom-0 left-0 right-0 h-1 bg-primary" />
       </div>
 
       {/* Content */}
@@ -82,10 +78,7 @@ export function ListingCard({ listing }: ListingCardProps) {
             <span className="text-lg font-bold text-gray-900">${parseFloat(listing.pricePerDay).toFixed(0)}</span>
             <span className="text-xs text-gray-400 ml-1">/ day</span>
           </div>
-          <span
-            className="text-xs font-medium px-2.5 py-1 rounded-full text-white"
-            style={{ backgroundColor: color }}
-          >
+          <span className="text-xs font-medium px-2.5 py-1 rounded-full text-primary-foreground bg-primary">
             Book Now
           </span>
         </div>

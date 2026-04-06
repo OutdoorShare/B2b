@@ -53,7 +53,6 @@ export function CompaniesPage() {
         ) : companies && companies.length > 0 ? (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
             {companies.map(company => {
-              const color = company.primaryColor || "#2d6a4f";
               return (
                 <div
                   key={company.tenantId}
@@ -67,10 +66,7 @@ export function CompaniesPage() {
                         className="h-12 w-12 rounded-full object-cover border border-gray-100 flex-shrink-0"
                       />
                     ) : (
-                      <div
-                        className="h-12 w-12 rounded-full flex items-center justify-center text-white font-bold text-lg flex-shrink-0"
-                        style={{ backgroundColor: color }}
-                      >
+                      <div className="h-12 w-12 rounded-full flex items-center justify-center text-primary-foreground font-bold text-lg flex-shrink-0 bg-primary">
                         {(company.businessName ?? company.slug)[0]?.toUpperCase()}
                       </div>
                     )}
@@ -100,8 +96,7 @@ export function CompaniesPage() {
                   <div className="flex gap-2">
                     <Button
                       size="sm"
-                      className="flex-1 text-white text-xs"
-                      style={{ backgroundColor: color }}
+                      className="flex-1 text-xs bg-primary hover:bg-primary/90 text-primary-foreground"
                       onClick={() => setLocation(`/?tenantSlug=${company.slug}`)}
                     >
                       Browse Listings

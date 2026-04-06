@@ -60,8 +60,6 @@ export function ListingDetailPage() {
     window.location.href = bookUrl;
   };
 
-  const color = listing.business.primaryColor || "#2d6a4f";
-
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Back nav */}
@@ -121,7 +119,7 @@ export function ListingDetailPage() {
                   {listing.categoryIcon || "🏕️"}
                 </div>
               )}
-              <div className="absolute bottom-0 left-0 right-0 h-1" style={{ backgroundColor: color }} />
+              <div className="absolute bottom-0 left-0 right-0 h-1 bg-primary" />
             </div>
 
             {/* Thumbnail strip */}
@@ -218,8 +216,7 @@ export function ListingDetailPage() {
               <Button
                 onClick={handleBook}
                 size="lg"
-                className="w-full text-white font-semibold h-12"
-                style={{ backgroundColor: color }}
+                className="w-full font-semibold h-12 bg-primary hover:bg-primary/90 text-primary-foreground"
               >
                 <Calendar className="h-4 w-4 mr-2" />
                 Book Now
@@ -244,10 +241,7 @@ export function ListingDetailPage() {
                       className="h-10 w-10 rounded-full object-cover border border-gray-100"
                     />
                   ) : (
-                    <div
-                      className="h-10 w-10 rounded-full flex items-center justify-center text-white font-bold text-sm"
-                      style={{ backgroundColor: color }}
-                    >
+                    <div className="h-10 w-10 rounded-full flex items-center justify-center text-primary-foreground font-bold text-sm bg-primary">
                       {listing.business.name[0]}
                     </div>
                   )}
