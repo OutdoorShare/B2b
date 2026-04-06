@@ -124,6 +124,8 @@ router.get("/marketplace/listings/:id", async (req, res) => {
           slug: tenantsTable.slug,
           name: tenantsTable.name,
           status: tenantsTable.status,
+          isHost: tenantsTable.isHost,
+          hostCustomerId: tenantsTable.hostCustomerId,
         },
         business: {
           name: businessProfileTable.name,
@@ -154,10 +156,25 @@ router.get("/marketplace/listings/:id", async (req, res) => {
 
     if (!row) { res.status(404).json({ error: "Listing not found" }); return; }
 
+    // For host listings, look up the host's first name from the customers table
+    let contactName: string = row.business?.name ?? row.tenant.name;
+    if (row.tenant.isHost && row.tenant.hostCustomerId) {
+      const [hostCustomer] = await db
+        .select({ name: customersTable.name })
+        .from(customersTable)
+        .where(eq(customersTable.id, row.tenant.hostCustomerId));
+      if (hostCustomer?.name) {
+        // Show first name only for host listings
+        contactName = hostCustomer.name.split(" ")[0] ?? hostCustomer.name;
+      }
+    }
+
     res.json({
       ...row.listing,
       tenantSlug: row.tenant.slug,
       tenantName: row.tenant.name,
+      isHost: row.tenant.isHost,
+      contactName,
       business: {
         name: row.business?.name ?? row.tenant.name,
         tagline: row.business?.tagline ?? null,

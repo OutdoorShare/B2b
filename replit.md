@@ -16,6 +16,7 @@ This project is a white-label rental management platform, designed as a B2B SaaS
 - Fully customizable branding and theming options.
 - Integrated documentation portal.
 - Consumer-facing marketplace (`/marketplace/`) with map view, category filters, and company browsing.
+- **Persistent chat**: Listing detail page has a real chat panel (replacing the one-shot email modal). Guest users enter name/email once (persisted in localStorage per tenant slug), then get a full conversation thread with message history, date groupings, and 5-second polling. API: `POST /api/chat/threads` (returns `{ threadId, message }`), `GET /api/chat/threads/:id` (returns `{ thread, messages }`), `POST /api/chat/threads/:id/messages`. For host listings, button shows host's first name ("Chat with Jake"); for company listings shows business name ("Chat with Wilder rentals").
 
 ## User Preferences
 

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useRoute, useLocation } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "@/lib/api";
@@ -7,7 +7,8 @@ import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import {
   ArrowLeft, MapPin, Building2, ExternalLink, ChevronLeft, ChevronRight,
-  Calendar, Shield, Package, CheckCircle2, MessageCircle, Plus, Lock, X,
+  Calendar, Shield, Package, CheckCircle2, MessageCircle, Plus, Lock, X, Send,
+  Loader2,
 } from "lucide-react";
 import { useAuth } from "@/context/auth";
 
@@ -50,98 +51,213 @@ async function fetchProtection(categorySlug: string): Promise<ProtectionPlan> {
   return res.json();
 }
 
-async function sendMessage(body: {
-  tenantSlug: string; tenantName: string; name: string; email: string; message: string;
-}) {
-  const res = await fetch(`${API_BASE}/feedback`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      submitterType: "renter",
-      submitterName: body.name,
-      submitterEmail: body.email,
-      subject: `Message from marketplace renter — ${body.tenantName}`,
-      message: body.message,
-      tenantSlug: body.tenantSlug,
-      tenantName: body.tenantName,
-    }),
-  });
-  if (!res.ok) throw new Error("Failed to send message");
+interface ChatMessage {
+  id: number;
+  senderType: "admin" | "renter";
+  senderName: string;
+  body: string;
+  createdAt: string;
 }
 
-function ContactModal({
-  tenantSlug, tenantName, onClose,
-}: { tenantSlug: string; tenantName: string; onClose: () => void }) {
+interface GuestInfo { name: string; email: string; }
+
+function guestKey(slug: string) { return `os_chat_guest_${slug}`; }
+function loadGuest(slug: string): GuestInfo | null {
+  try { const r = localStorage.getItem(guestKey(slug)); return r ? JSON.parse(r) : null; }
+  catch { return null; }
+}
+function saveGuest(slug: string, info: GuestInfo) {
+  try { localStorage.setItem(guestKey(slug), JSON.stringify(info)); } catch {}
+}
+
+function formatTime(d: string) {
+  return new Date(d).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: true });
+}
+function formatDay(d: string) {
+  const date = new Date(d);
+  const today = new Date();
+  const yesterday = new Date(); yesterday.setDate(today.getDate() - 1);
+  if (date.toDateString() === today.toDateString()) return "Today";
+  if (date.toDateString() === yesterday.toDateString()) return "Yesterday";
+  return date.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+}
+
+function ChatPanel({
+  tenantSlug, contactName, logoUrl, onClose,
+}: { tenantSlug: string; contactName: string; logoUrl?: string | null; onClose: () => void }) {
   const { customer } = useAuth();
-  const [name, setName] = useState(customer?.name ?? "");
-  const [email, setEmail] = useState(customer?.email ?? "");
-  const [message, setMessage] = useState("");
+
+  type Phase = "guest_form" | "loading" | "chatting";
+  const [phase, setPhase] = useState<Phase>("loading");
+  const [gName, setGName] = useState("");
+  const [gEmail, setGEmail] = useState("");
+  const [gErr, setGErr] = useState("");
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
-  const [sent, setSent] = useState(false);
-  const [err, setErr] = useState("");
+  const threadIdRef = useRef<number | null>(null);
+  const identityRef = useRef<GuestInfo | null>(null);
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const bottomRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
+
+  const tenantHeaders = { "x-tenant-slug": tenantSlug };
+
+  const scrollToBottom = () => {
+    setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: "smooth" }), 50);
+  };
+
+  const loadMessages = async (tid: number) => {
+    try {
+      const data = await fetch(`${API_BASE}/chat/threads/${tid}`, { headers: tenantHeaders }).then(r => r.json());
+      if (Array.isArray(data.messages)) {
+        setMessages(data.messages);
+        scrollToBottom();
+        fetch(`${API_BASE}/chat/threads/${tid}/read`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json", ...tenantHeaders },
+          body: JSON.stringify({ viewer: "renter" }),
+        }).catch(() => {});
+      }
+    } catch {}
+  };
+
+  const startPolling = (tid: number) => {
+    if (pollRef.current) clearInterval(pollRef.current);
+    pollRef.current = setInterval(() => { loadMessages(tid); }, 5000);
+  };
+
+  const initChat = async (email: string, name: string) => {
+    setPhase("loading");
+    identityRef.current = { email, name };
+    try {
+      const threads: { id: number }[] = await fetch(
+        `${API_BASE}/chat/threads?email=${encodeURIComponent(email)}`,
+        { headers: tenantHeaders },
+      ).then(r => r.ok ? r.json() : []);
+      if (Array.isArray(threads) && threads.length > 0) {
+        threadIdRef.current = threads[0].id;
+        await loadMessages(threads[0].id);
+        startPolling(threads[0].id);
+      } else {
+        threadIdRef.current = null;
+        setMessages([]);
+      }
+    } catch {}
+    setPhase("chatting");
+    setTimeout(() => inputRef.current?.focus(), 100);
+  };
+
+  useEffect(() => {
+    if (customer) {
+      initChat(customer.email, customer.name ?? customer.email);
+    } else {
+      const saved = loadGuest(tenantSlug);
+      if (saved) {
+        setGName(saved.name); setGEmail(saved.email);
+        initChat(saved.email, saved.name);
+      } else {
+        setPhase("guest_form");
+      }
+    }
+    return () => { if (pollRef.current) clearInterval(pollRef.current); };
+  }, []);
+
+  const handleGuestStart = () => {
+    if (!gName.trim() || !gEmail.trim()) { setGErr("Please enter your name and email."); return; }
+    setGErr("");
+    saveGuest(tenantSlug, { name: gName.trim(), email: gEmail.trim() });
+    initChat(gEmail.trim(), gName.trim());
+  };
 
   const handleSend = async () => {
-    if (!name.trim() || !email.trim() || !message.trim()) {
-      setErr("Please fill in all fields.");
-      return;
-    }
+    const text = input.trim();
+    if (!text || sending) return;
+    const identity = identityRef.current ?? (customer ? { email: customer.email, name: customer.name ?? customer.email } : null);
+    if (!identity) return;
     setSending(true);
-    setErr("");
+    setInput("");
     try {
-      await sendMessage({ tenantSlug, tenantName, name, email, message });
-      setSent(true);
+      if (!threadIdRef.current) {
+        const res = await fetch(`${API_BASE}/chat/threads`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", ...tenantHeaders },
+          body: JSON.stringify({ customerEmail: identity.email, customerName: identity.name, body: text }),
+        });
+        if (!res.ok) throw new Error("Failed");
+        const data: { threadId: number } = await res.json();
+        threadIdRef.current = data.threadId;
+        await loadMessages(data.threadId);
+        startPolling(data.threadId);
+      } else {
+        const res = await fetch(`${API_BASE}/chat/threads/${threadIdRef.current}/messages`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", ...tenantHeaders },
+          body: JSON.stringify({ body: text, senderType: "renter", senderName: identity.name }),
+        });
+        if (!res.ok) throw new Error("Failed");
+        await loadMessages(threadIdRef.current);
+      }
     } catch {
-      setErr("Something went wrong. Please try again.");
+      setInput(text);
     } finally {
       setSending(false);
+      setTimeout(() => inputRef.current?.focus(), 50);
     }
   };
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSend(); }
+  };
+
+  // Group messages by day label
+  const grouped: { label: string; msgs: ChatMessage[] }[] = [];
+  for (const m of messages) {
+    const label = formatDay(m.createdAt);
+    if (!grouped.length || grouped[grouped.length - 1].label !== label) {
+      grouped.push({ label, msgs: [m] });
+    } else {
+      grouped[grouped.length - 1].msgs.push(m);
+    }
+  }
 
   return (
     <div
       className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50 backdrop-blur-sm p-4"
       onClick={e => { if (e.target === e.currentTarget) onClose(); }}
     >
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6 relative animate-in slide-in-from-bottom-4 duration-200">
-        <button
-          onClick={onClose}
-          className="absolute top-4 right-4 text-gray-400 hover:text-gray-700 transition-colors"
-        >
-          <X className="h-5 w-5" />
-        </button>
-
-        {sent ? (
-          <div className="text-center py-6">
-            <div className="h-14 w-14 rounded-full bg-primary/10 flex items-center justify-center mx-auto mb-4">
-              <CheckCircle2 className="h-7 w-7 text-primary" />
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md flex flex-col animate-in slide-in-from-bottom-4 duration-200"
+        style={{ height: "min(560px, 90dvh)" }}
+      >
+        {/* Header */}
+        <div className="flex items-center gap-3 px-4 py-3 border-b border-gray-100 flex-shrink-0">
+          {logoUrl ? (
+            <img src={logoUrl} alt={contactName} className="h-8 w-8 rounded-full object-cover flex-shrink-0" />
+          ) : (
+            <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
+              <MessageCircle className="h-4 w-4 text-primary" />
             </div>
-            <h3 className="text-lg font-semibold text-gray-900 mb-1">Message sent!</h3>
-            <p className="text-sm text-gray-500 mb-5">
-              Your message has been forwarded to <span className="font-medium">{tenantName}</span>.
-              They'll reach out to you shortly.
-            </p>
-            <Button onClick={onClose} className="bg-primary hover:bg-primary/90 text-primary-foreground">Done</Button>
+          )}
+          <div className="flex-1 min-w-0">
+            <p className="font-semibold text-gray-900 text-sm leading-none truncate">{contactName}</p>
+            <p className="text-xs text-gray-400 mt-0.5">Usually responds within a few hours</p>
           </div>
-        ) : (
-          <>
-            <div className="flex items-center gap-3 mb-5">
-              <div className="h-9 w-9 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
-                <MessageCircle className="h-4 w-4 text-primary" />
-              </div>
-              <div>
-                <h3 className="font-semibold text-gray-900 text-sm">Message the Host</h3>
-                <p className="text-xs text-gray-500">{tenantName}</p>
-              </div>
-            </div>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-700 transition-colors ml-2 flex-shrink-0">
+            <X className="h-5 w-5" />
+          </button>
+        </div>
 
-            <div className="space-y-3">
+        {/* Body */}
+        <div className="flex-1 overflow-y-auto px-4 py-3 space-y-4">
+          {phase === "guest_form" && (
+            <div className="flex flex-col gap-4 pt-2">
+              <p className="text-sm text-gray-600 text-center">Enter your info to start a conversation with <span className="font-medium">{contactName}</span>.</p>
               <div>
                 <label className="text-xs font-medium text-gray-500 mb-1 block">Your name</label>
                 <input
                   className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary"
-                  value={name}
-                  onChange={e => setName(e.target.value)}
-                  placeholder="Jane Smith"
+                  value={gName} onChange={e => setGName(e.target.value)} placeholder="Jane Smith"
+                  onKeyDown={e => { if (e.key === "Enter") handleGuestStart(); }}
                 />
               </div>
               <div>
@@ -149,36 +265,87 @@ function ContactModal({
                 <input
                   type="email"
                   className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary"
-                  value={email}
-                  onChange={e => setEmail(e.target.value)}
-                  placeholder="jane@email.com"
+                  value={gEmail} onChange={e => setGEmail(e.target.value)} placeholder="jane@email.com"
+                  onKeyDown={e => { if (e.key === "Enter") handleGuestStart(); }}
                 />
               </div>
-              <div>
-                <label className="text-xs font-medium text-gray-500 mb-1 block">Message</label>
-                <textarea
-                  className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary resize-none"
-                  rows={4}
-                  value={message}
-                  onChange={e => setMessage(e.target.value)}
-                  placeholder="Hi! I have a question about this listing…"
-                />
-              </div>
-              {err && <p className="text-xs text-red-500">{err}</p>}
+              {gErr && <p className="text-xs text-red-500 -mt-1">{gErr}</p>}
+              <Button className="bg-primary hover:bg-primary/90 text-primary-foreground w-full" onClick={handleGuestStart}>
+                Start Chat
+              </Button>
+              <p className="text-xs text-gray-400 text-center flex items-center justify-center gap-1">
+                <Lock className="h-3 w-3" /> Sent securely through OutdoorShare
+              </p>
             </div>
+          )}
 
-            <Button
-              className="w-full mt-4 bg-primary hover:bg-primary/90 text-primary-foreground font-semibold"
+          {phase === "loading" && (
+            <div className="flex flex-col items-center justify-center h-full gap-2 text-gray-400">
+              <Loader2 className="h-6 w-6 animate-spin" />
+              <p className="text-sm">Loading conversation…</p>
+            </div>
+          )}
+
+          {phase === "chatting" && messages.length === 0 && (
+            <div className="flex flex-col items-center justify-center h-full gap-2 text-gray-400 py-8">
+              <MessageCircle className="h-8 w-8 text-gray-300" />
+              <p className="text-sm font-medium text-gray-500">No messages yet</p>
+              <p className="text-xs text-center text-gray-400">Send a message to start the conversation with {contactName}.</p>
+            </div>
+          )}
+
+          {phase === "chatting" && messages.length > 0 && grouped.map(group => (
+            <div key={group.label}>
+              <div className="flex items-center gap-2 my-2">
+                <div className="flex-1 h-px bg-gray-100" />
+                <span className="text-xs text-gray-400 font-medium px-1">{group.label}</span>
+                <div className="flex-1 h-px bg-gray-100" />
+              </div>
+              <div className="space-y-2">
+                {group.msgs.map(msg => {
+                  const isRenter = msg.senderType === "renter";
+                  return (
+                    <div key={msg.id} className={`flex ${isRenter ? "justify-end" : "justify-start"}`}>
+                      <div className={`max-w-[80%] rounded-2xl px-3.5 py-2.5 text-sm leading-relaxed ${isRenter ? "bg-primary text-primary-foreground rounded-br-sm" : "bg-gray-100 text-gray-900 rounded-bl-sm"}`}>
+                        {msg.body}
+                        <div className={`text-[10px] mt-1 ${isRenter ? "text-primary-foreground/70 text-right" : "text-gray-400"}`}>
+                          {formatTime(msg.createdAt)}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
+          <div ref={bottomRef} />
+        </div>
+
+        {/* Input area — only show when chatting */}
+        {phase === "chatting" && (
+          <div className="flex-shrink-0 border-t border-gray-100 px-3 py-2 flex items-end gap-2">
+            <textarea
+              ref={inputRef}
+              className="flex-1 resize-none text-sm border-0 outline-none focus:ring-0 py-2 px-1 placeholder-gray-400 max-h-24"
+              rows={1}
+              placeholder={`Message ${contactName}…`}
+              value={input}
+              onChange={e => setInput(e.target.value)}
+              onKeyDown={handleKeyDown}
+              onInput={e => {
+                const el = e.currentTarget;
+                el.style.height = "auto";
+                el.style.height = `${el.scrollHeight}px`;
+              }}
+            />
+            <button
               onClick={handleSend}
-              disabled={sending}
+              disabled={!input.trim() || sending}
+              className="flex-shrink-0 h-8 w-8 rounded-full bg-primary flex items-center justify-center text-primary-foreground disabled:opacity-40 transition-opacity mb-1"
             >
-              {sending ? "Sending…" : "Send Message"}
-            </Button>
-
-            <p className="text-xs text-gray-400 text-center mt-3 flex items-center justify-center gap-1">
-              <Lock className="h-3 w-3" /> Sent securely through OutdoorShare
-            </p>
-          </>
+              {sending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}
+            </button>
+          </div>
         )}
       </div>
     </div>
@@ -258,9 +425,10 @@ export function ListingDetailPage() {
   return (
     <>
       {contactOpen && listing && (
-        <ContactModal
+        <ChatPanel
           tenantSlug={listing.tenantSlug}
-          tenantName={listing.business.name}
+          contactName={listing.contactName ?? listing.business.name}
+          logoUrl={listing.business.logoUrl}
           onClose={() => setContactOpen(false)}
         />
       )}
@@ -573,7 +741,7 @@ export function ListingDetailPage() {
                     onClick={() => setContactOpen(true)}
                   >
                     <MessageCircle className="h-4 w-4" />
-                    Message Host
+                    Chat with {listing.contactName ?? listing.business.name}
                   </Button>
 
                   <Button

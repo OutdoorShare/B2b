@@ -31,6 +31,8 @@ export interface MarketplaceListing {
 }
 
 export interface MarketplaceListingDetail extends MarketplaceListing {
+  isHost: boolean;
+  contactName: string;
   weekendPrice: string | null;
   pricePerWeek: string | null;
   depositAmount: string | null;
