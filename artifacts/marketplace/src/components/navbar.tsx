@@ -9,7 +9,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { User, ChevronDown, LogOut, BookOpen, Menu, X, LayoutDashboard, Home } from "lucide-react";
+import { User, ChevronDown, LogOut, BookOpen, Menu, X, LayoutDashboard, Home, Mountain } from "lucide-react";
 
 const BASE_URL = import.meta.env.BASE_URL.replace(/\/$/, "");
 
@@ -54,6 +54,13 @@ export function Navbar({ onAuthOpen }: { onAuthOpen: () => void }) {
               className="text-sm font-medium text-gray-600 hover:text-gray-900 transition-colors"
             >
               Companies
+            </button>
+            <button
+              onClick={() => setLocation("/memories")}
+              className="text-sm font-medium text-gray-600 hover:text-gray-900 transition-colors flex items-center gap-1"
+            >
+              <Mountain className="h-3.5 w-3.5" />
+              Memories
             </button>
           </nav>
 
@@ -157,6 +164,12 @@ export function Navbar({ onAuthOpen }: { onAuthOpen: () => void }) {
               className="block w-full text-left px-2 py-2 text-sm text-gray-700 hover:bg-gray-50 rounded-md"
             >
               Companies
+            </button>
+            <button
+              onClick={() => { setLocation("/memories"); setMobileOpen(false); }}
+              className="block w-full text-left px-2 py-2 text-sm text-gray-700 hover:bg-gray-50 rounded-md"
+            >
+              Memories
             </button>
             {customer ? (
               <>

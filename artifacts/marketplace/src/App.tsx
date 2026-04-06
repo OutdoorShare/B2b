@@ -20,6 +20,7 @@ import { HostListingFormPage } from "@/pages/host/listing-form";
 import { HostBookingsPage } from "@/pages/host/bookings";
 import { HostSettingsPage } from "@/pages/host/settings";
 import { HostBundlesPage } from "@/pages/host/bundles";
+import { MemoriesPage } from "@/pages/memories";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -83,6 +84,7 @@ function AppContent() {
         <Route path="/listings/:id" component={ListingDetailPage} />
         <Route path="/profile" component={() => <ProfilePage onAuthOpen={() => setAuthOpen(true)} />} />
         <Route path="/companies" component={CompaniesPage} />
+        <Route path="/memories" component={() => <MemoriesPage onAuthOpen={() => setAuthOpen(true)} />} />
         <Route path="/become-host" component={() => <BecomeHostPage onAuthOpen={() => setAuthOpen(true)} />} />
         <Route path="/host" component={HostDashboardPage} />
         <Route path="/host/listings" component={HostListingsPage} />

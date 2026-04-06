@@ -26,3 +26,4 @@ export * from "./notifications";
 export * from "./support-threads";
 export * from "./support-messages";
 export * from "./bundles";
+export * from "./memories";
