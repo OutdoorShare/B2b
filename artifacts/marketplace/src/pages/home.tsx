@@ -5,13 +5,168 @@ import { ListingCard } from "@/components/listing-card";
 import { MapView } from "@/components/map-view";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { format, parseISO, differenceInCalendarDays } from "date-fns";
+import {
+  format, parseISO, differenceInCalendarDays,
+  startOfMonth, endOfMonth, startOfWeek, endOfWeek,
+  addMonths, subMonths, isSameDay, isBefore, isAfter, isToday,
+  eachDayOfInterval, startOfDay,
+} from "date-fns";
 import {
   Search, SlidersHorizontal, X, LayoutGrid, Map,
   Waves, Bus, Truck, Car, Anchor, Bike, Zap,
   Package, Snowflake, CarFront, Gauge, Tent,
-  CalendarDays,
+  CalendarDays, ChevronLeft, ChevronRight,
 } from "lucide-react";
+
+// ── Inline range-selection calendar ──────────────────────────────────────────
+const WEEKDAYS = ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"];
+
+function InlineRangePicker({
+  startDate,
+  endDate,
+  onStart,
+  onEnd,
+}: {
+  startDate: string;
+  endDate: string;
+  onStart: (d: string) => void;
+  onEnd: (d: string) => void;
+}) {
+  const today = startOfDay(new Date());
+  const [month, setMonth] = useState<Date>(() => {
+    if (startDate) return startOfMonth(parseISO(startDate));
+    return startOfMonth(today);
+  });
+
+  // Build the 6-week grid for the current month
+  const gridStart = startOfWeek(startOfMonth(month));
+  const gridEnd   = endOfWeek(endOfMonth(month));
+  const days      = eachDayOfInterval({ start: gridStart, end: gridEnd });
+
+  const startD = startDate ? startOfDay(parseISO(startDate)) : null;
+  const endD   = endDate   ? startOfDay(parseISO(endDate))   : null;
+
+  function handleDayClick(day: Date) {
+    if (isBefore(day, today)) return; // past dates disabled
+
+    const dayStr = format(day, "yyyy-MM-dd");
+
+    if (!startD) {
+      // No start set yet → set start
+      onStart(dayStr);
+      onEnd("");
+      return;
+    }
+    if (startD && !endD) {
+      if (isSameDay(day, startD)) {
+        // Clicking start again → clear
+        onStart(""); onEnd(""); return;
+      }
+      if (isBefore(day, startD)) {
+        // Picked before current start → new start
+        onStart(dayStr); onEnd(""); return;
+      }
+      // Set end
+      onEnd(dayStr);
+      return;
+    }
+    // Both set → reset and start fresh
+    onStart(dayStr);
+    onEnd("");
+  }
+
+  function dayState(day: Date): "start" | "end" | "range" | "today" | "past" | "normal" {
+    if (isBefore(day, today)) return "past";
+    if (startD && isSameDay(day, startD)) return "start";
+    if (endD   && isSameDay(day, endD))   return "end";
+    if (startD && endD && isAfter(day, startD) && isBefore(day, endD)) return "range";
+    if (isToday(day)) return "today";
+    return "normal";
+  }
+
+  const headerLabel = format(month, "MMMM yyyy");
+
+  return (
+    <div className="select-none">
+      {/* Month navigation */}
+      <div className="flex items-center justify-between mb-2">
+        <button
+          onClick={() => setMonth(m => subMonths(m, 1))}
+          className="h-7 w-7 flex items-center justify-center rounded-full hover:bg-gray-100 transition-colors"
+        >
+          <ChevronLeft className="h-4 w-4 text-gray-500" />
+        </button>
+        <p className="text-sm font-semibold text-gray-800">{headerLabel}</p>
+        <button
+          onClick={() => setMonth(m => addMonths(m, 1))}
+          className="h-7 w-7 flex items-center justify-center rounded-full hover:bg-gray-100 transition-colors"
+        >
+          <ChevronRight className="h-4 w-4 text-gray-500" />
+        </button>
+      </div>
+
+      {/* Weekday headers */}
+      <div className="grid grid-cols-7 mb-1">
+        {WEEKDAYS.map(d => (
+          <div key={d} className="text-center text-[10px] font-semibold text-gray-400 py-0.5">{d}</div>
+        ))}
+      </div>
+
+      {/* Day grid */}
+      <div className="grid grid-cols-7 gap-y-0.5">
+        {days.map((day, i) => {
+          const state  = dayState(day);
+          const inMonth = day.getMonth() === month.getMonth();
+          const isStart = state === "start";
+          const isEnd   = state === "end";
+          const isRange = state === "range";
+          const isPast  = state === "past";
+
+          return (
+            <div
+              key={i}
+              className={`relative flex items-center justify-center ${
+                isRange ? "bg-primary/10" : ""
+              } ${
+                isStart && endD ? "rounded-l-full" : ""
+              } ${
+                isEnd && startD ? "rounded-r-full" : ""
+              } ${
+                isRange && i % 7 === 0 ? "rounded-l-full" : ""
+              } ${
+                isRange && i % 7 === 6 ? "rounded-r-full" : ""
+              }`}
+            >
+              <button
+                disabled={isPast}
+                onClick={() => handleDayClick(day)}
+                className={`h-8 w-8 rounded-full flex items-center justify-center text-xs font-medium transition-all
+                  ${isPast ? "text-gray-200 cursor-not-allowed" : ""}
+                  ${!inMonth && !isPast ? "text-gray-300" : ""}
+                  ${inMonth && !isPast && state === "normal" ? "text-gray-700 hover:bg-primary/15" : ""}
+                  ${state === "today" ? "text-primary font-bold ring-1 ring-primary/40" : ""}
+                  ${isStart || isEnd ? "bg-primary text-white shadow-sm" : ""}
+                  ${isRange ? "hover:bg-primary/20 text-primary/80" : ""}
+                `}
+              >
+                {format(day, "d")}
+              </button>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Range hint */}
+      <p className="text-[10px] text-gray-400 text-center mt-2">
+        {!startD
+          ? "Click a date to set pick-up"
+          : !endD
+          ? "Now click a date to set drop-off"
+          : `${format(startD, "MMM d")} → ${format(endD, "MMM d")} · ${differenceInCalendarDays(endD, startD)} night${differenceInCalendarDays(endD, startD) !== 1 ? "s" : ""}`}
+      </p>
+    </div>
+  );
+}
 
 // Matches category slugs exactly as stored in the DB — same map as the storefront
 const CATEGORY_ICONS: Record<string, React.ElementType> = {
@@ -178,7 +333,7 @@ export function HomePage({ onAuthOpen }: { onAuthOpen: () => void }) {
 
                   {/* Date range */}
                   <div>
-                    <div className="flex items-center gap-1.5 mb-2">
+                    <div className="flex items-center gap-1.5 mb-3">
                       <CalendarDays className="h-3.5 w-3.5 text-primary" />
                       <p className="text-xs font-semibold text-gray-700">Availability</p>
                       {hasDateFilter && (
@@ -187,19 +342,29 @@ export function HomePage({ onAuthOpen }: { onAuthOpen: () => void }) {
                         </button>
                       )}
                     </div>
-                    <div className="grid grid-cols-2 gap-2">
+
+                    {/* Visual calendar */}
+                    <InlineRangePicker
+                      startDate={startDate}
+                      endDate={endDate}
+                      onStart={setStartDate}
+                      onEnd={setEndDate}
+                    />
+
+                    {/* Date text inputs */}
+                    <div className="grid grid-cols-2 gap-2 mt-3">
                       <div>
-                        <label className="block text-[10px] text-gray-400 font-medium mb-1 uppercase tracking-wide">Check-in</label>
+                        <label className="block text-[10px] text-gray-400 font-medium mb-1 uppercase tracking-wide">Pick-up date</label>
                         <input
                           type="date"
                           value={startDate}
                           min={todayStr}
-                          onChange={e => setStartDate(e.target.value)}
+                          onChange={e => { setStartDate(e.target.value); if (endDate && e.target.value >= endDate) setEndDate(""); }}
                           className="w-full h-9 rounded-lg border border-gray-200 bg-white px-3 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary"
                         />
                       </div>
                       <div>
-                        <label className="block text-[10px] text-gray-400 font-medium mb-1 uppercase tracking-wide">Check-out</label>
+                        <label className="block text-[10px] text-gray-400 font-medium mb-1 uppercase tracking-wide">Drop-off date</label>
                         <input
                           type="date"
                           value={endDate}
@@ -210,14 +375,6 @@ export function HomePage({ onAuthOpen }: { onAuthOpen: () => void }) {
                         />
                       </div>
                     </div>
-                    {startDate && endDate && (
-                      <p className="text-xs text-primary font-medium mt-1.5">
-                        {differenceInCalendarDays(parseISO(endDate), parseISO(startDate))} night{differenceInCalendarDays(parseISO(endDate), parseISO(startDate)) !== 1 ? "s" : ""} selected — showing available listings
-                      </p>
-                    )}
-                    {startDate && !endDate && (
-                      <p className="text-xs text-amber-600 mt-1.5">Pick a check-out date to filter by availability</p>
-                    )}
                   </div>
 
                   {/* Divider */}
