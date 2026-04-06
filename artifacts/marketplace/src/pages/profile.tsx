@@ -1,6 +1,6 @@
 import { useState, useMemo } from "react";
 import { useLocation } from "wouter";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/context/auth";
 import { api } from "@/lib/api";
 import { Button } from "@/components/ui/button";
@@ -11,8 +11,9 @@ import {
   User, LogOut, Calendar, ExternalLink, ArrowLeft,
   Settings, CreditCard, Lock, MapPin, Trash2, CheckCircle2,
   Phone, Mail, Loader2, AlertCircle, CalendarDays, List,
-  ChevronLeft, ChevronRight, Search, X,
+  ChevronLeft, ChevronRight, Search, X, Mountain, Plus, Globe,
 } from "lucide-react";
+import { Memory, MemoryCard, CreateMemoryModal } from "@/pages/memories";
 import {
   format, startOfDay, startOfMonth, endOfMonth,
   startOfWeek, endOfWeek, addDays, addMonths, subMonths,
@@ -85,7 +86,7 @@ type RenterBooking = {
   createdAt: string;
 };
 
-type Tab = "bookings" | "settings";
+type Tab = "bookings" | "memories" | "settings";
 
 export function ProfilePage({ onAuthOpen }: { onAuthOpen: () => void }) {
   const { customer, updateCustomer, logout } = useAuth();
@@ -156,7 +157,19 @@ export function ProfilePage({ onAuthOpen }: { onAuthOpen: () => void }) {
             }`}
           >
             <Calendar className="h-4 w-4" />
-            Booked Adventures {bookings && <span className="text-xs text-gray-400">({bookings.length})</span>}
+            <span className="hidden sm:inline">Booked Adventures</span>
+            <span className="sm:hidden">Bookings</span>
+            {bookings && <span className="text-xs text-gray-400">({bookings.length})</span>}
+          </button>
+          <button
+            onClick={() => setTab("memories")}
+            className={`flex-1 flex items-center justify-center gap-2 text-sm font-medium py-2 rounded-lg transition-all ${
+              tab === "memories" ? "bg-white shadow text-gray-900" : "text-gray-500 hover:text-gray-700"
+            }`}
+          >
+            <Mountain className="h-4 w-4" />
+            <span className="hidden sm:inline">My Memories</span>
+            <span className="sm:hidden">Memories</span>
           </button>
           <button
             onClick={() => setTab("settings")}
@@ -173,6 +186,10 @@ export function ProfilePage({ onAuthOpen }: { onAuthOpen: () => void }) {
           <BookingsTab bookings={bookings} isLoading={bookingsLoading} onBrowse={() => setLocation("/")} />
         )}
 
+        {tab === "memories" && (
+          <MemoriesTab customer={customer} />
+        )}
+
         {tab === "settings" && (
           <SettingsTab customer={customer} updateCustomer={updateCustomer} toast={toast} />
         )}
@@ -182,6 +199,132 @@ export function ProfilePage({ onAuthOpen }: { onAuthOpen: () => void }) {
 }
 
 type BookingViewMode = "list" | "calendar";
+
+// ─── Memories Tab ─────────────────────────────────────────────────────────────
+
+function MemoriesTab({ customer }: { customer: NonNullable<ReturnType<typeof useAuth>["customer"]> }) {
+  const qc = useQueryClient();
+  const { toast } = useToast();
+  const [showCreate, setShowCreate] = useState(false);
+
+  const { data: memories = [], isLoading } = useQuery<Memory[]>({
+    queryKey: ["my-memories", customer.id],
+    queryFn: async () => {
+      const res = await fetch("/api/memories/my", {
+        headers: { "x-customer-id": String(customer.id) },
+      });
+      const data = await res.json();
+      return data.memories ?? [];
+    },
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: async (id: number) => {
+      const res = await fetch(`/api/memories/${id}`, {
+        method: "DELETE",
+        headers: { "x-customer-id": String(customer.id) },
+      });
+      if (!res.ok) throw new Error("Delete failed");
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["my-memories", customer.id] });
+      qc.invalidateQueries({ queryKey: ["memories"] });
+      toast({ title: "Memory deleted" });
+    },
+    onError: (err: any) => {
+      toast({ title: "Error", description: err.message, variant: "destructive" });
+    },
+  });
+
+  const publicCount = memories.filter((m) => m.isPublic).length;
+  const privateCount = memories.filter((m) => !m.isPublic).length;
+
+  return (
+    <div>
+      {/* Header row */}
+      <div className="flex items-center justify-between mb-5">
+        <div>
+          <h2 className="text-lg font-bold text-gray-900">My Memories</h2>
+          {memories.length > 0 && (
+            <p className="text-sm text-gray-400 mt-0.5">
+              {memories.length} {memories.length === 1 ? "memory" : "memories"} · {publicCount} public · {privateCount} private
+            </p>
+          )}
+        </div>
+        <Button
+          size="sm"
+          onClick={() => setShowCreate(true)}
+          className="gap-2 bg-primary hover:bg-primary/90 text-white"
+        >
+          <Plus className="h-4 w-4" />
+          Add Memory
+        </Button>
+      </div>
+
+      {/* Loading */}
+      {isLoading && (
+        <div className="flex justify-center py-16">
+          <Loader2 className="h-6 w-6 animate-spin text-gray-400" />
+        </div>
+      )}
+
+      {/* Empty state */}
+      {!isLoading && memories.length === 0 && (
+        <div className="flex flex-col items-center justify-center py-20 text-center">
+          <div className="h-16 w-16 rounded-full bg-primary/10 flex items-center justify-center mb-4">
+            <Mountain className="h-8 w-8 text-primary" />
+          </div>
+          <h3 className="text-base font-semibold text-gray-800 mb-1">No memories yet</h3>
+          <p className="text-sm text-gray-500 mb-5 max-w-xs">
+            Capture your outdoor adventures — photos, captions, and tags for the companies you rented from.
+          </p>
+          <Button onClick={() => setShowCreate(true)} className="gap-2 bg-primary hover:bg-primary/90 text-white">
+            <Plus className="h-4 w-4" />
+            Add your first memory
+          </Button>
+        </div>
+      )}
+
+      {/* Privacy legend */}
+      {!isLoading && memories.length > 0 && (
+        <div className="flex gap-4 text-xs text-gray-400 mb-4">
+          <span className="flex items-center gap-1.5"><Globe className="h-3.5 w-3.5" /> Public — visible on the social wall</span>
+          <span className="flex items-center gap-1.5"><Lock className="h-3.5 w-3.5" /> Private — only you can see</span>
+        </div>
+      )}
+
+      {/* Grid */}
+      {!isLoading && memories.length > 0 && (
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          {memories.map((m) => (
+            <MemoryCard
+              key={m.id}
+              memory={m}
+              isOwn={true}
+              onDelete={(id) => deleteMutation.mutate(id)}
+            />
+          ))}
+        </div>
+      )}
+
+      {/* Create modal */}
+      {showCreate && (
+        <CreateMemoryModal
+          customerId={customer.id}
+          customerName={customer.name}
+          onClose={() => setShowCreate(false)}
+          onCreated={() => {
+            qc.invalidateQueries({ queryKey: ["my-memories", customer.id] });
+            qc.invalidateQueries({ queryKey: ["memories"] });
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
+// ─── Bookings Tab ─────────────────────────────────────────────────────────────
+
 type BookingTabKey = "recent" | "upcoming" | "cancelled" | "all";
 
 const BOOKING_TABS: { key: BookingTabKey; label: string }[] = [

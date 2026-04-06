@@ -28,7 +28,7 @@ const API = "/api";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
-interface Memory {
+export interface Memory {
   id: number;
   customerId: number;
   customerName: string;
@@ -116,7 +116,7 @@ function avatarColor(name: string) {
 
 // ─── Memory Card ─────────────────────────────────────────────────────────────
 
-function MemoryCard({
+export function MemoryCard({
   memory,
   isOwn,
   onDelete,
@@ -279,7 +279,7 @@ function MemoryCard({
 
 // ─── Create Memory Modal ──────────────────────────────────────────────────────
 
-function CreateMemoryModal({
+export function CreateMemoryModal({
   customerId,
   customerName,
   onClose,
