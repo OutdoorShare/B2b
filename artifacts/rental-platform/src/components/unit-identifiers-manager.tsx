@@ -206,7 +206,7 @@ export function UnitIdentifiersManager({ listingId, quantity }: Props) {
                     </div>
                     <div className="space-y-1">
                       <Label className="text-xs">Nickname / Label (optional)</Label>
-                      <Input className="h-8 text-sm" placeholder="e.g. Red Kayak, Unit A" value={editLabel} onChange={e => setEditLabel(e.target.value)} />
+                      <Input className="h-8 text-sm" placeholder="e.g. Unit A, Jet Ski #1" value={editLabel} onChange={e => setEditLabel(e.target.value)} />
                     </div>
                     <div className="flex gap-2 justify-end pt-1">
                       <Button size="sm" variant="outline" onClick={() => setEditingId(null)} className="h-7 text-xs gap-1">
@@ -277,7 +277,7 @@ export function UnitIdentifiersManager({ listingId, quantity }: Props) {
               <Label className="text-xs">Nickname / Label (optional)</Label>
               <Input
                 className="h-8 text-sm"
-                placeholder="e.g. Red Kayak, Unit A, Boat #2"
+                placeholder="e.g. Unit A, Jet Ski #1, Boat #2"
                 value={newLabel}
                 onChange={e => setNewLabel(e.target.value)}
               />

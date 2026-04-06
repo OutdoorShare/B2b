@@ -237,7 +237,7 @@ export default function AdminInventoryForm() {
                 id="name"
                 value={form.name}
                 onChange={e => handleChange("name", e.target.value)}
-                placeholder="e.g. 4-Person Tent, Kayak, Mountain Bike…"
+                placeholder="e.g. Jet Ski, ATV, Camper…"
                 required
               />
             </div>

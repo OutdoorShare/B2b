@@ -272,7 +272,7 @@ export default function AdminOnboarding() {
             <div className="space-y-4">
               <div className="space-y-1.5">
                 <Label>Item Name <span className="text-destructive">*</span></Label>
-                <Input value={listing.title} onChange={e => setList("title", e.target.value)} placeholder='e.g. "Kayak — Single" or "Mountain Bike — Large"' className="h-11" />
+                <Input value={listing.title} onChange={e => setList("title", e.target.value)} placeholder='e.g. "Jet Ski — 3-Seater" or "ATV — Large"' className="h-11" />
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-1.5">
@@ -286,7 +286,7 @@ export default function AdminOnboarding() {
               </div>
               <div className="space-y-1.5">
                 <Label>Category</Label>
-                <Input value={listing.category} onChange={e => setList("category", e.target.value)} placeholder='e.g. "Kayak", "Bike", "Camping Equipment"' className="h-11" />
+                <Input value={listing.category} onChange={e => setList("category", e.target.value)} placeholder='e.g. "Jet Ski", "ATV", "Camper"' className="h-11" />
               </div>
               <div className="space-y-1.5">
                 <Label>Description</Label>

@@ -158,14 +158,14 @@ Once all checklist items are marked complete, Launchpad collapses and your admin
     tags: ["listings", "operations", "rental-items"],
     content: `## What is a Listing?
 
-A listing is a rentable item — a kayak, a tent, a bicycle, a camera kit. Each listing has its own public page on your storefront, its own pricing, and its own inventory pool.
+A listing is a rentable item — a jet ski, an ATV, a camper, a utility trailer. Each listing has its own public page on your storefront, its own pricing, and its own inventory pool.
 
 ## Creating a listing
 
 1. Go to **Listings** in the sidebar.
 2. Click **New Listing** in the top-right corner.
 3. Fill in the required fields:
-   - **Title** — the name shown to renters (e.g. "2-Person Kayak").
+   - **Title** — the name shown to renters (e.g. "2026 SeaDoo Jet Ski").
    - **Category** — group similar items together (e.g. "Watercraft", "Camping").
    - **Daily Rate** — the base price per day.
    - **Description** — markdown-supported text that appears on the listing page.
