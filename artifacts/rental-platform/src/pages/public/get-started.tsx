@@ -338,26 +338,29 @@ export default function GetStartedPage() {
       </header>
 
       {/* Hero — full-bleed cinematic */}
-      <section
-        className="relative flex items-center justify-center min-h-[92vh] overflow-hidden"
-        style={{
-          backgroundImage: "url('/opengraph.jpg')",
-          backgroundSize: "cover",
-          backgroundPosition: "center 40%",
-        }}
-      >
-        {/* Dark gradient overlay */}
+      <section className="relative flex items-center justify-center min-h-[92vh] overflow-hidden bg-black">
+        {/* Background photo — absolutely positioned so it can't affect layout */}
+        <img
+          src="/hero-cover.jpg"
+          alt=""
+          aria-hidden="true"
+          className="absolute inset-0 w-full h-full object-cover object-center select-none pointer-events-none"
+          style={{ zIndex: 0 }}
+        />
+
+        {/* Dark gradient overlay — heavier at edges, lighter in center */}
         <div
           className="absolute inset-0"
           style={{
-            background: "linear-gradient(160deg, rgba(0,0,0,0.72) 0%, rgba(10,30,15,0.60) 50%, rgba(0,0,0,0.80) 100%)",
+            zIndex: 1,
+            background: "linear-gradient(160deg, rgba(0,0,0,0.78) 0%, rgba(5,20,10,0.55) 45%, rgba(0,0,0,0.82) 100%)",
           }}
         />
 
         {/* Green accent line at bottom */}
-        <div className="absolute bottom-0 left-0 right-0 h-1" style={{ background: `linear-gradient(90deg, transparent, ${OS_GREEN}, transparent)` }} />
+        <div className="absolute bottom-0 left-0 right-0 h-1" style={{ zIndex: 2, background: `linear-gradient(90deg, transparent, ${OS_GREEN}, transparent)` }} />
 
-        <div className="relative z-10 max-w-5xl mx-auto px-6 py-32 text-center">
+        <div className="relative max-w-5xl mx-auto px-6 py-32 text-center" style={{ zIndex: 3 }}>
           {/* Eyebrow */}
           <div
             className="inline-flex items-center gap-2 rounded-full px-4 py-1.5 text-xs font-bold uppercase tracking-widest mb-8 border"
