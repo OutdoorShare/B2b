@@ -176,6 +176,20 @@ export interface HostCategory {
   slug: string;
 }
 
+export interface HostBundle {
+  id: number;
+  tenantId: number;
+  name: string;
+  description: string | null;
+  coverImageUrl: string | null;
+  pricePerDay: string;
+  listingIds: number[];
+  discountPercent: string;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
 async function get<T>(path: string): Promise<T> {
   const res = await fetch(`${API_BASE}${path}`);
   if (!res.ok) throw new Error(`API error ${res.status}`);
@@ -308,5 +322,13 @@ export const api = {
       hostPut<{ success: boolean }>("/host/settings", body, customerId),
     categories: () =>
       get<HostCategory[]>("/host/categories"),
+    bundles: (customerId: number) =>
+      hostGet<HostBundle[]>("/host/bundles", customerId),
+    createBundle: (customerId: number, body: Record<string, unknown>) =>
+      hostPost<HostBundle>("/host/bundles", body, customerId),
+    updateBundle: (customerId: number, id: number, body: Record<string, unknown>) =>
+      hostPut<HostBundle>(`/host/bundles/${id}`, body, customerId),
+    deleteBundle: (customerId: number, id: number) =>
+      hostDelete<{ success: boolean }>(`/host/bundles/${id}`, customerId),
   },
 };

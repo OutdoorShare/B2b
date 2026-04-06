@@ -19,6 +19,7 @@ import { HostListingsPage } from "@/pages/host/listings";
 import { HostListingFormPage } from "@/pages/host/listing-form";
 import { HostBookingsPage } from "@/pages/host/bookings";
 import { HostSettingsPage } from "@/pages/host/settings";
+import { HostBundlesPage } from "@/pages/host/bundles";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -88,6 +89,7 @@ function AppContent() {
         <Route path="/host/listings/new" component={() => <HostListingFormPage />} />
         <Route path="/host/listings/:id/edit" component={() => <HostListingFormPage />} />
         <Route path="/host/bookings" component={HostBookingsPage} />
+        <Route path="/host/bundles" component={HostBundlesPage} />
         <Route path="/host/settings" component={HostSettingsPage} />
         <Route component={NotFound} />
       </Switch>

@@ -7,6 +7,7 @@ import {
   categoriesTable,
   customersTable,
   bookingsTable,
+  hostBundlesTable,
 } from "@workspace/db/schema";
 import { eq, and, desc, sql } from "drizzle-orm";
 import { randomBytes, scrypt } from "crypto";
@@ -390,11 +391,21 @@ router.get("/host/bookings", requireHostAuth, async (req, res) => {
 // ── PUT /api/host/settings ────────────────────────────────────────────────────
 router.put("/host/settings", requireHostAuth, async (req, res) => {
   try {
-    const { displayName, description, city, state, phone, website } = req.body;
+    const { displayName, description, city, state, phone, website, logoUrl, coverImageUrl } = req.body;
 
     await db
       .update(businessProfileTable)
-      .set({ name: displayName, description, city, state, phone, website })
+      .set({
+        name: displayName,
+        description,
+        city,
+        state,
+        phone,
+        website,
+        ...(logoUrl !== undefined ? { logoUrl } : {}),
+        ...(coverImageUrl !== undefined ? { coverImageUrl } : {}),
+        updatedAt: new Date(),
+      })
       .where(eq(businessProfileTable.tenantId, req.hostTenantId!));
 
     if (displayName) {
@@ -408,6 +419,97 @@ router.put("/host/settings", requireHostAuth, async (req, res) => {
   } catch (err) {
     req.log.error(err);
     res.status(500).json({ error: "Failed to update settings" });
+  }
+});
+
+// ── GET /api/host/bundles ─────────────────────────────────────────────────────
+router.get("/host/bundles", requireHostAuth, async (req, res) => {
+  try {
+    const bundles = await db
+      .select()
+      .from(hostBundlesTable)
+      .where(eq(hostBundlesTable.tenantId, req.hostTenantId!))
+      .orderBy(desc(hostBundlesTable.createdAt));
+    res.json(bundles);
+  } catch (err) {
+    req.log.error(err);
+    res.status(500).json({ error: "Failed to fetch bundles" });
+  }
+});
+
+// ── POST /api/host/bundles ────────────────────────────────────────────────────
+router.post("/host/bundles", requireHostAuth, async (req, res) => {
+  try {
+    const { name, description, coverImageUrl, pricePerDay, listingIds, discountPercent } = req.body as {
+      name: string;
+      description?: string;
+      coverImageUrl?: string;
+      pricePerDay: string | number;
+      listingIds: number[];
+      discountPercent?: string | number;
+    };
+    if (!name || !pricePerDay) {
+      res.status(400).json({ error: "name and pricePerDay are required" });
+      return;
+    }
+    const [bundle] = await db
+      .insert(hostBundlesTable)
+      .values({
+        tenantId: req.hostTenantId!,
+        name,
+        description: description ?? null,
+        coverImageUrl: coverImageUrl ?? null,
+        pricePerDay: String(pricePerDay),
+        listingIds: listingIds ?? [],
+        discountPercent: String(discountPercent ?? "0"),
+        isActive: true,
+      })
+      .returning();
+    res.status(201).json(bundle);
+  } catch (err) {
+    req.log.error(err);
+    res.status(500).json({ error: "Failed to create bundle" });
+  }
+});
+
+// ── PUT /api/host/bundles/:id ─────────────────────────────────────────────────
+router.put("/host/bundles/:id", requireHostAuth, async (req, res) => {
+  try {
+    const bundleId = parseInt(req.params.id);
+    const { name, description, coverImageUrl, pricePerDay, listingIds, discountPercent, isActive } = req.body;
+    const [bundle] = await db
+      .update(hostBundlesTable)
+      .set({
+        ...(name !== undefined ? { name } : {}),
+        ...(description !== undefined ? { description } : {}),
+        ...(coverImageUrl !== undefined ? { coverImageUrl } : {}),
+        ...(pricePerDay !== undefined ? { pricePerDay: String(pricePerDay) } : {}),
+        ...(listingIds !== undefined ? { listingIds } : {}),
+        ...(discountPercent !== undefined ? { discountPercent: String(discountPercent) } : {}),
+        ...(isActive !== undefined ? { isActive } : {}),
+        updatedAt: new Date(),
+      })
+      .where(and(eq(hostBundlesTable.id, bundleId), eq(hostBundlesTable.tenantId, req.hostTenantId!)))
+      .returning();
+    if (!bundle) { res.status(404).json({ error: "Bundle not found" }); return; }
+    res.json(bundle);
+  } catch (err) {
+    req.log.error(err);
+    res.status(500).json({ error: "Failed to update bundle" });
+  }
+});
+
+// ── DELETE /api/host/bundles/:id ──────────────────────────────────────────────
+router.delete("/host/bundles/:id", requireHostAuth, async (req, res) => {
+  try {
+    const bundleId = parseInt(req.params.id);
+    await db
+      .delete(hostBundlesTable)
+      .where(and(eq(hostBundlesTable.id, bundleId), eq(hostBundlesTable.tenantId, req.hostTenantId!)));
+    res.json({ success: true });
+  } catch (err) {
+    req.log.error(err);
+    res.status(500).json({ error: "Failed to delete bundle" });
   }
 });
 

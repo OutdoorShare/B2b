@@ -11,7 +11,9 @@ This project is a white-label rental management platform, designed as a B2B SaaS
 - Multi-step customer booking process with add-ons and agreements.
 - Admin dashboard for live analytics, booking management, custom quotes, and staff management.
 - Multi-tenancy architecture to support multiple independent rental businesses.
-- **Host role:** Marketplace renters can become Hosts — creating a micro-tenant (`is_host=true`) linked to their customer account. Hosts get a simplified dashboard (Listings, Bookings, Stats, Settings) with no branding/white-label access. Their listings appear on the OutdoorShare marketplace. Dashboard at `/marketplace/host`.
+- **Host role:** Marketplace renters can become Hosts — creating a micro-tenant (`is_host=true`) linked to their customer account. Hosts get a simplified dashboard (Listings, Bundles, Bookings, Settings) with no branding/white-label access. Their listings appear on the OutdoorShare marketplace. Dashboard at `/marketplace/host`.
+  - **Host profile photos**: Settings page (`/marketplace/host/settings`) has a Photos section with circular avatar upload and a cover photo strip upload. Photos are stored in `businessProfileTable.logoUrl` and `coverImageUrl`. Upload via `POST /api/upload/image`.
+  - **Host bundles**: Bundles page (`/marketplace/host/bundles`) lets hosts create curated gear packages. Bundle schema in `hostBundlesTable` (lib/db/src/schema/bundles.ts): name, description, coverImageUrl, pricePerDay, listingIds (json array), discountPercent, isActive. CRUD via `GET/POST/PUT/DELETE /api/host/bundles`.
 - AI Assistant (OutdoorBot) for both admin and customer support.
 - Fully customizable branding and theming options.
 - Integrated documentation portal.

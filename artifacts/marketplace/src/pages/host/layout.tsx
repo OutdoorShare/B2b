@@ -8,6 +8,7 @@ import {
   Settings,
   ArrowLeft,
   Menu,
+  Package2,
 } from "lucide-react";
 import { useState } from "react";
 
@@ -16,6 +17,7 @@ const BASE_URL = import.meta.env.BASE_URL.replace(/\/$/, "");
 const NAV_ITEMS = [
   { label: "Dashboard", icon: LayoutDashboard, path: "/host" },
   { label: "My Listings", icon: Package, path: "/host/listings" },
+  { label: "Bundles", icon: Package2, path: "/host/bundles" },
   { label: "Bookings", icon: CalendarDays, path: "/host/bookings" },
   { label: "Settings", icon: Settings, path: "/host/settings" },
 ];
