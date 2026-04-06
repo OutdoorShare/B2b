@@ -699,48 +699,48 @@ function BookingsTab({
                 const ts = getRentalTimeStatus(booking.startDate, booking.endDate, booking.status);
                 const badgeCls = STATUS_BADGE[booking.status] ?? "bg-gray-100 text-gray-700 border-gray-200";
                 return (
-                  <div key={booking.id} className="p-4 hover:bg-gray-50 transition-colors">
-                    <div className="flex gap-4 items-start">
-                      <div className="h-20 w-24 flex-shrink-0 rounded-xl overflow-hidden bg-gray-100">
+                  <div key={booking.id} className="p-5 sm:p-6 hover:bg-gray-50 transition-colors">
+                    <div className="flex gap-5 items-start">
+                      <div className="h-28 w-32 flex-shrink-0 rounded-xl overflow-hidden bg-gray-100 shadow-sm">
                         {booking.listingImage ? (
                           <img src={resolveImage(booking.listingImage)} alt={booking.listingTitle} className="w-full h-full object-cover" />
                         ) : (
-                          <div className="w-full h-full flex items-center justify-center text-2xl">🏕️</div>
+                          <div className="w-full h-full flex items-center justify-center text-3xl">🏕️</div>
                         )}
                       </div>
-                      <div className="flex-1 min-w-0">
+                      <div className="flex-1 min-w-0 space-y-1.5">
                         <div className="flex items-start justify-between gap-2 flex-wrap">
-                          <h3 className="font-semibold text-gray-800 text-sm line-clamp-1">{booking.listingTitle}</h3>
-                          <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold border capitalize ${badgeCls}`}>
+                          <h3 className="font-semibold text-gray-800 text-base line-clamp-1">{booking.listingTitle}</h3>
+                          <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-[11px] font-semibold border capitalize flex-shrink-0 ${badgeCls}`}>
                             {booking.status}
                           </span>
                         </div>
                         {booking.businessName && (
-                          <div className="flex items-center gap-1 text-xs text-gray-500 mt-1">
+                          <div className="flex items-center gap-1.5 text-sm text-gray-500">
                             {booking.businessLogoUrl && (
-                              <img src={resolveImage(booking.businessLogoUrl)} alt="" className="h-3.5 w-3.5 rounded-full object-cover" />
+                              <img src={resolveImage(booking.businessLogoUrl)} alt="" className="h-4 w-4 rounded-full object-cover" />
                             )}
                             <span>{booking.businessName}</span>
                           </div>
                         )}
-                        <div className="flex items-center gap-1 text-xs text-gray-400 mt-1">
-                          <Calendar className="h-3 w-3" />
+                        <div className="flex items-center gap-1.5 text-sm text-gray-400">
+                          <Calendar className="h-3.5 w-3.5 flex-shrink-0" />
                           <span>{format(parseISO(booking.startDate), "MMM d")} – {format(parseISO(booking.endDate), "MMM d, yyyy")}</span>
                         </div>
                         {ts && (
-                          <div className="mt-1.5 space-y-1">
-                            <span className={`inline-flex items-center text-[10px] font-semibold px-1.5 py-0.5 rounded border ${ts.color}`}>
+                          <div className="space-y-1.5 pt-0.5">
+                            <span className={`inline-flex items-center text-[11px] font-semibold px-2 py-0.5 rounded border ${ts.color}`}>
                               {ts.label}
                             </span>
                             {ts.pct > 0 && (
-                              <div className="h-1 w-full bg-gray-100 rounded-full overflow-hidden">
+                              <div className="h-1.5 w-full bg-gray-100 rounded-full overflow-hidden">
                                 <div className={`h-full rounded-full ${ts.bar}`} style={{ width: `${ts.pct}%` }} />
                               </div>
                             )}
                           </div>
                         )}
-                        <div className="flex items-center justify-between mt-2">
-                          <span className="text-sm font-semibold text-gray-800">${parseFloat(booking.totalPrice).toFixed(2)}</span>
+                        <div className="flex items-center justify-between pt-1">
+                          <span className="text-base font-bold text-gray-800">${parseFloat(booking.totalPrice).toFixed(2)}</span>
                           {booking.tenantSlug && (
                             <button
                               className="text-xs text-primary hover:underline flex items-center gap-1"
