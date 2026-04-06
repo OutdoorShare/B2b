@@ -117,6 +117,7 @@ export default function AdminSettings() {
   });
 
   const [saving, setSaving] = useState(false);
+  const [activeTab, setActiveTab] = useState<string>(new URLSearchParams(window.location.search).get("tab") ?? "branding");
   const [formData, setFormData] = useState<any>({});
   const [senderPasswordInput, setSenderPasswordInput] = useState("");
   const [clearSenderCreds, setClearSenderCreds] = useState(false);
@@ -199,17 +200,35 @@ export default function AdminSettings() {
     }
   };
 
-  const doSave = async (retrying = false) => {
+  // Tab → field allowlist mapping: each tab only sends its own fields so
+  // unrelated validation (e.g. address check) never fires from the wrong tab.
+  const TAB_FIELDS: Record<string, string[]> = {
+    general:     ["name", "tagline", "description", "email", "outboundEmail", "senderEmail", "senderPassword", "phone", "website", "location", "address", "city", "state", "zipCode", "country", "socialInstagram", "socialFacebook", "socialTwitter"],
+    branding:    ["logoUrl", "coverImageUrl", "primaryColor", "accentColor"],
+    policies:    ["depositRequired", "depositPercent", "cancellationPolicy", "rentalTerms", "bundleDiscountPercent", "instantBooking"],
+    payments:    [],
+    integration: ["kioskModeEnabled", "embedCode"],
+  };
+
+  const doSave = async (retrying = false, pickFields?: string[]) => {
     if (saving) return;
     setSaving(true);
     try {
+      // Build the payload: if pickFields supplied, only include those keys.
+      let payload: Record<string, any> = pickFields
+        ? Object.fromEntries(pickFields.filter(k => formData[k] !== undefined).map(k => [k, formData[k]]))
+        : { ...formData };
+
+      // Merge sender-credential overrides when they're in scope
+      const includingSender = !pickFields || pickFields.includes("senderPassword");
+      if (includingSender) {
+        Object.assign(payload, clearSenderCreds ? { senderPassword: "", senderEmail: "" } : senderPasswordInput !== "" ? { senderPassword: senderPasswordInput } : {});
+      }
+
       const res = await fetch(`${BASE}/api/business`, {
         method: "PUT",
         headers: { ...adminHeaders(), "Content-Type": "application/json" },
-        body: JSON.stringify({
-          ...formData,
-          ...(clearSenderCreds ? { senderPassword: "", senderEmail: "" } : senderPasswordInput !== "" ? { senderPassword: senderPasswordInput } : {}),
-        }),
+        body: JSON.stringify(payload),
       });
       if (res.status === 401) {
         redirectToLogin("Your session has expired. Redirecting you to log in…");
@@ -245,8 +264,10 @@ export default function AdminSettings() {
 
   const handleSave = (e: React.FormEvent) => {
     e.preventDefault();
-    doSave();
+    doSave(false, TAB_FIELDS[activeTab]);
   };
+
+  const saveTab = (tab: string) => doSave(false, TAB_FIELDS[tab]);
 
   const getStorefrontUrl = () => {
     // Most reliable source: extract slug directly from the current pathname.
@@ -403,7 +424,7 @@ export default function AdminSettings() {
         <p className="text-muted-foreground mt-1">Manage your business profile and preferences</p>
       </div>
 
-      <Tabs defaultValue={new URLSearchParams(window.location.search).get("tab") ?? "branding"} className="w-full">
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
         <TabsList className="grid w-full grid-cols-5">
           <TabsTrigger value="general">General</TabsTrigger>
           <TabsTrigger value="branding">Branding</TabsTrigger>
@@ -733,6 +754,12 @@ export default function AdminSettings() {
                 </div>
               </CardContent>
             </Card>
+
+            <div className="flex justify-end pt-2">
+              <Button type="submit" size="lg" disabled={saving} className="gap-2">
+                {saving ? <><RefreshCw className="w-4 h-4 animate-spin" />Saving…</> : <><CheckCircle2 className="w-4 h-4" />Save General Settings</>}
+              </Button>
+            </div>
           </TabsContent>
 
           {/* ── BRANDING ── */}
@@ -1114,6 +1141,12 @@ export default function AdminSettings() {
                 </div>
               </CardContent>
             </Card>
+
+            <div className="flex justify-end pt-2">
+              <Button type="submit" size="lg" disabled={saving} className="gap-2">
+                {saving ? <><RefreshCw className="w-4 h-4 animate-spin" />Saving…</> : <><CheckCircle2 className="w-4 h-4" />Save Branding</>}
+              </Button>
+            </div>
           </TabsContent>
 
           {/* ── POLICIES ── */}
@@ -1243,6 +1276,12 @@ export default function AdminSettings() {
                 </div>
               </CardContent>
             </Card>
+
+            <div className="flex justify-end pt-2">
+              <Button type="submit" size="lg" disabled={saving} className="gap-2">
+                {saving ? <><RefreshCw className="w-4 h-4 animate-spin" />Saving…</> : <><CheckCircle2 className="w-4 h-4" />Save Policies</>}
+              </Button>
+            </div>
           </TabsContent>
 
           {/* ── PAYMENTS ── */}
@@ -1421,29 +1460,15 @@ export default function AdminSettings() {
                 </div>
               </CardContent>
             </Card>
-          </TabsContent>
 
-          <div className="mt-8 flex justify-end">
-            <Button type="submit" size="lg" disabled={saving}>
-              {saving ? <><RefreshCw className="w-4 h-4 mr-2 animate-spin" />Saving…</> : "Save Settings"}
-            </Button>
-          </div>
-        </form>
-
-        {/* ── Sticky save bar ─────────────────────────────────────────────── */}
-        <div className="fixed bottom-0 left-0 right-0 z-50 pointer-events-none">
-          <div className="max-w-4xl mx-auto px-4 pb-4 flex justify-end">
-            <div className="pointer-events-auto shadow-xl rounded-xl border bg-background/95 backdrop-blur-sm px-4 py-3 flex items-center gap-4">
-              {saving
-                ? <span className="text-sm text-muted-foreground flex items-center gap-1.5"><RefreshCw className="w-3.5 h-3.5 animate-spin" />Saving…</span>
-                : <span className="text-sm text-muted-foreground">Unsaved changes?</span>
-              }
-              <Button size="sm" disabled={saving} onClick={doSave} className="gap-1.5">
-                {saving ? <><RefreshCw className="w-3.5 h-3.5 animate-spin" />Saving…</> : <><CheckCircle2 className="w-3.5 h-3.5" />Save Settings</>}
+            <div className="flex justify-end pt-2">
+              <Button type="submit" size="lg" disabled={saving} className="gap-2">
+                {saving ? <><RefreshCw className="w-4 h-4 animate-spin" />Saving…</> : <><CheckCircle2 className="w-4 h-4" />Save Integration Settings</>}
               </Button>
             </div>
-          </div>
-        </div>
+          </TabsContent>
+
+        </form>
       </Tabs>
     </div>
   );

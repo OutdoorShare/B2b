@@ -122,9 +122,13 @@ router.put("/business", requireTenant as any, async (req, res) => {
       kioskModeEnabled, instantBooking, embedCode,
     } = req.body;
 
-    // Require business address fields whenever they are submitted
+    // Require business address fields whenever they are submitted with content.
+    // Empty strings ("") are treated as "not submitted" so branding/policies saves
+    // that don't include address fields never trigger this validation.
     const addressFields = { address, city, state, zipCode };
-    const addressPresent = Object.values(addressFields).some(v => v !== undefined);
+    const addressPresent = Object.values(addressFields).some(
+      v => v !== undefined && v !== null && String(v).trim() !== ""
+    );
     if (addressPresent) {
       const missing = Object.entries(addressFields)
         .filter(([, v]) => !v || !String(v).trim())
