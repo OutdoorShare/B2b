@@ -159,51 +159,51 @@ export function ProfilePage({ onAuthOpen }: { onAuthOpen: () => void }) {
           <button
             onClick={() => setTab("profile")}
             className={`flex-1 flex items-center justify-center gap-2 text-sm font-medium py-2 rounded-lg transition-all ${
-              tab === "profile" ? "bg-white shadow text-gray-900" : "text-gray-500 hover:text-gray-700"
+              tab === "profile" ? "bg-white shadow text-primary" : "text-gray-500 hover:text-gray-700"
             }`}
           >
-            <User className="h-4 w-4" />
+            <User className={`h-4 w-4 ${tab === "profile" ? "text-primary" : ""}`} />
             <span className="hidden sm:inline">My Profile</span>
             <span className="sm:hidden">Profile</span>
           </button>
           <button
             onClick={() => setTab("bookings")}
             className={`flex-1 flex items-center justify-center gap-2 text-sm font-medium py-2 rounded-lg transition-all ${
-              tab === "bookings" ? "bg-white shadow text-gray-900" : "text-gray-500 hover:text-gray-700"
+              tab === "bookings" ? "bg-white shadow text-blue-600" : "text-gray-500 hover:text-gray-700"
             }`}
           >
-            <Calendar className="h-4 w-4" />
+            <Calendar className={`h-4 w-4 ${tab === "bookings" ? "text-blue-600" : ""}`} />
             <span className="hidden sm:inline">Booked Adventures</span>
             <span className="sm:hidden">Bookings</span>
-            {bookings && <span className="text-xs text-gray-400">({bookings.length})</span>}
+            {bookings && <span className={`text-xs ${tab === "bookings" ? "text-blue-400" : "text-gray-400"}`}>({bookings.length})</span>}
           </button>
           <button
             onClick={() => setTab("favorites")}
             className={`flex-1 flex items-center justify-center gap-2 text-sm font-medium py-2 rounded-lg transition-all ${
-              tab === "favorites" ? "bg-white shadow text-gray-900" : "text-gray-500 hover:text-gray-700"
+              tab === "favorites" ? "bg-white shadow text-red-500" : "text-gray-500 hover:text-gray-700"
             }`}
           >
             <Heart className={`h-4 w-4 ${tab === "favorites" ? "fill-red-500 text-red-500" : ""}`} />
             <span>Favorites</span>
-            {favoriteIds.size > 0 && <span className="text-xs text-gray-400">({favoriteIds.size})</span>}
+            {favoriteIds.size > 0 && <span className={`text-xs ${tab === "favorites" ? "text-red-400" : "text-gray-400"}`}>({favoriteIds.size})</span>}
           </button>
           <button
             onClick={() => setTab("memories")}
             className={`flex-1 flex items-center justify-center gap-2 text-sm font-medium py-2 rounded-lg transition-all ${
-              tab === "memories" ? "bg-white shadow text-gray-900" : "text-gray-500 hover:text-gray-700"
+              tab === "memories" ? "bg-white shadow text-orange-500" : "text-gray-500 hover:text-gray-700"
             }`}
           >
-            <Mountain className="h-4 w-4" />
+            <Mountain className={`h-4 w-4 ${tab === "memories" ? "text-orange-500" : ""}`} />
             <span className="hidden sm:inline">My Memories</span>
             <span className="sm:hidden">Memories</span>
           </button>
           <button
             onClick={() => setTab("settings")}
             className={`flex-1 flex items-center justify-center gap-2 text-sm font-medium py-2 rounded-lg transition-all ${
-              tab === "settings" ? "bg-white shadow text-gray-900" : "text-gray-500 hover:text-gray-700"
+              tab === "settings" ? "bg-white shadow text-violet-600" : "text-gray-500 hover:text-gray-700"
             }`}
           >
-            <Settings className="h-4 w-4" />
+            <Settings className={`h-4 w-4 ${tab === "settings" ? "text-violet-600" : ""}`} />
             Settings
           </button>
         </div>
