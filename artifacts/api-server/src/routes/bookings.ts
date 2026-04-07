@@ -14,6 +14,7 @@ import {
   sendBookingPickupReminderEmail,
   sendAdminPickupReminderEmail,
   sendReadyToAdventureEmail,
+  sendPickupPhotosAdminAlertEmail,
   sendContactCardEmail,
   sendAdminBookingContactEmail,
   sendAgreementLinkEmail,
@@ -1106,7 +1107,7 @@ router.get("/pickup/:token", async (req, res) => {
     const [booking] = await db.select().from(bookingsTable).where(eq(bookingsTable.pickupToken, token));
     if (!booking) { res.status(404).json({ error: "Pickup link not found or expired" }); return; }
 
-    const [listing] = await db.select({ title: listingsTable.title, imageUrls: listingsTable.imageUrls }).from(listingsTable).where(eq(listingsTable.id, booking.listingId));
+    const [listing] = await db.select({ title: listingsTable.title, imageUrls: listingsTable.imageUrls, depositAmount: listingsTable.depositAmount }).from(listingsTable).where(eq(listingsTable.id, booking.listingId));
     let companyName = "OutdoorShare";
     let logoUrl: string | null = null;
     if (booking.tenantId) {
@@ -1114,6 +1115,12 @@ router.get("/pickup/:token", async (req, res) => {
       if (biz?.name) companyName = biz.name;
       if (biz?.logoUrl) logoUrl = biz.logoUrl;
     }
+
+    const depositAmount = listing?.depositAmount ? parseFloat(String(listing.depositAmount)) : 0;
+    const startMs = new Date(booking.startDate).getTime();
+    const endMs   = new Date(booking.endDate).getTime();
+    const rentalDays = Math.max(1, Math.round((endMs - startMs) / (1000 * 60 * 60 * 24)));
+    const isLongBooking = rentalDays >= 5;
 
     res.json({
       bookingId: booking.id,
@@ -1127,6 +1134,9 @@ router.get("/pickup/:token", async (req, res) => {
       source: booking.source ?? "online",
       pickupCompleted: !!booking.pickupCompletedAt,
       pickupPhotos: booking.pickupPhotos ? JSON.parse(booking.pickupPhotos) : [],
+      depositAmount: depositAmount > 0 ? depositAmount : null,
+      depositHoldStatus: booking.depositHoldStatus ?? null,
+      isLongBooking,
     });
   } catch (err) {
     req.log.error(err);
@@ -1230,24 +1240,36 @@ router.post("/pickup/:token/photos", pickupUpload.array("photos", 20), async (re
       // Auto-trigger deposit hold/charge at pickup (non-fatal)
       await triggerDepositAtPickup(booking, req.log);
 
-      // Send "ready to adventure" email
-      if (booking.customerEmail) {
-        (async () => {
-          try {
-            let companyName = "Rental Company";
-            let adminEmail: string | undefined;
-            if (booking.tenantId) {
-              const [biz] = await db.select({ businessName: businessProfileTable.businessName })
-                .from(businessProfileTable).where(eq(businessProfileTable.tenantId, booking.tenantId));
-              if (biz?.businessName) companyName = biz.businessName;
-              const [t] = await db.select({ email: tenantsTable.email })
-                .from(tenantsTable).where(eq(tenantsTable.id, booking.tenantId));
-              if (t?.email) adminEmail = t.email;
-            }
-            const [smtpCreds, brand] = await Promise.all([getTenantSmtpCreds(booking.tenantId), getTenantBrand(booking.tenantId)]);
-            const listingTitle = booking.listingId
-              ? (await db.select({ title: listingsTable.title }).from(listingsTable).where(eq(listingsTable.id, booking.listingId)))[0]?.title ?? "your rental"
-              : "your rental";
+      // Re-fetch booking to get updated depositHoldStatus after the trigger above
+      const [updatedBooking] = await db.select({ depositHoldStatus: bookingsTable.depositHoldStatus })
+        .from(bookingsTable).where(eq(bookingsTable.id, booking.id));
+      const depositHoldStatus = updatedBooking?.depositHoldStatus ?? null;
+
+      // Send emails to both renter and admin
+      (async () => {
+        try {
+          let companyName = "Rental Company";
+          let adminEmail: string | undefined;
+          let tenantSlug = "";
+          if (booking.tenantId) {
+            const [biz] = await db.select({ businessName: businessProfileTable.businessName, name: businessProfileTable.name })
+              .from(businessProfileTable).where(eq(businessProfileTable.tenantId, booking.tenantId));
+            companyName = biz?.name ?? biz?.businessName ?? "Rental Company";
+            const [t] = await db.select({ email: tenantsTable.email, slug: tenantsTable.slug })
+              .from(tenantsTable).where(eq(tenantsTable.id, booking.tenantId));
+            if (t?.email) adminEmail = t.email;
+            if (t?.slug) tenantSlug = t.slug;
+          }
+          const [smtpCreds, brand] = await Promise.all([getTenantSmtpCreds(booking.tenantId), getTenantBrand(booking.tenantId)]);
+          const [listingRow] = booking.listingId
+            ? await db.select({ title: listingsTable.title, depositAmount: listingsTable.depositAmount })
+                .from(listingsTable).where(eq(listingsTable.id, booking.listingId))
+            : [];
+          const listingTitle = listingRow?.title ?? "your rental";
+          const depositAmount = listingRow?.depositAmount ? parseFloat(String(listingRow.depositAmount)) : 0;
+
+          // Email renter
+          if (booking.customerEmail) {
             await withBrand(brand, () => withSmtpCreds(smtpCreds, () => sendReadyToAdventureEmail({
               customerName: booking.customerName,
               customerEmail: booking.customerEmail,
@@ -1257,12 +1279,29 @@ router.post("/pickup/:token/photos", pickupUpload.array("photos", 20), async (re
               endDate: booking.endDate,
               companyName,
               adminEmail,
-            })));
-          } catch (emailErr) {
-            req.log.warn(emailErr, "Failed to send ready-to-adventure email");
+            }))).catch(e => req.log.warn(e, "Failed to send ready-to-adventure email"));
           }
-        })();
-      }
+
+          // Email admin
+          if (adminEmail && tenantSlug) {
+            await withBrand(brand, () => withSmtpCreds(smtpCreds, () => sendPickupPhotosAdminAlertEmail({
+              adminEmail: adminEmail!,
+              customerName: booking.customerName,
+              customerEmail: booking.customerEmail,
+              bookingId: booking.id,
+              listingTitle,
+              startDate: booking.startDate,
+              endDate: booking.endDate,
+              companyName,
+              tenantSlug,
+              depositAmount: depositAmount > 0 ? depositAmount : undefined,
+              depositHoldStatus,
+            }))).catch(e => req.log.warn(e, "Failed to send pickup-photos admin alert email"));
+          }
+        } catch (emailErr) {
+          req.log.warn(emailErr, "Failed to send pickup completion emails");
+        }
+      })();
     }
 
     res.json({ ok: true, photos: allPhotos, count: allPhotos.length });

@@ -1087,6 +1087,72 @@ export async function sendReadyToAdventureEmail(opts: {
   });
 }
 
+// ── Pickup photos complete — admin alert ─────────────────────────────────────
+export async function sendPickupPhotosAdminAlertEmail(opts: {
+  adminEmail: string;
+  customerName: string;
+  customerEmail: string;
+  bookingId: number;
+  listingTitle: string;
+  startDate: string;
+  endDate: string;
+  companyName: string;
+  tenantSlug: string;
+  depositAmount?: number;
+  depositHoldStatus?: string | null;
+}): Promise<void> {
+  const { adminEmail, customerName, customerEmail, bookingId, listingTitle, startDate, endDate, companyName, tenantSlug, depositAmount, depositHoldStatus } = opts;
+  const bookingUrl = `${APP_URL}/${tenantSlug}/admin/bookings/${bookingId}`;
+
+  const depositNote = depositAmount && depositAmount > 0
+    ? (depositHoldStatus === "authorized"
+        ? `✅ $${depositAmount.toFixed(2)} security deposit hold is active on the renter's card.`
+        : depositHoldStatus === "charged"
+          ? `✅ $${depositAmount.toFixed(2)} security deposit has been charged to the renter's card (5+ day rental).`
+          : `⚠️ Security deposit ($${depositAmount.toFixed(2)}) has not been authorized yet — authorize it from the booking page.`)
+    : null;
+
+  const body = `
+    <p style="margin:0 0 8px;font-size:18px;font-weight:700;color:${BRAND_DARK};">Pickup photos submitted — rental is underway</p>
+    <p style="margin:0 0 20px;font-size:15px;color:#374151;line-height:1.6;">
+      <strong>${customerName}</strong> has submitted their pickup condition photos for <strong>${listingTitle}</strong>. The rental is now officially underway.
+    </p>
+
+    ${infoTable([
+      { label: "Booking #",  value: `#${bookingId}`, mono: true },
+      { label: "Customer",   value: customerName },
+      { label: "Email",      value: customerEmail },
+      { label: "Item",       value: listingTitle },
+      { label: "Started",    value: startDate },
+      { label: "Return by",  value: endDate },
+    ])}
+
+    ${depositNote ? `
+    <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:16px;margin:20px 0;">
+      <p style="margin:0;font-size:14px;color:#166534;line-height:1.6;">${depositNote}</p>
+    </div>` : ""}
+
+    ${ctaButton("View Booking", bookingUrl, BRAND_DARK)}
+
+    <p style="margin:0;font-size:13px;color:#9ca3af;text-align:center;">
+      This is an automated alert sent when a renter completes their pickup photo documentation.
+    </p>
+  `;
+
+  const html = emailShell({
+    preheader: `${customerName} has submitted pickup photos for ${listingTitle} — rental is underway.`,
+    badgeLabel: "Pickup Complete — Rental Active",
+    badgeColor: BRAND_GREEN,
+    body,
+  });
+
+  const gmail = await getUncachableGmailClient();
+  await gmail.users.messages.send({
+    userId: "me",
+    requestBody: { raw: makeRawEmail(adminEmail, `[${companyName}] Pickup photos submitted — ${customerName} · ${listingTitle}`, html) },
+  });
+}
+
 export async function sendAuditRequestEmail(opts: {
   name: string;
   email: string;

@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useParams } from "wouter";
-import { Camera, Upload, CheckCircle2, ImagePlus, X, AlertCircle, Loader2 } from "lucide-react";
+import { Camera, Upload, CheckCircle2, ImagePlus, X, AlertCircle, Loader2, Lock, Zap } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
@@ -17,6 +17,9 @@ type PickupInfo = {
   source: string;
   pickupCompleted: boolean;
   pickupPhotos: string[];
+  depositAmount: number | null;
+  depositHoldStatus: string | null;
+  isLongBooking: boolean;
 };
 
 export default function PickupPage() {
@@ -188,9 +191,35 @@ export default function PickupPage() {
               <CheckCircle2 className="w-12 h-12 mx-auto mb-3" style={{ color: brandColor }} />
               <h3 className="text-xl font-bold text-gray-900 mb-1">Photos Submitted!</h3>
               <p className="text-gray-500 text-sm">
-                Your {savedPhotos.length} photo{savedPhotos.length !== 1 ? "s" : ""} have been saved and linked to your booking. You're all set for pickup!
+                Your {savedPhotos.length} photo{savedPhotos.length !== 1 ? "s" : ""} have been saved. You're officially checked in!
               </p>
             </div>
+
+            {/* Deposit notice */}
+            {info.depositAmount && info.depositAmount > 0 && (
+              <div className="bg-amber-50 border border-amber-200 rounded-2xl px-4 py-3 flex items-start gap-3">
+                <Lock className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                <p className="text-sm text-amber-800 leading-relaxed">
+                  {info.isLongBooking
+                    ? `A $${info.depositAmount.toFixed(2)} security deposit has been charged to your card for this multi-day rental. It will be reviewed and returned after you complete your return.`
+                    : `A $${info.depositAmount.toFixed(2)} security deposit hold has been placed on your card. It will be automatically released once your return is confirmed.`}
+                </p>
+              </div>
+            )}
+
+            {/* Start My Adventure CTA */}
+            <Button
+              className="w-full py-7 text-lg font-bold rounded-2xl gap-2 shadow-md"
+              style={{ background: brandColor }}
+              onClick={() => {
+                // Nothing to navigate to — just a celebratory acknowledgment
+                window.scrollTo({ top: 0, behavior: "smooth" });
+              }}
+            >
+              <Zap className="w-5 h-5" />
+              Start My Adventure!
+            </Button>
+
             {savedPhotos.length > 0 && (
               <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-4">
                 <p className="text-sm font-semibold text-gray-700 mb-3">Your submitted photos</p>
