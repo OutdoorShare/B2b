@@ -2374,7 +2374,7 @@ export default function StorefrontBook() {
                     <div className="bg-muted/40 rounded-2xl p-5 space-y-3 border mt-4">
                       <div className="flex items-center gap-2">
                         <Lock className="w-4 h-4 text-primary" />
-                        <h3 className="font-semibold text-sm">Create your account</h3>
+                        <h3 className="font-semibold text-sm">Make a profile to view your booking details</h3>
                       </div>
                       <div className="space-y-3">
                         <div className="relative">
