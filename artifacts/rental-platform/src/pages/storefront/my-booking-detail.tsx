@@ -8,7 +8,7 @@ import {
   StickyNote, ShieldCheck, MessageSquare, CreditCard,
   MapPin, Monitor, Smartphone, Phone as PhoneIcon, Users,
   Receipt, Tag, Camera, ImagePlus, Upload, X as XIcon, Loader2, RotateCcw,
-  IdCard
+  IdCard, Mountain, Sparkles, Send, MailCheck
 } from "lucide-react";
 import { format, differenceInDays, startOfDay, parseISO, subHours } from "date-fns";
 
@@ -91,6 +91,32 @@ export default function MyBookingDetail() {
   const [photoDone, setPhotoDone] = useState(false);
   const [savedPhotos, setSavedPhotos] = useState<string[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Live countdown state (days / hours / mins / secs until pickup)
+  const [countdown, setCountdown] = useState({ d: 0, h: 0, m: 0, s: 0, past: false });
+  const [sendingAgreement, setSendingAgreement] = useState(false);
+  const [agreementLinkSent, setAgreementLinkSent] = useState(false);
+
+  useEffect(() => {
+    if (!booking) return;
+    const tick = () => {
+      const now    = Date.now();
+      const target = new Date(booking.startDate + "T00:00:00").getTime();
+      const diff   = target - now;
+      if (diff <= 0) { setCountdown({ d: 0, h: 0, m: 0, s: 0, past: true }); return; }
+      const totalSecs = Math.floor(diff / 1000);
+      setCountdown({
+        d: Math.floor(totalSecs / 86400),
+        h: Math.floor((totalSecs % 86400) / 3600),
+        m: Math.floor((totalSecs % 3600) / 60),
+        s: totalSecs % 60,
+        past: false,
+      });
+    };
+    tick();
+    const timer = setInterval(tick, 1000);
+    return () => clearInterval(timer);
+  }, [booking?.startDate]);
 
   useEffect(() => {
     const s = loadSession();
@@ -269,121 +295,210 @@ export default function MyBookingDetail() {
           <span>Your booking is awaiting confirmation. You'll receive an email once it's reviewed.</span>
         </div>
       )}
+
+      {/* ── Adventure hero — confirmed bookings ── */}
       {booking.status === "confirmed" && (() => {
-        const today    = startOfDay(new Date());
-        const start    = startOfDay(startDate);
-        const daysAway = differenceInDays(start, today);
-        const isToday  = daysAway === 0;
+        const today      = startOfDay(new Date());
+        const start      = startOfDay(startDate);
+        const daysAway   = differenceInDays(start, today);
+        const isPickupDay = daysAway === 0;
+        const isPast     = daysAway < 0;
+        const agreementSigned = !!booking.agreementSignerName;
+        const stepsComplete   = agreementSigned;
+
+        // ── CASE A: Steps not done → warning ──────────────────────────────
+        if (!stepsComplete) {
+          const agreementUrl = booking.pickupToken
+            ? `${BASE}/${slug}/pickup/${booking.pickupToken}`
+            : null;
+
+          const sendAgreementLink = async () => {
+            setSendingAgreement(true);
+            try {
+              const r = await fetch(`${BASE}/api/bookings/${booking.id}/send-agreement-link`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+              });
+              const data = await r.json();
+              if (r.ok && !data.error) setAgreementLinkSent(true);
+            } finally { setSendingAgreement(false); }
+          };
+
+          return (
+            <div className={`rounded-2xl border-2 overflow-hidden ${isPast ? "border-red-300" : "border-amber-300"}`}>
+              <div className={`px-5 py-4 flex items-start gap-3 ${isPast ? "bg-red-600" : "bg-amber-500"}`}>
+                <AlertCircle className="w-6 h-6 text-white shrink-0 mt-0.5" />
+                <div>
+                  <p className="font-bold text-base text-white">
+                    {isPast ? "🚫 Required steps overdue — rental cannot start" : "⚠️ Complete required steps before pickup"}
+                  </p>
+                  <p className="text-sm text-white/90 mt-0.5">
+                    {isPast
+                      ? "Do not take the equipment until all required steps are done."
+                      : "Your rental cannot begin until these steps are completed."}
+                  </p>
+                </div>
+              </div>
+              <div className="px-5 py-4 space-y-3 bg-white">
+                {!agreementSigned && (
+                  <div className="flex items-center gap-3 p-3 rounded-xl border border-amber-200 bg-amber-50">
+                    <FileSignature className="w-5 h-5 text-amber-600 shrink-0" />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-semibold text-amber-800">Rental Agreement — not yet signed</p>
+                      <p className="text-xs text-amber-700 mt-0.5">You must sign before your rental can begin.</p>
+                    </div>
+                    {agreementUrl ? (
+                      <a href={agreementUrl} className="shrink-0 px-3 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold transition-colors">
+                        Sign Now →
+                      </a>
+                    ) : (
+                      <Button size="sm" variant="outline" className="h-7 text-xs gap-1 shrink-0 border-amber-300 text-amber-700" onClick={sendAgreementLink} disabled={sendingAgreement || agreementLinkSent}>
+                        {sendingAgreement ? <Loader2 className="w-3 h-3 animate-spin" /> : agreementLinkSent ? <MailCheck className="w-3 h-3" /> : <Send className="w-3 h-3" />}
+                        {agreementLinkSent ? "Link sent!" : "Request link"}
+                      </Button>
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
+          );
+        }
+
+        // ── CASE B: Steps done, pickup day → ADVENTURE! ─────────────────────
+        if (isPickupDay || isPast) {
+          return (
+            <div className="rounded-2xl border-2 border-green-400 overflow-hidden">
+              <div className="bg-gradient-to-br from-green-500 to-green-700 px-6 py-8 text-center relative overflow-hidden">
+                {/* Background decoration */}
+                <div className="absolute inset-0 opacity-10">
+                  <div className="absolute top-2 left-4 text-6xl">🏔️</div>
+                  <div className="absolute bottom-2 right-4 text-5xl">⛺</div>
+                </div>
+                <div className="relative">
+                  <div className="w-16 h-16 rounded-full bg-white/20 flex items-center justify-center mx-auto mb-3">
+                    <Mountain className="w-8 h-8 text-white" />
+                  </div>
+                  <h2 className="text-2xl font-black text-white tracking-tight leading-tight">
+                    Ready to Start Your Adventure!
+                  </h2>
+                  <p className="text-green-100 text-sm mt-2">
+                    Head over to pick up your <strong>{booking.listingTitle}</strong>
+                  </p>
+                  <div className="mt-4 flex items-center justify-center gap-2">
+                    <Sparkles className="w-4 h-4 text-yellow-300" />
+                    <span className="text-white font-semibold text-sm">All steps complete — you're all set!</span>
+                    <Sparkles className="w-4 h-4 text-yellow-300" />
+                  </div>
+                </div>
+              </div>
+              <div className="px-5 py-4 bg-green-50 border-t border-green-200">
+                <div className="space-y-2">
+                  {[
+                    { icon: <User className="w-4 h-4 text-green-600" />, text: "Bring a valid government-issued photo ID" },
+                    { icon: <FileSignature className="w-4 h-4 text-green-600" />, text: "Rental agreement signed ✓" },
+                    { icon: <CreditCard className="w-4 h-4 text-green-600" />, text: "Payment method on file ✓" },
+                  ].map(({ icon, text }, i) => (
+                    <div key={i} className="flex items-center gap-2.5 text-sm text-green-800">
+                      <div className="w-6 h-6 rounded-full bg-green-100 border border-green-200 flex items-center justify-center shrink-0">
+                        {icon}
+                      </div>
+                      {text}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          );
+        }
+
+        // ── CASE C: Steps done, pickup in the future → countdown ─────────────
+        const pad = (n: number) => String(n).padStart(2, "0");
+        const showSecs = countdown.d === 0 && countdown.h < 24;
 
         return (
-          <div className={`rounded-2xl border-2 overflow-hidden ${isToday ? "border-green-400" : "border-green-200"}`}>
-            {/* Header */}
-            <div className={`px-5 py-4 flex items-center gap-3 ${isToday ? "bg-green-600" : "bg-green-50"}`}>
-              <div className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 ${isToday ? "bg-white/20" : "bg-green-100"}`}>
-                <CheckCircle2 className={`w-6 h-6 ${isToday ? "text-white" : "text-green-600"}`} />
+          <div className="rounded-2xl border-2 border-green-300 overflow-hidden">
+            {/* Countdown header */}
+            <div className="bg-gradient-to-br from-[#1a4731] to-[#2d6a4f] px-6 py-6 text-center relative overflow-hidden">
+              <div className="absolute inset-0 opacity-10">
+                <div className="absolute top-1 left-3 text-5xl">🏔️</div>
+                <div className="absolute bottom-1 right-3 text-4xl">🌲</div>
               </div>
-              <div>
-                <p className={`font-bold text-base ${isToday ? "text-white" : "text-green-800"}`}>
-                  {isToday ? "Today is your pickup day!" : daysAway === 1 ? "Your pickup is tomorrow" : `Your booking is confirmed`}
-                </p>
-                <p className={`text-sm mt-0.5 ${isToday ? "text-green-100" : "text-green-700"}`}>
-                  {isToday
-                    ? `Head over to pick up your ${booking.listingTitle ?? "rental"}`
-                    : `Pickup on ${format(startDate, "EEEE, MMMM d")}`
-                  }
-                </p>
-              </div>
-            </div>
-
-            {/* Bring with you */}
-            <div className="px-5 pt-4 pb-2">
-              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3">What to bring</p>
-              <div className="space-y-2">
-                {[
-                  { icon: <User className="w-4 h-4 text-green-600" />, text: "Valid government-issued photo ID" },
-                  { icon: <FileSignature className="w-4 h-4 text-green-600" />, text: "Your signed rental agreement (already completed)" },
-                  { icon: <CreditCard className="w-4 h-4 text-green-600" />, text: "Payment method on file" },
-                ].map(({ icon, text }, i) => (
-                  <div key={i} className="flex items-center gap-3">
-                    <div className="w-7 h-7 rounded-full bg-green-50 border border-green-200 flex items-center justify-center shrink-0">
-                      {icon}
+              <div className="relative">
+                <p className="text-green-300 text-xs font-semibold uppercase tracking-widest mb-2">Your adventure begins in</p>
+                <div className="flex items-end justify-center gap-3">
+                  {countdown.d > 0 && (
+                    <div className="text-center">
+                      <span className="text-5xl font-black text-white tabular-nums leading-none">{countdown.d}</span>
+                      <p className="text-green-300 text-xs mt-1 uppercase tracking-wide">day{countdown.d !== 1 ? "s" : ""}</p>
                     </div>
-                    <span className="text-sm text-foreground">{text}</span>
+                  )}
+                  <div className="text-center">
+                    <span className="text-5xl font-black text-white tabular-nums leading-none">{pad(countdown.h)}</span>
+                    <p className="text-green-300 text-xs mt-1 uppercase tracking-wide">hrs</p>
                   </div>
-                ))}
+                  <div className="text-center">
+                    <span className="text-5xl font-black text-white tabular-nums leading-none">{pad(countdown.m)}</span>
+                    <p className="text-green-300 text-xs mt-1 uppercase tracking-wide">min</p>
+                  </div>
+                  {showSecs && (
+                    <div className="text-center">
+                      <span className="text-5xl font-black text-green-300 tabular-nums leading-none">{pad(countdown.s)}</span>
+                      <p className="text-green-400 text-xs mt-1 uppercase tracking-wide">sec</p>
+                    </div>
+                  )}
+                </div>
+                <p className="text-green-200 text-sm mt-3 font-medium">
+                  Pickup on <strong className="text-white">{format(startDate, "EEEE, MMMM d")}</strong>
+                  {booking.pickupTime && <span className="text-green-300"> · {booking.pickupTime}</span>}
+                </p>
               </div>
             </div>
-
-            {/* What will happen */}
-            <div className="px-5 pt-3 pb-4">
-              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3">What to expect</p>
-              <ol className="space-y-2">
-                {[
-                  "Staff will check your ID and look up your booking",
-                  "You'll photograph the equipment condition — this protects you from any damage disputes",
-                  "Pick up your product and enjoy!",
-                ].map((step, i) => (
-                  <li key={i} className="flex items-start gap-2.5 text-sm text-muted-foreground">
-                    <span className="w-5 h-5 rounded-full bg-green-100 text-green-700 text-xs font-bold flex items-center justify-center shrink-0 mt-0.5">{i + 1}</span>
-                    {step}
-                  </li>
-                ))}
-              </ol>
+            {/* You're all set strip */}
+            <div className="bg-green-50 border-t border-green-200 px-5 py-3 flex items-center gap-2">
+              <CheckCircle2 className="w-4 h-4 text-green-600 shrink-0" />
+              <p className="text-sm text-green-800 font-semibold">You're all set — all required steps complete!</p>
             </div>
           </div>
         );
       })()}
+
+      {/* Active rental — time remaining */}
+      {booking.status === "active" && (() => {
+        const today     = startOfDay(new Date());
+        const end       = startOfDay(endDate);
+        const start     = startOfDay(startDate);
+        const daysToEnd   = differenceInDays(end, today);
+        const totalDays   = Math.max(1, differenceInDays(end, start));
+        const elapsed     = Math.max(0, differenceInDays(today, start));
+        const pct         = Math.min(100, Math.round((elapsed / totalDays) * 100));
+        let border = "border-green-200", bg = "bg-green-50", text = "text-green-700", bar = "bg-green-500";
+        let label = "", sub = "";
+        if (daysToEnd > 1)  { label = `${daysToEnd} days remaining`;     sub = `Return by ${format(end, "EEEE, MMMM d")}`; }
+        else if (daysToEnd === 1) { label = "Return tomorrow"; sub = `Due back ${format(end, "EEEE, MMMM d")}`; border="border-amber-200"; bg="bg-amber-50"; text="text-amber-700"; bar="bg-amber-500"; }
+        else if (daysToEnd === 0) { label = "Return due today"; sub = "Please return the equipment by end of day"; border="border-amber-200"; bg="bg-amber-50"; text="text-amber-700"; bar="bg-amber-500"; }
+        else { label = `Overdue by ${Math.abs(daysToEnd)} day${Math.abs(daysToEnd) !== 1 ? "s" : ""}`; sub = `Was due back ${format(end, "EEEE, MMMM d")}`; border="border-red-200"; bg="bg-red-50"; text="text-red-700"; bar="bg-red-500"; }
+        return (
+          <div className={`rounded-2xl border ${border} ${bg} p-4 space-y-2.5`}>
+            <div className="flex items-center justify-between">
+              <div className={`flex items-center gap-2 font-semibold text-sm ${text}`}>
+                <Clock className="w-4 h-4" /> {label}
+              </div>
+              <span className="text-xs text-muted-foreground">{pct}% of rental used</span>
+            </div>
+            <div className="h-2.5 bg-black/10 rounded-full overflow-hidden">
+              <div className={`h-full rounded-full ${bar} transition-all`} style={{ width: `${pct}%` }} />
+            </div>
+            <p className="text-xs text-muted-foreground">{sub}</p>
+          </div>
+        );
+      })()}
+
       {booking.status === "cancelled" && (
         <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-800 flex items-start gap-2">
           <XCircle className="w-4 h-4 mt-0.5 shrink-0 text-red-500" />
           <span>This booking has been cancelled. Contact the rental company if you have questions.</span>
         </div>
       )}
-
-      {/* Time remaining */}
-      {(() => {
-        const skip = ["cancelled", "completed", "no_show"];
-        if (skip.includes(booking.status)) return null;
-        const today     = startOfDay(new Date());
-        const start     = startOfDay(startDate);
-        const end       = startOfDay(endDate);
-        const daysToStart = differenceInDays(start, today);
-        const daysToEnd   = differenceInDays(end,   today);
-        const totalDays   = Math.max(1, differenceInDays(end, start));
-        const elapsed     = Math.max(0, differenceInDays(today, start));
-        const pct         = Math.min(100, Math.round((elapsed / totalDays) * 100));
-
-        let label = "", sub = "", icon = <Clock className="w-4 h-4" />;
-        let border = "border-primary/20", bg = "bg-primary/5", text = "text-primary", bar = "bg-primary";
-
-        if (daysToStart > 1)    { label = `Starts in ${daysToStart} days`;   sub = `Pickup on ${format(start, "EEEE, MMMM d")}`; border="border-blue-200"; bg="bg-blue-50"; text="text-blue-700"; bar="bg-blue-500"; }
-        else if (daysToStart===1){ label = "Starts tomorrow";                 sub = `Pickup on ${format(start, "EEEE, MMMM d")}`; border="border-blue-200"; bg="bg-blue-50"; text="text-blue-700"; bar="bg-blue-500"; }
-        else if (daysToStart===0){ label = "Today is your pickup day!";       sub = "Check in with the rental company when you arrive"; border="border-green-200"; bg="bg-green-50"; text="text-green-700"; bar="bg-green-500"; }
-        else if (daysToEnd > 1) { label = `${daysToEnd} days remaining`;     sub = `Return by ${format(end, "EEEE, MMMM d")}`; border="border-green-200"; bg="bg-green-50"; text="text-green-700"; bar="bg-green-500"; }
-        else if (daysToEnd===1) { label = "Return tomorrow";                  sub = `Due back ${format(end, "EEEE, MMMM d")}`; border="border-amber-200"; bg="bg-amber-50"; text="text-amber-700"; bar="bg-amber-500"; }
-        else if (daysToEnd===0) { label = "Return due today";                 sub = "Please return the equipment by end of day"; border="border-amber-200"; bg="bg-amber-50"; text="text-amber-700"; bar="bg-amber-500"; }
-        else                    { label = `Overdue by ${Math.abs(daysToEnd)} day${Math.abs(daysToEnd)!==1?"s":""}`; sub = `Was due back ${format(end, "EEEE, MMMM d")}`; border="border-red-200"; bg="bg-red-50"; text="text-red-700"; bar="bg-red-500"; }
-
-        return (
-          <div className={`rounded-2xl border ${border} ${bg} p-4 space-y-2.5`}>
-            <div className="flex items-center justify-between">
-              <div className={`flex items-center gap-2 font-semibold text-sm ${text}`}>
-                <Clock className="w-4 h-4" />
-                {label}
-              </div>
-              {daysToStart < 0 && (
-                <span className="text-xs text-muted-foreground">{pct}% of rental used</span>
-              )}
-            </div>
-            {daysToStart < 0 && (
-              <div className="h-2.5 bg-black/10 rounded-full overflow-hidden">
-                <div className={`h-full rounded-full ${bar} transition-all`} style={{ width: `${pct}%` }} />
-              </div>
-            )}
-            <p className="text-xs text-muted-foreground">{sub}</p>
-          </div>
-        );
-      })()}
 
       {/* ── Pickup photo window not yet open ── */}
       {photoWindowPending && (

@@ -14,6 +14,7 @@ import {
   tenantsTable,
 } from "@workspace/db/schema";
 import { eq, and, isNull, or, sql } from "drizzle-orm";
+import { randomBytes } from "crypto";
 import {
   sendPrePickupReminderRenterEmail,
   sendPrePickupReminderAdminEmail,
@@ -421,10 +422,15 @@ async function alertIncompleteStepsApproaching() {
       const listingTitle = await getListingTitle(booking.listingId);
       const missingSteps = ["Rental Agreement (not yet signed)"];
 
-      // Build agreement URL from existing pickup token if available
-      const agreementUrl = booking.pickupToken
-        ? `${APP_URL}/${ctx.slug}/pickup/${booking.pickupToken}`
-        : null;
+      // Always ensure a pickup token exists so the email has a direct link
+      let token = booking.pickupToken;
+      if (!token) {
+        token = randomBytes(24).toString("hex");
+        await db.update(bookingsTable)
+          .set({ pickupToken: token, updatedAt: new Date() })
+          .where(eq(bookingsTable.id, booking.id));
+      }
+      const agreementUrl = `${APP_URL}/${ctx.slug}/pickup/${token}`;
 
       if (booking.customerEmail) {
         await sendIncompleteStepsRenterEmail({
@@ -507,9 +513,15 @@ async function alertIncompleteStepsOverdue() {
       const listingTitle = await getListingTitle(booking.listingId);
       const missingSteps = ["Rental Agreement (not yet signed)"];
 
-      const agreementUrl = booking.pickupToken
-        ? `${APP_URL}/${ctx.slug}/pickup/${booking.pickupToken}`
-        : null;
+      // Always ensure a pickup token exists so the email has a direct link
+      let token = booking.pickupToken;
+      if (!token) {
+        token = randomBytes(24).toString("hex");
+        await db.update(bookingsTable)
+          .set({ pickupToken: token, updatedAt: new Date() })
+          .where(eq(bookingsTable.id, booking.id));
+      }
+      const agreementUrl = `${APP_URL}/${ctx.slug}/pickup/${token}`;
 
       if (booking.customerEmail) {
         await sendIncompleteStepsRenterEmail({
