@@ -174,6 +174,23 @@ function SuperAdminDemoGuard() {
   return <DemoPage />;
 }
 
+// Reserved slugs that must never be treated as tenant storefronts.
+// Any /:slug route that resolves to one of these renders a 404 instead.
+const RESERVED_SLUGS = new Set([
+  "admin", "api", "superadmin", "platform", "docs", "public", "signup",
+  "get-started", "demo", "audit", "health", "static", "assets", "uploads",
+  "login", "logout", "register", "account", "dashboard", "settings", "billing",
+  "support", "help", "about", "contact", "privacy", "terms", "pricing",
+  "www", "mail", "email", "ftp", "cdn", "media", "images",
+]);
+
+// Guard that prevents reserved words from accidentally matching storefront routes.
+function SlugGuard({ children }: { children: React.ReactNode }) {
+  const params = useParams<{ slug: string }>();
+  if (RESERVED_SLUGS.has(params.slug ?? "")) return <NotFound />;
+  return <>{children}</>;
+}
+
 // Auth guard: checks session matches the slug in the URL
 function AdminGuard({ children }: { children: React.ReactNode }) {
   const params = useParams<{ slug: string }>();
@@ -382,28 +399,28 @@ function Router() {
 
       {/* Storefront Routes — tenant-specific via slug prefix */}
       <Route path="/:slug">
-        <StorefrontLayout><StorefrontHome /></StorefrontLayout>
+        <SlugGuard><StorefrontLayout><StorefrontHome /></StorefrontLayout></SlugGuard>
       </Route>
       <Route path="/:slug/listings/:id">
-        <StorefrontLayout><StorefrontProductDetail /></StorefrontLayout>
+        <SlugGuard><StorefrontLayout><StorefrontProductDetail /></StorefrontLayout></SlugGuard>
       </Route>
       <Route path="/:slug/book">
-        <StorefrontLayout><StorefrontBook /></StorefrontLayout>
+        <SlugGuard><StorefrontLayout><StorefrontBook /></StorefrontLayout></SlugGuard>
       </Route>
       <Route path="/:slug/login">
-        <StorefrontLayout><StorefrontLogin /></StorefrontLayout>
+        <SlugGuard><StorefrontLayout><StorefrontLogin /></StorefrontLayout></SlugGuard>
       </Route>
       <Route path="/:slug/set-password">
-        <StorefrontLayout><StorefrontSetPassword /></StorefrontLayout>
+        <SlugGuard><StorefrontLayout><StorefrontSetPassword /></StorefrontLayout></SlugGuard>
       </Route>
       <Route path="/:slug/my-bookings/:id">
-        <StorefrontLayout><StorefrontMyBookingDetail /></StorefrontLayout>
+        <SlugGuard><StorefrontLayout><StorefrontMyBookingDetail /></StorefrontLayout></SlugGuard>
       </Route>
       <Route path="/:slug/my-bookings">
-        <StorefrontLayout><StorefrontMyBookings /></StorefrontLayout>
+        <SlugGuard><StorefrontLayout><StorefrontMyBookings /></StorefrontLayout></SlugGuard>
       </Route>
       <Route path="/:slug/profile">
-        <StorefrontLayout><StorefrontProfile /></StorefrontLayout>
+        <SlugGuard><StorefrontLayout><StorefrontProfile /></StorefrontLayout></SlugGuard>
       </Route>
 
       {/* Root → SaaS marketing landing */}
