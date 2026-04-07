@@ -517,8 +517,17 @@ router.put("/superadmin/tenants/:id/listings/:lid", requireSuperAdmin, async (re
     const lid = parseInt(req.params.lid);
     const body = req.body;
     const updates: any = { updatedAt: new Date() };
-    const fields = ["title","description","status","quantity","categoryId","condition","brand","model","location","requirements"];
-    fields.forEach(f => { if (body[f] !== undefined) updates[f] = body[f]; });
+    // Explicit allow-list — no dynamic bracket notation on user input
+    if (body.title       !== undefined) updates.title       = body.title;
+    if (body.description !== undefined) updates.description = body.description;
+    if (body.status      !== undefined) updates.status      = body.status;
+    if (body.quantity    !== undefined) updates.quantity    = body.quantity;
+    if (body.categoryId  !== undefined) updates.categoryId  = body.categoryId;
+    if (body.condition   !== undefined) updates.condition   = body.condition;
+    if (body.brand       !== undefined) updates.brand       = body.brand;
+    if (body.model       !== undefined) updates.model       = body.model;
+    if (body.location    !== undefined) updates.location    = body.location;
+    if (body.requirements !== undefined) updates.requirements = body.requirements;
     if (body.pricePerDay !== undefined) updates.pricePerDay = String(body.pricePerDay);
     if (body.pricePerWeek !== undefined) updates.pricePerWeek = body.pricePerWeek ? String(body.pricePerWeek) : null;
     if (body.depositAmount !== undefined) updates.depositAmount = body.depositAmount ? String(body.depositAmount) : null;

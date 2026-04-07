@@ -188,6 +188,16 @@ const APP_URL =
   process.env.APP_URL ||
   (process.env.REPLIT_DEV_DOMAIN ? `https://${process.env.REPLIT_DEV_DOMAIN}` : "https://outdoorshare.app");
 
+// ── HTML-escape helper (prevents XSS in email templates) ─────────────────────
+function esc(value: unknown): string {
+  return String(value == null ? "" : value)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
 // ── Brand constants (platform defaults) ───────────────────────────────────────
 const BRAND_GREEN = "#3ab549";
 const BRAND_DARK  = "#1a2332";
@@ -213,8 +223,8 @@ function emailShell(opts: {
     ? (rawLogoUrl.startsWith("http") ? rawLogoUrl : `${APP_URL}${rawLogoUrl}`)
     : null;
   const headerHtml = logoSrc
-    ? `<img src="${logoSrc}" alt="${companyName}" width="180" style="display:inline-block;max-width:180px;max-height:80px;height:auto;object-fit:contain;" />`
-    : `<span style="font-size:22px;font-weight:900;color:#ffffff;letter-spacing:-0.5px;">${companyName}</span>`;
+    ? `<img src="${logoSrc}" alt="${esc(companyName)}" width="180" style="display:inline-block;max-width:180px;max-height:80px;height:auto;object-fit:contain;" />`
+    : `<span style="font-size:22px;font-weight:900;color:#ffffff;letter-spacing:-0.5px;">${esc(companyName)}</span>`;
 
   const { preheader, badgeLabel, badgeColor, body } = opts;
 
@@ -259,10 +269,10 @@ function emailShell(opts: {
           <tr>
             <td style="background:#f8faf8;padding:20px 40px;text-align:center;border-top:1px solid #e5e7eb;">
               <p style="margin:0 0 6px 0;font-size:13px;color:#6b7280;">
-                <strong style="color:${accentColor};">${companyName}</strong>
+                <strong style="color:${accentColor};">${esc(companyName)}</strong>
               </p>
               <p style="margin:0;font-size:11px;color:#9ca3af;">
-                Questions? <a href="mailto:${contactEmail}" style="color:#9ca3af;">${contactEmail}</a>
+                Questions? <a href="mailto:${esc(contactEmail)}" style="color:#9ca3af;">${esc(contactEmail)}</a>
               </p>
               <p style="margin:8px 0 0;font-size:10px;color:#d1d5db;">Powered by OutdoorShare</p>
             </td>
@@ -289,11 +299,12 @@ function ctaButton(label: string, url: string, color = BRAND_GREEN): string {
 }
 
 // ── Info table ─────────────────────────────────────────────────────────────────
-function infoTable(rows: { label: string; value: string; mono?: boolean }[]): string {
+// rawHtml: true → value is pre-composed HTML (e.g. <a> links); skip escaping
+function infoTable(rows: { label: string; value: string; mono?: boolean; rawHtml?: boolean }[]): string {
   const rowsHtml = rows.map(r => `
     <tr>
-      <td style="padding:10px 16px;background:#f8faf8;font-size:13px;color:#6b7280;font-weight:600;white-space:nowrap;border-bottom:1px solid #e5e7eb;width:130px;">${r.label}</td>
-      <td style="padding:10px 16px;font-size:14px;color:#111827;border-bottom:1px solid #e5e7eb;${r.mono ? "font-family:monospace;letter-spacing:0.5px;" : ""}">${r.value}</td>
+      <td style="padding:10px 16px;background:#f8faf8;font-size:13px;color:#6b7280;font-weight:600;white-space:nowrap;border-bottom:1px solid #e5e7eb;width:130px;">${esc(r.label)}</td>
+      <td style="padding:10px 16px;font-size:14px;color:#111827;border-bottom:1px solid #e5e7eb;${r.mono ? "font-family:monospace;letter-spacing:0.5px;" : ""}">${r.rawHtml ? r.value : esc(r.value)}</td>
     </tr>`).join("");
 
   return `<table cellpadding="0" cellspacing="0" border="0" width="100%" style="border-radius:8px;overflow:hidden;border:1px solid #e5e7eb;margin:24px 0;">
@@ -321,7 +332,7 @@ export async function sendBlastEmail(opts: {
     .join("");
 
   const body = `
-    <p style="margin:0 0 4px;font-size:16px;font-weight:700;color:${BRAND_DARK};">Hi ${customerName},</p>
+    <p style="margin:0 0 4px;font-size:16px;font-weight:700;color:${BRAND_DARK};">Hi ${esc(customerName)},</p>
     ${bodyHtml}
     <p style="margin:24px 0 0;font-size:14px;color:#6b7280;border-top:1px solid #e5e7eb;padding-top:16px;">
       &mdash; The team at <strong>${companyName}</strong>
@@ -363,7 +374,7 @@ export async function sendWelcomeEmail(opts: {
     ${infoTable([
       { label: "Email", value: toEmail },
       { label: "Password", value: password, mono: true },
-      { label: "Storefront", value: `<a href="${storefrontUrl}" style="color:${BRAND_GREEN};text-decoration:none;">${storefrontUrl}</a>` },
+      { label: "Storefront", value: `<a href="${storefrontUrl}" style="color:${BRAND_GREEN};text-decoration:none;">${storefrontUrl}</a>`, rawHtml: true },
     ])}
 
     ${ctaButton("Log In to Your Dashboard", loginUrl)}
@@ -435,9 +446,9 @@ export async function sendAccountUpdatedEmail(opts: {
   const loginUrl = `${APP_URL}/${slug}/admin`;
   const storefrontUrl = `${APP_URL}/${slug}`;
 
-  const tableRows: { label: string; value: string; mono?: boolean }[] = [
+  const tableRows: { label: string; value: string; mono?: boolean; rawHtml?: boolean }[] = [
     { label: "Email", value: toEmail },
-    { label: "Storefront", value: `<a href="${storefrontUrl}" style="color:${BRAND_GREEN};text-decoration:none;">${storefrontUrl}</a>` },
+    { label: "Storefront", value: `<a href="${storefrontUrl}" style="color:${BRAND_GREEN};text-decoration:none;">${storefrontUrl}</a>`, rawHtml: true },
   ];
   if (passwordChanged && newPassword) {
     tableRows.push({ label: "New Password", value: newPassword, mono: true });
@@ -501,17 +512,17 @@ export async function sendPickupLinkEmail(opts: {
     : "Pre-Pickup Photo Check Required";
 
   const intro = hostPickup
-    ? `Hi <strong>${customerName}</strong>, your host at <strong>${companyName}</strong> has completed the equipment handoff for your rental.
+    ? `Hi <strong>${esc(customerName)}</strong>, your host at <strong>${companyName}</strong> has completed the equipment handoff for your rental.
        Please take a moment to photograph the equipment's current condition using the link below.
        These photos are your record and protect you against any future damage claims.`
-    : `Hi <strong>${customerName}</strong>, it's almost time to pick up your rental from <strong>${companyName}</strong>.
+    : `Hi <strong>${esc(customerName)}</strong>, it's almost time to pick up your rental from <strong>${companyName}</strong>.
        Before pickup, please document the condition of the equipment by uploading photos using the link below.
        These photos protect you in case of any future damage claims.`;
 
   const badge = hostPickup ? "Action Required — Document Equipment Condition" : "Action Required — Upload Pickup Photos";
   const preheader = hostPickup
-    ? `Your host has completed the handoff — please upload photos to document your ${listingTitle}.`
-    : `Upload pickup photos for your ${listingTitle} rental — required before pickup.`;
+    ? `Your host has completed the handoff — please upload photos to document your ${esc(listingTitle)}.`
+    : `Upload pickup photos for your ${esc(listingTitle)} rental — required before pickup.`;
   const subject = hostPickup
     ? `[${companyName}] Please document your rental equipment condition`
     : `[${companyName}] Please upload pickup photos for your rental`;
@@ -578,7 +589,7 @@ export async function sendClaimChargeEmail(opts: {
   const body = `
     <p style="margin:0 0 8px;font-size:18px;font-weight:700;color:${BRAND_DARK};">Damage Charge Notice</p>
     <p style="margin:0 0 20px;font-size:15px;color:#374151;line-height:1.6;">
-      Dear <strong>${customerName}</strong>, a damage charge of <strong>$${amount.toFixed(2)}</strong> has been issued by <strong>${tenantName}</strong> in connection with your recent rental. ${modeDesc}
+      Dear <strong>${esc(customerName)}</strong>, a damage charge of <strong>$${amount.toFixed(2)}</strong> has been issued by <strong>${tenantName}</strong> in connection with your recent rental. ${modeDesc}
     </p>
     ${infoTable(tableRows)}
     ${paymentUrl ? ctaButton(mode === "link" ? "Pay Now" : "View Invoice", paymentUrl, "#dc2626") : ""}
@@ -617,7 +628,7 @@ export async function sendCredentialsEmail(opts: {
     : PLATFORM_FROM;
 
   const body = `
-    <p style="margin:0 0 8px;font-size:18px;font-weight:700;color:${BRAND_DARK};">Your account is ready, ${customerName}!</p>
+    <p style="margin:0 0 8px;font-size:18px;font-weight:700;color:${BRAND_DARK};">Your account is ready, ${esc(customerName)}!</p>
     <p style="margin:0 0 20px;font-size:15px;color:#374151;line-height:1.6;">
       Here are your login credentials. Keep this email somewhere safe.
     </p>
@@ -665,7 +676,7 @@ export async function sendKioskAccountSetupEmail(opts: {
   const registerUrl = `${APP_URL}/${tenantSlug}/set-password?email=${encodeURIComponent(customerEmail)}`;
 
   const body = `
-    <p style="margin:0 0 8px;font-size:18px;font-weight:700;color:${BRAND_DARK};">Your booking is confirmed, ${customerName}!</p>
+    <p style="margin:0 0 8px;font-size:18px;font-weight:700;color:${BRAND_DARK};">Your booking is confirmed, ${esc(customerName)}!</p>
     <p style="margin:0 0 20px;font-size:15px;color:#374151;line-height:1.6;">
       Thank you for booking with <strong>${companyName}</strong>. Your rental has been reserved — see the details below.
     </p>
@@ -748,7 +759,7 @@ export async function sendClaimAlertEmail(opts: {
   `;
 
   const html = emailShell({
-    preheader: `New ${typeLabel} claim from ${customerName} at ${companyName} — action required.`,
+    preheader: `New ${typeLabel} claim from ${esc(customerName)} at ${companyName} — action required.`,
     badgeLabel: "New Claim — Action Required",
     badgeColor: "#dc2626",
     body,
@@ -866,7 +877,7 @@ export async function sendClaimSettlementEmail(opts: {
   const body = `
     <p style="margin:0 0 8px;font-size:18px;font-weight:700;color:${BRAND_DARK};">Your Claim Has Been Resolved</p>
     <p style="margin:0 0 20px;font-size:15px;color:#374151;line-height:1.6;">
-      Dear <strong>${customerName}</strong>, your ${typeLabel.toLowerCase()} claim (<strong>#${claimId}</strong>) with <strong>${companyName}</strong> has been fully resolved.
+      Dear <strong>${esc(customerName)}</strong>, your ${typeLabel.toLowerCase()} claim (<strong>#${claimId}</strong>) with <strong>${companyName}</strong> has been fully resolved.
     </p>
     ${infoTable(tableRows)}
     <div style="background:${noRefund ? "#fef2f2" : "#f0fdf4"};border:1px solid ${noRefund ? "#fecaca" : "#bbf7d0"};border-radius:8px;padding:16px;margin:24px 0;">
@@ -919,7 +930,7 @@ export async function sendBookingPickupReminderEmail(opts: {
   const bookingUrl = tenantSlug ? `${APP_URL}/${tenantSlug}/my-bookings/${bookingId}` : null;
 
   const body = `
-    <p style="margin:0 0 8px;font-size:18px;font-weight:700;color:${BRAND_DARK};">Your booking is confirmed, ${customerName}!</p>
+    <p style="margin:0 0 8px;font-size:18px;font-weight:700;color:${BRAND_DARK};">Your booking is confirmed, ${esc(customerName)}!</p>
     <p style="margin:0 0 20px;font-size:15px;color:#374151;line-height:1.6;">
       Thank you for booking with <strong>${companyName}</strong>. Your rental is all set — see the details below.
     </p>
@@ -961,7 +972,7 @@ export async function sendBookingPickupReminderEmail(opts: {
   `;
 
   const html = emailShell({
-    preheader: `Your ${listingTitle} rental at ${companyName} is confirmed — see what to expect at pickup.`,
+    preheader: `Your ${esc(listingTitle)} rental at ${companyName} is confirmed — see what to expect at pickup.`,
     badgeLabel: "Booking Confirmed",
     badgeColor: BRAND_GREEN,
     body,
@@ -992,7 +1003,7 @@ export async function sendAdminPickupReminderEmail(opts: {
   const body = `
     <p style="margin:0 0 8px;font-size:18px;font-weight:700;color:${BRAND_DARK};">New rental booking received</p>
     <p style="margin:0 0 20px;font-size:15px;color:#374151;line-height:1.6;">
-      <strong>${customerName}</strong> has completed an online booking for <strong>${listingTitle}</strong>. See the details below.
+      <strong>${esc(customerName)}</strong> has completed an online booking for <strong>${esc(listingTitle)}</strong>. See the details below.
     </p>
 
     ${infoTable([
@@ -1007,7 +1018,7 @@ export async function sendAdminPickupReminderEmail(opts: {
     <div style="background:#fff7ed;border:1px solid #fed7aa;border-radius:8px;padding:16px;margin:24px 0;">
       <p style="margin:0 0 6px;font-size:14px;font-weight:700;color:#9a3412;">⚠️ Pickup reminder</p>
       <p style="margin:0;font-size:13px;color:#c2410c;line-height:1.6;">
-        Before releasing the equipment to <strong>${customerName}</strong>, please ensure they complete the pickup photo documentation.
+        Before releasing the equipment to <strong>${esc(customerName)}</strong>, please ensure they complete the pickup photo documentation.
         This step is required to protect your business against any future damage disputes.
       </p>
     </div>
@@ -1020,7 +1031,7 @@ export async function sendAdminPickupReminderEmail(opts: {
   `;
 
   const html = emailShell({
-    preheader: `New booking from ${customerName} for ${listingTitle} starting ${startDate} — pickup photo reminder.`,
+    preheader: `New booking from ${esc(customerName)} for ${esc(listingTitle)} starting ${startDate} — pickup photo reminder.`,
     badgeLabel: "New Booking — Pickup Reminder",
     badgeColor: "#f97316",
     body,
@@ -1029,7 +1040,7 @@ export async function sendAdminPickupReminderEmail(opts: {
   const gmail = await getUncachableGmailClient();
   await gmail.users.messages.send({
     userId: "me",
-    requestBody: { raw: makeRawEmail(adminEmail, `[${companyName}] New booking — ${customerName} · ${listingTitle}`, html) },
+    requestBody: { raw: makeRawEmail(adminEmail, `[${companyName}] New booking — ${esc(customerName)} · ${esc(listingTitle)}`, html) },
   });
 }
 
@@ -1048,9 +1059,9 @@ export async function sendReadyToAdventureEmail(opts: {
   const fromHeader = `${companyName} <samhos@myoutdoorshare.com>`;
 
   const body = `
-    <p style="margin:0 0 8px;font-size:18px;font-weight:700;color:${BRAND_DARK};">You're all set — enjoy your adventure, ${customerName}!</p>
+    <p style="margin:0 0 8px;font-size:18px;font-weight:700;color:${BRAND_DARK};">You're all set — enjoy your adventure, ${esc(customerName)}!</p>
     <p style="margin:0 0 20px;font-size:15px;color:#374151;line-height:1.6;">
-      Your pickup is complete and your <strong>${listingTitle}</strong> rental is officially underway. Your photos have been saved — you're good to go!
+      Your pickup is complete and your <strong>${esc(listingTitle)}</strong> rental is officially underway. Your photos have been saved — you're good to go!
     </p>
 
     ${infoTable([
@@ -1074,7 +1085,7 @@ export async function sendReadyToAdventureEmail(opts: {
   `;
 
   const html = emailShell({
-    preheader: `Pickup complete — your ${listingTitle} adventure is officially underway. Enjoy!`,
+    preheader: `Pickup complete — your ${esc(listingTitle)} adventure is officially underway. Enjoy!`,
     badgeLabel: "Pickup Complete — Adventure Begins!",
     badgeColor: BRAND_GREEN,
     body,
@@ -1115,7 +1126,7 @@ export async function sendPickupPhotosAdminAlertEmail(opts: {
   const body = `
     <p style="margin:0 0 8px;font-size:18px;font-weight:700;color:${BRAND_DARK};">Pickup photos submitted — rental is underway</p>
     <p style="margin:0 0 20px;font-size:15px;color:#374151;line-height:1.6;">
-      <strong>${customerName}</strong> has submitted their pickup condition photos for <strong>${listingTitle}</strong>. The rental is now officially underway.
+      <strong>${esc(customerName)}</strong> has submitted their pickup condition photos for <strong>${esc(listingTitle)}</strong>. The rental is now officially underway.
     </p>
 
     ${infoTable([
@@ -1140,7 +1151,7 @@ export async function sendPickupPhotosAdminAlertEmail(opts: {
   `;
 
   const html = emailShell({
-    preheader: `${customerName} has submitted pickup photos for ${listingTitle} — rental is underway.`,
+    preheader: `${esc(customerName)} has submitted pickup photos for ${esc(listingTitle)} — rental is underway.`,
     badgeLabel: "Pickup Complete — Rental Active",
     badgeColor: BRAND_GREEN,
     body,
@@ -1149,7 +1160,7 @@ export async function sendPickupPhotosAdminAlertEmail(opts: {
   const gmail = await getUncachableGmailClient();
   await gmail.users.messages.send({
     userId: "me",
-    requestBody: { raw: makeRawEmail(adminEmail, `[${companyName}] Pickup photos submitted — ${customerName} · ${listingTitle}`, html) },
+    requestBody: { raw: makeRawEmail(adminEmail, `[${companyName}] Pickup photos submitted — ${esc(customerName)} · ${esc(listingTitle)}`, html) },
   });
 }
 
@@ -1281,8 +1292,8 @@ export async function sendContactCardEmail(opts: {
     { label: "Return Date", value: endDate },
   ];
   if (contactCard.address) rows.push({ label: "Pickup Address", value: contactCard.address });
-  if (contactCard.phone) rows.push({ label: "Phone", value: `<a href="tel:${contactCard.phone}" style="color:${BRAND_GREEN};text-decoration:none;">${contactCard.phone}</a>` });
-  if (contactCard.email) rows.push({ label: "Email", value: `<a href="mailto:${contactCard.email}" style="color:${BRAND_GREEN};text-decoration:none;">${contactCard.email}</a>` });
+  if (contactCard.phone) rows.push({ label: "Phone", value: `<a href="tel:${esc(contactCard.phone)}" style="color:${BRAND_GREEN};text-decoration:none;">${esc(contactCard.phone)}</a>`, rawHtml: true });
+  if (contactCard.email) rows.push({ label: "Email", value: `<a href="mailto:${esc(contactCard.email)}" style="color:${BRAND_GREEN};text-decoration:none;">${esc(contactCard.email)}</a>`, rawHtml: true });
 
   const instructionsBlock = contactCard.specialInstructions
     ? `<div style="margin:24px 0;padding:16px 20px;background:#f0faf0;border-left:4px solid ${BRAND_GREEN};border-radius:0 8px 8px 0;">
@@ -1294,7 +1305,7 @@ export async function sendContactCardEmail(opts: {
   const body = `
     <p style="margin:0 0 8px;font-size:18px;font-weight:700;color:${BRAND_DARK};">Your rental is confirmed! 🎉</p>
     <p style="margin:0 0 20px;font-size:15px;color:#374151;line-height:1.6;">
-      Hi ${customerName}, your booking with <strong>${companyName}</strong> has been approved. Here's everything you need to know to prepare for your rental.
+      Hi ${esc(customerName)}, your booking with <strong>${companyName}</strong> has been approved. Here's everything you need to know to prepare for your rental.
     </p>
 
     ${infoTable(rows)}
@@ -1307,7 +1318,7 @@ export async function sendContactCardEmail(opts: {
   `;
 
   const html = emailShell({
-    preheader: `Your ${listingTitle} rental with ${companyName} is confirmed — here's what you need to know.`,
+    preheader: `Your ${esc(listingTitle)} rental with ${companyName} is confirmed — here's what you need to know.`,
     badgeLabel: "Booking Confirmed",
     badgeColor: BRAND_GREEN,
     body,
@@ -1321,7 +1332,7 @@ export async function sendContactCardEmail(opts: {
     requestBody: {
       raw: makeRawEmail(
         toEmail,
-        `Your ${listingTitle} rental is confirmed — pickup details inside`,
+        `Your ${esc(listingTitle)} rental is confirmed — pickup details inside`,
         html,
         fromHeader,
         replyToEmail,
@@ -1345,11 +1356,11 @@ export async function sendAdminBookingContactEmail(opts: {
 }): Promise<void> {
   const { toEmail, companyName, customerName, customerEmail, customerPhone, listingTitle, startDate, endDate, bookingId, slug } = opts;
 
-  const rows: { label: string; value: string }[] = [
+  const rows: { label: string; value: string; rawHtml?: boolean }[] = [
     { label: "Guest", value: customerName },
-    { label: "Email", value: `<a href="mailto:${customerEmail}" style="color:${BRAND_GREEN};text-decoration:none;">${customerEmail}</a>` },
+    { label: "Email", value: `<a href="mailto:${esc(customerEmail)}" style="color:${BRAND_GREEN};text-decoration:none;">${esc(customerEmail)}</a>`, rawHtml: true },
   ];
-  if (customerPhone) rows.push({ label: "Phone", value: `<a href="tel:${customerPhone}" style="color:${BRAND_GREEN};text-decoration:none;">${customerPhone}</a>` });
+  if (customerPhone) rows.push({ label: "Phone", value: `<a href="tel:${esc(customerPhone)}" style="color:${BRAND_GREEN};text-decoration:none;">${esc(customerPhone)}</a>`, rawHtml: true });
   rows.push({ label: "Equipment", value: listingTitle });
   rows.push({ label: "Pickup Date", value: startDate });
   rows.push({ label: "Return Date", value: endDate });
@@ -1368,7 +1379,7 @@ export async function sendAdminBookingContactEmail(opts: {
   `;
 
   const html = emailShell({
-    preheader: `${customerName} is confirmed for ${listingTitle} — ${startDate} to ${endDate}.`,
+    preheader: `${esc(customerName)} is confirmed for ${esc(listingTitle)} — ${startDate} to ${endDate}.`,
     badgeLabel: "Booking Confirmed",
     badgeColor: BRAND_DARK,
     body,
@@ -1380,7 +1391,7 @@ export async function sendAdminBookingContactEmail(opts: {
     requestBody: {
       raw: makeRawEmail(
         toEmail,
-        `Booking confirmed — ${customerName} for ${listingTitle}`,
+        `Booking confirmed — ${esc(customerName)} for ${esc(listingTitle)}`,
         html,
         PLATFORM_FROM,
       ),
@@ -1408,9 +1419,9 @@ export async function sendPrePickupReminderRenterEmail(opts: {
   const bookingUrl = tenantSlug ? `${APP_URL}/${tenantSlug}/my-bookings/${bookingId}` : null;
 
   const body = `
-    <p style="margin:0 0 8px;font-size:18px;font-weight:700;color:${BRAND_DARK};">Your rental starts soon, ${customerName}!</p>
+    <p style="margin:0 0 8px;font-size:18px;font-weight:700;color:${BRAND_DARK};">Your rental starts soon, ${esc(customerName)}!</p>
     <p style="margin:0 0 20px;font-size:15px;color:#374151;line-height:1.6;">
-      This is a reminder that your <strong>${listingTitle}</strong> rental at <strong>${companyName}</strong> is coming up.
+      This is a reminder that your <strong>${esc(listingTitle)}</strong> rental at <strong>${companyName}</strong> is coming up.
     </p>
 
     ${infoTable([
@@ -1439,7 +1450,7 @@ export async function sendPrePickupReminderRenterEmail(opts: {
   `;
 
   const html = emailShell({
-    preheader: `Reminder: Your ${listingTitle} rental starts on ${startDate} — see your pickup details inside.`,
+    preheader: `Reminder: Your ${esc(listingTitle)} rental starts on ${startDate} — see your pickup details inside.`,
     badgeLabel: "Rental Reminder",
     badgeColor: "#f59e0b",
     body,
@@ -1472,7 +1483,7 @@ export async function sendPrePickupReminderAdminEmail(opts: {
   const body = `
     <p style="margin:0 0 8px;font-size:18px;font-weight:700;color:${BRAND_DARK};">Pickup arriving soon — action needed</p>
     <p style="margin:0 0 20px;font-size:15px;color:#374151;line-height:1.6;">
-      <strong>${customerName}</strong> is picking up <strong>${listingTitle}</strong> tomorrow (${startDate}). Make sure they complete the photo documentation at pickup.
+      <strong>${esc(customerName)}</strong> is picking up <strong>${esc(listingTitle)}</strong> tomorrow (${startDate}). Make sure they complete the photo documentation at pickup.
     </p>
 
     ${infoTable([
@@ -1488,7 +1499,7 @@ export async function sendPrePickupReminderAdminEmail(opts: {
     <div style="background:#fff7ed;border:1px solid #fed7aa;border-radius:8px;padding:16px;margin:24px 0;">
       <p style="margin:0 0 6px;font-size:14px;font-weight:700;color:#9a3412;">⚠️ What you must do at pickup</p>
       <ol style="margin:0;padding-left:20px;font-size:13px;color:#c2410c;line-height:2;">
-        <li>Greet <strong>${customerName}</strong> at the agreed pickup time and address.</li>
+        <li>Greet <strong>${esc(customerName)}</strong> at the agreed pickup time and address.</li>
         <li>Send them the <strong>pickup photo link</strong> from their booking page so they can document equipment condition.</li>
         <li>Do <strong>not</strong> hand over equipment until at least 5 photos are uploaded.</li>
         <li>Their <strong>security deposit</strong> will be automatically held when photos are submitted.</li>
@@ -1500,7 +1511,7 @@ export async function sendPrePickupReminderAdminEmail(opts: {
   `;
 
   const html = emailShell({
-    preheader: `${customerName} picks up ${listingTitle} on ${startDate} — don't forget pickup photos!`,
+    preheader: `${esc(customerName)} picks up ${esc(listingTitle)} on ${startDate} — don't forget pickup photos!`,
     badgeLabel: "⏰ Pickup Reminder — Action Needed",
     badgeColor: "#f97316",
     body,
@@ -1509,7 +1520,7 @@ export async function sendPrePickupReminderAdminEmail(opts: {
   const gmail = await getUncachableGmailClient();
   await gmail.users.messages.send({
     userId: "me",
-    requestBody: { raw: makeRawEmail(adminEmail, `[${companyName}] Pickup reminder — ${customerName} · ${listingTitle} tomorrow`, html) },
+    requestBody: { raw: makeRawEmail(adminEmail, `[${companyName}] Pickup reminder — ${esc(customerName)} · ${esc(listingTitle)} tomorrow`, html) },
   });
 }
 
@@ -1531,9 +1542,9 @@ export async function sendReturnReminderRenterEmail(opts: {
   const bookingUrl = tenantSlug ? `${APP_URL}/${tenantSlug}/my-bookings/${bookingId}` : null;
 
   const body = `
-    <p style="margin:0 0 8px;font-size:18px;font-weight:700;color:${BRAND_DARK};">Return reminder — due tomorrow, ${customerName}</p>
+    <p style="margin:0 0 8px;font-size:18px;font-weight:700;color:${BRAND_DARK};">Return reminder — due tomorrow, ${esc(customerName)}</p>
     <p style="margin:0 0 20px;font-size:15px;color:#374151;line-height:1.6;">
-      Your <strong>${listingTitle}</strong> rental is due back to <strong>${companyName}</strong> tomorrow (<strong>${endDate}</strong>).
+      Your <strong>${esc(listingTitle)}</strong> rental is due back to <strong>${companyName}</strong> tomorrow (<strong>${endDate}</strong>).
       Please plan your return in advance to avoid any late fees.
     </p>
 
@@ -1564,7 +1575,7 @@ export async function sendReturnReminderRenterEmail(opts: {
   `;
 
   const html = emailShell({
-    preheader: `Your ${listingTitle} is due back tomorrow (${endDate}) — return info inside.`,
+    preheader: `Your ${esc(listingTitle)} is due back tomorrow (${endDate}) — return info inside.`,
     badgeLabel: "Return Due Tomorrow",
     badgeColor: "#3b82f6",
     body,
@@ -1591,13 +1602,13 @@ export async function sendChatMessageToAdminEmail(opts: {
   const chatUrl = `${APP_URL}/${slug}/admin/messages?thread=${threadId}`;
 
   const body = `
-    <p style="margin:0 0 8px;font-size:18px;font-weight:700;color:${BRAND_DARK};">New message from ${customerName}</p>
+    <p style="margin:0 0 8px;font-size:18px;font-weight:700;color:${BRAND_DARK};">New message from ${esc(customerName)}</p>
     <p style="margin:0 0 20px;font-size:15px;color:#374151;line-height:1.6;">
       A renter has sent you a message through the chat system. Reply directly in your admin portal.
     </p>
 
     ${infoTable([
-      { label: "From",    value: `${customerName} (${customerEmail})` },
+      { label: "From",    value: `${esc(customerName)} (${customerEmail})` },
       { label: "Message", value: messageBody },
     ])}
 
@@ -1605,7 +1616,7 @@ export async function sendChatMessageToAdminEmail(opts: {
   `;
 
   const html = emailShell({
-    preheader: `${customerName} sent you a message: "${messageBody.substring(0, 60)}…"`,
+    preheader: `${esc(customerName)} sent you a message: "${messageBody.substring(0, 60)}…"`,
     badgeLabel: "New Customer Message",
     badgeColor: BRAND_GREEN,
     body,
@@ -1614,7 +1625,7 @@ export async function sendChatMessageToAdminEmail(opts: {
   const gmail = await getUncachableGmailClient();
   await gmail.users.messages.send({
     userId: "me",
-    requestBody: { raw: makeRawEmail(adminEmail, `[${companyName}] New message from ${customerName}`, html) },
+    requestBody: { raw: makeRawEmail(adminEmail, `[${companyName}] New message from ${esc(customerName)}`, html) },
   });
 }
 
@@ -1683,12 +1694,12 @@ export async function sendReturnLinkEmail(opts: {
   ];
 
   const subject = `[${companyName}] Please upload return photos for your rental`;
-  const preheader = `Upload return photos for your ${listingTitle} — protects you against any damage claims.`;
+  const preheader = `Upload return photos for your ${esc(listingTitle)} — protects you against any damage claims.`;
 
   const body = `
     <p style="margin:0 0 8px;font-size:18px;font-weight:700;color:${BRAND_DARK};">Return Photo Documentation</p>
     <p style="margin:0 0 20px;font-size:15px;color:#374151;line-height:1.6;">
-      Hi <strong>${customerName}</strong>, thank you for returning your rental to <strong>${companyName}</strong>.
+      Hi <strong>${esc(customerName)}</strong>, thank you for returning your rental to <strong>${companyName}</strong>.
       Please document the equipment's condition at return by uploading photos using the link below.
       These photos protect you against any after-the-fact damage claims.
     </p>
@@ -1812,7 +1823,7 @@ export async function sendAgreementLinkEmail(opts: {
   const fromHeader = `${companyName} <samhos@myoutdoorshare.com>`;
   const replyToEmail = companyEmail || undefined;
   const subject = `[${companyName}] Please sign your rental agreement`;
-  const preheader = `Action required — sign your rental agreement for ${listingTitle} before pickup.`;
+  const preheader = `Action required — sign your rental agreement for ${esc(listingTitle)} before pickup.`;
 
   const tableRows = [
     { label: "Equipment",    value: listingTitle },
@@ -1824,7 +1835,7 @@ export async function sendAgreementLinkEmail(opts: {
   const body = `
     <p style="margin:0 0 8px;font-size:18px;font-weight:700;color:${BRAND_DARK};">Your rental agreement is ready to sign</p>
     <p style="margin:0 0 20px;font-size:15px;color:#374151;line-height:1.6;">
-      Hi <strong>${customerName}</strong>, your upcoming rental with <strong>${companyName}</strong> requires you to review and sign the rental agreement before pickup.
+      Hi <strong>${esc(customerName)}</strong>, your upcoming rental with <strong>${companyName}</strong> requires you to review and sign the rental agreement before pickup.
       Please click the button below to complete this step.
     </p>
     ${infoTable(tableRows)}
@@ -1865,7 +1876,7 @@ export async function sendIdentityVerificationEmail(opts: {
   const body = `
     <p style="margin:0 0 8px;font-size:18px;font-weight:700;color:${BRAND_DARK};">Identity verification required</p>
     <p style="margin:0 0 20px;font-size:15px;color:#374151;line-height:1.6;">
-      Hi <strong>${customerName}</strong>, <strong>${companyName}</strong> requires identity verification before your rental of <strong>${listingTitle}</strong>.
+      Hi <strong>${esc(customerName)}</strong>, <strong>${companyName}</strong> requires identity verification before your rental of <strong>${esc(listingTitle)}</strong>.
       This is a quick, secure process powered by Stripe that takes under 2 minutes.
     </p>
     <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:14px 18px;margin:20px 0;">
@@ -1905,7 +1916,7 @@ export async function sendPaymentRequestEmail(opts: {
   const { toEmail, customerName, paymentUrl, listingTitle, startDate, endDate, totalPrice, companyName, companyEmail } = opts;
   const fromHeader = `${companyName} <samhos@myoutdoorshare.com>`;
   const replyToEmail = companyEmail || undefined;
-  const subject = `[${companyName}] Complete your rental payment — ${listingTitle}`;
+  const subject = `[${companyName}] Complete your rental payment — ${esc(listingTitle)}`;
   const preheader = `Your rental from ${companyName} is reserved. Complete payment to confirm your booking.`;
 
   const tableRows = [
@@ -1919,7 +1930,7 @@ export async function sendPaymentRequestEmail(opts: {
   const body = `
     <p style="margin:0 0 8px;font-size:18px;font-weight:700;color:${BRAND_DARK};">Your rental is reserved — payment required</p>
     <p style="margin:0 0 20px;font-size:15px;color:#374151;line-height:1.6;">
-      Hi <strong>${customerName}</strong>, <strong>${companyName}</strong> has created a rental booking for you.
+      Hi <strong>${esc(customerName)}</strong>, <strong>${companyName}</strong> has created a rental booking for you.
       Complete your secure payment below to confirm the reservation. Your booking will remain pending until payment is received.
     </p>
     ${infoTable(tableRows)}

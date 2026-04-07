@@ -547,7 +547,10 @@ router.get("/bookings/:id/agreement-pdf", async (req, res) => {
     if (!booking) { res.status(404).json({ error: "Not found" }); return; }
     if (!booking.agreementPdfPath) { res.status(404).json({ error: "No PDF available for this booking" }); return; }
 
-    const filepath = path.join(UPLOADS_DIR_BOOKINGS, booking.agreementPdfPath);
+    const filepath = path.resolve(UPLOADS_DIR_BOOKINGS, booking.agreementPdfPath);
+    if (!filepath.startsWith(path.resolve(UPLOADS_DIR_BOOKINGS) + path.sep)) {
+      res.status(400).json({ error: "Invalid file path" }); return;
+    }
     if (!fs.existsSync(filepath)) { res.status(404).json({ error: "PDF file not found" }); return; }
 
     const forceDownload = req.query.download === "1";
@@ -1501,8 +1504,9 @@ router.post("/bookings/:id/inspect", async (req, res) => {
     const toBase64 = (photoPath: string): { base64: string; mime: string } | null => {
       try {
         // Local path: /api/uploads/filename.jpg → uploads/filename.jpg
-        const relative = photoPath.replace(/^\/api\/uploads\//, "");
-        const filePath = path.join(UPLOADS_DIR_BOOKINGS, relative);
+        const relative = path.basename(photoPath.replace(/^\/api\/uploads\//, ""));
+        const filePath = path.resolve(UPLOADS_DIR_BOOKINGS, relative);
+        if (!filePath.startsWith(path.resolve(UPLOADS_DIR_BOOKINGS) + path.sep)) return null;
         if (!fs.existsSync(filePath)) return null;
         const buf = fs.readFileSync(filePath);
         const ext = path.extname(filePath).toLowerCase().replace(".", "");
