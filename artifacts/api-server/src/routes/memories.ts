@@ -72,7 +72,7 @@ router.post("/memories", async (req: Request, res: Response) => {
     });
     if (!customer) return void res.status(404).json({ error: "Customer not found" });
 
-    const { photoUrls, caption, taggedTenantId, isPublic } = req.body;
+    const { photoUrls, caption, taggedTenantId, isPublic, locationLat, locationLng, locationName } = req.body;
 
     if (!Array.isArray(photoUrls) || photoUrls.length === 0) {
       return void res.status(400).json({ error: "At least one photo is required" });
@@ -102,6 +102,9 @@ router.post("/memories", async (req: Request, res: Response) => {
         taggedTenantName,
         taggedTenantSlug,
         isPublic: isPublic !== false,
+        locationLat: locationLat ? String(locationLat) : null,
+        locationLng: locationLng ? String(locationLng) : null,
+        locationName: locationName ? String(locationName) : null,
       })
       .returning();
 

@@ -41,6 +41,9 @@ export interface Memory {
   taggedTenantName: string | null;
   taggedTenantSlug: string | null;
   isPublic: boolean;
+  locationLat: string | null;
+  locationLng: string | null;
+  locationName: string | null;
   createdAt: string;
 }
 
@@ -225,11 +228,27 @@ export function MemoryCard({
 
         {/* Tagged company/host chip */}
         {memory.taggedTenantName && (
-          <div className="flex items-center gap-1.5 mb-3">
+          <div className="flex items-center gap-1.5 mb-2">
             <Tag className="h-3 w-3 text-primary" />
             <span className="text-xs font-medium text-primary bg-primary/10 px-2 py-0.5 rounded-full">
               {memory.taggedTenantName}
             </span>
+          </div>
+        )}
+
+        {/* Location chip */}
+        {memory.locationLat && memory.locationName && (
+          <div className="flex items-center gap-1.5 mb-3">
+            <a
+              href={`https://www.google.com/maps?q=${memory.locationLat},${memory.locationLng}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-1 text-xs text-sky-600 bg-sky-50 hover:bg-sky-100 px-2 py-0.5 rounded-full transition-colors"
+              title="View on Google Maps"
+            >
+              <MapPin className="h-3 w-3 flex-shrink-0" />
+              <span className="font-medium">{memory.locationName}</span>
+            </a>
           </div>
         )}
 
@@ -303,6 +322,61 @@ export function CreateMemoryModal({
   const [caption, setCaption] = useState("");
   const [isPublic, setIsPublic] = useState(true);
 
+  // Location
+  const [locationLat, setLocationLat] = useState<string | null>(null);
+  const [locationLng, setLocationLng] = useState<string | null>(null);
+  const [locationName, setLocationName] = useState<string | null>(null);
+  const [locationLoading, setLocationLoading] = useState(false);
+
+  const getLocation = async () => {
+    if (!navigator.geolocation) {
+      toast({ title: "Geolocation not supported by your browser", variant: "destructive" });
+      return;
+    }
+    setLocationLoading(true);
+    navigator.geolocation.getCurrentPosition(
+      async (pos) => {
+        const lat = pos.coords.latitude.toFixed(6);
+        const lng = pos.coords.longitude.toFixed(6);
+        setLocationLat(lat);
+        setLocationLng(lng);
+        try {
+          const r = await fetch(
+            `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}`,
+            { headers: { "Accept-Language": "en" } }
+          );
+          const data = await r.json();
+          const addr = data.address ?? {};
+          const parts = [
+            addr.village ?? addr.town ?? addr.city ?? addr.county,
+            addr.state,
+            addr.country,
+          ].filter(Boolean);
+          setLocationName(parts.slice(0, 2).join(", ") || `${lat}, ${lng}`);
+        } catch {
+          setLocationName(`${lat}, ${lng}`);
+        }
+        setLocationLoading(false);
+      },
+      (err) => {
+        setLocationLoading(false);
+        const messages: Record<number, string> = {
+          1: "Location permission denied. Please allow location access.",
+          2: "Unable to determine your location.",
+          3: "Location request timed out.",
+        };
+        toast({ title: messages[err.code] ?? "Could not get location", variant: "destructive" });
+      },
+      { timeout: 10000 }
+    );
+  };
+
+  const clearLocation = () => {
+    setLocationLat(null);
+    setLocationLng(null);
+    setLocationName(null);
+  };
+
   // Tenant tagging
   const [tagSearch, setTagSearch] = useState("");
   const [tagOpen, setTagOpen] = useState(false);
@@ -355,6 +429,9 @@ export function CreateMemoryModal({
           caption: caption.trim() || null,
           taggedTenantId: selectedTenant?.id ?? null,
           isPublic,
+          locationLat: locationLat ?? null,
+          locationLng: locationLng ?? null,
+          locationName: locationName ?? null,
         }),
       });
       if (!res.ok) throw new Error("Failed to post memory");
@@ -494,6 +571,39 @@ export function CreateMemoryModal({
                   </div>
                 )}
               </div>
+            )}
+          </div>
+
+          {/* Location */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1.5">
+              <MapPin className="h-3.5 w-3.5 inline mr-1 text-sky-500" />
+              Location
+            </label>
+            {locationLat && locationName ? (
+              <div className="flex items-center gap-2 bg-sky-50 border border-sky-100 text-sky-700 px-3 py-2.5 rounded-xl">
+                <MapPin className="h-3.5 w-3.5 flex-shrink-0 text-sky-500" />
+                <span className="text-sm font-medium flex-1 leading-tight">{locationName}</span>
+                <button
+                  onClick={clearLocation}
+                  className="p-0.5 rounded-full hover:bg-sky-100 text-sky-400 hover:text-sky-600 transition-colors"
+                  title="Remove location"
+                >
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              </div>
+            ) : (
+              <button
+                onClick={getLocation}
+                disabled={locationLoading}
+                className="w-full flex items-center justify-center gap-2 border-2 border-dashed border-sky-200 rounded-xl py-2.5 text-sm text-sky-500 hover:bg-sky-50 hover:border-sky-300 transition-colors disabled:opacity-60"
+              >
+                {locationLoading ? (
+                  <><Loader2 className="h-4 w-4 animate-spin" />Detecting location…</>
+                ) : (
+                  <><MapPin className="h-4 w-4" />Share my location</>
+                )}
+              </button>
             )}
           </div>
 
