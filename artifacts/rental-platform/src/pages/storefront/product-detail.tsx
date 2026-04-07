@@ -402,7 +402,7 @@ export default function StorefrontProductDetail() {
                   className="[--cell-size:2rem] sm:[--cell-size:2.5rem] w-full"
                   classNames={{
                     root: "w-full",
-                    day: "group/day relative aspect-square w-full select-none p-0 flex items-center justify-center [&>button]:!w-full [&>button]:!h-full [&:first-child[data-selected=true]_button]:rounded-l-md [&:last-child[data-selected=true]_button]:rounded-r-md",
+                    day: "group/day relative h-[--cell-size] w-full select-none p-0 flex items-center justify-center [&>button]:!w-full [&>button]:!h-full [&:first-child[data-selected=true]_button]:rounded-l-md [&:last-child[data-selected=true]_button]:rounded-r-md",
                   }}
                   modifiers={{ booked: disabledDates, service: serviceDates }}
                   modifiersClassNames={{
