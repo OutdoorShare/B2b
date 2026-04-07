@@ -782,121 +782,179 @@ export default function AdminBookingDetail() {
         {/* Right Column: Payment + Pickup Photos */}
         <div className="lg:col-span-1 space-y-8">
 
-          {/* ── Pickup Readiness Checklist — confirmed only ── */}
-          {booking.status === 'confirmed' && (
-            <Card className="border-green-200">
-              <CardHeader className="pb-3">
-                <CardTitle className="flex items-center gap-2 text-base text-green-800">
-                  <CheckCircle2 className="w-5 h-5 text-green-600" />
-                  Pickup Checklist
-                </CardTitle>
-                <CardDescription className="text-xs">
-                  Complete these before marking the booking as picked up.
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                {/* 1. Agreement */}
-                {(() => {
-                  const signed = !!(booking as any).agreementSignerName;
-                  return (
-                    <div className={`flex items-center gap-3 rounded-xl p-3 border ${signed ? "bg-green-50 border-green-200" : "bg-muted/30 border-border"}`}>
-                      <div className={`w-6 h-6 rounded-full flex items-center justify-center shrink-0 ${signed ? "bg-green-500" : "bg-muted-foreground/20"}`}>
-                        {signed ? <CheckCircle2 className="w-4 h-4 text-white" /> : <span className="text-muted-foreground text-xs font-bold">1</span>}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className={`text-sm font-semibold ${signed ? "text-green-800" : "text-foreground"}`}>Rental Agreement</p>
-                        <p className="text-xs text-muted-foreground">
-                          {signed ? `Signed by ${(booking as any).agreementSignerName}` : "Not yet signed by renter"}
-                        </p>
-                      </div>
-                      {!signed && (
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          className="h-7 text-xs gap-1.5 shrink-0"
-                          onClick={sendAgreementLink}
-                          disabled={sendingAgreement}
-                        >
-                          {sendingAgreement ? <Loader2 className="w-3 h-3 animate-spin" /> : agreementSent ? <MailCheck className="w-3 h-3 text-green-600" /> : <Send className="w-3 h-3" />}
-                          {agreementSent ? "Sent!" : "Send"}
-                        </Button>
-                      )}
-                    </div>
-                  );
-                })()}
+          {/* ── Rental Progress Checklist — confirmed / active / completed ── */}
+          {['confirmed', 'active', 'completed'].includes(booking.status) && (() => {
+            const isConfirmed  = booking.status === 'confirmed';
+            const isActive     = booking.status === 'active';
+            const isCompleted  = booking.status === 'completed';
 
-                {/* 2. Identity */}
-                {(() => {
-                  const verified = verifData?.identityVerificationStatus === "verified";
-                  return (
-                    <div className={`flex items-center gap-3 rounded-xl p-3 border ${verified ? "bg-green-50 border-green-200" : "bg-muted/30 border-border"}`}>
-                      <div className={`w-6 h-6 rounded-full flex items-center justify-center shrink-0 ${verified ? "bg-green-500" : "bg-muted-foreground/20"}`}>
-                        {verified ? <CheckCircle2 className="w-4 h-4 text-white" /> : <span className="text-muted-foreground text-xs font-bold">2</span>}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className={`text-sm font-semibold ${verified ? "text-green-800" : "text-foreground"}`}>Identity Verified</p>
-                        <p className="text-xs text-muted-foreground">
-                          {verified ? `Verified via Stripe Identity` : "Not yet verified — check ID at pickup"}
-                        </p>
-                      </div>
-                      {!verified && (
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          className="h-7 text-xs gap-1.5 shrink-0"
-                          onClick={sendIdentityLink}
-                          disabled={sendingIdentity}
-                        >
-                          {sendingIdentity ? <Loader2 className="w-3 h-3 animate-spin" /> : identitySent ? <MailCheck className="w-3 h-3 text-green-600" /> : <Send className="w-3 h-3" />}
-                          {identitySent ? "Sent!" : "Send"}
-                        </Button>
-                      )}
-                    </div>
-                  );
-                })()}
+            const signed       = !!(booking as any).agreementSignerName;
+            const identStatus  = verifData?.identityVerificationStatus ?? "unverified";
+            const identVerified = identStatus === "verified";
+            const identPending  = identStatus === "pending";
+            const identNeedsAction = identStatus === "unverified" || identStatus === "failed";
 
-                {/* 3. Photos */}
-                {(() => {
-                  const photos = (booking as any).pickupPhotos ?? [];
-                  const done = photos.length > 0;
-                  return (
-                    <div className={`flex items-center gap-3 rounded-xl p-3 border ${done ? "bg-green-50 border-green-200" : "bg-muted/30 border-border"}`}>
-                      <div className={`w-6 h-6 rounded-full flex items-center justify-center shrink-0 ${done ? "bg-green-500" : "bg-muted-foreground/20"}`}>
-                        {done ? <CheckCircle2 className="w-4 h-4 text-white" /> : <span className="text-muted-foreground text-xs font-bold">3</span>}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className={`text-sm font-semibold ${done ? "text-green-800" : "text-foreground"}`}>Equipment Photos</p>
-                        <p className="text-xs text-muted-foreground">
-                          {done ? `${photos.length} photo${photos.length !== 1 ? "s" : ""} submitted by renter` : "Renter hasn't submitted photos yet"}
-                        </p>
-                      </div>
-                      {!done && (
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          className="h-7 text-xs gap-1.5 shrink-0"
-                          onClick={() => sendPickupLink(false)}
-                          disabled={sendingPickupLink}
-                        >
-                          {sendingPickupLink ? <Loader2 className="w-3 h-3 animate-spin" /> : pickupLinkSent ? <MailCheck className="w-3 h-3 text-green-600" /> : <Send className="w-3 h-3" />}
-                          {pickupLinkSent ? "Sent!" : "Send"}
-                        </Button>
-                      )}
-                    </div>
-                  );
-                })()}
+            const pickupPhotos  = (booking as any).pickupPhotos ?? [];
+            const pickupDone    = pickupPhotos.length > 0;
 
-                {/* CTA */}
-                <Button
-                  className="w-full gap-2 bg-green-600 hover:bg-green-700 text-white mt-1"
-                  onClick={() => handleStatusChange('active')}
-                >
-                  <CheckCircle2 className="w-4 h-4" />
-                  Mark as Picked Up
-                </Button>
-              </CardContent>
-            </Card>
-          )}
+            const returnPhotos  = (booking as any).returnPhotos ?? [];
+            const returnDone    = returnPhotos.length > 0;
+            const returnSentFlag = !!(booking as any).returnToken || returnLinkSent;
+
+            // Step rows: [stepNum, done, pending, label, sublabel, action?]
+            type StepRow = {
+              num: number;
+              done: boolean;
+              pending?: boolean;
+              label: string;
+              sub: string;
+              action?: React.ReactNode;
+            };
+
+            const steps: StepRow[] = [
+              {
+                num: 1,
+                done: signed,
+                label: "Rental Agreement",
+                sub: signed
+                  ? `Signed by ${(booking as any).agreementSignerName}`
+                  : "Not yet signed by renter",
+                action: (!signed && isConfirmed) ? (
+                  <Button size="sm" variant="outline" className="h-7 text-xs gap-1.5 shrink-0" onClick={sendAgreementLink} disabled={sendingAgreement}>
+                    {sendingAgreement ? <Loader2 className="w-3 h-3 animate-spin" /> : agreementSent ? <MailCheck className="w-3 h-3 text-green-600" /> : <Send className="w-3 h-3" />}
+                    {agreementSent ? "Sent!" : "Send"}
+                  </Button>
+                ) : undefined,
+              },
+              {
+                num: 2,
+                done: identVerified,
+                pending: identPending,
+                label: "Identity Verified",
+                sub: identVerified
+                  ? "Verified via Stripe Identity"
+                  : identPending
+                    ? "Verification link sent — awaiting completion"
+                    : identStatus === "failed"
+                      ? "Verification failed — resend link or check ID at pickup"
+                      : "Not yet verified — send a link or check ID at pickup",
+                action: (identNeedsAction && isConfirmed) ? (
+                  <Button size="sm" variant="outline" className="h-7 text-xs gap-1.5 shrink-0" onClick={sendIdentityLink} disabled={sendingIdentity}>
+                    {sendingIdentity ? <Loader2 className="w-3 h-3 animate-spin" /> : identitySent ? <MailCheck className="w-3 h-3 text-green-600" /> : <Send className="w-3 h-3" />}
+                    {identitySent ? "Sent!" : identStatus === "failed" ? "Retry" : "Send"}
+                  </Button>
+                ) : undefined,
+              },
+              {
+                num: 3,
+                done: pickupDone,
+                label: "Pickup Photos",
+                sub: pickupDone
+                  ? `${pickupPhotos.length} photo${pickupPhotos.length !== 1 ? "s" : ""} submitted`
+                  : "Renter hasn't submitted photos yet",
+                action: (!pickupDone && isConfirmed) ? (
+                  <Button size="sm" variant="outline" className="h-7 text-xs gap-1.5 shrink-0" onClick={() => sendPickupLink(false)} disabled={sendingPickupLink}>
+                    {sendingPickupLink ? <Loader2 className="w-3 h-3 animate-spin" /> : pickupLinkSent ? <MailCheck className="w-3 h-3 text-green-600" /> : <Send className="w-3 h-3" />}
+                    {pickupLinkSent ? "Sent!" : "Send"}
+                  </Button>
+                ) : undefined,
+              },
+              {
+                num: 4,
+                done: returnDone,
+                pending: returnSentFlag && !returnDone,
+                label: "Return Photos",
+                sub: returnDone
+                  ? `${returnPhotos.length} photo${returnPhotos.length !== 1 ? "s" : ""} submitted`
+                  : returnSentFlag
+                    ? "Return link sent — awaiting photos"
+                    : isActive
+                      ? "Send a return link when the renter is ready to return"
+                      : "Collected at return",
+                action: (!returnDone && isActive) ? (
+                  <Button size="sm" variant="outline" className="h-7 text-xs gap-1.5 shrink-0" onClick={sendReturnLink} disabled={sendingReturnLink}>
+                    {sendingReturnLink ? <Loader2 className="w-3 h-3 animate-spin" /> : returnLinkSent ? <MailCheck className="w-3 h-3 text-green-600" /> : <Send className="w-3 h-3" />}
+                    {returnLinkSent ? "Sent!" : returnSentFlag ? "Resend" : "Send"}
+                  </Button>
+                ) : undefined,
+              },
+            ];
+
+            const cardBorder = isCompleted ? "border-green-200" : isActive ? "border-blue-200" : "border-green-200";
+            const titleColor = isCompleted ? "text-green-800" : isActive ? "text-blue-800" : "text-green-800";
+            const titleIcon  = isCompleted
+              ? <CheckCircle2 className="w-5 h-5 text-green-600" />
+              : isActive
+                ? <PackageCheck className="w-5 h-5 text-blue-600" />
+                : <CheckCircle2 className="w-5 h-5 text-green-600" />;
+
+            const descText = isCompleted
+              ? "Rental is complete. All steps finished."
+              : isActive
+                ? "Rental is in progress. Send the return link when the renter is ready."
+                : "Complete these steps before marking the booking as picked up.";
+
+            return (
+              <Card className={cardBorder}>
+                <CardHeader className="pb-3">
+                  <CardTitle className={`flex items-center gap-2 text-base ${titleColor}`}>
+                    {titleIcon}
+                    {isCompleted ? "Rental Summary" : isActive ? "Rental Progress" : "Pickup Checklist"}
+                  </CardTitle>
+                  <CardDescription className="text-xs">{descText}</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  {steps.map(step => {
+                    const rowBg = step.done
+                      ? "bg-green-50 border-green-200"
+                      : step.pending
+                        ? "bg-amber-50 border-amber-200"
+                        : "bg-muted/30 border-border";
+                    const dotBg = step.done
+                      ? "bg-green-500"
+                      : step.pending
+                        ? "bg-amber-400"
+                        : "bg-muted-foreground/20";
+                    const labelColor = step.done
+                      ? "text-green-800"
+                      : step.pending
+                        ? "text-amber-800"
+                        : "text-foreground";
+                    return (
+                      <div key={step.num} className={`flex items-center gap-3 rounded-xl p-3 border ${rowBg}`}>
+                        <div className={`w-6 h-6 rounded-full flex items-center justify-center shrink-0 ${dotBg}`}>
+                          {step.done
+                            ? <CheckCircle2 className="w-4 h-4 text-white" />
+                            : step.pending
+                              ? <Clock className="w-3.5 h-3.5 text-white" />
+                              : <span className="text-muted-foreground text-xs font-bold">{step.num}</span>}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className={`text-sm font-semibold ${labelColor}`}>{step.label}</p>
+                          <p className="text-xs text-muted-foreground">{step.sub}</p>
+                        </div>
+                        {step.action}
+                      </div>
+                    );
+                  })}
+
+                  {/* CTA */}
+                  {isConfirmed && (
+                    <Button className="w-full gap-2 bg-green-600 hover:bg-green-700 text-white mt-1" onClick={() => handleStatusChange('active')}>
+                      <CheckCircle2 className="w-4 h-4" />
+                      Mark as Picked Up
+                    </Button>
+                  )}
+                  {isActive && (
+                    <Button className="w-full gap-2 bg-blue-600 hover:bg-blue-700 text-white mt-1" onClick={() => handleStatusChange('completed')}>
+                      <PackageCheck className="w-4 h-4" />
+                      Mark as Returned
+                    </Button>
+                  )}
+                </CardContent>
+              </Card>
+            );
+          })()}
 
           {/* ── Pickup Documentation Card — always visible for confirmed/active ── */}
           {['confirmed', 'active'].includes(booking.status) && (
