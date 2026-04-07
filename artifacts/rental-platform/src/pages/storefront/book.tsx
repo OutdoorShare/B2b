@@ -3596,7 +3596,9 @@ export default function StorefrontBook() {
                               Return to Kiosk
                             </Button>
                           ) : (
-                            <Button variant="outline" size="sm" className="w-full" onClick={() => setLocation(sfBase || "/")}>
+                            <Button variant="outline" size="sm" className="w-full" onClick={() => {
+                              window.location.href = `${window.location.origin}${sfBase}`;
+                            }}>
                               Browse More Listings
                             </Button>
                           )}
