@@ -620,7 +620,7 @@ export function CreateMemoryModal({
                   {isPublic ? "Public" : "Only me"}
                 </p>
                 <p className="text-[11px] text-gray-400">
-                  {isPublic ? "Everyone on the social wall can see this" : "Only visible in My Memories"}
+                  {isPublic ? "Everyone on the social wall can see this" : "Only visible in My Memory Book"}
                 </p>
               </div>
             </div>
@@ -780,7 +780,7 @@ export function MemoriesPage({ onAuthOpen }: { onAuthOpen: () => void }) {
             }`}
           >
             <MapPin className="h-3.5 w-3.5" />
-            My Memories
+            My Memory Book
           </button>
         </div>
 

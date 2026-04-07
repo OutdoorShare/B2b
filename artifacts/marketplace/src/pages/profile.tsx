@@ -194,8 +194,8 @@ export function ProfilePage({ onAuthOpen }: { onAuthOpen: () => void }) {
             }`}
           >
             <Mountain className={`h-4 w-4 ${tab === "memories" ? "text-orange-500" : ""}`} />
-            <span className="hidden sm:inline">My Memories</span>
-            <span className="sm:hidden">Memories</span>
+            <span className="hidden sm:inline">My Memory Book</span>
+            <span className="sm:hidden">Memory Book</span>
           </button>
           <button
             onClick={() => setTab("settings")}
@@ -390,7 +390,7 @@ function MemoriesTab({ customer }: { customer: NonNullable<ReturnType<typeof use
       {/* Header row */}
       <div className="flex items-center justify-between mb-5">
         <div>
-          <h2 className="text-lg font-bold text-gray-900">My Memories</h2>
+          <h2 className="text-lg font-bold text-gray-900">My Memory Book</h2>
           {memories.length > 0 && (
             <p className="text-sm text-gray-400 mt-0.5">
               {memories.length} {memories.length === 1 ? "memory" : "memories"} · {publicCount} public · {privateCount} private
