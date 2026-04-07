@@ -23,6 +23,7 @@ import { HostBookingsPage } from "@/pages/host/bookings";
 import { HostSettingsPage } from "@/pages/host/settings";
 import { HostBundlesPage } from "@/pages/host/bundles";
 import { MemoriesPage } from "@/pages/memories";
+import { MemoriesSharePage } from "@/pages/memories-share";
 import { OutdoorBot } from "@/components/OutdoorBot";
 
 const queryClient = new QueryClient({
@@ -88,6 +89,7 @@ function AppContent() {
         <Route path="/profile" component={() => <ProfilePage onAuthOpen={() => setAuthOpen(true)} />} />
         <Route path="/companies" component={() => { window.location.replace(import.meta.env.BASE_URL.replace(/\/$/, "") || "/"); return null; }} />
         <Route path="/memories" component={() => <MemoriesPage onAuthOpen={() => setAuthOpen(true)} />} />
+        <Route path="/memories/share/:customerId" component={MemoriesSharePage} />
         <Route path="/become-host" component={() => <BecomeHostPage onAuthOpen={() => setAuthOpen(true)} />} />
         <Route path="/host" component={HostDashboardPage} />
         <Route path="/host/launchpad" component={HostLaunchpadPage} />

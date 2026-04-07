@@ -21,6 +21,9 @@ import {
   ChevronDown,
   Link2,
   Check,
+  QrCode,
+  Copy,
+  Users,
 } from "lucide-react";
 
 const BASE_URL = import.meta.env.BASE_URL.replace(/\/$/, "");
@@ -551,6 +554,8 @@ export function MemoriesPage({ onAuthOpen }: { onAuthOpen: () => void }) {
   const { toast } = useToast();
   const [tab, setTab] = useState<"all" | "my">("all");
   const [showCreate, setShowCreate] = useState(false);
+  const [showInvite, setShowInvite] = useState(false);
+  const [copied, setCopied] = useState(false);
 
   const { data: memories = [], isLoading } = useQuery({
     queryKey: ["memories", tab, customer?.id],
@@ -666,6 +671,79 @@ export function MemoriesPage({ onAuthOpen }: { onAuthOpen: () => void }) {
             My Memories
           </button>
         </div>
+
+        {/* Invite Friends Panel — only visible on My Memories tab when logged in */}
+        {tab === "my" && customer && (() => {
+          const shareUrl = `${window.location.origin}${BASE_URL}/memories/share/${customer.id}`;
+          const qrSrc = `https://api.qrserver.com/v1/create-qr-code/?size=180x180&color=1a4731&bgcolor=ffffff&data=${encodeURIComponent(shareUrl)}`;
+          const copyLink = () => {
+            navigator.clipboard.writeText(shareUrl).then(() => {
+              setCopied(true);
+              setTimeout(() => setCopied(false), 2500);
+            });
+          };
+          return (
+            <div className="mb-6">
+              <button
+                onClick={() => setShowInvite(v => !v)}
+                className="w-full flex items-center justify-between px-5 py-3.5 bg-white border border-gray-200 rounded-2xl shadow-sm hover:shadow-md transition-shadow group"
+              >
+                <div className="flex items-center gap-3">
+                  <div className="h-9 w-9 rounded-xl flex items-center justify-center" style={{ background: "linear-gradient(135deg, #1a4731, hsl(127,55%,38%))" }}>
+                    <Users className="h-5 w-5 text-white" />
+                  </div>
+                  <div className="text-left">
+                    <p className="text-sm font-semibold text-gray-900">Invite Friends to Contribute</p>
+                    <p className="text-xs text-gray-400">Share your personal QR code or link</p>
+                  </div>
+                </div>
+                <QrCode className={`h-4 w-4 text-gray-400 transition-transform ${showInvite ? "rotate-180" : ""}`} />
+              </button>
+
+              {showInvite && (
+                <div className="mt-2 bg-white border border-gray-200 rounded-2xl shadow-sm p-5">
+                  <p className="text-sm text-gray-600 mb-5 text-center max-w-sm mx-auto">
+                    Friends can scan the QR code or use the link below to add photos directly to your memory book — no account needed.
+                  </p>
+                  <div className="flex flex-col sm:flex-row items-center gap-6">
+                    {/* QR Code */}
+                    <div className="flex-shrink-0 p-3 rounded-xl border-2 border-dashed border-gray-200 bg-gray-50">
+                      <img
+                        src={qrSrc}
+                        alt="QR code for friend uploads"
+                        className="w-[160px] h-[160px] rounded-lg"
+                      />
+                    </div>
+                    {/* URL + copy */}
+                    <div className="flex-1 min-w-0 w-full space-y-3">
+                      <div>
+                        <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">Your personal upload link</p>
+                        <div className="flex items-center gap-2 bg-gray-50 border border-gray-200 rounded-xl px-3 py-2.5">
+                          <Link2 className="h-3.5 w-3.5 text-gray-400 flex-shrink-0" />
+                          <span className="text-xs text-gray-600 truncate flex-1">{shareUrl}</span>
+                        </div>
+                      </div>
+                      <button
+                        onClick={copyLink}
+                        className={`w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl font-semibold text-sm transition-all ${
+                          copied
+                            ? "bg-green-500 text-white"
+                            : "bg-primary text-white hover:bg-primary/90"
+                        }`}
+                      >
+                        {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+                        {copied ? "Copied!" : "Copy Link"}
+                      </button>
+                      <p className="text-[11px] text-gray-400 text-center">
+                        Photos from friends are saved privately to your memory book only.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          );
+        })()}
 
         {/* Content */}
         {isLoading ? (

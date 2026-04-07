@@ -111,6 +111,59 @@ router.post("/memories", async (req: Request, res: Response) => {
   }
 });
 
+// GET /api/memories/profile/:customerId — public, returns name for guest upload page
+router.get("/memories/profile/:customerId", async (req: Request, res: Response) => {
+  try {
+    const customerId = parseInt(req.params.customerId, 10);
+    if (isNaN(customerId)) return void res.status(400).json({ error: "Invalid id" });
+    const customer = await db.query.customersTable.findFirst({
+      where: eq(customersTable.id, customerId),
+    });
+    if (!customer) return void res.status(404).json({ error: "Not found" });
+    res.json({ id: customer.id, name: customer.name ?? "Adventurer" });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/memories/guest-upload/:customerId — friends upload without auth
+router.post("/memories/guest-upload/:customerId", async (req: Request, res: Response) => {
+  try {
+    const customerId = parseInt(req.params.customerId, 10);
+    if (isNaN(customerId)) return void res.status(400).json({ error: "Invalid id" });
+
+    const customer = await db.query.customersTable.findFirst({
+      where: eq(customersTable.id, customerId),
+    });
+    if (!customer) return void res.status(404).json({ error: "Customer not found" });
+
+    const { photoUrls, caption, contributorName } = req.body;
+    if (!Array.isArray(photoUrls) || photoUrls.length === 0) {
+      return void res.status(400).json({ error: "At least one photo is required" });
+    }
+
+    const friendName = String(contributorName || "A friend").trim().slice(0, 80);
+    const fullCaption = caption
+      ? `📸 From ${friendName}: ${caption}`
+      : `📸 Shared by ${friendName}`;
+
+    const [memory] = await db
+      .insert(memoriesTable)
+      .values({
+        customerId,
+        customerName: customer.name ?? "Adventurer",
+        photoUrls,
+        caption: fullCaption,
+        isPublic: false,
+      })
+      .returning();
+
+    res.status(201).json(memory);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // DELETE /api/memories/:id
 router.delete("/memories/:id", async (req: Request, res: Response) => {
   const customerId = await getCustomerId(req);
