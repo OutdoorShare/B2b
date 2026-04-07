@@ -1901,6 +1901,167 @@ export async function sendIdentityVerificationEmail(opts: {
   });
 }
 
+// ── Incomplete pre-pickup steps — renter email ─────────────────────────────────
+// Sent when approaching or past pickup date and required steps aren't done.
+export async function sendIncompleteStepsRenterEmail(opts: {
+  toEmail: string;
+  customerName: string;
+  listingTitle: string;
+  startDate: string;
+  companyName: string;
+  adminEmail?: string;
+  missingSteps: string[];      // e.g. ["Rental Agreement", "Identity Verification"]
+  agreementUrl?: string | null;
+  isOverdue?: boolean;
+}): Promise<void> {
+  const { toEmail, customerName, listingTitle, startDate, companyName, adminEmail, missingSteps, agreementUrl, isOverdue } = opts;
+  const fromHeader = `${companyName} <samhos@myoutdoorshare.com>`;
+  const replyToEmail = adminEmail || undefined;
+
+  const subject = isOverdue
+    ? `[${companyName}] ⚠️ Action required — your rental cannot proceed yet`
+    : `[${companyName}] Action required before your rental pickup`;
+
+  const preheader = isOverdue
+    ? `Your rental pickup time has passed but required steps are still incomplete. Do NOT take the equipment.`
+    : `Complete these required steps before your rental of ${esc(listingTitle)} can begin.`;
+
+  const stepsListHtml = missingSteps.map(s =>
+    `<li style="margin-bottom:6px;font-size:14px;color:#374151;">${esc(s)}</li>`
+  ).join("");
+
+  const urgencyBox = isOverdue
+    ? `<div style="background:#fef2f2;border:2px solid #fca5a5;border-radius:8px;padding:16px 18px;margin:20px 0;">
+        <p style="margin:0 0 6px;font-size:14px;font-weight:700;color:#dc2626;">🚫 Do not take the equipment yet</p>
+        <p style="margin:0;font-size:13px;color:#7f1d1d;line-height:1.6;">
+          Your pickup time has passed, but the required steps below are still incomplete.
+          Please complete them immediately and contact <strong>${companyName}</strong> before picking up any equipment.
+        </p>
+      </div>`
+    : `<div style="background:#fffbeb;border:1px solid #fde68a;border-radius:8px;padding:14px 18px;margin:20px 0;">
+        <p style="margin:0 0 4px;font-size:13px;font-weight:700;color:#92400e;">⏰ Action needed before pickup</p>
+        <p style="margin:0;font-size:13px;color:#78350f;line-height:1.6;">
+          Your rental pickup is coming up soon. Please complete the required steps below before arriving so your rental can start without delay.
+        </p>
+      </div>`;
+
+  const ctaSection = agreementUrl
+    ? ctaButton("Sign Rental Agreement →", agreementUrl, isOverdue ? "#dc2626" : BRAND_GREEN)
+    : `<p style="margin:20px 0 0;font-size:13px;color:#374151;">Please contact <strong>${companyName}</strong> directly to complete these steps${adminEmail ? `: <a href="mailto:${esc(adminEmail)}" style="color:${BRAND_GREEN};">${esc(adminEmail)}</a>` : "."}</p>`;
+
+  const body = `
+    <p style="margin:0 0 8px;font-size:18px;font-weight:700;color:${BRAND_DARK};">
+      ${isOverdue ? "Rental cannot start — action required" : "Complete required steps before pickup"}
+    </p>
+    <p style="margin:0 0 20px;font-size:15px;color:#374151;line-height:1.6;">
+      Hi <strong>${esc(customerName)}</strong>, your upcoming rental of <strong>${esc(listingTitle)}</strong>
+      ${isOverdue ? "was scheduled for" : "on"} <strong>${esc(startDate)}</strong> requires the following steps to be completed before the rental can begin.
+    </p>
+    ${urgencyBox}
+    <p style="margin:0 0 10px;font-size:14px;font-weight:700;color:${BRAND_DARK};">Steps still needed:</p>
+    <ul style="margin:0 0 20px;padding-left:20px;">${stepsListHtml}</ul>
+    ${ctaSection}
+    <p style="margin:20px 0 0;font-size:13px;color:#9ca3af;text-align:center;line-height:1.6;">
+      Questions? Contact <strong>${companyName}</strong> directly.
+    </p>
+  `;
+
+  const html = emailShell({
+    preheader,
+    badgeLabel: isOverdue ? "Urgent — Action Required" : "Action Required",
+    badgeColor: isOverdue ? "#dc2626" : "#f59e0b",
+    body,
+  });
+  const gmail = await getUncachableGmailClient();
+  await gmail.users.messages.send({
+    userId: "me",
+    requestBody: { raw: makeRawEmail(toEmail, subject, html, fromHeader, replyToEmail) },
+  });
+}
+
+// ── Incomplete pre-pickup steps — admin email ───────────────────────────────────
+// Sent to the host/admin so they know a booking has blockers before pickup.
+export async function sendIncompleteStepsAdminEmail(opts: {
+  adminEmail: string;
+  customerName: string;
+  customerEmail: string;
+  bookingId: number;
+  listingTitle: string;
+  startDate: string;
+  companyName: string;
+  tenantSlug: string;
+  missingSteps: string[];
+  isOverdue?: boolean;
+}): Promise<void> {
+  const { adminEmail, customerName, customerEmail, bookingId, listingTitle, startDate, companyName, tenantSlug, missingSteps, isOverdue } = opts;
+  const bookingUrl = `${APP_URL}/${tenantSlug}/admin/bookings/${bookingId}`;
+
+  const subject = isOverdue
+    ? `[${companyName}] ⚠️ Overdue: Booking #${bookingId} has incomplete required steps`
+    : `[${companyName}] Heads-up: Booking #${bookingId} has incomplete steps before pickup`;
+
+  const preheader = isOverdue
+    ? `Pickup time has passed and required steps are still incomplete — do not release the equipment.`
+    : `Required steps for ${esc(listingTitle)} (${esc(customerName)}) aren't done before pickup.`;
+
+  const stepsListHtml = missingSteps.map(s =>
+    `<li style="margin-bottom:6px;font-size:14px;color:#374151;">${esc(s)}</li>`
+  ).join("");
+
+  const urgencyBox = isOverdue
+    ? `<div style="background:#fef2f2;border:2px solid #fca5a5;border-radius:8px;padding:16px 18px;margin:20px 0;">
+        <p style="margin:0 0 6px;font-size:14px;font-weight:700;color:#dc2626;">🚫 Do not release the equipment</p>
+        <p style="margin:0;font-size:13px;color:#7f1d1d;line-height:1.6;">
+          The scheduled pickup time has already passed and the required steps below are still incomplete.
+          Contact the renter immediately and do not allow them to take the equipment until all steps are resolved.
+        </p>
+      </div>`
+    : `<div style="background:#fffbeb;border:1px solid #fde68a;border-radius:8px;padding:14px 18px;margin:20px 0;">
+        <p style="margin:0 0 4px;font-size:13px;font-weight:700;color:#92400e;">⏰ Pickup is approaching</p>
+        <p style="margin:0;font-size:13px;color:#78350f;line-height:1.6;">
+          This booking is scheduled to pick up on <strong>${esc(startDate)}</strong>.
+          The steps below must be completed before the rental can begin.
+          Follow up with the renter so these are done in time.
+        </p>
+      </div>`;
+
+  const tableRows = [
+    { label: "Customer",   value: `${customerName} (${customerEmail})` },
+    { label: "Equipment",  value: listingTitle },
+    { label: "Pickup",     value: startDate },
+    { label: "Booking",    value: `#${bookingId}` },
+  ];
+
+  const body = `
+    <p style="margin:0 0 8px;font-size:18px;font-weight:700;color:${BRAND_DARK};">
+      ${isOverdue ? "Overdue: required steps still incomplete" : "Required steps not yet done before pickup"}
+    </p>
+    <p style="margin:0 0 20px;font-size:15px;color:#374151;line-height:1.6;">
+      Booking <strong>#${bookingId}</strong> for <strong>${esc(listingTitle)}</strong> has required pre-pickup steps that have not been completed.
+    </p>
+    ${urgencyBox}
+    ${infoTable(tableRows)}
+    <p style="margin:0 0 10px;font-size:14px;font-weight:700;color:${BRAND_DARK};">Steps still needed:</p>
+    <ul style="margin:0 0 20px;padding-left:20px;">${stepsListHtml}</ul>
+    ${ctaButton("View Booking →", bookingUrl, isOverdue ? "#dc2626" : BRAND_GREEN)}
+    <p style="margin:0;font-size:13px;color:#9ca3af;text-align:center;">
+      You can send the required links directly from the booking detail page.
+    </p>
+  `;
+
+  const html = emailShell({
+    preheader,
+    badgeLabel: isOverdue ? "Urgent — Overdue Steps" : "Action Required — Upcoming Pickup",
+    badgeColor: isOverdue ? "#dc2626" : "#f59e0b",
+    body,
+  });
+  const gmail = await getUncachableGmailClient();
+  await gmail.users.messages.send({
+    userId: "me",
+    requestBody: { raw: makeRawEmail(adminEmail, subject, html, PLATFORM_FROM) },
+  });
+}
+
 // ── Payment request email (sent to renter when admin creates a booking with payment link) ──
 export async function sendPaymentRequestEmail(opts: {
   toEmail: string;

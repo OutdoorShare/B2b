@@ -19,6 +19,8 @@ import {
   sendPrePickupReminderAdminEmail,
   sendReturnReminderRenterEmail,
   sendStripeRestrictedAlertEmail,
+  sendIncompleteStepsRenterEmail,
+  sendIncompleteStepsAdminEmail,
 } from "./gmail";
 import { createNotification } from "./notifications";
 import { getStripeForTenant } from "./stripe";
@@ -388,6 +390,180 @@ async function authorizeDepositHolds() {
   }
 }
 
+// ── 5. Incomplete pre-pickup steps — approaching alert (within 24 hrs) ─────────
+//
+// Fires once per booking when the pickup date is within 24 hours AND the
+// rental agreement has not yet been signed. Sends both the renter and admin
+// an "action required" email so the step can be resolved before pickup.
+async function alertIncompleteStepsApproaching() {
+  const now     = new Date();
+  const in24hrs = new Date(now.getTime() + 24 * 60 * 60 * 1000);
+  const todayStr  = now.toISOString().slice(0, 10);
+  const in24Str   = in24hrs.toISOString().slice(0, 10);
+
+  const bookings = await db.select().from(bookingsTable).where(
+    and(
+      sql`${bookingsTable.startDate} >= ${todayStr}`,
+      sql`${bookingsTable.startDate} <= ${in24Str}`,
+      sql`${bookingsTable.status} = 'confirmed'`,
+      sql`${bookingsTable.agreementSignerName} IS NULL`,
+      sql`coalesce(${bookingsTable.incompleteStepsAlertSent}, false) = false`,
+    )
+  );
+
+  for (const booking of bookings) {
+    try {
+      await db.update(bookingsTable)
+        .set({ incompleteStepsAlertSent: true, updatedAt: new Date() })
+        .where(eq(bookingsTable.id, booking.id));
+
+      const ctx = await getContext(booking.tenantId);
+      const listingTitle = await getListingTitle(booking.listingId);
+      const missingSteps = ["Rental Agreement (not yet signed)"];
+
+      // Build agreement URL from existing pickup token if available
+      const agreementUrl = booking.pickupToken
+        ? `${APP_URL}/${ctx.slug}/pickup/${booking.pickupToken}`
+        : null;
+
+      if (booking.customerEmail) {
+        await sendIncompleteStepsRenterEmail({
+          toEmail: booking.customerEmail,
+          customerName: booking.customerName,
+          listingTitle,
+          startDate: booking.startDate,
+          companyName: ctx.companyName,
+          adminEmail: ctx.adminEmail,
+          missingSteps,
+          agreementUrl,
+          isOverdue: false,
+        });
+      }
+
+      if (ctx.adminEmail && ctx.slug) {
+        await sendIncompleteStepsAdminEmail({
+          adminEmail: ctx.adminEmail,
+          customerName: booking.customerName,
+          customerEmail: booking.customerEmail,
+          bookingId: booking.id,
+          listingTitle,
+          startDate: booking.startDate,
+          companyName: ctx.companyName,
+          tenantSlug: ctx.slug,
+          missingSteps,
+          isOverdue: false,
+        });
+      }
+
+      // In-app notification for admin
+      if (booking.tenantId) {
+        createNotification({
+          tenantId: booking.tenantId,
+          targetType: "admin",
+          type: "action_required",
+          title: "Incomplete steps before pickup",
+          body: `${booking.customerName}'s rental agreement for ${listingTitle} is still unsigned — pickup is today/tomorrow.`,
+          actionUrl: `/bookings/${booking.id}`,
+          isActionRequired: true,
+          relatedId: booking.id,
+        }).catch(() => {});
+      }
+
+      console.log(`[scheduler] Incomplete-steps approaching alert sent for booking #${booking.id}`);
+    } catch (err: any) {
+      console.warn(`[scheduler] Incomplete-steps approaching alert FAILED for booking #${booking.id}:`, err?.message);
+      await db.update(bookingsTable)
+        .set({ incompleteStepsAlertSent: false, updatedAt: new Date() })
+        .where(eq(bookingsTable.id, booking.id)).catch(() => {});
+    }
+  }
+}
+
+// ── 6. Incomplete pre-pickup steps — overdue alert (past pickup date) ───────────
+//
+// Fires once per booking when the pickup date has already passed, the booking
+// is still in 'confirmed' status (not marked active), and the agreement hasn't
+// been signed. Sends a stronger "do not release the equipment" alert to both
+// the admin and the renter.
+async function alertIncompleteStepsOverdue() {
+  const todayStr = new Date().toISOString().slice(0, 10);
+
+  const bookings = await db.select().from(bookingsTable).where(
+    and(
+      sql`${bookingsTable.startDate} < ${todayStr}`,
+      sql`${bookingsTable.status} = 'confirmed'`,
+      sql`${bookingsTable.agreementSignerName} IS NULL`,
+      sql`coalesce(${bookingsTable.overdueIncompleteAlertSent}, false) = false`,
+    )
+  );
+
+  for (const booking of bookings) {
+    try {
+      await db.update(bookingsTable)
+        .set({ overdueIncompleteAlertSent: true, updatedAt: new Date() })
+        .where(eq(bookingsTable.id, booking.id));
+
+      const ctx = await getContext(booking.tenantId);
+      const listingTitle = await getListingTitle(booking.listingId);
+      const missingSteps = ["Rental Agreement (not yet signed)"];
+
+      const agreementUrl = booking.pickupToken
+        ? `${APP_URL}/${ctx.slug}/pickup/${booking.pickupToken}`
+        : null;
+
+      if (booking.customerEmail) {
+        await sendIncompleteStepsRenterEmail({
+          toEmail: booking.customerEmail,
+          customerName: booking.customerName,
+          listingTitle,
+          startDate: booking.startDate,
+          companyName: ctx.companyName,
+          adminEmail: ctx.adminEmail,
+          missingSteps,
+          agreementUrl,
+          isOverdue: true,
+        });
+      }
+
+      if (ctx.adminEmail && ctx.slug) {
+        await sendIncompleteStepsAdminEmail({
+          adminEmail: ctx.adminEmail,
+          customerName: booking.customerName,
+          customerEmail: booking.customerEmail,
+          bookingId: booking.id,
+          listingTitle,
+          startDate: booking.startDate,
+          companyName: ctx.companyName,
+          tenantSlug: ctx.slug,
+          missingSteps,
+          isOverdue: true,
+        });
+      }
+
+      // In-app notification — action required, urgent
+      if (booking.tenantId) {
+        createNotification({
+          tenantId: booking.tenantId,
+          targetType: "admin",
+          type: "action_required",
+          title: "⚠️ Overdue: required steps incomplete",
+          body: `Booking #${booking.id} (${booking.customerName}) is past the pickup date but the rental agreement is still unsigned. Do not release the equipment.`,
+          actionUrl: `/bookings/${booking.id}`,
+          isActionRequired: true,
+          relatedId: booking.id,
+        }).catch(() => {});
+      }
+
+      console.log(`[scheduler] Incomplete-steps OVERDUE alert sent for booking #${booking.id}`);
+    } catch (err: any) {
+      console.warn(`[scheduler] Incomplete-steps overdue alert FAILED for booking #${booking.id}:`, err?.message);
+      await db.update(bookingsTable)
+        .set({ overdueIncompleteAlertSent: false, updatedAt: new Date() })
+        .where(eq(bookingsTable.id, booking.id)).catch(() => {});
+    }
+  }
+}
+
 // ── Main scheduler loop ────────────────────────────────────────────────────────
 async function runSchedulerCycle() {
   try {
@@ -395,6 +571,8 @@ async function runSchedulerCycle() {
     await sendReturnReminders();
     await alertRestrictedStripeAccounts();
     await authorizeDepositHolds();
+    await alertIncompleteStepsApproaching();
+    await alertIncompleteStepsOverdue();
   } catch (err: any) {
     console.warn("[scheduler] Cycle error:", err?.message);
   }

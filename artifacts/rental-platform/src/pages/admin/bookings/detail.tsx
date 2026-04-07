@@ -880,19 +880,51 @@ export default function AdminBookingDetail() {
               },
             ];
 
-            const cardBorder = isCompleted ? "border-green-200" : isActive ? "border-blue-200" : "border-green-200";
-            const titleColor = isCompleted ? "text-green-800" : isActive ? "text-blue-800" : "text-green-800";
-            const titleIcon  = isCompleted
+            // Required steps for pre-pickup (agreement is mandatory; identity if pending/failed)
+            const requiredMissing: string[] = [];
+            if (!signed) requiredMissing.push("Rental Agreement");
+            if (identNeedsAction) requiredMissing.push("Identity Verification");
+
+            const hasBlockers   = isConfirmed && requiredMissing.length > 0;
+            const today         = startOfDay(new Date());
+            const pickupDay     = startOfDay(new Date(booking.startDate + "T00:00:00"));
+            const daysUntil     = differenceInDays(pickupDay, today);
+            const isPickupOverdue = isConfirmed && daysUntil < 0;
+            const isPickupUrgent  = isConfirmed && daysUntil <= 1;
+
+            const cardBorder = isCompleted
+              ? "border-green-200"
+              : isActive
+                ? "border-blue-200"
+                : hasBlockers
+                  ? isPickupOverdue ? "border-red-300" : isPickupUrgent ? "border-amber-300" : "border-amber-200"
+                  : "border-green-200";
+
+            const titleColor = isCompleted
+              ? "text-green-800"
+              : isActive
+                ? "text-blue-800"
+                : hasBlockers
+                  ? isPickupOverdue ? "text-red-800" : "text-amber-800"
+                  : "text-green-800";
+
+            const titleIcon = isCompleted
               ? <CheckCircle2 className="w-5 h-5 text-green-600" />
               : isActive
                 ? <PackageCheck className="w-5 h-5 text-blue-600" />
-                : <CheckCircle2 className="w-5 h-5 text-green-600" />;
+                : hasBlockers
+                  ? isPickupOverdue
+                    ? <AlertCircle className="w-5 h-5 text-red-600" />
+                    : <AlertCircle className="w-5 h-5 text-amber-500" />
+                  : <CheckCircle2 className="w-5 h-5 text-green-600" />;
 
             const descText = isCompleted
               ? "Rental is complete. All steps finished."
               : isActive
                 ? "Rental is in progress. Send the return link when the renter is ready."
-                : "Complete these steps before marking the booking as picked up.";
+                : hasBlockers
+                  ? "Required steps must be completed before this rental can start."
+                  : "All required steps done — ready to mark as picked up.";
 
             return (
               <Card className={cardBorder}>
@@ -904,6 +936,36 @@ export default function AdminBookingDetail() {
                   <CardDescription className="text-xs">{descText}</CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-3">
+                  {/* ── Blocker banner ── */}
+                  {hasBlockers && (
+                    <div className={`rounded-xl border-2 p-4 ${isPickupOverdue ? "bg-red-50 border-red-300" : "bg-amber-50 border-amber-300"}`}>
+                      <div className="flex items-start gap-3">
+                        <AlertCircle className={`w-5 h-5 shrink-0 mt-0.5 ${isPickupOverdue ? "text-red-600" : "text-amber-600"}`} />
+                        <div>
+                          <p className={`text-sm font-bold mb-1 ${isPickupOverdue ? "text-red-800" : "text-amber-800"}`}>
+                            {isPickupOverdue
+                              ? "🚫 Do not start this rental — required steps are overdue"
+                              : isPickupUrgent
+                                ? "⚠️ Pickup is today or tomorrow — required steps not done"
+                                : "⚠️ Required steps must be completed before pickup"}
+                          </p>
+                          <p className={`text-xs leading-relaxed ${isPickupOverdue ? "text-red-700" : "text-amber-700"}`}>
+                            {isPickupOverdue
+                              ? "The pickup date has passed. Do not release the equipment until all required steps are resolved. Notifications have been sent to the renter."
+                              : "The renter cannot take the equipment until these steps are done. Use the Send buttons below or contact them directly."}
+                          </p>
+                          <ul className={`mt-2 space-y-0.5 ${isPickupOverdue ? "text-red-700" : "text-amber-700"}`}>
+                            {requiredMissing.map(s => (
+                              <li key={s} className="text-xs font-semibold flex items-center gap-1.5">
+                                <span className="w-1.5 h-1.5 rounded-full bg-current shrink-0" />
+                                {s} — not completed
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      </div>
+                    </div>
+                  )}
                   {steps.map(step => {
                     const rowBg = step.done
                       ? "bg-green-50 border-green-200"
