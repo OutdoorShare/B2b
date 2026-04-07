@@ -21,6 +21,7 @@ import {
   sendStripeRestrictedAlertEmail,
 } from "./gmail";
 import { createNotification } from "./notifications";
+import { getStripeForTenant } from "./stripe";
 
 const APP_URL = process.env.APP_URL || `https://${process.env.REPLIT_DEV_DOMAIN}`;
 const INTERVAL_MS = 15 * 60 * 1000; // 15 minutes
@@ -298,12 +299,102 @@ async function alertRestrictedStripeAccounts() {
   }
 }
 
+// ── 4. Auto-authorize security deposit holds ───────────────────────────────────
+//
+// Fires for any confirmed booking that:
+//   - Has a deposit amount configured on the listing
+//   - Starts within the next 24 hours (or is already overdue to start)
+//   - Has a Stripe payment method on file
+//   - Has not already had a deposit hold attempted
+//
+// This runs automatically so the admin never needs to click a button.
+// If this attempt fails (e.g. card declined), the manual button becomes
+// visible in the admin UI as a fallback.
+async function authorizeDepositHolds() {
+  const now = new Date();
+  // Look ahead 24 hours so we catch same-day and next-day pickups each cycle
+  const windowEnd = new Date(now.getTime() + 24 * 60 * 60 * 1000);
+  const todayStr = now.toISOString().slice(0, 10);
+  const windowEndStr = windowEnd.toISOString().slice(0, 10);
+
+  const bookings = await db.select().from(bookingsTable).where(
+    and(
+      sql`${bookingsTable.startDate} >= ${todayStr}`,
+      sql`${bookingsTable.startDate} <= ${windowEndStr}`,
+      sql`${bookingsTable.status} IN ('confirmed', 'active')`,
+      sql`${bookingsTable.stripePaymentIntentId} IS NOT NULL`,
+      sql`${bookingsTable.depositHoldStatus} IS NULL`,
+      sql`${bookingsTable.depositAutoAttemptedAt} IS NULL`,
+    )
+  );
+
+  for (const booking of bookings) {
+    // Mark attempted immediately so we don't retry on the next cycle even if something throws
+    await db.update(bookingsTable)
+      .set({ depositAutoAttemptedAt: new Date(), updatedAt: new Date() })
+      .where(eq(bookingsTable.id, booking.id));
+
+    try {
+      const [listing] = await db.select().from(listingsTable)
+        .where(eq(listingsTable.id, booking.listingId));
+      const depositAmountCents = listing?.depositAmount
+        ? Math.round(parseFloat(String(listing.depositAmount)) * 100) : 0;
+      if (depositAmountCents < 50) continue; // no deposit configured
+
+      const [tenant] = await db.select().from(tenantsTable)
+        .where(eq(tenantsTable.id, booking.tenantId!));
+      if (!tenant) continue;
+
+      const stripeClient = getStripeForTenant(!!tenant.testMode);
+      const originalPi = await stripeClient.paymentIntents.retrieve(booking.stripePaymentIntentId!);
+      if (!originalPi.payment_method) {
+        console.warn(`[scheduler] Deposit auto-hold skipped for booking #${booking.id}: no saved payment method`);
+        continue;
+      }
+
+      const startMs = new Date(booking.startDate).getTime();
+      const endMs   = new Date(booking.endDate).getTime();
+      const rentalDays = Math.round((endMs - startMs) / (1000 * 60 * 60 * 24));
+      const isLongBooking = rentalDays >= 5;
+
+      const depositPi = await stripeClient.paymentIntents.create({
+        amount: depositAmountCents,
+        currency: "usd",
+        payment_method: String(originalPi.payment_method),
+        capture_method: isLongBooking ? "automatic" : "manual",
+        confirm: true,
+        off_session: true,
+        description: isLongBooking
+          ? `Security deposit (full charge, ${rentalDays}-day rental) — Booking #${booking.id} (${listing?.title ?? ""})`
+          : `Security deposit hold — Booking #${booking.id} (${listing?.title ?? ""})`,
+        metadata: {
+          booking_id: String(booking.id),
+          tenant_id: String(booking.tenantId),
+          type: isLongBooking ? "deposit_charge" : "deposit_hold",
+          rental_days: String(rentalDays),
+        },
+      });
+
+      const newStatus = isLongBooking ? "charged" : "authorized";
+      await db.update(bookingsTable)
+        .set({ depositHoldIntentId: depositPi.id, depositHoldStatus: newStatus, updatedAt: new Date() })
+        .where(eq(bookingsTable.id, booking.id));
+
+      console.log(`[scheduler] Deposit auto-${isLongBooking ? "charged" : "hold authorized"} for booking #${booking.id} — $${(depositAmountCents / 100).toFixed(2)}`);
+    } catch (err: any) {
+      console.warn(`[scheduler] Deposit auto-hold FAILED for booking #${booking.id}:`, err?.message);
+      // depositAutoAttemptedAt is already set — the UI will show the manual fallback button
+    }
+  }
+}
+
 // ── Main scheduler loop ────────────────────────────────────────────────────────
 async function runSchedulerCycle() {
   try {
     await sendPickupReminders();
     await sendReturnReminders();
     await alertRestrictedStripeAccounts();
+    await authorizeDepositHolds();
   } catch (err: any) {
     console.warn("[scheduler] Cycle error:", err?.message);
   }

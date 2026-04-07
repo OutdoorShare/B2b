@@ -71,6 +71,7 @@ export default function AdminBookingDetail() {
   const [copySuccess, setCopySuccess] = useState(false);
   const [depositLoading, setDepositLoading] = useState<"authorize" | "release" | "capture" | null>(null);
   const [depositHoldStatus, setDepositHoldStatus] = useState<string | null>(null);
+  const [depositAutoAttemptedAt, setDepositAutoAttemptedAt] = useState<string | null>(null);
   const [sendingReturnLink, setSendingReturnLink] = useState(false);
   const [returnLinkSent, setReturnLinkSent] = useState(false);
   const [returnUrl, setReturnUrl] = useState<string | null>(null);
@@ -100,6 +101,9 @@ export default function AdminBookingDetail() {
     }
     if ((booking as any)?.depositHoldStatus) {
       setDepositHoldStatus((booking as any).depositHoldStatus);
+    }
+    if ((booking as any)?.depositAutoAttemptedAt) {
+      setDepositAutoAttemptedAt((booking as any).depositAutoAttemptedAt);
     }
   }, [booking]);
 
@@ -1306,16 +1310,34 @@ export default function AdminBookingDetail() {
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-3">
-                {!depositHoldStatus && (
-                  <Button
-                    className="w-full gap-2"
-                    onClick={() => handleDepositAction("authorize")}
-                    disabled={depositLoading !== null}
-                  >
-                    {depositLoading === "authorize" ? <Loader2 className="w-4 h-4 animate-spin" /> : <Lock className="w-4 h-4" />}
-                    Authorize Hold at Pickup
-                  </Button>
-                )}
+                {!depositHoldStatus && (() => {
+                  const startPassed = booking?.startDate ? new Date(booking.startDate) <= new Date() : false;
+                  const autoFailed = !!depositAutoAttemptedAt && !depositHoldStatus;
+                  const showFallback = startPassed || autoFailed;
+                  return showFallback ? (
+                    <div className="space-y-2">
+                      {autoFailed && (
+                        <div className="flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2.5 text-xs text-amber-800">
+                          <span className="shrink-0 mt-0.5">⚠️</span>
+                          <span>Auto-authorization failed (card may not be on file). Use the button below to authorize manually.</span>
+                        </div>
+                      )}
+                      <Button
+                        className="w-full gap-2"
+                        onClick={() => handleDepositAction("authorize")}
+                        disabled={depositLoading !== null}
+                      >
+                        {depositLoading === "authorize" ? <Loader2 className="w-4 h-4 animate-spin" /> : <Lock className="w-4 h-4" />}
+                        Authorize Hold Manually
+                      </Button>
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-2 rounded-xl border border-blue-200 bg-blue-50 px-3 py-2.5 text-xs text-blue-800">
+                      <Lock className="w-4 h-4 shrink-0 text-blue-500" />
+                      <span>Hold will be authorized automatically before pickup — no action needed.</span>
+                    </div>
+                  );
+                })()}
                 {depositHoldStatus === "authorized" && (
                   <div className="space-y-2">
                     <div className="flex items-center gap-2 bg-amber-50 border border-amber-200 rounded-xl p-3 text-sm text-amber-800">
