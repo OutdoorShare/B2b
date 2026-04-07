@@ -62,8 +62,10 @@ async function fetchMemories(tab: "all" | "my", customerId?: number): Promise<Me
   return data.memories ?? [];
 }
 
-async function fetchTenants(q: string): Promise<Tenant[]> {
-  const res = await fetch(`${API}/memories/tenants?q=${encodeURIComponent(q)}`);
+async function fetchTenants(q: string, customerId?: number): Promise<Tenant[]> {
+  const headers: Record<string, string> = {};
+  if (customerId) headers["x-customer-id"] = String(customerId);
+  const res = await fetch(`${API}/memories/tenants?q=${encodeURIComponent(q)}`, { headers });
   const data = await res.json();
   return data.tenants ?? [];
 }
@@ -306,8 +308,8 @@ export function CreateMemoryModal({
   const [tagOpen, setTagOpen] = useState(false);
   const [selectedTenant, setSelectedTenant] = useState<Tenant | null>(null);
   const { data: tenants = [] } = useQuery({
-    queryKey: ["memories-tenants", tagSearch],
-    queryFn: () => fetchTenants(tagSearch),
+    queryKey: ["memories-tenants", tagSearch, customerId],
+    queryFn: () => fetchTenants(tagSearch, customerId),
     enabled: tagOpen,
   });
 
@@ -467,14 +469,14 @@ export function CreateMemoryModal({
                     value={tagSearch}
                     onChange={(e) => { setTagSearch(e.target.value); setTagOpen(true); }}
                     onFocus={() => setTagOpen(true)}
-                    placeholder="Search companies or hosts..."
+                    placeholder="Your booked companies…"
                     className="pl-9 text-sm"
                   />
                 </div>
                 {tagOpen && (
                   <div className="absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-xl shadow-lg max-h-48 overflow-y-auto">
                     {tenants.length === 0 ? (
-                      <p className="text-xs text-gray-400 text-center py-3">No results</p>
+                      <p className="text-xs text-gray-400 text-center py-3 px-3">No companies found — only companies you've booked with appear here</p>
                     ) : (
                       tenants.map((t) => (
                         <button

@@ -185,26 +185,55 @@ router.delete("/memories/:id", async (req: Request, res: Response) => {
 });
 
 // GET /api/memories/tenants — list companies/hosts that can be tagged
+// If x-customer-id header is present, only return companies that customer has booked from
 router.get("/memories/tenants", async (req: Request, res: Response) => {
   try {
     const q = String(req.query.q ?? "").toLowerCase();
-    const rows = await db
-      .select({
-        id: tenantsTable.id,
-        name: tenantsTable.name,
-        slug: tenantsTable.slug,
-        isHost: tenantsTable.isHost,
-      })
-      .from(tenantsTable)
-      .where(eq(tenantsTable.status, "active"))
-      .orderBy(tenantsTable.name)
-      .limit(30);
+    const customerId = await getCustomerId(req);
 
-    const filtered = q
-      ? rows.filter((r) => (r.name ?? r.slug ?? "").toLowerCase().includes(q))
-      : rows;
+    if (customerId) {
+      // Look up the customer's email, then find distinct tenants they booked from
+      const customer = await db.query.customersTable.findFirst({
+        where: eq(customersTable.id, customerId),
+      });
 
-    res.json({ tenants: filtered });
+      if (customer?.email) {
+        const { bookingsTable } = await import("@workspace/db/schema");
+        const bookedTenantIds = await db
+          .selectDistinct({ tenantId: bookingsTable.tenantId })
+          .from(bookingsTable)
+          .where(eq(bookingsTable.customerEmail, customer.email));
+
+        const ids = bookedTenantIds
+          .map((r) => r.tenantId)
+          .filter((id): id is number => id !== null);
+
+        if (ids.length > 0) {
+          const { inArray } = await import("drizzle-orm");
+          const rows = await db
+            .select({
+              id: tenantsTable.id,
+              name: tenantsTable.name,
+              slug: tenantsTable.slug,
+              isHost: tenantsTable.isHost,
+            })
+            .from(tenantsTable)
+            .where(and(eq(tenantsTable.status, "active"), inArray(tenantsTable.id, ids)))
+            .orderBy(tenantsTable.name);
+
+          const filtered = q
+            ? rows.filter((r) => (r.name ?? r.slug ?? "").toLowerCase().includes(q))
+            : rows;
+
+          return void res.json({ tenants: filtered });
+        } else {
+          return void res.json({ tenants: [] });
+        }
+      }
+    }
+
+    // Fallback: no customer ID — return empty (tag dropdown not shown unless logged in)
+    res.json({ tenants: [] });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }
