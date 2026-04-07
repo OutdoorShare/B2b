@@ -18,7 +18,7 @@ import {
   ArrowLeft, Edit, ExternalLink, Package, Tag, DollarSign,
   CalendarDays, TrendingUp, Wrench,
   Check, ChevronRight, Ban, Trash2, CalendarOff,
-  ShieldCheck, Users, Search, X, Clock,
+  ShieldCheck, Users, Search, X, Clock, Code, Copy,
 } from "lucide-react";
 import { format, addDays, startOfDay, isAfter } from "date-fns";
 import { UnitIdentifiersManager } from "@/components/unit-identifiers-manager";
@@ -69,6 +69,7 @@ export default function AdminListingDetail() {
   const [blockRange, setBlockRange] = useState<DateRange | undefined>(undefined);
   const [blockReason, setBlockReason] = useState("");
   const [blockSaving, setBlockSaving] = useState(false);
+  const [embedCopied, setEmbedCopied] = useState(false);
 
   const { data: listing, isLoading } = useGetListing(id, {
     query: { enabled: !!id, queryKey: getGetListingQueryKey(id) },
@@ -160,6 +161,15 @@ export default function AdminListingDetail() {
     .reduce((s, b) => s + (typeof b.totalPrice === "number" ? b.totalPrice : parseFloat(String(b.totalPrice ?? "0"))), 0);
   const recentBookings = [...bookings].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()).slice(0, 5);
   const activeAddonCount = addons.filter(a => a.isActive).length;
+
+  const embedUrl = `${window.location.origin}${BASE}/${params.slug}/embed/listing/${listing.id}`;
+  const embedSnippet = `<iframe\n  src="${embedUrl}"\n  style="width:100%;height:580px;border:none;border-radius:12px;"\n  allow="payment"\n  loading="lazy"\n  title="${listing.title}"\n></iframe>`;
+  const copyEmbed = () => {
+    navigator.clipboard.writeText(embedSnippet).then(() => {
+      setEmbedCopied(true);
+      setTimeout(() => setEmbedCopied(false), 2000);
+    });
+  };
 
   return (
     <div className="p-6 max-w-6xl mx-auto space-y-6">
@@ -398,6 +408,37 @@ export default function AdminListingDetail() {
               <button className="text-xs text-primary hover:underline flex items-center gap-1">View all <ChevronRight className="w-3 h-3" /></button>
             </Link>
           </div>
+
+          {/* Embed Code */}
+          <div className="bg-background rounded-2xl border p-5 space-y-3">
+            <h3 className="font-semibold text-sm flex items-center gap-2">
+              <Code className="w-4 h-4 text-primary" /> Embed This Listing
+            </h3>
+            <p className="text-xs text-muted-foreground leading-relaxed">
+              Copy this snippet and paste it into any website to display this listing in an iframe — photos, pricing, and a Book Now button included.
+            </p>
+            <div className="relative bg-muted rounded-xl p-3 overflow-hidden">
+              <pre className="text-[10px] font-mono leading-relaxed whitespace-pre-wrap break-all pr-14 text-muted-foreground select-all">{embedSnippet}</pre>
+              <button
+                onClick={copyEmbed}
+                className="absolute top-2 right-2 flex items-center gap-1.5 text-xs font-medium px-2.5 py-1.5 rounded-lg bg-background border hover:bg-muted transition-colors"
+              >
+                {embedCopied
+                  ? <><Check className="w-3 h-3 text-green-600" /> Copied!</>
+                  : <><Copy className="w-3 h-3" /> Copy</>
+                }
+              </button>
+            </div>
+            <a
+              href={`/${params.slug}/embed/listing/${listing.id}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-1.5 text-xs text-primary hover:underline w-fit"
+            >
+              <ExternalLink className="w-3 h-3" /> Preview embed page
+            </a>
+          </div>
+
         </div>
       </div>
 

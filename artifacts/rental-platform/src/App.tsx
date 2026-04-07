@@ -13,6 +13,7 @@ import { ThemeProvider } from "@/components/theme-provider";
 // Pages
 import StorefrontHome from "@/pages/storefront/home";
 import StorefrontProductDetail from "@/pages/storefront/product-detail";
+import EmbedListing from "@/pages/storefront/embed-listing";
 import StorefrontBook from "@/pages/storefront/book";
 import StorefrontLogin from "@/pages/storefront/login";
 import StorefrontSetPassword from "@/pages/storefront/set-password";
@@ -395,6 +396,11 @@ function Router() {
       {/* Return Photo Route — public, no layout wrapper */}
       <Route path="/:slug/return/:token">
         <ReturnPage />
+      </Route>
+
+      {/* Listing Embed Route — iframe-friendly, no layout wrapper */}
+      <Route path="/:slug/embed/listing/:id">
+        <EmbedListing />
       </Route>
 
       {/* Storefront Routes — tenant-specific via slug prefix */}
