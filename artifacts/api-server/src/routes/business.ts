@@ -120,6 +120,9 @@ router.put("/business", requireTenant as any, async (req, res) => {
       depositRequired, depositPercent,
       cancellationPolicy, rentalTerms,
       kioskModeEnabled, instantBooking, embedCode,
+      paymentPlanEnabled, paymentPlanDepositType,
+      paymentPlanDepositFixed, paymentPlanDepositPercent,
+      paymentPlanDaysBeforePickup,
     } = req.body;
 
     // Require business address fields whenever they are submitted with content.
@@ -174,6 +177,11 @@ router.put("/business", requireTenant as any, async (req, res) => {
       ...(instantBooking     !== undefined && { instantBooking }),
       ...(embedCode          !== undefined && { embedCode }),
       depositPercent: depositPercent !== undefined ? String(depositPercent) : undefined,
+      ...(paymentPlanEnabled         !== undefined && { paymentPlanEnabled }),
+      ...(paymentPlanDepositType     !== undefined && { paymentPlanDepositType }),
+      ...(paymentPlanDepositFixed    !== undefined && { paymentPlanDepositFixed: String(paymentPlanDepositFixed) }),
+      ...(paymentPlanDepositPercent  !== undefined && { paymentPlanDepositPercent: String(paymentPlanDepositPercent) }),
+      ...(paymentPlanDaysBeforePickup !== undefined && { paymentPlanDaysBeforePickup: Number(paymentPlanDaysBeforePickup) }),
     };
 
     // If this tenant is design-locked (e.g. the platform demo), strip design fields

@@ -1090,7 +1090,7 @@ router.post("/stripe/admin-payment-link", requireAdminAuth, async (req, res) => 
 router.post("/stripe/admin-charge-saved", requireAdminAuth, async (req, res) => {
   try {
     const tenantId = req.tenantId!;
-    const { bookingId } = req.body ?? {};
+    const { bookingId, amountOverride } = req.body ?? {};
     if (!bookingId) { res.status(400).json({ error: "bookingId required" }); return; }
 
     const [booking] = await db.select().from(bookingsTable).where(
@@ -1125,10 +1125,12 @@ router.post("/stripe/admin-charge-saved", requireAdminAuth, async (req, res) => 
     const feePercent = tenant.platformFeePercent != null
       ? parseFloat(tenant.platformFeePercent) / 100
       : PLATFORM_FEE_PERCENT;
-    const amountCents = Math.round(parseFloat(String(booking.totalPrice)) * 100);
+    // amountOverride lets admin charge a specific amount (e.g. deposit only) instead of total
+    const baseAmount = amountOverride != null ? parseFloat(String(amountOverride)) : parseFloat(String(booking.totalPrice));
+    const amountCents = Math.round(baseAmount * 100);
     const platformFeeAmount = Math.round(amountCents * feePercent);
-    const transferAmount = amountCents - platformFeeAmount;
     const tenantConnected = !isTestMode && !!(tenant.stripeAccountId && tenant.stripeChargesEnabled);
+    const isSplitDeposit = amountOverride != null && booking.paymentPlanEnabled;
 
     const intentParams: any = {
       amount: amountCents,
@@ -1137,7 +1139,7 @@ router.post("/stripe/admin-charge-saved", requireAdminAuth, async (req, res) => 
       payment_method: pm.id,
       confirm: true,
       off_session: true,
-      description: `Admin charge — Booking #${booking.id} — ${tenant.name}${isTestMode ? " [TEST]" : ""}`,
+      description: `${isSplitDeposit ? "Deposit" : "Admin"} charge — Booking #${booking.id} — ${tenant.name}${isTestMode ? " [TEST]" : ""}`,
       metadata: {
         tenant_id: String(tenantId),
         tenant_slug: tenant.slug,
@@ -1155,13 +1157,23 @@ router.post("/stripe/admin-charge-saved", requireAdminAuth, async (req, res) => 
     const pi = await stripeClient.paymentIntents.create(intentParams);
 
     if (pi.status === "succeeded") {
-      await db.update(bookingsTable).set({
-        status: "confirmed",
-        stripePaymentIntentId: pi.id,
-        stripePaymentStatus: "paid",
-        stripePlatformFee: String((platformFeeAmount / 100).toFixed(2)),
-        updatedAt: new Date(),
-      }).where(eq(bookingsTable.id, booking.id));
+      if (isSplitDeposit) {
+        // Split payment deposit — keep status as-is (pending), just record that deposit was charged
+        await db.update(bookingsTable).set({
+          stripePaymentIntentId: pi.id,
+          stripePaymentStatus: "deposit_paid",
+          stripePlatformFee: String((platformFeeAmount / 100).toFixed(2)),
+          updatedAt: new Date(),
+        }).where(eq(bookingsTable.id, booking.id));
+      } else {
+        await db.update(bookingsTable).set({
+          status: "confirmed",
+          stripePaymentIntentId: pi.id,
+          stripePaymentStatus: "paid",
+          stripePlatformFee: String((platformFeeAmount / 100).toFixed(2)),
+          updatedAt: new Date(),
+        }).where(eq(bookingsTable.id, booking.id));
+      }
 
       res.json({
         success: true,
@@ -1175,6 +1187,113 @@ router.post("/stripe/admin-charge-saved", requireAdminAuth, async (req, res) => 
   } catch (e: any) {
     console.error("[stripe/admin-charge-saved]", e.message);
     res.status(400).json({ error: e.message || "Card charge failed." });
+  }
+});
+
+// ── Charge remaining split-payment balance (admin or scheduler) ───────────────
+// Looks up the customer's saved payment method and charges the remaining balance
+// for a booking that was originally booked with a payment plan.
+router.post("/stripe/charge-remaining/:bookingId", requireAdminAuth, async (req, res) => {
+  try {
+    const bookingId = Number(req.params.bookingId);
+    const tenantId  = req.tenantId!;
+
+    const [booking] = await db.select().from(bookingsTable).where(
+      and(eq(bookingsTable.id, bookingId), eq(bookingsTable.tenantId, tenantId))
+    );
+    if (!booking) { res.status(404).json({ error: "Booking not found" }); return; }
+    if (!booking.paymentPlanEnabled) {
+      res.status(400).json({ error: "This booking does not use a payment plan." }); return;
+    }
+    if (booking.splitRemainingStatus === "charged") {
+      res.status(400).json({ error: "Remaining balance has already been charged." }); return;
+    }
+    if (booking.splitRemainingStatus === "waived") {
+      res.status(400).json({ error: "Remaining balance was waived." }); return;
+    }
+
+    const remainingCents = Math.round(parseFloat(String(booking.splitRemainingAmount ?? "0")) * 100);
+    if (remainingCents < 50) {
+      res.status(400).json({ error: "Remaining balance is too small to charge." }); return;
+    }
+
+    const [tenant] = await db.select().from(tenantsTable).where(eq(tenantsTable.id, tenantId));
+    if (!tenant) { res.status(404).json({ error: "Tenant not found" }); return; }
+
+    const [customer] = await db.select().from(customersTable).where(
+      eq(customersTable.email, booking.customerEmail.toLowerCase())
+    );
+    if (!customer?.stripeCustomerId) {
+      res.status(400).json({ error: "No saved payment method on file for this customer." }); return;
+    }
+
+    const isTestMode = !!tenant.testMode;
+    const stripeClient = getStripeForTenant(isTestMode);
+
+    const pms = await stripeClient.paymentMethods.list({
+      customer: customer.stripeCustomerId, type: "card",
+    });
+    if (!pms.data.length) {
+      res.status(400).json({ error: "No saved card found for this customer." }); return;
+    }
+    const pm = pms.data[0];
+
+    const feePercent = tenant.platformFeePercent != null
+      ? parseFloat(tenant.platformFeePercent) / 100
+      : PLATFORM_FEE_PERCENT;
+    const platformFeeAmount = Math.round(remainingCents * feePercent);
+    const tenantConnected = !isTestMode && !!(tenant.stripeAccountId && tenant.stripeChargesEnabled);
+
+    const intentParams: any = {
+      amount: remainingCents,
+      currency: "usd",
+      customer: customer.stripeCustomerId,
+      payment_method: pm.id,
+      confirm: true,
+      off_session: true,
+      description: `Remaining balance — Booking #${booking.id} — ${tenant.name}${isTestMode ? " [TEST]" : ""}`,
+      metadata: {
+        tenant_id: String(tenantId),
+        booking_id: String(booking.id),
+        charge_type: "split_payment_remaining",
+        test_mode: isTestMode ? "true" : "false",
+      },
+    };
+    if (tenantConnected) {
+      intentParams.transfer_data = { destination: tenant.stripeAccountId };
+      intentParams.application_fee_amount = platformFeeAmount;
+    }
+
+    const pi = await stripeClient.paymentIntents.create(intentParams);
+
+    if (pi.status === "succeeded") {
+      await db.update(bookingsTable).set({
+        splitRemainingStatus: "charged",
+        splitRemainingIntentId: pi.id,
+        splitRemainingChargedAt: new Date(),
+        updatedAt: new Date(),
+      }).where(eq(bookingsTable.id, booking.id));
+
+      res.json({
+        success: true,
+        paymentIntentId: pi.id,
+        amountCharged: (remainingCents / 100).toFixed(2),
+        brand: pm.card?.brand ?? null,
+        last4: pm.card?.last4 ?? null,
+      });
+    } else {
+      await db.update(bookingsTable).set({
+        splitRemainingStatus: "failed",
+        updatedAt: new Date(),
+      }).where(eq(bookingsTable.id, booking.id));
+      res.status(400).json({ error: `Payment not completed (status: ${pi.status}).` });
+    }
+  } catch (e: any) {
+    console.error("[stripe/charge-remaining]", e.message);
+    await db.update(bookingsTable).set({
+      splitRemainingStatus: "failed", updatedAt: new Date(),
+    }).where(eq(bookingsTable.id, Number(req.params.bookingId))).catch(() => {});
+    res.status(400).json({ error: e.message || "Charge failed." });
   }
 });
 

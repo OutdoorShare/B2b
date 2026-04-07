@@ -278,10 +278,26 @@ router.post("/bookings", async (req, res) => {
     const addonsData = addons.length > 0 ? JSON.stringify(addons) : null;
     const bundleItemsJson = bundleItems.length > 0 ? JSON.stringify(bundleItems) : null;
 
-    const { addons: _addons, bundleItems: _bi, assignedUnitIds: rawUnitIds, agreementSignedAt: _ignoredTs, agreementSignatureDataUrl, ruleInitials: ruleInitialsJson, protectionPlanFee: _ppf, ...restBody } = body;
+    const {
+      addons: _addons, bundleItems: _bi, assignedUnitIds: rawUnitIds,
+      agreementSignedAt: _ignoredTs, agreementSignatureDataUrl,
+      ruleInitials: ruleInitialsJson, protectionPlanFee: _ppf,
+      // Split payment fields — extracted so they don't go into restBody raw
+      paymentPlanEnabled: reqPaymentPlanEnabled,
+      splitDepositAmount: reqSplitDeposit,
+      splitRemainingAmount: reqSplitRemaining,
+      splitRemainingDueDate: reqSplitDueDate,
+      ...restBody
+    } = body;
     const assignedUnitIds = Array.isArray(rawUnitIds) && rawUnitIds.length > 0 ? JSON.stringify(rawUnitIds) : null;
     // Set agreementSignedAt server-side when the customer provides their signature
     const agreementSignedAt = restBody.agreementSignerName ? new Date() : null;
+
+    // ── Split payment plan ──────────────────────────────────────────────────
+    const usingSplitPayment = !!reqPaymentPlanEnabled && reqSplitDeposit != null && reqSplitRemaining != null;
+    const splitDepositAmount  = usingSplitPayment ? String(parseFloat(reqSplitDeposit).toFixed(2)) : null;
+    const splitRemainingAmount = usingSplitPayment ? String(parseFloat(reqSplitRemaining).toFixed(2)) : null;
+    const splitRemainingDueDate = usingSplitPayment && reqSplitDueDate ? String(reqSplitDueDate) : null;
 
     // Kiosk bookings are always auto-confirmed; otherwise check the tenant's instant booking setting
     let autoConfirm = restBody.source === "kiosk";
@@ -304,6 +320,14 @@ router.post("/bookings", async (req, res) => {
       agreementSignature: agreementSignatureDataUrl ?? null,
       ruleInitials: ruleInitialsJson ?? null,
       protectionPlanFee: protectionPlanFee > 0 ? String(protectionPlanFee) : null,
+      // Split payment plan fields
+      ...(usingSplitPayment ? {
+        paymentPlanEnabled: true,
+        splitDepositAmount,
+        splitRemainingAmount,
+        splitRemainingDueDate,
+        splitRemainingStatus: "pending" as const,
+      } : {}),
       ...(autoConfirm ? { status: "confirmed" } : {}),
       // Online bookings are unseen by admin until they open them
       seenByAdmin: restBody.source === "online" ? false : true,

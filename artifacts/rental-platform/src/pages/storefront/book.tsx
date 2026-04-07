@@ -632,6 +632,8 @@ export default function StorefrontBook() {
   const [showStripeForm, setShowStripeForm] = useState(false);
   // Prevents the auto-create effect from firing again when email/name change after intent is already in flight
   const intentFiredRef = useRef(false);
+  // Split / payment plan
+  const [usePaymentPlan, setUsePaymentPlan] = useState(false);
 
   // Kiosk QR-pay
   const [kioskPayMode, setKioskPayMode] = useState<"card" | "qr">("card");
@@ -1025,6 +1027,15 @@ export default function StorefrontBook() {
     intentFiredRef.current = false;
   }, [selectedQuantity]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // When the user toggles payment plan, reset the intent to use the new amount
+  useEffect(() => {
+    if (paymentConfirmed) return;
+    if (!clientSecret && !intentFiredRef.current) return; // not started yet
+    setClientSecret(null);
+    setShowStripeForm(false);
+    intentFiredRef.current = false;
+  }, [usePaymentPlan]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const subtotal = useMemo(() => {
     // Time-slot rate overrides everything else when a slot is selected
     let base: number;
@@ -1070,6 +1081,25 @@ export default function StorefrontBook() {
   const total = subtotal + bundleItemsTotal + addonsSubtotal + platformProtectionFee - bundleDiscountAmount;
   const promoDiscount = appliedPromo ? Math.min(appliedPromo.discountAmount, total) : 0;
   const discountedTotal = Math.max(0.50, total - promoDiscount);
+
+  // ── Payment plan / split deposit ──────────────────────────────────────────
+  const bp = businessProfile as any;
+  const planEnabled = !!bp?.paymentPlanEnabled;
+  const planDepositType: "percent" | "fixed" = bp?.paymentPlanDepositType ?? "percent";
+  const planDepositRaw = planDepositType === "percent"
+    ? discountedTotal * (parseFloat(String(bp?.paymentPlanDepositPercent ?? "25")) / 100)
+    : parseFloat(String(bp?.paymentPlanDepositFixed ?? "0"));
+  const planDepositAmount = Math.max(0.50, Math.min(planDepositRaw, discountedTotal - 0.50));
+  const planRemainingAmount = discountedTotal - planDepositAmount;
+  const planDaysBeforePickup = parseInt(String(bp?.paymentPlanDaysBeforePickup ?? "0"));
+  const planDueDate = (() => {
+    if (!dateRange?.from) return "";
+    const d = new Date(dateRange.from);
+    d.setDate(d.getDate() - planDaysBeforePickup);
+    return d.toISOString().slice(0, 10);
+  })();
+  // The amount that will actually be charged now
+  const chargeNowAmount = usePaymentPlan && planEnabled ? planDepositAmount : discountedTotal;
 
   const startFormatted = dateRange?.from ? format(dateRange.from, "MMM d, yyyy") : "—";
   const endFormatted = dateRange?.to ? format(dateRange.to, "MMM d, yyyy") : "—";
@@ -1311,10 +1341,11 @@ export default function StorefrontBook() {
     if (!dateRange?.from || !dateRange?.to) return;
     if (discountedTotal <= 0) return;
     intentFiredRef.current = true;
-    const cents = Math.round(discountedTotal * 100);
+    // Use deposit amount if payment plan is selected, otherwise full total
+    const cents = Math.round(chargeNowAmount * 100);
     setShowStripeForm(true);
     createPaymentIntent(cents);
-  }, [session, isKiosk, email, name, discountedTotal, clientSecret, paymentConfirmed, dateRange, createPaymentIntent]);
+  }, [session, isKiosk, email, name, discountedTotal, chargeNowAmount, clientSecret, paymentConfirmed, dateRange, createPaymentIntent]);
 
   // Auto-launch Stripe Identity popup as soon as the session is ready — no extra button tap
   // Placed here (before early returns) so it's always called unconditionally; the handler
@@ -1498,6 +1529,13 @@ export default function StorefrontBook() {
           discountAmount: promoDiscount > 0 ? promoDiscount : undefined,
           depositPaid: deposit > 0 ? String(deposit) : undefined,
           protectionPlanFee: platformProtectionFee > 0 ? String(platformProtectionFee) : undefined,
+          // Payment plan (split deposit)
+          ...(usePaymentPlan && planEnabled ? {
+            paymentPlanEnabled: true,
+            splitDepositAmount: planDepositAmount.toFixed(2),
+            splitRemainingAmount: planRemainingAmount.toFixed(2),
+            splitRemainingDueDate: planDueDate,
+          } : {}),
           ruleInitials: listingRules.length > 0
             ? JSON.stringify(listingRules.map(r => ({
                 ruleId: r.id,
@@ -2592,34 +2630,71 @@ export default function StorefrontBook() {
                             <CardScanHelper />
                           </div>
                         </div>
-                      ) : !clientSecret ? (
-                        <div className="flex items-center justify-center py-16 gap-3 text-muted-foreground">
-                          <Loader2 className="w-5 h-5 animate-spin" />
-                          <span>Preparing payment…</span>
-                        </div>
                       ) : (
                         <>
-                          {isTestMode && (
-                            <div className="flex items-center gap-2.5 bg-amber-50 border border-amber-300 rounded-lg px-4 py-3 mb-4">
-                              <span className="text-amber-600 font-bold text-xs uppercase tracking-wider bg-amber-200 px-2 py-0.5 rounded">Test Mode</span>
-                              <span className="text-sm text-amber-800">No real money will be charged. Use card <strong>4242 4242 4242 4242</strong>, any future expiry and CVC.</span>
+                          {/* ── Payment Plan Toggle ── */}
+                          {planEnabled && !paymentConfirmed && (
+                            <div className="rounded-xl border-2 border-blue-200 bg-blue-50 p-4 mb-4 space-y-3">
+                              <div className="flex items-start gap-3">
+                                <div className="mt-0.5">
+                                  <svg className="w-5 h-5 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" /></svg>
+                                </div>
+                                <div className="flex-1">
+                                  <p className="text-sm font-semibold text-blue-900">Flexible Payment Option</p>
+                                  <p className="text-xs text-blue-700 mt-0.5">
+                                    Pay ${planDepositAmount.toFixed(2)} now and ${planRemainingAmount.toFixed(2)} will be automatically charged on {planDueDate || "the due date"}.
+                                  </p>
+                                </div>
+                              </div>
+                              <div className="flex gap-2">
+                                <button
+                                  type="button"
+                                  onClick={() => setUsePaymentPlan(false)}
+                                  className={`flex-1 py-2 px-3 rounded-lg border text-sm font-medium transition-colors ${!usePaymentPlan ? "border-blue-500 bg-blue-600 text-white" : "border-blue-200 bg-white text-blue-700 hover:bg-blue-50"}`}
+                                >
+                                  Pay full ${discountedTotal.toFixed(2)} now
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => setUsePaymentPlan(true)}
+                                  className={`flex-1 py-2 px-3 rounded-lg border text-sm font-medium transition-colors ${usePaymentPlan ? "border-blue-500 bg-blue-600 text-white" : "border-blue-200 bg-white text-blue-700 hover:bg-blue-50"}`}
+                                >
+                                  Pay ${planDepositAmount.toFixed(2)} deposit now
+                                </button>
+                              </div>
                             </div>
                           )}
-                          <div className="bg-background rounded-2xl border shadow-sm p-5">
-                            <div className="flex items-center justify-between mb-4">
-                              <h3 className="font-semibold flex items-center gap-2">
-                                <CreditCard className="w-4 h-4 text-primary" />
-                                Card Details
-                              </h3>
-                              <CardScanHelper />
+
+                          {!clientSecret ? (
+                            <div className="flex items-center justify-center py-16 gap-3 text-muted-foreground">
+                              <Loader2 className="w-5 h-5 animate-spin" />
+                              <span>Preparing payment…</span>
                             </div>
-                            <Elements stripe={isTestMode ? testStripePromise : liveStripePromise} options={{ clientSecret, appearance: { theme: "stripe" } }}>
-                              <StripePaymentForm
-                                onSuccess={() => setPaymentConfirmed(true)}
-                                customerEmail={email}
-                              />
-                            </Elements>
-                          </div>
+                          ) : (
+                            <>
+                              {isTestMode && (
+                                <div className="flex items-center gap-2.5 bg-amber-50 border border-amber-300 rounded-lg px-4 py-3 mb-4">
+                                  <span className="text-amber-600 font-bold text-xs uppercase tracking-wider bg-amber-200 px-2 py-0.5 rounded">Test Mode</span>
+                                  <span className="text-sm text-amber-800">No real money will be charged. Use card <strong>4242 4242 4242 4242</strong>, any future expiry and CVC.</span>
+                                </div>
+                              )}
+                              <div className="bg-background rounded-2xl border shadow-sm p-5">
+                                <div className="flex items-center justify-between mb-4">
+                                  <h3 className="font-semibold flex items-center gap-2">
+                                    <CreditCard className="w-4 h-4 text-primary" />
+                                    {usePaymentPlan && planEnabled ? `Deposit — $${planDepositAmount.toFixed(2)}` : "Card Details"}
+                                  </h3>
+                                  <CardScanHelper />
+                                </div>
+                                <Elements stripe={isTestMode ? testStripePromise : liveStripePromise} options={{ clientSecret, appearance: { theme: "stripe" } }}>
+                                  <StripePaymentForm
+                                    onSuccess={() => setPaymentConfirmed(true)}
+                                    customerEmail={email}
+                                  />
+                                </Elements>
+                              </div>
+                            </>
+                          )}
                         </>
                       )}
                     </>

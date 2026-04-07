@@ -205,7 +205,7 @@ export default function AdminSettings() {
   const TAB_FIELDS: Record<string, string[]> = {
     general:     ["name", "tagline", "description", "email", "outboundEmail", "senderEmail", "senderPassword", "phone", "website", "location", "address", "city", "state", "zipCode", "country", "socialInstagram", "socialFacebook", "socialTwitter"],
     branding:    ["logoUrl", "coverImageUrl", "primaryColor", "accentColor"],
-    policies:    ["depositRequired", "depositPercent", "cancellationPolicy", "rentalTerms", "bundleDiscountPercent", "instantBooking"],
+    policies:    ["depositRequired", "depositPercent", "cancellationPolicy", "rentalTerms", "bundleDiscountPercent", "instantBooking", "paymentPlanEnabled", "paymentPlanDepositType", "paymentPlanDepositFixed", "paymentPlanDepositPercent", "paymentPlanDaysBeforePickup"],
     payments:    [],
     integration: ["kioskModeEnabled", "embedCode"],
   };
@@ -1178,6 +1178,101 @@ export default function AdminSettings() {
                     checked={formData.depositRequired || false}
                     onCheckedChange={checked => handleSwitchChange("depositRequired", checked)}
                   />
+                </div>
+
+                {/* ── Split / Delayed Payment Plan ── */}
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between border rounded-lg p-4">
+                    <div className="space-y-0.5">
+                      <Label className="text-base">Split Payment Plans</Label>
+                      <p className="text-sm text-muted-foreground">
+                        Allow customers to pay a deposit now and have the remaining balance automatically charged later.
+                      </p>
+                    </div>
+                    <Switch
+                      checked={!!formData.paymentPlanEnabled}
+                      onCheckedChange={checked => handleSwitchChange("paymentPlanEnabled", checked)}
+                    />
+                  </div>
+
+                  {formData.paymentPlanEnabled && (
+                    <div className="ml-4 border-l-2 border-primary/20 pl-4 space-y-4">
+                      {/* Deposit type */}
+                      <div className="space-y-2">
+                        <Label className="text-sm font-medium">Deposit Amount</Label>
+                        <div className="flex gap-2">
+                          <button
+                            type="button"
+                            onClick={() => setFormData((f: any) => ({ ...f, paymentPlanDepositType: "percent" }))}
+                            className={`flex-1 rounded-lg border px-3 py-2 text-sm transition-colors ${formData.paymentPlanDepositType === "percent" ? "border-primary bg-primary/5 font-semibold text-primary" : "border-border hover:bg-muted/50"}`}
+                          >
+                            Percentage (%)
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setFormData((f: any) => ({ ...f, paymentPlanDepositType: "fixed" }))}
+                            className={`flex-1 rounded-lg border px-3 py-2 text-sm transition-colors ${formData.paymentPlanDepositType === "fixed" ? "border-primary bg-primary/5 font-semibold text-primary" : "border-border hover:bg-muted/50"}`}
+                          >
+                            Fixed Amount ($)
+                          </button>
+                        </div>
+                        {formData.paymentPlanDepositType === "percent" ? (
+                          <div className="flex items-center gap-2">
+                            <Input
+                              type="number" min="1" max="99" step="1"
+                              value={formData.paymentPlanDepositPercent ?? 25}
+                              onChange={e => setFormData((f: any) => ({ ...f, paymentPlanDepositPercent: parseFloat(e.target.value) || 25 }))}
+                              className="w-28"
+                            />
+                            <span className="text-sm text-muted-foreground">% of total due at booking</span>
+                          </div>
+                        ) : (
+                          <div className="flex items-center gap-2">
+                            <span className="text-sm text-muted-foreground">$</span>
+                            <Input
+                              type="number" min="1" step="0.01"
+                              value={formData.paymentPlanDepositFixed ?? 0}
+                              onChange={e => setFormData((f: any) => ({ ...f, paymentPlanDepositFixed: parseFloat(e.target.value) || 0 }))}
+                              className="w-28"
+                            />
+                            <span className="text-sm text-muted-foreground">due at booking</span>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* When to charge remaining */}
+                      <div className="space-y-2">
+                        <Label className="text-sm font-medium">Charge Remaining Balance</Label>
+                        <div className="flex items-center gap-2">
+                          <Input
+                            type="number" min="0" max="60" step="1"
+                            value={formData.paymentPlanDaysBeforePickup ?? 0}
+                            onChange={e => setFormData((f: any) => ({ ...f, paymentPlanDaysBeforePickup: parseInt(e.target.value) || 0 }))}
+                            className="w-20"
+                          />
+                          <span className="text-sm text-muted-foreground">
+                            {(formData.paymentPlanDaysBeforePickup ?? 0) === 0
+                              ? "days before pickup (0 = day of pickup)"
+                              : `day${(formData.paymentPlanDaysBeforePickup ?? 0) !== 1 ? "s" : ""} before pickup`}
+                          </span>
+                        </div>
+                        <p className="text-xs text-muted-foreground">
+                          The remaining balance will be automatically charged to the card on file on the scheduled date.
+                        </p>
+                      </div>
+
+                      {/* Preview */}
+                      <div className="rounded-lg bg-blue-50 border border-blue-200 p-3">
+                        <p className="text-xs font-semibold text-blue-700 mb-1">Example for a $300 rental</p>
+                        <p className="text-xs text-blue-600">
+                          {formData.paymentPlanDepositType === "percent"
+                            ? `Deposit: $${(300 * (parseFloat(String(formData.paymentPlanDepositPercent ?? "25")) / 100)).toFixed(2)} due now · Remaining $${(300 - 300 * (parseFloat(String(formData.paymentPlanDepositPercent ?? "25")) / 100)).toFixed(2)} auto-charged ${(formData.paymentPlanDaysBeforePickup ?? 0) === 0 ? "on pickup day" : `${formData.paymentPlanDaysBeforePickup} day${(formData.paymentPlanDaysBeforePickup ?? 0) !== 1 ? "s" : ""} before pickup`}`
+                            : `Deposit: $${parseFloat(String(formData.paymentPlanDepositFixed ?? "0")).toFixed(2)} due now · Remaining $${Math.max(0, 300 - parseFloat(String(formData.paymentPlanDepositFixed ?? "0"))).toFixed(2)} auto-charged ${(formData.paymentPlanDaysBeforePickup ?? 0) === 0 ? "on pickup day" : `${formData.paymentPlanDaysBeforePickup} day${(formData.paymentPlanDaysBeforePickup ?? 0) !== 1 ? "s" : ""} before pickup`}`
+                          }
+                        </p>
+                      </div>
+                    </div>
+                  )}
                 </div>
                 <div className="space-y-3">
                   <div>

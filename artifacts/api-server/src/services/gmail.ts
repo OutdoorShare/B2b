@@ -2114,3 +2114,55 @@ export async function sendPaymentRequestEmail(opts: {
     requestBody: { raw: makeRawEmail(toEmail, subject, html, fromHeader, replyToEmail) },
   });
 }
+
+// ── Split payment — remaining balance auto-charged ────────────────────────────
+export async function sendSplitPaymentChargedEmail(opts: {
+  customerName: string;
+  customerEmail: string;
+  bookingId: number;
+  listingTitle: string;
+  amountCharged: string;
+  companyName: string;
+  adminEmail?: string;
+}): Promise<void> {
+  const { customerName, customerEmail, bookingId, listingTitle, amountCharged, companyName, adminEmail } = opts;
+  const fromHeader = `${companyName} <samhos@myoutdoorshare.com>`;
+
+  const body = `
+    <p style="margin:0 0 8px;font-size:18px;font-weight:700;color:${BRAND_DARK};">Your remaining balance has been charged</p>
+    <p style="margin:0 0 20px;font-size:15px;color:#374151;line-height:1.6;">
+      Hi ${esc(customerName)}, the remaining balance for your upcoming rental has been automatically charged as scheduled.
+      Your booking is fully paid — see you soon!
+    </p>
+
+    ${infoTable([
+      { label: "Booking #",   value: `#${bookingId}`, mono: true },
+      { label: "Item",        value: listingTitle },
+      { label: "Amount",      value: `$${amountCharged}` },
+      { label: "Company",     value: companyName },
+    ])}
+
+    <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:20px;margin:24px 0;text-align:center;">
+      <p style="margin:0 0 6px;font-size:22px;">✅</p>
+      <p style="margin:0;font-size:15px;font-weight:700;color:#166534;">Fully Paid</p>
+      <p style="margin:4px 0 0;font-size:13px;color:#15803d;">Your reservation is complete. All steps are paid and confirmed.</p>
+    </div>
+
+    <p style="margin:0;font-size:14px;color:#374151;line-height:1.6;text-align:center;">
+      Questions about your booking? Reply to this email and <strong>${esc(companyName)}</strong> will be happy to help.
+    </p>
+  `;
+
+  const html = emailShell({
+    preheader: `Remaining balance of $${amountCharged} charged for your ${esc(listingTitle)} booking.`,
+    badgeLabel: "Remaining Balance Charged",
+    badgeColor: BRAND_GREEN,
+    body,
+  });
+
+  const gmail = await getUncachableGmailClient();
+  await gmail.users.messages.send({
+    userId: "me",
+    requestBody: { raw: makeRawEmail(customerEmail, `[${companyName}] Remaining balance charged — Booking #${bookingId}`, html, fromHeader, adminEmail) },
+  });
+}

@@ -12,6 +12,7 @@ import {
   listingsTable,
   businessProfileTable,
   tenantsTable,
+  customersTable,
 } from "@workspace/db/schema";
 import { eq, and, isNull, or, sql } from "drizzle-orm";
 import { randomBytes } from "crypto";
@@ -22,6 +23,7 @@ import {
   sendStripeRestrictedAlertEmail,
   sendIncompleteStepsRenterEmail,
   sendIncompleteStepsAdminEmail,
+  sendSplitPaymentChargedEmail,
 } from "./gmail";
 import { createNotification } from "./notifications";
 import { getStripeForTenant } from "./stripe";
@@ -576,6 +578,128 @@ async function alertIncompleteStepsOverdue() {
   }
 }
 
+// ── 6. Auto-charge split-payment remaining balances ───────────────────────────
+// Runs daily (every cycle is fine — it's idempotent): finds all bookings where:
+//   • paymentPlanEnabled = true
+//   • splitRemainingStatus = 'pending'
+//   • splitRemainingDueDate <= today
+// Then charges the remaining balance off-session using the customer's saved card.
+const PLATFORM_FEE_PERCENT_SCH = 0.05; // 5 % — mirrors services/stripe.ts constant
+async function autoChargeRemainingBalances() {
+  const todayStr = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
+
+  // Find all bookings with a pending remaining balance due on or before today
+  const due = await db.select().from(bookingsTable)
+    .where(
+      and(
+        eq(bookingsTable.paymentPlanEnabled, true),
+        eq(bookingsTable.splitRemainingStatus, "pending"),
+        sql`${bookingsTable.splitRemainingDueDate} IS NOT NULL`,
+        sql`${bookingsTable.splitRemainingDueDate} <= ${todayStr}`,
+        or(
+          eq(bookingsTable.status, "confirmed"),
+          eq(bookingsTable.status, "active"),
+        ),
+      )
+    );
+
+  if (!due.length) return;
+  console.log(`[scheduler] Auto-charge remaining: ${due.length} booking(s) due`);
+
+  for (const booking of due) {
+    try {
+      const remainingCents = Math.round(parseFloat(String(booking.splitRemainingAmount ?? "0")) * 100);
+      if (remainingCents < 50) {
+        console.warn(`[scheduler] Auto-charge: booking #${booking.id} remaining < $0.50 — skipping`);
+        continue;
+      }
+
+      const [tenant] = await db.select().from(tenantsTable).where(eq(tenantsTable.id, booking.tenantId!));
+      if (!tenant) continue;
+
+      const [customer] = await db.select().from(customersTable)
+        .where(eq(customersTable.email, booking.customerEmail.toLowerCase()));
+      if (!customer?.stripeCustomerId) {
+        console.warn(`[scheduler] Auto-charge: no Stripe customer for booking #${booking.id} (${booking.customerEmail})`);
+        await db.update(bookingsTable).set({ splitRemainingStatus: "failed", updatedAt: new Date() })
+          .where(eq(bookingsTable.id, booking.id)).catch(() => {});
+        continue;
+      }
+
+      const isTestMode = !!tenant.testMode;
+      const stripeClient = getStripeForTenant(isTestMode);
+
+      const pms = await stripeClient.paymentMethods.list({
+        customer: customer.stripeCustomerId, type: "card",
+      });
+      if (!pms.data.length) {
+        console.warn(`[scheduler] Auto-charge: no saved card for booking #${booking.id}`);
+        await db.update(bookingsTable).set({ splitRemainingStatus: "failed", updatedAt: new Date() })
+          .where(eq(bookingsTable.id, booking.id)).catch(() => {});
+        continue;
+      }
+      const pm = pms.data[0];
+
+      const feePercent = tenant.platformFeePercent != null
+        ? parseFloat(tenant.platformFeePercent) / 100
+        : PLATFORM_FEE_PERCENT_SCH;
+      const platformFeeAmount = Math.round(remainingCents * feePercent);
+      const tenantConnected = !isTestMode && !!(tenant.stripeAccountId && tenant.stripeChargesEnabled);
+
+      const intentParams: any = {
+        amount: remainingCents,
+        currency: "usd",
+        customer: customer.stripeCustomerId,
+        payment_method: pm.id,
+        confirm: true,
+        off_session: true,
+        description: `Remaining balance (auto) — Booking #${booking.id} — ${tenant.name}${isTestMode ? " [TEST]" : ""}`,
+        metadata: {
+          tenant_id: String(booking.tenantId),
+          booking_id: String(booking.id),
+          charge_type: "split_payment_remaining_auto",
+        },
+      };
+      if (tenantConnected) {
+        intentParams.transfer_data = { destination: tenant.stripeAccountId };
+        intentParams.application_fee_amount = platformFeeAmount;
+      }
+
+      const pi = await stripeClient.paymentIntents.create(intentParams);
+      if (pi.status === "succeeded") {
+        await db.update(bookingsTable).set({
+          splitRemainingStatus: "charged",
+          splitRemainingIntentId: pi.id,
+          splitRemainingChargedAt: new Date(),
+          updatedAt: new Date(),
+        }).where(eq(bookingsTable.id, booking.id));
+        console.log(`[scheduler] Auto-charge: remaining balance charged for booking #${booking.id} ($${(remainingCents / 100).toFixed(2)})`);
+
+        // Email the customer to confirm the charge
+        const ctx = await getContext(booking.tenantId);
+        const listingTitle = await getListingTitle(booking.listingId!);
+        sendSplitPaymentChargedEmail({
+          customerName: booking.customerName,
+          customerEmail: booking.customerEmail,
+          bookingId: booking.id,
+          listingTitle,
+          amountCharged: (remainingCents / 100).toFixed(2),
+          companyName: ctx.companyName,
+          adminEmail: ctx.adminEmail,
+        }).catch(e => console.warn(`[scheduler] Auto-charge email FAILED for booking #${booking.id}:`, e?.message));
+      } else {
+        await db.update(bookingsTable).set({ splitRemainingStatus: "failed", updatedAt: new Date() })
+          .where(eq(bookingsTable.id, booking.id)).catch(() => {});
+        console.warn(`[scheduler] Auto-charge: charge did not succeed for booking #${booking.id} (status: ${pi.status})`);
+      }
+    } catch (err: any) {
+      console.warn(`[scheduler] Auto-charge FAILED for booking #${booking.id}:`, err?.message);
+      await db.update(bookingsTable).set({ splitRemainingStatus: "failed", updatedAt: new Date() })
+        .where(eq(bookingsTable.id, booking.id)).catch(() => {});
+    }
+  }
+}
+
 // ── Main scheduler loop ────────────────────────────────────────────────────────
 async function runSchedulerCycle() {
   try {
@@ -585,6 +709,7 @@ async function runSchedulerCycle() {
     await authorizeDepositHolds();
     await alertIncompleteStepsApproaching();
     await alertIncompleteStepsOverdue();
+    await autoChargeRemainingBalances();
   } catch (err: any) {
     console.warn("[scheduler] Cycle error:", err?.message);
   }

@@ -16,7 +16,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { Link, useLocation } from "wouter";
-import { ArrowLeft, User, Phone, Mail, Calendar, Package, StickyNote, ShieldAlert, Pencil, FileSignature, FileText, ChevronDown, ChevronUp, Download, Camera, CheckCircle2, Loader2, ExternalLink, ImageIcon, Clock, ShieldCheck, ShieldX, Shield, AlertCircle, Copy, Send, UserCheck, Lock, LockOpen, DollarSign, PackageCheck, ScanSearch, MailCheck, Link2, MailX, RefreshCw } from "lucide-react";
+import { ArrowLeft, User, Phone, Mail, Calendar, Package, StickyNote, ShieldAlert, Pencil, FileSignature, FileText, ChevronDown, ChevronUp, Download, Camera, CheckCircle2, Loader2, ExternalLink, ImageIcon, Clock, ShieldCheck, ShieldX, Shield, AlertCircle, Copy, Send, UserCheck, Lock, LockOpen, DollarSign, PackageCheck, ScanSearch, MailCheck, Link2, MailX, RefreshCw, CreditCard } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { format, differenceInDays, startOfDay } from "date-fns";
 
@@ -1644,13 +1644,79 @@ export default function AdminBookingDetail() {
                 );
               })()}
               
-              <div className="mt-6 p-4 bg-muted rounded-lg space-y-3">
-                <div className="text-sm font-medium">Payment Status</div>
-                <div className="flex items-center justify-between">
-                  <span className="text-sm text-muted-foreground">Balance Due</span>
-                  <span className="font-semibold text-green-600">$0.00</span>
+              {/* ── Split Payment Plan Status ── */}
+              {(booking as any).paymentPlanEnabled && (
+                <div className="mt-4 space-y-3 rounded-lg border border-blue-200 bg-blue-50 p-4">
+                  <div className="flex items-center gap-2">
+                    <CreditCard className="w-4 h-4 text-blue-600" />
+                    <span className="text-sm font-semibold text-blue-800">Payment Plan</span>
+                    {(booking as any).splitRemainingStatus === "charged" && (
+                      <span className="ml-auto text-xs font-semibold px-2 py-0.5 rounded-full bg-green-100 text-green-700">Fully Paid</span>
+                    )}
+                    {(booking as any).splitRemainingStatus === "pending" && (
+                      <span className="ml-auto text-xs font-semibold px-2 py-0.5 rounded-full bg-amber-100 text-amber-700">Remaining Pending</span>
+                    )}
+                    {(booking as any).splitRemainingStatus === "failed" && (
+                      <span className="ml-auto text-xs font-semibold px-2 py-0.5 rounded-full bg-red-100 text-red-700">Charge Failed</span>
+                    )}
+                  </div>
+                  <div className="space-y-1.5 text-sm">
+                    <div className="flex justify-between">
+                      <span className="text-blue-700">Deposit charged</span>
+                      <span className="font-semibold text-blue-900">${parseFloat(String((booking as any).splitDepositAmount ?? 0)).toFixed(2)}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-blue-700">Remaining balance</span>
+                      <span className="font-semibold text-blue-900">${parseFloat(String((booking as any).splitRemainingAmount ?? 0)).toFixed(2)}</span>
+                    </div>
+                    {(booking as any).splitRemainingDueDate && (
+                      <div className="flex justify-between">
+                        <span className="text-blue-700">Due date</span>
+                        <span className="font-medium text-blue-900">{(booking as any).splitRemainingDueDate}</span>
+                      </div>
+                    )}
+                    {(booking as any).splitRemainingChargedAt && (
+                      <div className="flex justify-between">
+                        <span className="text-blue-700">Charged on</span>
+                        <span className="font-medium text-blue-900">{format(new Date((booking as any).splitRemainingChargedAt), "MMM d, yyyy")}</span>
+                      </div>
+                    )}
+                  </div>
+                  {(booking as any).splitRemainingStatus !== "charged" && (
+                    <Button
+                      size="sm"
+                      variant="default"
+                      className="w-full mt-2"
+                      onClick={async () => {
+                        if (!confirm(`Charge the remaining $${parseFloat(String((booking as any).splitRemainingAmount ?? 0)).toFixed(2)} to the customer's saved card now?`)) return;
+                        try {
+                          const r = await fetch(`${BASE}/api/stripe/charge-remaining/${booking.id}`, {
+                            method: "POST",
+                            headers: { "Content-Type": "application/json" },
+                          });
+                          const d = await r.json();
+                          if (!r.ok) { alert(d.error || "Charge failed."); return; }
+                          toast({ title: "Remaining balance charged!", description: `$${parseFloat(String((booking as any).splitRemainingAmount ?? 0)).toFixed(2)} successfully charged.` });
+                          queryClient.invalidateQueries({ queryKey: getGetBookingQueryKey(id) });
+                        } catch { alert("Connection error. Please try again."); }
+                      }}
+                    >
+                      <CreditCard className="w-3.5 h-3.5 mr-1.5" />
+                      Charge Remaining ${parseFloat(String((booking as any).splitRemainingAmount ?? 0)).toFixed(2)} Now
+                    </Button>
+                  )}
                 </div>
-              </div>
+              )}
+
+              {!(booking as any).paymentPlanEnabled && (
+                <div className="mt-6 p-4 bg-muted rounded-lg space-y-3">
+                  <div className="text-sm font-medium">Payment Status</div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-muted-foreground">Balance Due</span>
+                    <span className="font-semibold text-green-600">$0.00</span>
+                  </div>
+                </div>
+              )}
             </CardContent>
           </Card>
         </div>

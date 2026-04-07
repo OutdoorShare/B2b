@@ -794,8 +794,44 @@ export default function MyBookingDetail() {
           );
         })()}
 
-        {/* Payment status */}
-        {hasPayment && (
+        {/* Payment status / payment plan breakdown */}
+        {(booking as any).paymentPlanEnabled ? (
+          <>
+            <Separator />
+            <div className="space-y-2">
+              <div className="flex items-center gap-1.5 text-sm font-medium">
+                <CreditCard className="w-3.5 h-3.5 text-primary" />
+                Payment Plan
+              </div>
+              <div className="rounded-lg bg-blue-50 border border-blue-200 p-3 space-y-2 text-sm">
+                <div className="flex justify-between">
+                  <span className="text-blue-700">Deposit paid</span>
+                  <span className="font-semibold text-green-700 flex items-center gap-1">
+                    <CheckCircle2 className="w-3.5 h-3.5" /> ${parseFloat(String((booking as any).splitDepositAmount ?? 0)).toFixed(2)}
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-blue-700">Remaining balance</span>
+                  <span className={`font-semibold ${(booking as any).splitRemainingStatus === "charged" ? "text-green-700" : "text-blue-900"}`}>
+                    ${parseFloat(String((booking as any).splitRemainingAmount ?? 0)).toFixed(2)}
+                    {(booking as any).splitRemainingStatus === "charged" && <span className="ml-1 text-xs">(paid)</span>}
+                  </span>
+                </div>
+                {(booking as any).splitRemainingDueDate && (booking as any).splitRemainingStatus !== "charged" && (
+                  <div className="flex justify-between text-xs text-blue-600">
+                    <span>Auto-charged on</span>
+                    <span>{(booking as any).splitRemainingDueDate}</span>
+                  </div>
+                )}
+                {(booking as any).splitRemainingStatus === "failed" && (
+                  <div className="rounded bg-red-50 border border-red-200 px-2 py-1.5 text-xs text-red-700 font-medium">
+                    Remaining charge failed — please contact us to resolve.
+                  </div>
+                )}
+              </div>
+            </div>
+          </>
+        ) : hasPayment ? (
           <>
             <Separator />
             <div className="flex items-center justify-between text-sm">
@@ -814,8 +850,7 @@ export default function MyBookingDetail() {
               )}
             </div>
           </>
-        )}
-        {!hasPayment && (
+        ) : (
           <>
             <Separator />
             <p className="text-xs text-muted-foreground flex items-center gap-1.5">

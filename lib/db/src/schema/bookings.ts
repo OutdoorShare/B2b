@@ -58,6 +58,18 @@ export const bookingsTable = pgTable("bookings", {
   // Incomplete-steps alert flags — set true once the timed alert is sent
   incompleteStepsAlertSent: boolean("incomplete_steps_alert_sent").default(false),
   overdueIncompleteAlertSent: boolean("overdue_incomplete_alert_sent").default(false),
+  // ── Split / delayed payment plan ────────────────────────────────────────────
+  // When a tenant offers split-payment, the customer pays a deposit at booking
+  // time and the remaining balance is automatically charged later.
+  paymentPlanEnabled: boolean("payment_plan_enabled").default(false),
+  splitDepositAmount: decimal("split_deposit_amount", { precision: 10, scale: 2 }),
+  splitRemainingAmount: decimal("split_remaining_amount", { precision: 10, scale: 2 }),
+  splitRemainingDueDate: text("split_remaining_due_date"),  // YYYY-MM-DD
+  splitRemainingStatus: text("split_remaining_status", {
+    enum: ["pending", "charged", "failed", "waived"],
+  }),
+  splitRemainingIntentId: text("split_remaining_intent_id"),
+  splitRemainingChargedAt: timestamp("split_remaining_charged_at"),
   // Email activity log — JSON array of {type, sentAt, toEmail?}
   emailEvents: text("email_events"),
   // Seen/read tracking — false means the viewer has not yet looked at this booking/update

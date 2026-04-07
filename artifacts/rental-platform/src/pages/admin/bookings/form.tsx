@@ -78,12 +78,15 @@ export default function AdminBookingForm() {
   const [assignedSlots, setAssignedSlots] = useState<string[]>([""]);
 
   // Payment options (new bookings only)
-  type PaymentMode = "none" | "send_link" | "charge_saved";
+  type PaymentMode = "none" | "send_link" | "charge_saved" | "split_payment";
   const [paymentMode, setPaymentMode] = useState<PaymentMode>("none");
   const [savedCard, setSavedCard] = useState<{ brand: string; last4: string } | null>(null);
   const [savedCardLoading, setSavedCardLoading] = useState(false);
   const [paymentLinkUrl, setPaymentLinkUrl] = useState<string | null>(null);
   const [paymentLinkCopied, setPaymentLinkCopied] = useState(false);
+  // Split payment state
+  const [splitDepositInput, setSplitDepositInput] = useState<string>("");
+  const [splitDueDateInput, setSplitDueDateInput] = useState<string>("");
 
   // Promo code
   const [promoInput, setPromoInput] = useState("");
@@ -313,8 +316,24 @@ export default function AdminBookingForm() {
         ? [{ id: selectedProtection.id, name: selectedProtection.name, price: parseFloat(selectedProtection.price), pricingType: selectedProtection.pricingType, subtotal: protectionPrice }]
         : [];
 
+      // Validate split payment inputs
+      if (!isEditing && paymentMode === "split_payment") {
+        const dep = parseFloat(splitDepositInput);
+        if (isNaN(dep) || dep <= 0 || dep >= estimatedTotal) {
+          setError("Please enter a valid deposit amount less than the total.");
+          return;
+        }
+        if (!splitDueDateInput) {
+          setError("Please enter a due date for the remaining balance.");
+          return;
+        }
+      }
+
       // Force pending status when payment will be collected via link or card
       const effectiveStatus = !isEditing && paymentMode !== "none" ? "pending" : form.status;
+
+      const splitDeposit = paymentMode === "split_payment" ? parseFloat(splitDepositInput) : undefined;
+      const splitRemaining = splitDeposit != null ? Math.max(0, estimatedTotal - splitDeposit) : undefined;
 
       const payload: any = {
         protectionPlanFee: platformProtectionFee > 0 ? String(platformProtectionFee) : (protectionPrice > 0 ? String(protectionPrice) : undefined),
@@ -336,6 +355,13 @@ export default function AdminBookingForm() {
         totalPrice: estimatedTotal,
         appliedPromoCode: appliedPromo?.code || undefined,
         discountAmount: promoDiscount > 0 ? promoDiscount : undefined,
+        // Split payment plan
+        ...(paymentMode === "split_payment" ? {
+          paymentPlanEnabled: true,
+          splitDepositAmount: splitDeposit?.toFixed(2),
+          splitRemainingAmount: splitRemaining?.toFixed(2),
+          splitRemainingDueDate: splitDueDateInput,
+        } : {}),
       };
 
       const url = isEditing ? `${BASE}/api/bookings/${editId}` : `${BASE}/api/bookings`;
@@ -396,6 +422,26 @@ export default function AdminBookingForm() {
           toast({
             title: "Card charged!",
             description: `${csData.brand ?? savedCard?.brand ?? "Card"} ••••${csData.last4 ?? savedCard?.last4} successfully charged $${estimatedTotal.toFixed(2)}. Booking confirmed.`,
+          });
+          queryClient.invalidateQueries({ queryKey: getGetBookingsQueryKey() });
+          setLocation(`/${params.slug}/admin/bookings/${newBookingId}`);
+          return;
+        }
+      } else if (!isEditing && paymentMode === "split_payment" && savedCard) {
+        // Charge just the deposit portion off-session using admin-charge-saved
+        // The backend will read splitDepositAmount from the booking record
+        const csRes = await fetch(`${BASE}/api/stripe/admin-charge-saved`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ bookingId: newBookingId, amountOverride: splitDeposit?.toFixed(2) }),
+        });
+        const csData = await csRes.json();
+        if (!csRes.ok) {
+          setError(csData.error || "Booking created but deposit charge failed. You can retry from the booking page.");
+        } else {
+          toast({
+            title: "Deposit charged!",
+            description: `$${splitDeposit?.toFixed(2)} deposit charged. Remaining $${splitRemaining?.toFixed(2)} due ${splitDueDateInput}.`,
           });
           queryClient.invalidateQueries({ queryKey: getGetBookingsQueryKey() });
           setLocation(`/${params.slug}/admin/bookings/${newBookingId}`);
@@ -940,6 +986,68 @@ export default function AdminBookingForm() {
                   </div>
                 </button>
 
+                {/* Option: Split payment */}
+                <button
+                  type="button"
+                  onClick={() => { if (savedCard) setPaymentMode("split_payment"); }}
+                  disabled={!savedCard && !savedCardLoading}
+                  className={`w-full text-left rounded-lg border px-3.5 py-3 transition-colors ${!savedCard && !savedCardLoading ? "opacity-40 cursor-not-allowed" : ""} ${paymentMode === "split_payment" ? "border-primary bg-primary/5" : "border-border hover:bg-muted/50"}`}
+                >
+                  <div className="flex items-center gap-2.5">
+                    <div className={`w-4 h-4 rounded-full border-2 flex-shrink-0 flex items-center justify-center ${paymentMode === "split_payment" ? "border-primary" : "border-muted-foreground/40"}`}>
+                      {paymentMode === "split_payment" && <div className="w-2 h-2 rounded-full bg-primary" />}
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-1.5">
+                        <p className="text-sm font-medium">Split payment (deposit now)</p>
+                        <CreditCard className="w-3 h-3 text-primary" />
+                      </div>
+                      {savedCardLoading ? (
+                        <p className="text-xs text-muted-foreground">Checking for saved card…</p>
+                      ) : savedCard ? (
+                        <p className="text-xs text-muted-foreground">Charge deposit to {savedCard.brand} ••••{savedCard.last4} · auto-charge remaining later</p>
+                      ) : (
+                        <p className="text-xs text-muted-foreground">No saved card — enter email above to check</p>
+                      )}
+                    </div>
+                  </div>
+                </button>
+
+                {paymentMode === "split_payment" && (
+                  <div className="ml-4 pl-4 border-l-2 border-primary/20 space-y-3 pt-1">
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="space-y-1">
+                        <label className="text-xs font-medium text-muted-foreground">Deposit amount ($)</label>
+                        <input
+                          type="number"
+                          min="1"
+                          max={estimatedTotal - 0.01}
+                          step="0.01"
+                          placeholder={`e.g. ${(estimatedTotal * 0.25).toFixed(2)}`}
+                          value={splitDepositInput}
+                          onChange={e => setSplitDepositInput(e.target.value)}
+                          className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm"
+                        />
+                        {splitDepositInput && !isNaN(parseFloat(splitDepositInput)) && (
+                          <p className="text-xs text-muted-foreground">
+                            Remaining: ${Math.max(0, estimatedTotal - parseFloat(splitDepositInput)).toFixed(2)}
+                          </p>
+                        )}
+                      </div>
+                      <div className="space-y-1">
+                        <label className="text-xs font-medium text-muted-foreground">Remaining due date</label>
+                        <input
+                          type="date"
+                          value={splitDueDateInput}
+                          onChange={e => setSplitDueDateInput(e.target.value)}
+                          className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm"
+                        />
+                      </div>
+                    </div>
+                    <p className="text-xs text-muted-foreground">Deposit charged now; remaining auto-charged on the due date.</p>
+                  </div>
+                )}
+
                 {/* Payment link display after creation */}
                 {paymentLinkUrl && (
                   <div className="mt-2 rounded-lg bg-emerald-50 border border-emerald-200 p-3 space-y-2">
@@ -977,10 +1085,12 @@ export default function AdminBookingForm() {
             <Button className="w-full" onClick={handleSubmit} disabled={saving}>
               {saving ? (
                 paymentMode === "send_link" ? "Sending payment link…" :
-                paymentMode === "charge_saved" ? "Charging card…" : "Saving…"
+                paymentMode === "charge_saved" ? "Charging card…" :
+                paymentMode === "split_payment" ? "Creating & Charging Deposit…" : "Saving…"
               ) : isEditing ? "Save Changes" : (
                 paymentMode === "send_link" ? "Create & Send Payment Link" :
                 paymentMode === "charge_saved" ? `Create & Charge ${savedCard ? `${savedCard.brand} ••••${savedCard.last4}` : "Card"}` :
+                paymentMode === "split_payment" ? `Create & Charge Deposit ($${splitDepositInput || "…"})` :
                 "Create Booking"
               )}
             </Button>

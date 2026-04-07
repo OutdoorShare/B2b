@@ -35,6 +35,14 @@ export const businessProfileTable = pgTable("business_profile", {
   kioskModeEnabled: boolean("kiosk_mode_enabled").notNull().default(false),
   instantBooking: boolean("instant_booking").notNull().default(false),
   embedCode: text("embed_code"),
+  // ── Split / delayed payment plan settings ────────────────────────────────
+  paymentPlanEnabled: boolean("payment_plan_enabled").notNull().default(false),
+  paymentPlanDepositType: text("payment_plan_deposit_type", {
+    enum: ["fixed", "percent"],
+  }).notNull().default("percent"),
+  paymentPlanDepositFixed: decimal("payment_plan_deposit_fixed", { precision: 10, scale: 2 }).default("0"),
+  paymentPlanDepositPercent: decimal("payment_plan_deposit_percent", { precision: 5, scale: 2 }).default("25"),
+  paymentPlanDaysBeforePickup: integer("payment_plan_days_before_pickup").default(0),
   lat: decimal("lat", { precision: 10, scale: 6 }),
   lng: decimal("lng", { precision: 10, scale: 6 }),
   createdAt: timestamp("created_at").defaultNow().notNull(),
