@@ -1030,7 +1030,9 @@ router.post("/bookings/:id/send-identity-link", async (req, res) => {
     if (tenant?.name) companyName = tenant.name;
     if (tenant?.email) companyEmail = tenant.email;
 
-    const isTestMode = !!(tenant?.testMode);
+    // Demo slug + testMode tenants always use test Stripe for identity verification
+    const IDENTITY_TEST_SLUGS = new Set(["demo", "demo-outdoorshare"]);
+    const isTestMode = !!(tenant?.testMode) || IDENTITY_TEST_SLUGS.has((slug ?? "").toLowerCase());
     const stripeClient = getStripeForTenant(isTestMode);
 
     // Look up customer to link session

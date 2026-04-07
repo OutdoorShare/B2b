@@ -456,6 +456,19 @@ router.post("/stripe/connect/sweep-pending", requireAdminAuth, async (req, res) 
   }
 });
 
+// ── Identity: helper — is a slug always forced to test mode? ─────────────────
+// Demo tenant + any testMode tenant should always use the test Stripe key.
+const DEMO_SLUGS = new Set(["demo", "demo-outdoorshare"]);
+function isIdentityTestMode(tenantSlug: string | undefined, tenantTestMode: boolean | null | undefined): boolean {
+  if (tenantTestMode) return true;
+  if (tenantSlug && DEMO_SLUGS.has(tenantSlug.toLowerCase())) return true;
+  return false;
+}
+// Auto-detect from Stripe session ID prefix — more reliable than tenant lookup
+function isTestSessionId(sessionId: string): boolean {
+  return sessionId.startsWith("vs_test_") || sessionId.startsWith("isses_test_");
+}
+
 // ── Identity: create verification session ────────────────────────────────────
 router.post("/stripe/identity/session", async (req, res) => {
   try {
@@ -472,7 +485,7 @@ router.post("/stripe/identity/session", async (req, res) => {
     }
 
     const [tenant] = await db.select().from(tenantsTable).where(eq(tenantsTable.slug, tenantSlug));
-    const isTestMode = !!(tenant?.testMode);
+    const isTestMode = isIdentityTestMode(tenantSlug, tenant?.testMode);
 
     const createSession = async (stripeClient: any) => {
       return stripeClient.identity.verificationSessions.create({
@@ -541,10 +554,13 @@ router.get("/stripe/identity/status/:sessionId", async (req, res) => {
   try {
     const { sessionId } = req.params;
     const tenantSlug = req.query.tenantSlug as string | undefined;
-    let testMode = false;
-    if (tenantSlug) {
+
+    // Primary: auto-detect from session ID prefix (most reliable)
+    // Fallback: look up tenant testMode flag
+    let testMode = isTestSessionId(sessionId);
+    if (!testMode && tenantSlug) {
       const [tenant] = await db.select().from(tenantsTable).where(eq(tenantsTable.slug, tenantSlug));
-      testMode = !!(tenant?.testMode);
+      testMode = isIdentityTestMode(tenantSlug, tenant?.testMode);
     }
     const stripeClient = getStripeForTenant(testMode);
     const session = await (stripeClient as any).identity.verificationSessions.retrieve(sessionId);
