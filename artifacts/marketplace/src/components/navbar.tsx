@@ -124,7 +124,7 @@ export function Navbar({
                         : "border-primary/30 text-primary hover:bg-primary/5"
                     }`}
                   >
-                    List your adventure
+                    List your gear
                   </Button>
                 )}
 
@@ -184,7 +184,7 @@ export function Navbar({
                     transparent ? "text-white/85 hover:text-white" : "text-primary hover:text-primary/80"
                   }`}
                 >
-                  List your adventure
+                  List your gear
                 </button>
                 <Button
                   variant="outline"
@@ -277,7 +277,7 @@ export function Navbar({
                       transparent ? "text-white hover:bg-white/10" : "text-primary hover:bg-primary/5"
                     }`}
                   >
-                    List your adventure
+                    List your gear
                   </button>
                 )}
               </>
@@ -288,7 +288,7 @@ export function Navbar({
                   transparent ? "text-white hover:bg-white/10" : "text-primary hover:bg-primary/5"
                 }`}
               >
-                List your adventure
+                List your gear
               </button>
             )}
           </div>

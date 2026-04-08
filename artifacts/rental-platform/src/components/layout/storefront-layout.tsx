@@ -80,15 +80,18 @@ function DemoLoginOverlay({ slug, onAuth }: { slug: string; onAuth: () => void }
         </div>
 
         {/* Form */}
-        <div className="bg-white/5 border border-white/10 rounded-2xl p-6 space-y-4">
+        <form
+          onSubmit={e => { e.preventDefault(); handleLogin(); }}
+          className="bg-white/5 border border-white/10 rounded-2xl p-6 space-y-4"
+        >
           <div className="space-y-1.5">
             <label className="text-white/60 text-xs font-medium uppercase tracking-wide">Email</label>
             <input
               type="email"
               value={email}
               onChange={e => setEmail(e.target.value)}
-              onKeyDown={e => e.key === "Enter" && handleLogin()}
               placeholder="demo@example.com"
+              autoComplete="email"
               autoFocus
               className="w-full bg-white/5 border border-white/10 rounded-lg px-3.5 py-2.5 text-white text-sm placeholder:text-white/25 focus:outline-none focus:border-[#3ab549]/60 focus:ring-1 focus:ring-[#3ab549]/40 transition-colors"
             />
@@ -100,8 +103,8 @@ function DemoLoginOverlay({ slug, onAuth }: { slug: string; onAuth: () => void }
                 type={showPw ? "text" : "password"}
                 value={password}
                 onChange={e => setPassword(e.target.value)}
-                onKeyDown={e => e.key === "Enter" && handleLogin()}
                 placeholder="••••••••"
+                autoComplete="current-password"
                 className="w-full bg-white/5 border border-white/10 rounded-lg px-3.5 py-2.5 pr-10 text-white text-sm placeholder:text-white/25 focus:outline-none focus:border-[#3ab549]/60 focus:ring-1 focus:ring-[#3ab549]/40 transition-colors"
               />
               <button
@@ -119,13 +122,13 @@ function DemoLoginOverlay({ slug, onAuth }: { slug: string; onAuth: () => void }
           )}
 
           <button
-            onClick={handleLogin}
+            type="submit"
             disabled={loading}
             className="w-full py-2.5 rounded-lg text-white text-sm font-semibold bg-[#3ab549] hover:bg-[#2ea040] disabled:opacity-50 disabled:cursor-not-allowed transition-colors mt-1"
           >
             {loading ? "Signing in…" : "Sign In"}
           </button>
-        </div>
+        </form>
 
         <p className="text-center text-white/20 text-xs mt-6">
           Powered by OutdoorShare

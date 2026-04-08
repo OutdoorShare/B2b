@@ -72,7 +72,7 @@ function getRentalTimeStatus(startStr: string, endStr: string, status: string) {
   const pct         = Math.min(100, Math.round((elapsed / totalDays) * 100));
   if (daysToStart > 1)  return { label: `Starts in ${daysToStart}d`, color: "text-blue-600 bg-blue-50 border-blue-200", pct: 0, bar: "bg-blue-400" };
   if (daysToStart === 1) return { label: "Starts tomorrow",          color: "text-blue-600 bg-blue-50 border-blue-200", pct: 0, bar: "bg-blue-400" };
-  if (daysToStart === 0) return { label: "Pickup day!",              color: "text-green-700 bg-green-50 border-green-200", pct: 0, bar: "bg-green-500" };
+  if (daysToStart === 0) return { label: "Pickup today",              color: "text-green-700 bg-green-50 border-green-200", pct: 0, bar: "bg-green-500" };
   if (daysToEnd > 1)    return { label: `${daysToEnd}d remaining`,  color: "text-green-700 bg-green-50 border-green-200", pct, bar: "bg-green-500" };
   if (daysToEnd === 1)  return { label: "Returns tomorrow",          color: "text-amber-700 bg-amber-50 border-amber-200", pct, bar: "bg-amber-500" };
   if (daysToEnd === 0)  return { label: "Due back today",            color: "text-amber-700 bg-amber-50 border-amber-200", pct: 100, bar: "bg-amber-500" };

@@ -415,7 +415,7 @@ export function HomePage({ onAuthOpen }: { onAuthOpen: () => void }) {
             {/* Stats */}
             {stats && (
               <div className="flex gap-6 justify-center mt-4 mb-10 text-white/65 text-sm">
-                <span><strong className="text-white">{stats.listings.toLocaleString()}</strong> listings</span>
+                <span><strong className="text-white">{stats.listings.toLocaleString()}</strong> {stats.listings === 1 ? "listing" : "listings"}</span>
                 <span><strong className="text-[hsl(197,100%,75%)]">{stats.companies.toLocaleString()}</strong> companies</span>
                 <span><strong className="text-[hsl(197,100%,75%)]">{stats.customers.toLocaleString()}</strong> renters</span>
               </div>
@@ -509,7 +509,7 @@ export function HomePage({ onAuthOpen }: { onAuthOpen: () => void }) {
         {/* Results header + Grid/Map toggle */}
         <div className="flex items-center justify-between mb-5">
           <p className="text-sm text-gray-500">
-            {isLoading ? "Loading…" : `${listings?.length ?? 0} listings`}
+            {isLoading ? "Loading…" : `${listings?.length ?? 0} ${(listings?.length ?? 0) === 1 ? "listing" : "listings"}`}
             {hasFilters && " matching your filters"}
           </p>
           <div className="flex items-center bg-white border border-gray-200 rounded-lg p-0.5 shadow-sm">
