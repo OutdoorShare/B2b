@@ -2,7 +2,7 @@ import { useState, useEffect, useLayoutEffect, useReducer } from "react";
 import { AIAssistant } from "@/components/ai-assistant";
 import { StorefrontChat } from "@/components/storefront-chat";
 import { Link, useParams, useLocation } from "wouter";
-import { Tent, Clock, Lock, User, LogOut, BookOpen, UserCircle, Eye, EyeOff } from "lucide-react";
+import { Mountain, Clock, Lock, User, LogOut, BookOpen, UserCircle, Eye, EyeOff } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -438,7 +438,7 @@ export function StorefrontLayout({ children }: { children: React.ReactNode }) {
     return (
       <div className="min-h-screen bg-gray-50 flex flex-col items-center justify-center px-4 text-center">
         <div className="w-16 h-16 rounded-full bg-gray-100 flex items-center justify-center mb-6">
-          <Tent className="w-8 h-8 text-gray-400" />
+          <Mountain className="w-8 h-8 text-gray-400" />
         </div>
         <h1 className="text-2xl font-bold text-gray-800 mb-2">Page not found</h1>
         <p className="text-gray-500 max-w-sm">
@@ -478,7 +478,7 @@ export function StorefrontLayout({ children }: { children: React.ReactNode }) {
                 className="h-8 object-contain shrink-0"
               />
             ) : (
-              <Tent className="w-6 h-6 shrink-0" style={{ color: accentColor }} />
+              <Mountain className="w-6 h-6 shrink-0" style={{ color: accentColor }} />
             )}
             <span
               className="font-bold text-lg tracking-tight truncate"
@@ -583,7 +583,7 @@ export function StorefrontLayout({ children }: { children: React.ReactNode }) {
               {profile?.logoUrl ? (
                 <img src={profile.logoUrl} alt={profile.name} className="h-7 object-contain opacity-80" />
               ) : (
-                <Tent className="w-5 h-5 text-white/60" />
+                <Mountain className="w-5 h-5 text-white/60" />
               )}
               <span className="font-bold text-white/70 text-sm">{profile?.name || "Outdoor Rentals"}</span>
             </div>

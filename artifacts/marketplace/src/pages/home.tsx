@@ -14,7 +14,7 @@ import {
 import {
   Search, SlidersHorizontal, X, LayoutGrid, Map,
   Waves, Bus, Truck, Car, Anchor, Bike, Zap,
-  Package, Snowflake, CarFront, Gauge, Tent,
+  Package, Snowflake, CarFront, Gauge, Mountain,
   CalendarDays, ChevronLeft, ChevronRight,
 } from "lucide-react";
 
@@ -172,7 +172,7 @@ function InlineRangePicker({
 const CATEGORY_ICONS: Record<string, React.ElementType> = {
   "jet-ski": Waves,
   "rv": Bus,
-  "camper": Tent,
+  "camper": Mountain,
   "atv": Truck,
   "utv": Car,
   "boat": Anchor,

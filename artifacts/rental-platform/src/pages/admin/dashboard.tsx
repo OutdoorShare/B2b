@@ -9,7 +9,7 @@ import {
   getGetBookingsQueryKey
 } from "@workspace/api-client-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { DollarSign, CalendarDays, Package, TrendingUp, Tent, AlertTriangle, ArrowRight } from "lucide-react";
+import { DollarSign, CalendarDays, Package, TrendingUp, Mountain, AlertTriangle, ArrowRight } from "lucide-react";
 import { Link } from "wouter";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -191,7 +191,7 @@ export default function AdminDashboard() {
           <CardHeader className="pb-3">
             <div className="flex items-center gap-2">
               <div className="w-7 h-7 rounded-lg bg-primary/10 flex items-center justify-center">
-                <Tent className="h-3.5 w-3.5 text-primary" />
+                <Mountain className="h-3.5 w-3.5 text-primary" />
               </div>
               <div>
                 <CardTitle className="text-[15px]">Top Listings</CardTitle>

@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from "react";
-import { Bell, X, CheckCheck, AlertTriangle, CalendarPlus, CheckCircle, Tent, Truck, RotateCcw, FileWarning, BanIcon } from "lucide-react";
+import { Bell, X, CheckCheck, AlertTriangle, CalendarPlus, CheckCircle, Mountain, Truck, RotateCcw, FileWarning, BanIcon } from "lucide-react";
 import { useLocation } from "wouter";
 
 const BASE_URL = import.meta.env.BASE_URL.replace(/\/$/, "");
@@ -31,7 +31,7 @@ const TYPE_ICON: Record<string, React.ElementType> = {
   new_booking: CalendarPlus,
   booking_confirmed: CheckCircle,
   booking_cancelled: BanIcon,
-  booking_active: Tent,
+  booking_active: Mountain,
   claim_submitted: FileWarning,
   pickup_due_soon: Truck,
   return_due_soon: RotateCcw,
