@@ -364,16 +364,24 @@ router.get("/marketplace/renter/bookings", async (req, res) => {
       .orderBy(desc(bookingsTable.createdAt))
       .limit(50);
 
-    res.json(bookings.map(r => ({
-      ...r.booking,
-      listingTitle: r.listing?.title ?? "Unknown listing",
-      listingImage: r.listing?.imageUrls?.[0] ?? null,
-      tenantSlug: r.tenant?.slug ?? null,
-      tenantName: r.tenant?.name ?? null,
-      businessName: r.business?.name ?? r.tenant?.name ?? null,
-      businessLogoUrl: r.business?.logoUrl ?? null,
-      businessPrimaryColor: r.business?.primaryColor ?? null,
-    })));
+    res.json(bookings.map(r => {
+      let pickupPhotos: string[] = [];
+      let returnPhotos: string[] = [];
+      try { pickupPhotos = r.booking.pickupPhotos ? JSON.parse(r.booking.pickupPhotos) : []; } catch {}
+      try { returnPhotos = r.booking.returnPhotos ? JSON.parse(r.booking.returnPhotos) : []; } catch {}
+      return {
+        ...r.booking,
+        pickupPhotos,
+        returnPhotos,
+        listingTitle: r.listing?.title ?? "Unknown listing",
+        listingImage: r.listing?.imageUrls?.[0] ?? null,
+        tenantSlug: r.tenant?.slug ?? null,
+        tenantName: r.tenant?.name ?? null,
+        businessName: r.business?.name ?? r.tenant?.name ?? null,
+        businessLogoUrl: r.business?.logoUrl ?? null,
+        businessPrimaryColor: r.business?.primaryColor ?? null,
+      };
+    }));
   } catch (err) {
     req.log.error(err);
     res.status(500).json({ error: "Failed to fetch bookings" });

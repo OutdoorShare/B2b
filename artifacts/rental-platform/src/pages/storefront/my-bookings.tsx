@@ -6,6 +6,7 @@ import {
   Loader2, ChevronLeft, ChevronRight, Search, X, ExternalLink,
   Mail, Phone, Trash2, RotateCcw, MessageSquarePlus, Star,
   TrendingUp, Package, ArrowRight, Sparkles, Clock, Zap,
+  Camera, Images, Building2, ChevronDown as ChevronDownIcon,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -90,6 +91,8 @@ type RenterBooking = {
   createdAt: string;
   seenByRenter?: boolean | null;
   lastAdminReminderSentAt?: string | null;
+  pickupPhotos?: string[];
+  returnPhotos?: string[];
 };
 
 type CustomerProfile = {
@@ -108,7 +111,7 @@ type CustomerProfile = {
 };
 
 type Session = { id: number; email: string; name: string; phone?: string };
-type Tab = "bookings" | "profile" | "settings";
+type Tab = "bookings" | "memories" | "profile" | "settings";
 
 function loadSession(): Session | null {
   try { return JSON.parse(localStorage.getItem("rental_customer") ?? "null"); }
@@ -245,9 +248,10 @@ export default function MyBookings() {
         <div className="max-w-3xl mx-auto px-4 sm:px-6">
           <div className="flex border-b border-white/20">
             {([
-              { key: "bookings" as Tab, label: "Bookings", icon: Calendar },
-              { key: "profile"  as Tab, label: "Profile",  icon: User     },
-              { key: "settings" as Tab, label: "Settings", icon: Settings },
+              { key: "bookings"  as Tab, label: "Bookings",  icon: Calendar },
+              { key: "memories"  as Tab, label: "Memories",  icon: Camera   },
+              { key: "profile"   as Tab, label: "Profile",   icon: User     },
+              { key: "settings"  as Tab, label: "Settings",  icon: Settings },
             ] as const).map(({ key, label, icon: Icon }) => (
               <button
                 key={key}
@@ -287,6 +291,10 @@ export default function MyBookings() {
             base={base}
             onBrowse={() => setLocation(base || "/")}
           />
+        )}
+
+        {tab === "memories" && (
+          <MemoriesTab bookings={bookings} isLoading={bookingsLoading} />
         )}
 
         {tab === "settings" && profile && (
@@ -973,6 +981,245 @@ function BookingCard({ booking: b, base }: { booking: RenterBooking; base: strin
           </div>
         </div>
       </div>
+    </div>
+  );
+}
+
+// ─── Memories Tab ─────────────────────────────────────────────────────────────
+
+function MemoriesTab({ bookings, isLoading }: { bookings: RenterBooking[]; isLoading: boolean }) {
+  const [lightbox, setLightbox] = useState<{ photos: string[]; idx: number } | null>(null);
+
+  const memories = bookings.filter(b => b.status === "completed");
+  const withPhotos = memories.filter(b => (b.pickupPhotos?.length ?? 0) + (b.returnPhotos?.length ?? 0) > 0);
+  const withoutPhotos = memories.filter(b => (b.pickupPhotos?.length ?? 0) + (b.returnPhotos?.length ?? 0) === 0);
+
+  const closeLightbox = () => setLightbox(null);
+  const advanceLightbox = (dir: 1 | -1) => {
+    if (!lightbox) return;
+    const next = (lightbox.idx + dir + lightbox.photos.length) % lightbox.photos.length;
+    setLightbox({ ...lightbox, idx: next });
+  };
+
+  if (isLoading) {
+    return (
+      <div className="flex justify-center py-20">
+        <Loader2 className="w-6 h-6 animate-spin text-primary" />
+      </div>
+    );
+  }
+
+  if (memories.length === 0) {
+    return (
+      <div className="flex flex-col items-center justify-center py-20 text-center gap-4">
+        <div className="w-20 h-20 rounded-full bg-gradient-to-br from-primary/20 to-primary/5 flex items-center justify-center">
+          <Camera className="w-9 h-9 text-primary/50" />
+        </div>
+        <div>
+          <p className="font-bold text-lg text-foreground">No memories yet</p>
+          <p className="text-sm text-muted-foreground mt-1 max-w-xs">
+            Your adventure photos will appear here after your first completed rental.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-8">
+      {/* Header */}
+      <div className="flex items-center gap-3">
+        <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-primary to-primary/70 flex items-center justify-center shadow-md">
+          <Camera className="w-5 h-5 text-white" />
+        </div>
+        <div>
+          <h2 className="font-black text-xl">OutdoorShare Memories</h2>
+          <p className="text-muted-foreground text-sm">{memories.length} adventure{memories.length !== 1 ? "s" : ""} completed</p>
+        </div>
+      </div>
+
+      {/* Photo memory cards */}
+      {withPhotos.map(b => {
+        const allPhotos = [...(b.pickupPhotos ?? []), ...(b.returnPhotos ?? [])].map(resolveImage).filter(Boolean);
+        const nights = differenceInDays(parseISO(b.endDate), parseISO(b.startDate));
+        const accent = b.businessPrimaryColor ?? "hsl(127,55%,38%)";
+
+        return (
+          <div key={b.id} className="rounded-3xl overflow-hidden border border-gray-100 shadow-md bg-white">
+            {/* Card header gradient */}
+            <div
+              className="relative p-4 pb-3 text-white"
+              style={{ background: `linear-gradient(135deg, ${accent} 0%, ${accent}cc 100%)` }}
+            >
+              <div className="absolute top-0 right-0 w-28 h-28 rounded-full bg-white/10 -translate-y-10 translate-x-10" />
+              <div className="flex items-start gap-3 relative z-10">
+                {b.listingImage ? (
+                  <img src={resolveImage(b.listingImage)} alt={b.listingTitle} className="w-14 h-14 rounded-2xl object-cover shadow-lg shrink-0 border-2 border-white/30" />
+                ) : (
+                  <div className="w-14 h-14 rounded-2xl bg-white/20 flex items-center justify-center shrink-0">
+                    <Package className="w-6 h-6 text-white/60" />
+                  </div>
+                )}
+                <div className="flex-1 min-w-0">
+                  <p className="font-black text-base leading-tight truncate">{b.listingTitle}</p>
+                  {b.businessName && (
+                    <span className="inline-flex items-center gap-1 text-[11px] font-semibold mt-1 px-2 py-0.5 rounded-full bg-white/20">
+                      <Building2 className="w-2.5 h-2.5" /> {b.businessName}
+                    </span>
+                  )}
+                  <p className="text-white/75 text-xs mt-1 flex items-center gap-1">
+                    <Calendar className="w-3 h-3" />
+                    {format(parseISO(b.startDate), "MMM d")} – {format(parseISO(b.endDate), "MMM d, yyyy")}
+                    {nights > 0 && <span className="ml-1 text-white/60">· {nights} night{nights !== 1 ? "s" : ""}</span>}
+                  </p>
+                </div>
+                <div className="shrink-0">
+                  <span className="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wide px-2 py-1 rounded-full bg-white/20">
+                    <Images className="w-3 h-3" /> {allPhotos.length} photo{allPhotos.length !== 1 ? "s" : ""}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* Photo grid */}
+            <div className="p-3">
+              {allPhotos.length === 1 ? (
+                <img
+                  src={allPhotos[0]}
+                  alt="Adventure photo"
+                  className="w-full h-56 object-cover rounded-2xl cursor-pointer hover:opacity-95 transition-opacity"
+                  onClick={() => setLightbox({ photos: allPhotos, idx: 0 })}
+                />
+              ) : allPhotos.length === 2 ? (
+                <div className="grid grid-cols-2 gap-2">
+                  {allPhotos.map((p, i) => (
+                    <img key={i} src={p} alt="Adventure photo" className="w-full h-44 object-cover rounded-2xl cursor-pointer hover:opacity-95 transition-opacity"
+                      onClick={() => setLightbox({ photos: allPhotos, idx: i })} />
+                  ))}
+                </div>
+              ) : allPhotos.length === 3 ? (
+                <div className="grid grid-cols-3 gap-2">
+                  {allPhotos.map((p, i) => (
+                    <img key={i} src={p} alt="Adventure photo" className="w-full h-36 object-cover rounded-2xl cursor-pointer hover:opacity-95 transition-opacity"
+                      onClick={() => setLightbox({ photos: allPhotos, idx: i })} />
+                  ))}
+                </div>
+              ) : (
+                <div className="grid grid-cols-2 gap-2">
+                  <img src={allPhotos[0]} alt="Adventure photo" className="w-full h-52 object-cover rounded-2xl cursor-pointer hover:opacity-95 transition-opacity row-span-2"
+                    onClick={() => setLightbox({ photos: allPhotos, idx: 0 })} />
+                  <div className="grid grid-rows-2 gap-2">
+                    {allPhotos.slice(1, 3).map((p, i) => (
+                      <img key={i} src={p} alt="Adventure photo" className="w-full h-24 object-cover rounded-2xl cursor-pointer hover:opacity-95 transition-opacity"
+                        onClick={() => setLightbox({ photos: allPhotos, idx: i + 1 })} />
+                    ))}
+                  </div>
+                  {allPhotos.length > 3 && (
+                    <button
+                      className="rounded-2xl bg-black/70 text-white font-bold text-sm flex items-center justify-center gap-2 hover:bg-black/80 transition-colors"
+                      onClick={() => setLightbox({ photos: allPhotos, idx: 3 })}
+                      style={{ gridColumn: "2", height: "24px", marginTop: "-32px", position: "relative" }}
+                    >
+                      +{allPhotos.length - 3} more
+                    </button>
+                  )}
+                </div>
+              )}
+
+              {/* "View all" button for 4+ photos */}
+              {allPhotos.length > 3 && (
+                <button
+                  className="mt-2 w-full text-xs font-semibold text-muted-foreground hover:text-primary transition-colors py-1 flex items-center justify-center gap-1"
+                  onClick={() => setLightbox({ photos: allPhotos, idx: 0 })}
+                >
+                  View all {allPhotos.length} photos <ChevronDownIcon className="w-3 h-3 rotate-[-90deg]" />
+                </button>
+              )}
+            </div>
+          </div>
+        );
+      })}
+
+      {/* Simple completed trips without photos */}
+      {withoutPhotos.length > 0 && (
+        <div className="space-y-2">
+          <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground px-1">Past trips</p>
+          <div className="space-y-2">
+            {withoutPhotos.map(b => {
+              const nights = differenceInDays(parseISO(b.endDate), parseISO(b.startDate));
+              return (
+                <div key={b.id} className="flex items-center gap-3 p-3 rounded-2xl border border-gray-100 bg-gray-50/50">
+                  {b.listingImage ? (
+                    <img src={resolveImage(b.listingImage)} alt={b.listingTitle} className="w-12 h-12 rounded-xl object-cover shrink-0" />
+                  ) : (
+                    <div className="w-12 h-12 rounded-xl bg-muted flex items-center justify-center shrink-0">
+                      <Package className="w-5 h-5 text-muted-foreground" />
+                    </div>
+                  )}
+                  <div className="flex-1 min-w-0">
+                    <p className="font-semibold text-sm truncate">{b.listingTitle}</p>
+                    <p className="text-xs text-muted-foreground flex items-center gap-1 mt-0.5">
+                      <Calendar className="w-3 h-3" />
+                      {format(parseISO(b.startDate), "MMM d")} – {format(parseISO(b.endDate), "MMM d, yyyy")}
+                      {b.businessName && <span className="ml-1 text-muted-foreground/70">· {b.businessName}</span>}
+                    </p>
+                  </div>
+                  <div className="shrink-0 text-right">
+                    <p className="text-xs text-muted-foreground">{nights > 0 ? `${nights}n` : "1d"}</p>
+                    <CheckCircle2 className="w-4 h-4 text-emerald-500 mt-0.5 ml-auto" />
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* Lightbox */}
+      {lightbox && (
+        <div
+          className="fixed inset-0 z-50 bg-black/95 flex items-center justify-center"
+          onClick={closeLightbox}
+        >
+          <button
+            className="absolute top-4 right-4 text-white/80 hover:text-white p-2 rounded-full bg-white/10 hover:bg-white/20 transition-colors"
+            onClick={closeLightbox}
+          >
+            <X className="w-5 h-5" />
+          </button>
+          {lightbox.photos.length > 1 && (
+            <>
+              <button
+                className="absolute left-4 top-1/2 -translate-y-1/2 text-white/80 hover:text-white p-2 rounded-full bg-white/10 hover:bg-white/20 transition-colors"
+                onClick={(e) => { e.stopPropagation(); advanceLightbox(-1); }}
+              >
+                <ChevronLeft className="w-6 h-6" />
+              </button>
+              <button
+                className="absolute right-4 top-1/2 -translate-y-1/2 text-white/80 hover:text-white p-2 rounded-full bg-white/10 hover:bg-white/20 transition-colors"
+                onClick={(e) => { e.stopPropagation(); advanceLightbox(1); }}
+              >
+                <ChevronRight className="w-6 h-6" />
+              </button>
+            </>
+          )}
+          <img
+            src={lightbox.photos[lightbox.idx]}
+            alt="Memory photo"
+            className="max-w-[92vw] max-h-[88vh] object-contain rounded-xl shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          />
+          <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex gap-1.5">
+            {lightbox.photos.map((_, i) => (
+              <button
+                key={i}
+                className={`w-1.5 h-1.5 rounded-full transition-all ${i === lightbox.idx ? "bg-white w-4" : "bg-white/40"}`}
+                onClick={(e) => { e.stopPropagation(); setLightbox({ ...lightbox, idx: i }); }}
+              />
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
