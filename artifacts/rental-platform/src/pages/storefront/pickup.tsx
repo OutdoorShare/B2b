@@ -89,6 +89,10 @@ export default function PickupPage() {
       if (!r.ok || data.error) { alert(data.error ?? "Upload failed"); return; }
       setSavedPhotos(data.photos);
       setDone(true);
+      // Navigate to booking detail page with adventure celebration
+      if (info) {
+        window.location.href = `${BASE}/${slug}/my-bookings/${info.bookingId}?adventure=1`;
+      }
     } finally {
       setUploading(false);
     }
@@ -207,13 +211,12 @@ export default function PickupPage() {
               </div>
             )}
 
-            {/* Start My Adventure CTA */}
+            {/* Go to my booking CTA */}
             <Button
               className="w-full py-7 text-lg font-bold rounded-2xl gap-2 shadow-md"
               style={{ background: brandColor }}
               onClick={() => {
-                // Nothing to navigate to — just a celebratory acknowledgment
-                window.scrollTo({ top: 0, behavior: "smooth" });
+                window.location.href = `${BASE}/${slug}/my-bookings/${info.bookingId}?adventure=1`;
               }}
             >
               <Zap className="w-5 h-5" />
@@ -306,22 +309,22 @@ export default function PickupPage() {
               </div>
             )}
 
-            {/* Submit button */}
+            {/* Submit & Adventure button */}
             <Button
               onClick={submit}
               disabled={staged.length === 0 || uploading}
-              className="w-full py-6 text-base font-bold rounded-2xl"
+              className="w-full py-7 text-base font-bold rounded-2xl gap-2 shadow-md"
               style={{ background: staged.length > 0 ? brandColor : undefined }}
             >
               {uploading ? (
-                <><Loader2 className="w-5 h-5 animate-spin mr-2" />Uploading…</>
+                <><Loader2 className="w-5 h-5 animate-spin" />Uploading…</>
               ) : (
-                <><Upload className="w-5 h-5 mr-2" />Submit {staged.length > 0 ? `${staged.length} Photo${staged.length !== 1 ? "s" : ""}` : "Photos"}</>
+                <><Upload className="w-5 h-5" />{staged.length > 0 ? `Submit ${staged.length} Photo${staged.length !== 1 ? "s" : ""} & Start My Adventure` : "Submit Photos & Start My Adventure"}</>
               )}
             </Button>
 
             {staged.length === 0 && (
-              <p className="text-center text-xs text-gray-400">At least 1 photo required to proceed</p>
+              <p className="text-center text-xs text-gray-400">Add at least 1 photo to proceed</p>
             )}
 
             <p className="text-center text-xs text-gray-400">

@@ -74,10 +74,66 @@ function SourceBadge({ source }: { source?: string }) {
   }
 }
 
+function useConfetti(active: boolean) {
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  useEffect(() => {
+    if (!active) return;
+    const canvas = document.createElement("canvas");
+    canvas.style.cssText = "position:fixed;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:9999";
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+    document.body.appendChild(canvas);
+    canvasRef.current = canvas;
+    const ctx = canvas.getContext("2d")!;
+    const COLORS = ["#3ab549","#22c55e","#16a34a","#4ade80","#facc15","#fb923c","#60a5fa","#f472b6","#a78bfa"];
+    type P = { x:number;y:number;r:number;c:string;vx:number;vy:number;va:number;a:number;w:number;h:number };
+    const particles: P[] = Array.from({length: 160}, () => ({
+      x: Math.random() * canvas.width,
+      y: -20 - Math.random() * 200,
+      r: Math.random() * Math.PI * 2,
+      c: COLORS[Math.floor(Math.random() * COLORS.length)],
+      vx: (Math.random() - 0.5) * 3,
+      vy: 2 + Math.random() * 4,
+      va: (Math.random() - 0.5) * 0.2,
+      a: 1,
+      w: 8 + Math.random() * 8,
+      h: 4 + Math.random() * 4,
+    }));
+    let raf: number;
+    let elapsed = 0;
+    const tick = () => {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      elapsed++;
+      particles.forEach(p => {
+        p.y += p.vy;
+        p.x += p.vx;
+        p.r += p.va;
+        if (p.y > canvas.height) { p.y = -20; p.x = Math.random() * canvas.width; }
+        if (elapsed > 160) p.a = Math.max(0, p.a - 0.008);
+        ctx.save();
+        ctx.globalAlpha = p.a;
+        ctx.translate(p.x, p.y);
+        ctx.rotate(p.r);
+        ctx.fillStyle = p.c;
+        ctx.fillRect(-p.w/2, -p.h/2, p.w, p.h);
+        ctx.restore();
+      });
+      if (elapsed < 300) raf = requestAnimationFrame(tick);
+      else { canvas.remove(); }
+    };
+    raf = requestAnimationFrame(tick);
+    return () => { cancelAnimationFrame(raf); canvas.remove(); };
+  }, [active]);
+}
+
 export default function MyBookingDetail() {
   const { slug, id } = useParams<{ slug: string; id: string }>();
   const [, setLocation] = useLocation();
   const base = slug ? `/${slug}` : "";
+
+  const isAdventure = typeof window !== "undefined" && new URLSearchParams(window.location.search).get("adventure") === "1";
+  const [showAdventureBanner, setShowAdventureBanner] = useState(isAdventure);
+  useConfetti(isAdventure);
 
   const [session, setSession] = useState<CustomerSession | null>(null);
   const [booking, setBooking] = useState<any | null>(null);
@@ -273,6 +329,27 @@ export default function MyBookingDetail() {
           <ArrowLeft className="w-4 h-4 mr-1.5" /> My Bookings
         </Button>
       </Link>
+
+      {/* Adventure celebration banner */}
+      {showAdventureBanner && (
+        <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-green-500 via-green-600 to-emerald-700 p-6 shadow-lg">
+          <div className="absolute inset-0 opacity-10" style={{
+            backgroundImage: "radial-gradient(circle at 20% 50%, white 1px, transparent 1px), radial-gradient(circle at 80% 20%, white 1px, transparent 1px)",
+            backgroundSize: "40px 40px"
+          }} />
+          <div className="relative text-center space-y-2">
+            <div className="text-4xl mb-2">🎉</div>
+            <h2 className="text-2xl font-black text-white tracking-tight">You're Ready to Begin Your Adventure!</h2>
+            <p className="text-green-100 text-sm font-medium">You're all set — photos submitted, deposit held, and adventure officially started. Have an amazing time out there!</p>
+            <button
+              onClick={() => setShowAdventureBanner(false)}
+              className="mt-3 text-xs text-green-200 hover:text-white underline underline-offset-2 transition-colors"
+            >
+              Dismiss
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Title + Status */}
       <div className="flex items-start justify-between gap-3 flex-wrap">
