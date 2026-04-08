@@ -17,6 +17,51 @@ function requireAdminAuth(req: Request, res: any, next: any) {
   next();
 }
 
+// ── Payout helpers ────────────────────────────────────────────────────────────
+
+/** Set a connected account's payout schedule to daily with the minimum allowed delay. */
+async function setDailyPayoutSchedule(stripeClient: any, accountId: string): Promise<void> {
+  try {
+    await stripeClient.accounts.update(accountId, {
+      settings: {
+        payouts: {
+          schedule: {
+            interval: "daily",
+            delay_days: "minimum",
+          },
+        },
+      },
+    });
+    console.log(`[payout-schedule] Set daily/minimum schedule for ${accountId}`);
+  } catch (e: any) {
+    // Non-fatal — log but don't block the caller
+    console.error(`[payout-schedule] Could not set schedule for ${accountId}: ${e.message}`);
+  }
+}
+
+/**
+ * Trigger an immediate standard payout of the connected account's available balance.
+ * Silently no-ops when the balance is zero, funds are still pending, or the account
+ * doesn't have a bank account attached yet.
+ */
+async function triggerAvailablePayout(stripeClient: any, accountId: string): Promise<void> {
+  try {
+    const balance = await stripeClient.balance.retrieve({ stripeAccount: accountId });
+    const avail = (balance.available ?? []).find((b: any) => b.currency === "usd");
+    const amount = avail?.amount ?? 0;
+    if (amount < 100) return; // nothing meaningful to payout (Stripe minimum is 50 cents)
+
+    await stripeClient.payouts.create(
+      { amount, currency: "usd", method: "standard" },
+      { stripeAccount: accountId },
+    );
+    console.log(`[payout] Triggered $${(amount / 100).toFixed(2)} standard payout for ${accountId}`);
+  } catch (e: any) {
+    // Expected errors: insufficient funds, no bank account, payouts blocked
+    console.log(`[payout] Could not trigger immediate payout for ${accountId}: ${e.message}`);
+  }
+}
+
 // ── Stripe Connect: start onboarding ─────────────────────────────────────────
 router.post("/stripe/connect/onboard", requireAdminAuth, async (req, res) => {
   try {
@@ -46,6 +91,8 @@ router.post("/stripe/connect/onboard", requireAdminAuth, async (req, res) => {
         stripeAccountStatus: "onboarding",
         updatedAt: new Date(),
       }).where(eq(tenantsTable.id, tenantId));
+      // Set daily payout schedule immediately on account creation
+      setDailyPayoutSchedule(stripeClient, account.id);
     }
 
     const protocol = req.headers["x-forwarded-proto"] ?? "https";
@@ -470,6 +517,11 @@ async function sweepPendingPayouts(tenantId: number): Promise<{ swept: number; t
     }
   }
 
+  // After sweeping, try to push whatever is now in the available balance to the bank
+  if (swept > 0) {
+    triggerAvailablePayout(sweepStripe, tenant.stripeAccountId).catch(() => {});
+  }
+
   return { swept, totalCents };
 }
 
@@ -640,6 +692,24 @@ router.post("/stripe/webhook", async (req, res) => {
           stripePaymentStatus: "paid",
           updatedAt: new Date(),
         }).where(eq(bookingsTable.stripePaymentIntentId, pi.id));
+
+        // For PIs routed via transfer_data, funds land on the connected account automatically.
+        // Trigger an immediate payout so the balance doesn't sit waiting for the default schedule.
+        const tenantIdFromMeta = pi.metadata?.tenant_id ? parseInt(pi.metadata.tenant_id) : null;
+        if (tenantIdFromMeta) {
+          (async () => {
+            try {
+              const [t] = await db.select({ stripeAccountId: tenantsTable.stripeAccountId, testMode: tenantsTable.testMode })
+                .from(tenantsTable).where(eq(tenantsTable.id, tenantIdFromMeta)).limit(1);
+              if (t?.stripeAccountId) {
+                const piStripe = getStripeForTenant(!!t.testMode);
+                await triggerAvailablePayout(piStripe, t.stripeAccountId);
+              }
+            } catch (e: any) {
+              console.error("[webhook] payment_intent payout trigger failed:", e.message);
+            }
+          })();
+        }
         break;
       }
       case "payment_intent.payment_failed": {
@@ -698,11 +768,22 @@ router.post("/stripe/webhook", async (req, res) => {
             updatedAt: new Date(),
           }).where(eq(tenantsTable.id, tenantId));
 
-          // Auto-sweep held funds when tenant first becomes active
-          if (account.charges_enabled && !prevTenant?.stripeChargesEnabled) {
-            sweepPendingPayouts(tenantId).then(r => {
-              if (r.swept > 0) console.log(`[webhook] Auto-swept ${r.swept} bookings ($${(r.totalCents/100).toFixed(2)}) to tenant ${tenantId}`);
-            }).catch(err => console.error("[webhook] sweep failed:", err.message));
+          // When account becomes active: set daily payout schedule, sweep held funds, then trigger payout
+          if (account.charges_enabled) {
+            const isTestMode = !!((await db.select({ testMode: tenantsTable.testMode })
+              .from(tenantsTable).where(eq(tenantsTable.id, tenantId)).limit(1))[0]?.testMode);
+            const tenantStripe = getStripeForTenant(isTestMode);
+            // (Re-)apply daily payout schedule on every activation — handles re-connections too
+            setDailyPayoutSchedule(tenantStripe, account.id);
+            if (!prevTenant?.stripeChargesEnabled) {
+              // First-time activation — sweep any held platform funds and trigger payout
+              sweepPendingPayouts(tenantId).then(async r => {
+                if (r.swept > 0) {
+                  console.log(`[webhook] Auto-swept ${r.swept} bookings ($${(r.totalCents/100).toFixed(2)}) to tenant ${tenantId}`);
+                  await triggerAvailablePayout(tenantStripe, account.id);
+                }
+              }).catch(err => console.error("[webhook] sweep failed:", err.message));
+            }
           }
 
           // Fire restriction alert if account just became restricted (or is newly detected restricted)
