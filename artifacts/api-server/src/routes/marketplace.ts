@@ -8,6 +8,7 @@ import {
   customersTable,
   bookingsTable,
   customerFavoritesTable,
+  claimsTable,
 } from "@workspace/db/schema";
 import { eq, and, sql, ilike, gte, lte, or, desc, inArray } from "drizzle-orm";
 
@@ -385,6 +386,73 @@ router.get("/marketplace/renter/bookings", async (req, res) => {
   } catch (err) {
     req.log.error(err);
     res.status(500).json({ error: "Failed to fetch bookings" });
+  }
+});
+
+// GET /api/marketplace/renter/claims?customerId=... — claims filed against a renter
+router.get("/marketplace/renter/claims", async (req, res) => {
+  try {
+    const { customerId } = req.query as { customerId?: string };
+    if (!customerId) { res.status(400).json({ error: "customerId required" }); return; }
+    const id = parseInt(customerId);
+    if (isNaN(id)) { res.status(400).json({ error: "Invalid customerId" }); return; }
+
+    const customer = await db
+      .select({ email: customersTable.email })
+      .from(customersTable)
+      .where(eq(customersTable.id, id))
+      .limit(1);
+
+    if (!customer.length) { res.json([]); return; }
+    const email = customer[0].email;
+
+    const claims = await db
+      .select({
+        id: claimsTable.id,
+        type: claimsTable.type,
+        description: claimsTable.description,
+        claimedAmount: claimsTable.claimedAmount,
+        settledAmount: claimsTable.settledAmount,
+        chargedAmount: claimsTable.chargedAmount,
+        refundAmount: claimsTable.refundAmount,
+        refundStatus: claimsTable.refundStatus,
+        status: claimsTable.status,
+        evidenceUrls: claimsTable.evidenceUrls,
+        createdAt: claimsTable.createdAt,
+        updatedAt: claimsTable.updatedAt,
+        bookingId: claimsTable.bookingId,
+        listingId: claimsTable.listingId,
+        tenantId: claimsTable.tenantId,
+        listingTitle: listingsTable.title,
+        listingImage: listingsTable.imageUrls,
+        startDate: bookingsTable.startDate,
+        endDate: bookingsTable.endDate,
+        tenantSlug: tenantsTable.slug,
+        businessName: businessProfileTable.name,
+        businessLogo: businessProfileTable.logoUrl,
+      })
+      .from(claimsTable)
+      .leftJoin(listingsTable, eq(claimsTable.listingId, listingsTable.id))
+      .leftJoin(bookingsTable, eq(claimsTable.bookingId, bookingsTable.id))
+      .leftJoin(tenantsTable, eq(claimsTable.tenantId, tenantsTable.id))
+      .leftJoin(businessProfileTable, eq(businessProfileTable.tenantId, tenantsTable.id))
+      .where(eq(claimsTable.customerEmail, email))
+      .orderBy(desc(claimsTable.createdAt));
+
+    res.json(claims.map(c => ({
+      ...c,
+      claimedAmount: c.claimedAmount ? parseFloat(String(c.claimedAmount)) : null,
+      settledAmount: c.settledAmount ? parseFloat(String(c.settledAmount)) : null,
+      chargedAmount: c.chargedAmount ? parseFloat(String(c.chargedAmount)) : null,
+      refundAmount: c.refundAmount ? parseFloat(String(c.refundAmount)) : null,
+      listingImage: (() => { try { const imgs = JSON.parse(String(c.listingImage ?? "[]")); return imgs[0] ?? null; } catch { return null; } })(),
+      evidenceUrls: (() => { try { return JSON.parse(String(c.evidenceUrls ?? "[]")); } catch { return []; } })(),
+      createdAt: c.createdAt.toISOString(),
+      updatedAt: c.updatedAt.toISOString(),
+    })));
+  } catch (err) {
+    req.log.error(err);
+    res.status(500).json({ error: "Failed to fetch claims" });
   }
 });
 

@@ -2,7 +2,7 @@ import { useState, useEffect, useLayoutEffect, useReducer } from "react";
 import { AIAssistant } from "@/components/ai-assistant";
 import { StorefrontChat } from "@/components/storefront-chat";
 import { Link, useParams, useLocation } from "wouter";
-import { Mountain, Clock, Lock, User, LogOut, BookOpen, UserCircle, Eye, EyeOff } from "lucide-react";
+import { Mountain, Clock, Lock, User, LogOut, BookOpen, UserCircle, Eye, EyeOff, ShieldAlert } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -544,6 +544,11 @@ export function StorefrontLayout({ children }: { children: React.ReactNode }) {
                   <DropdownMenuItem asChild>
                     <Link href={`${base}/my-bookings`} className="flex items-center gap-2 cursor-pointer">
                       <BookOpen className="w-4 h-4" /> My Bookings
+                    </Link>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem asChild>
+                    <Link href={`${base}/my-claims`} className="flex items-center gap-2 cursor-pointer">
+                      <ShieldAlert className="w-4 h-4" /> My Claims
                     </Link>
                   </DropdownMenuItem>
                   <DropdownMenuSeparator />

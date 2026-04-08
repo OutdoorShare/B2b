@@ -19,6 +19,7 @@ import StorefrontLogin from "@/pages/storefront/login";
 import StorefrontSetPassword from "@/pages/storefront/set-password";
 import StorefrontMyBookings from "@/pages/storefront/my-bookings";
 import StorefrontMyBookingDetail from "@/pages/storefront/my-booking-detail";
+import StorefrontMyClaims from "@/pages/storefront/my-claims";
 import StorefrontProfile from "@/pages/storefront/profile";
 import PickupPage from "@/pages/storefront/pickup";
 import ReturnPage from "@/pages/storefront/return";
@@ -424,6 +425,9 @@ function Router() {
       </Route>
       <Route path="/:slug/my-bookings">
         <SlugGuard><StorefrontLayout><StorefrontMyBookings /></StorefrontLayout></SlugGuard>
+      </Route>
+      <Route path="/:slug/my-claims">
+        <SlugGuard><StorefrontLayout><StorefrontMyClaims /></StorefrontLayout></SlugGuard>
       </Route>
       <Route path="/:slug/profile">
         <SlugGuard><StorefrontLayout><StorefrontProfile /></StorefrontLayout></SlugGuard>
