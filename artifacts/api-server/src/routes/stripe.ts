@@ -250,10 +250,13 @@ router.post("/stripe/payment-intent", async (req, res) => {
     let platformFeeAmount: number;
     let transferAmount: number;
     if (passthroughFeeCents != null && passthroughFeeCents > 0) {
-      // Pass-through: customer already paid the fee; platform keeps exactly passthroughFeeCents
-      // (plus 100% of any protection fee if this is also a host tenant).
+      // The service fee was added on top of the rental by the customer-facing booking page
+      // and must flow entirely to the company — OutdoorShare takes ZERO commission from it.
+      // OutdoorShare's platform fee is calculated only from the base rental amount.
       const ppCents = protectionFeeCents != null && protectionFeeCents > 0 ? protectionFeeCents : 0;
-      platformFeeAmount = Math.round(passthroughFeeCents) + ppCents;
+      const rentalBase = amountCents - Math.round(passthroughFeeCents) - ppCents;
+      platformFeeAmount = Math.round(rentalBase * feePercent) + ppCents;
+      // transferAmount = rental base net of platform fee + 100% of service fee
       transferAmount = amountCents - platformFeeAmount;
     } else if (tenant.isHost && protectionFeeCents != null && protectionFeeCents > 0) {
       const rentalSubtotal = amountCents - protectionFeeCents;
