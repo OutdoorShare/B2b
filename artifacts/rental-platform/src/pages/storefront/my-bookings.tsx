@@ -89,6 +89,7 @@ type RenterBooking = {
   businessPrimaryColor: string | null;
   createdAt: string;
   seenByRenter?: boolean | null;
+  lastAdminReminderSentAt?: string | null;
 };
 
 type CustomerProfile = {
@@ -799,12 +800,56 @@ function BookingsTab({
 
 function BookingCard({ booking: b, base }: { booking: RenterBooking; base: string }) {
   const [, setLocation] = useLocation();
+  const [reminding,    setReminding]    = useState(false);
+  const [reminderSent, setReminderSent] = useState(false);
+  const [reminderErr,  setReminderErr]  = useState<string | null>(null);
+
   const ts = getRentalTimeStatus(b.startDate, b.endDate, b.status);
   const badgeCls  = STATUS_BADGE[b.status]  ?? "bg-gray-100 text-gray-700 border-gray-200";
   const accentCls = STATUS_ACCENT[b.status] ?? "bg-gray-400";
   const bookingBase = b.tenantSlug ? `/${b.tenantSlug}` : base;
   const hasUpdate = b.seenByRenter === false;
   const nights = differenceInDays(parseISO(b.endDate), parseISO(b.startDate));
+
+  // Show the "remind" button if: pending AND booking is > 3 hours old
+  const THREE_HOURS = 3 * 60 * 60 * 1000;
+  const bookingAgeMs = Date.now() - new Date(b.createdAt).getTime();
+  const canRemind = b.status === "pending" && bookingAgeMs >= THREE_HOURS;
+
+  // Check if a reminder was sent recently (< 3 hours ago) — prevents re-nudging
+  const lastReminderAgeMs = b.lastAdminReminderSentAt
+    ? Date.now() - new Date(b.lastAdminReminderSentAt).getTime()
+    : null;
+  const reminderOnCooldown = lastReminderAgeMs !== null && lastReminderAgeMs < THREE_HOURS;
+
+  const session = loadSession();
+
+  const handleRemind = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (reminding || reminderSent || reminderOnCooldown) return;
+    setReminding(true);
+    setReminderErr(null);
+    try {
+      const res = await fetch(`${API}/api/bookings/${b.id}/remind-admin`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ customerEmail: session?.email ?? "" }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setReminderErr(data.error ?? "Could not send reminder.");
+        setTimeout(() => setReminderErr(null), 5000);
+      } else {
+        setReminderSent(true);
+        setTimeout(() => setReminderSent(false), 8000);
+      }
+    } catch {
+      setReminderErr("Network error. Please try again.");
+      setTimeout(() => setReminderErr(null), 5000);
+    } finally {
+      setReminding(false);
+    }
+  };
 
   return (
     <div
@@ -873,6 +918,37 @@ function BookingCard({ booking: b, base }: { booking: RenterBooking; base: strin
                   <div className="flex-1 h-1 bg-gray-100 rounded-full overflow-hidden max-w-24">
                     <div className={`h-full rounded-full ${ts.bar}`} style={{ width: `${ts.pct}%` }} />
                   </div>
+                )}
+              </div>
+            )}
+
+            {/* Pending reminder notice */}
+            {canRemind && (
+              <div className="mt-1" onClick={e => e.stopPropagation()}>
+                {reminderOnCooldown ? (
+                  <p className="text-[11px] text-amber-600 flex items-center gap-1">
+                    <CheckCircle2 className="h-3 w-3" /> Reminder sent — available again in ~3 hrs
+                  </p>
+                ) : reminderSent ? (
+                  <p className="text-[11px] text-emerald-600 flex items-center gap-1 font-semibold">
+                    <CheckCircle2 className="h-3 w-3" /> Reminder sent to the company!
+                  </p>
+                ) : (
+                  <button
+                    onClick={handleRemind}
+                    disabled={reminding}
+                    className="flex items-center gap-1.5 text-[11px] font-semibold text-amber-700 bg-amber-50 border border-amber-200 rounded-full px-2.5 py-1 hover:bg-amber-100 transition-colors disabled:opacity-50"
+                  >
+                    {reminding ? (
+                      <Loader2 className="h-3 w-3 animate-spin" />
+                    ) : (
+                      <Clock className="h-3 w-3" />
+                    )}
+                    Remind company to review
+                  </button>
+                )}
+                {reminderErr && (
+                  <p className="text-[11px] text-red-500 mt-1">{reminderErr}</p>
                 )}
               </div>
             )}

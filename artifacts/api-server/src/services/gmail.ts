@@ -2166,3 +2166,67 @@ export async function sendSplitPaymentChargedEmail(opts: {
     requestBody: { raw: makeRawEmail(customerEmail, `[${companyName}] Remaining balance charged — Booking #${bookingId}`, html, fromHeader, adminEmail) },
   });
 }
+
+// ── Renter-triggered "please review my booking" reminder to admin ─────────────
+export async function sendPendingBookingReminderEmail(opts: {
+  toEmail: string;
+  companyName: string;
+  customerName: string;
+  customerEmail: string;
+  customerPhone?: string | null;
+  listingTitle: string;
+  startDate: string;
+  endDate: string;
+  bookingId: number;
+  slug: string;
+}): Promise<void> {
+  const { toEmail, companyName, customerName, customerEmail, customerPhone, listingTitle, startDate, endDate, bookingId, slug } = opts;
+
+  const bookingUrl = `${APP_URL}/${slug}/admin/bookings/${bookingId}`;
+
+  const rows: { label: string; value: string; rawHtml?: boolean }[] = [
+    { label: "Guest",        value: customerName },
+    { label: "Email",        value: `<a href="mailto:${esc(customerEmail)}" style="color:${BRAND_GREEN};text-decoration:none;">${esc(customerEmail)}</a>`, rawHtml: true },
+  ];
+  if (customerPhone) rows.push({ label: "Phone", value: `<a href="tel:${esc(customerPhone)}" style="color:${BRAND_GREEN};text-decoration:none;">${esc(customerPhone)}</a>`, rawHtml: true });
+  rows.push({ label: "Rental",    value: listingTitle });
+  rows.push({ label: "Dates",     value: `${startDate} – ${endDate}` });
+  rows.push({ label: "Booking #", value: String(bookingId) });
+
+  const body = `
+    <p style="margin:0 0 8px;font-size:18px;font-weight:700;color:${BRAND_DARK};">You have a booking waiting for review</p>
+    <p style="margin:0 0 20px;font-size:15px;color:#374151;line-height:1.6;">
+      <strong>${esc(customerName)}</strong> sent a reminder — their booking for
+      <strong>${esc(listingTitle)}</strong> is still <span style="color:#d97706;font-weight:700;">pending</span>
+      and awaiting your approval. Please review it at your earliest convenience.
+    </p>
+
+    ${infoTable(rows)}
+
+    ${ctaButton("Review &amp; Approve Booking", bookingUrl)}
+
+    <p style="margin:20px 0 0;font-size:13px;color:#9ca3af;text-align:center;">
+      This reminder was sent by the renter from their booking portal.
+    </p>
+  `;
+
+  const html = emailShell({
+    preheader: `${esc(customerName)} is waiting for you to approve their booking for ${esc(listingTitle)}.`,
+    badgeLabel: "Booking Awaiting Review",
+    badgeColor: "#d97706",
+    body,
+  });
+
+  const gmail = await getUncachableGmailClient();
+  await gmail.users.messages.send({
+    userId: "me",
+    requestBody: {
+      raw: makeRawEmail(
+        toEmail,
+        `[Action needed] Booking reminder from ${esc(customerName)} — ${esc(listingTitle)}`,
+        html,
+        PLATFORM_FROM,
+      ),
+    },
+  });
+}

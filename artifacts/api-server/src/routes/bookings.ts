@@ -19,6 +19,7 @@ import {
   sendAdminBookingContactEmail,
   sendAgreementLinkEmail,
   sendIdentityVerificationEmail,
+  sendPendingBookingReminderEmail,
   withSmtpCreds,
   withBrand,
 } from "../services/gmail";
@@ -1592,6 +1593,120 @@ router.post("/bookings/:id/inspect", async (req, res) => {
   } catch (err: any) {
     req.log.error(err);
     res.status(500).json({ error: err.message ?? "Inspection failed" });
+  }
+});
+
+// ── POST /api/bookings/:id/remind-admin ─────────────────────────────────────
+// Renter sends a gentle reminder to the company admin to review a pending booking.
+// Rate-limited: only allowed after 3 hours since booking created AND since last reminder.
+router.post("/:id/remind-admin", async (req, res) => {
+  try {
+    const bookingId = parseInt(req.params.id);
+    if (isNaN(bookingId)) { res.status(400).json({ error: "Invalid booking ID" }); return; }
+
+    const { customerEmail } = req.body as { customerEmail?: string };
+    if (!customerEmail) { res.status(400).json({ error: "customerEmail required" }); return; }
+
+    // Load booking with tenant + business info
+    const rows = await db
+      .select({
+        booking: bookingsTable,
+        listing: { title: listingsTable.title },
+        tenant:  { slug: tenantsTable.slug, email: tenantsTable.email },
+        biz:     { name: businessProfileTable.name, email: businessProfileTable.email, outboundEmail: businessProfileTable.outboundEmail },
+      })
+      .from(bookingsTable)
+      .leftJoin(listingsTable,       eq(bookingsTable.listingId,    listingsTable.id))
+      .leftJoin(tenantsTable,        eq(bookingsTable.tenantId,     tenantsTable.id))
+      .leftJoin(businessProfileTable, eq(businessProfileTable.tenantId, tenantsTable.id))
+      .where(eq(bookingsTable.id, bookingId))
+      .limit(1);
+
+    if (!rows.length) { res.status(404).json({ error: "Booking not found" }); return; }
+    const { booking, listing, tenant, biz } = rows[0];
+
+    // Verify ownership
+    if (booking.customerEmail.toLowerCase() !== customerEmail.toLowerCase()) {
+      res.status(403).json({ error: "Not authorized" }); return;
+    }
+
+    // Must still be pending
+    if (booking.status !== "pending") {
+      res.status(400).json({ error: "Booking is no longer pending" }); return;
+    }
+
+    const now = new Date();
+    const THREE_HOURS = 3 * 60 * 60 * 1000;
+
+    // Must be at least 3 hours old
+    const bookingAge = now.getTime() - new Date(booking.createdAt).getTime();
+    if (bookingAge < THREE_HOURS) {
+      const remainingMs = THREE_HOURS - bookingAge;
+      const remainingMin = Math.ceil(remainingMs / 60000);
+      res.status(429).json({ error: `You can send a reminder ${remainingMin} minute${remainingMin !== 1 ? "s" : ""} after booking. Please allow time for the company to review.`, remainingMs });
+      return;
+    }
+
+    // Cooldown: 3 hours since last reminder
+    if (booking.lastAdminReminderSentAt) {
+      const since = now.getTime() - new Date(booking.lastAdminReminderSentAt).getTime();
+      if (since < THREE_HOURS) {
+        const remainingMs = THREE_HOURS - since;
+        const remainingMin = Math.ceil(remainingMs / 60000);
+        res.status(429).json({ error: `Reminder already sent. You can send another in ${remainingMin} minute${remainingMin !== 1 ? "s" : ""}.`, remainingMs });
+        return;
+      }
+    }
+
+    // Resolve admin email
+    const adminEmail = biz?.outboundEmail ?? biz?.email ?? tenant?.email;
+    const companyName = biz?.name ?? tenant?.slug ?? "the company";
+    const tenantSlug = tenant?.slug ?? "";
+
+    // Send email (best-effort — don't fail the response if email fails)
+    if (adminEmail) {
+      try {
+        await withBrand({ companyName }, () =>
+          sendPendingBookingReminderEmail({
+            toEmail:       adminEmail,
+            companyName,
+            customerName:  booking.customerName,
+            customerEmail: booking.customerEmail,
+            customerPhone: booking.customerPhone,
+            listingTitle:  listing?.title ?? "Unknown rental",
+            startDate:     booking.startDate,
+            endDate:       booking.endDate,
+            bookingId,
+            slug:          tenantSlug,
+          })
+        );
+      } catch (emailErr) {
+        req.log.warn({ emailErr }, "Failed to send pending booking reminder email");
+      }
+    }
+
+    // Create in-app notification for the admin
+    try {
+      if (booking.tenantId) {
+        await createNotification({
+          tenantId:  booking.tenantId,
+          type:      "booking_reminder",
+          title:     "Booking Review Reminder",
+          message:   `${booking.customerName} sent a reminder to review their pending booking for ${listing?.title ?? "a rental"}.`,
+          bookingId,
+        });
+      }
+    } catch { /* non-critical */ }
+
+    // Stamp the reminder time
+    await db.update(bookingsTable)
+      .set({ lastAdminReminderSentAt: now, updatedAt: now } as any)
+      .where(eq(bookingsTable.id, bookingId));
+
+    res.json({ ok: true, message: "Reminder sent to the company." });
+  } catch (err) {
+    req.log.error(err);
+    res.status(500).json({ error: "Failed to send reminder" });
   }
 });
 

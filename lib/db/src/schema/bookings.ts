@@ -75,6 +75,8 @@ export const bookingsTable = pgTable("bookings", {
   splitRemainingChargedAt: timestamp("split_remaining_charged_at"),
   // Email activity log — JSON array of {type, sentAt, toEmail?}
   emailEvents: text("email_events"),
+  // Renter-triggered admin review reminder — timestamp of last nudge sent
+  lastAdminReminderSentAt: timestamp("last_admin_reminder_sent_at"),
   // Seen/read tracking — false means the viewer has not yet looked at this booking/update
   seenByAdmin: boolean("seen_by_admin").notNull().default(true),
   seenByRenter: boolean("seen_by_renter").notNull().default(true),
