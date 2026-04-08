@@ -41,8 +41,12 @@ async function triggerDepositAtPickup(
 
     const [listing] = await db.select().from(listingsTable)
       .where(eq(listingsTable.id, booking.listingId));
-    const depositAmountCents = listing?.depositAmount
-      ? Math.round(parseFloat(String(listing.depositAmount)) * 100) : 0;
+    // Use the booking's stored depositPaid (which includes bundle item deposits) when set;
+    // fall back to the listing's configured depositAmount.
+    const rawDeposit = booking.depositPaid
+      ? parseFloat(String(booking.depositPaid))
+      : (listing?.depositAmount ? parseFloat(String(listing.depositAmount)) : 0);
+    const depositAmountCents = Math.round(rawDeposit * 100);
     if (depositAmountCents < 50) return; // no deposit on this listing
 
     if (!booking.stripePaymentIntentId) return; // no card on file

@@ -13,6 +13,7 @@ export type BundleItem = {
   subtotal: number;
   imageUrl?: string;
   categoryName?: string;
+  categorySlug?: string;
 };
 
 type AvailableListing = {
@@ -21,6 +22,7 @@ type AvailableListing = {
   pricePerDay: number | string;
   imageUrls?: string[];
   categoryName?: string | null;
+  categorySlug?: string | null;
   quantity?: number;
   status?: string;
 };
@@ -74,6 +76,7 @@ export default function BundlePickerModal({
       subtotal: price * days,
       imageUrl: listing.imageUrls?.[0],
       categoryName: listing.categoryName ?? undefined,
+      categorySlug: listing.categorySlug ?? undefined,
     };
     onChange([...bundleItems, item]);
   }

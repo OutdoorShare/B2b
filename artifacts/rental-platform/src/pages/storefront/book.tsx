@@ -22,7 +22,7 @@ import {
   ScanFace, RefreshCw, XCircle, Clock, Tag, Monitor, QrCode, Smartphone,
   ScanLine, X, Copy, Check, Upload, ImagePlus, Car, Mountain, BookOpen, Building2, Package,
   Minus, Plus, LogIn, MapPin, Phone, Mail, IdCard, ExternalLink,
-  Shirt, ShoppingBag, Truck, Lightbulb
+  Shirt, ShoppingBag, Truck, Lightbulb, ChevronDown, ChevronUp
 } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { differenceInDays, format, addDays, eachDayOfInterval, parseISO, isBefore, isAfter, startOfDay } from "date-fns";
@@ -698,6 +698,9 @@ export default function StorefrontBook() {
   const [bundlePickerOpen, setBundlePickerOpen] = useState(false);
   const [allListings, setAllListings] = useState<any[]>([]);
   const [bundleDiscountPercent, setBundleDiscountPercent] = useState(0);
+  // Cache of categorySlug → protection fee per day for bundle items
+  const [bundleProtectionCache, setBundleProtectionCache] = useState<Record<string, number>>({});
+  const [showProtectionBreakdown, setShowProtectionBreakdown] = useState(false);
 
   // Quantity selection (multi-unit listings)
   const [selectedQuantity, setSelectedQuantity] = useState(1);
@@ -778,6 +781,30 @@ export default function StorefrontBook() {
     setBundleItems(items => items.map(i => ({ ...i, days, subtotal: i.pricePerDay * i.qty * days })));
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [days]);
+
+  // Fetch protection plans for any bundle item category slugs not yet cached
+  useEffect(() => {
+    const uncached = bundleItems
+      .map(i => i.categorySlug)
+      .filter((slug): slug is string => !!slug && !(slug in bundleProtectionCache));
+    const unique = [...new Set(uncached)];
+    if (unique.length === 0) return;
+    Promise.all(
+      unique.map(slug =>
+        fetch(`${BASE}/api/protection-plan/${encodeURIComponent(slug)}`)
+          .then(r => r.json())
+          .then(d => ({ slug, feePerDay: d.enabled ? parseFloat(d.feeAmount || "0") : 0 }))
+          .catch(() => ({ slug, feePerDay: 0 }))
+      )
+    ).then(results => {
+      setBundleProtectionCache(prev => {
+        const next = { ...prev };
+        results.forEach(({ slug, feePerDay }) => { next[slug] = feePerDay; });
+        return next;
+      });
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [bundleItems]);
 
   // Fetch booked-dates availability for multi-quantity logic
   useEffect(() => {
@@ -1069,12 +1096,26 @@ export default function StorefrontBook() {
   }, [hasTimeSlots, selectedTimeSlot, listing, isOneDay, selectedOption, fullDayPrice, days, selectedHours, selectedQuantity]);
   const deposit = listing?.depositAmount ? parseFloat(String(listing.depositAmount)) : 0;
   const platformProtectionRate = platformProtectionPlan?.enabled ? parseFloat(platformProtectionPlan.feeAmount || "0") : 0;
-  const platformProtectionFeeBase = platformProtectionRate * days;
+  const primaryProtectionFeeBase = platformProtectionRate * days;
+  // Per-item bundle protection fees (each item's category rate × days × qty)
+  const bundleProtectionBreakdown = bundleItems.map(item => ({
+    title: item.title,
+    categoryName: item.categoryName,
+    feePerDay: item.categorySlug ? (bundleProtectionCache[item.categorySlug] ?? 0) : 0,
+    days: item.days,
+    qty: item.qty,
+    total: (item.categorySlug ? (bundleProtectionCache[item.categorySlug] ?? 0) : 0) * item.days * item.qty,
+  }));
+  const bundleProtectionFeeBase = bundleProtectionBreakdown.reduce((s, b) => s + b.total, 0);
+  const platformProtectionFeeBase = primaryProtectionFeeBase + bundleProtectionFeeBase;
   // Renter opt-out: if the company has made the protection plan optional, the renter
   // can decline it. When declined, remove the fee from the total.
   const protectionIsOptional = !!(businessProfile as any)?.protectionPlanOptional;
   // effectiveProtectionFee is 0 when the renter has opted out
   const platformProtectionFee = protectionIsOptional && protectionDeclined ? 0 : platformProtectionFeeBase;
+  // Bundle item deposits (20% of each item's subtotal)
+  const bundleDepositTotal = bundleItems.reduce((s, i) => s + i.subtotal * 0.20, 0);
+  const totalDeposit = deposit + bundleDepositTotal;
   // When the platform protection plan is active, exclude listing addons named "protection"
   // to avoid double-counting the same fee.
   const addonsSubtotal = useMemo(() => {
@@ -1576,7 +1617,7 @@ export default function StorefrontBook() {
           stripePaymentIntentId: paymentIntentId || undefined,
           appliedPromoCode: appliedPromo?.code || undefined,
           discountAmount: promoDiscount > 0 ? promoDiscount : undefined,
-          depositPaid: deposit > 0 ? String(deposit) : undefined,
+          depositPaid: totalDeposit > 0 ? String(totalDeposit) : undefined,
           protectionPlanFee: platformProtectionFee > 0 ? String(platformProtectionFee) : undefined,
           protectionPlanDeclined: protectionIsOptional && protectionDeclined ? true : undefined,
           // Payment plan (split deposit)
@@ -3938,12 +3979,51 @@ export default function StorefrontBook() {
                           </div>
                         ))}
                       {platformProtectionFeeBase > 0 && !protectionDeclined && (
-                        <div className="flex justify-between text-blue-700 font-medium">
-                          <span className="flex items-center gap-1.5">
-                            <img src="/outdoorshare-logo.png" alt="OutdoorShare" className="h-3.5 object-contain opacity-80" />
-                            Protection Plan (${platformProtectionRate.toFixed(0)}/day × {days} day{days !== 1 ? "s" : ""})
-                          </span>
-                          <span>+${platformProtectionFeeBase.toFixed(2)}</span>
+                        <div className="space-y-1">
+                          <button
+                            type="button"
+                            onClick={() => setShowProtectionBreakdown(v => !v)}
+                            className="w-full flex justify-between items-center text-blue-700 font-medium hover:text-blue-800 transition-colors group"
+                          >
+                            <span className="flex items-center gap-1.5">
+                              <img src="/outdoorshare-logo.png" alt="OutdoorShare" className="h-3.5 object-contain opacity-80" />
+                              Protection Plan
+                              {bundleItems.length > 0 && (
+                                <span className="text-xs font-normal text-blue-500">({bundleItems.length + 1} items)</span>
+                              )}
+                            </span>
+                            <span className="flex items-center gap-1">
+                              +${platformProtectionFeeBase.toFixed(2)}
+                              {bundleItems.length > 0 && (
+                                showProtectionBreakdown
+                                  ? <ChevronUp className="w-3.5 h-3.5 opacity-60" />
+                                  : <ChevronDown className="w-3.5 h-3.5 opacity-60" />
+                              )}
+                            </span>
+                          </button>
+                          {showProtectionBreakdown && (
+                            <div className="ml-4 space-y-1 border-l-2 border-blue-100 pl-3">
+                              {/* Primary listing */}
+                              {primaryProtectionFeeBase > 0 && (
+                                <div className="flex justify-between text-xs text-blue-600">
+                                  <span className="truncate mr-2">{listing?.title ?? "Primary"}</span>
+                                  <span>${platformProtectionRate.toFixed(0)}/day × {days} = +${primaryProtectionFeeBase.toFixed(2)}</span>
+                                </div>
+                              )}
+                              {/* Bundle items */}
+                              {bundleProtectionBreakdown.filter(b => b.total > 0).map((b, idx) => (
+                                <div key={idx} className="flex justify-between text-xs text-blue-600">
+                                  <span className="truncate mr-2">{b.title}</span>
+                                  <span>${b.feePerDay.toFixed(0)}/day × {b.days}{b.qty > 1 ? ` × ${b.qty}` : ""} = +${b.total.toFixed(2)}</span>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                          {!showProtectionBreakdown && bundleItems.length === 0 && (
+                            <p className="text-xs text-blue-400 ml-5">
+                              ${platformProtectionRate.toFixed(0)}/day × {days} day{days !== 1 ? "s" : ""}
+                            </p>
+                          )}
                         </div>
                       )}
                       {platformProtectionFeeBase > 0 && protectionDeclined && (
@@ -3993,13 +4073,31 @@ export default function StorefrontBook() {
                           <span>${total.toFixed(2)}</span>
                         </div>
                       )}
-                      {deposit > 0 && (
-                        <div className="flex justify-between text-xs bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
-                          <span className="flex items-center gap-1.5 text-amber-800 font-medium">
-                            <Lock className="w-3 h-3" />
-                            Security deposit (held at pickup)
-                          </span>
-                          <span className="text-amber-800 font-semibold">${deposit.toFixed(2)}</span>
+                      {totalDeposit > 0 && (
+                        <div className="bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 space-y-1">
+                          <div className="flex justify-between text-xs">
+                            <span className="flex items-center gap-1.5 text-amber-800 font-medium">
+                              <Lock className="w-3 h-3" />
+                              Security deposit (held at pickup)
+                            </span>
+                            <span className="text-amber-800 font-semibold">${totalDeposit.toFixed(2)}</span>
+                          </div>
+                          {bundleDepositTotal > 0 && (
+                            <div className="space-y-0.5 ml-4 border-l-2 border-amber-200 pl-2">
+                              {deposit > 0 && (
+                                <div className="flex justify-between text-xs text-amber-700">
+                                  <span className="truncate mr-2">{listing?.title ?? "Primary"}</span>
+                                  <span>${deposit.toFixed(2)}</span>
+                                </div>
+                              )}
+                              {bundleItems.map(item => (
+                                <div key={item.listingId} className="flex justify-between text-xs text-amber-700">
+                                  <span className="truncate mr-2">{item.title} (20%)</span>
+                                  <span>${(item.subtotal * 0.20).toFixed(2)}</span>
+                                </div>
+                              ))}
+                            </div>
+                          )}
                         </div>
                       )}
                       <p className="text-xs text-muted-foreground flex items-center gap-1">
