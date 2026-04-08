@@ -2,10 +2,10 @@ import { useState, useMemo, useEffect } from "react";
 import { useLocation, useParams } from "wouter";
 import {
   User, LogOut, Calendar, CalendarDays, List, Settings,
-  CreditCard, Lock, MapPin, CheckCircle2, AlertCircle, Clock,
+  CreditCard, Lock, MapPin, CheckCircle2, AlertCircle,
   Loader2, ChevronLeft, ChevronRight, Search, X, ExternalLink,
-  Mail, Phone, Shield, Trash2, RotateCcw, Building2,
-  MessageSquarePlus, Star,
+  Mail, Phone, Trash2, RotateCcw, MessageSquarePlus, Star,
+  TrendingUp, Package, ArrowRight, Sparkles, Clock, Zap,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -13,7 +13,8 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import {
   format, startOfDay, startOfMonth, endOfMonth, startOfWeek, endOfWeek,
-  addDays, addMonths, subMonths, isSameMonth, isSameDay, parseISO, differenceInDays,
+  addDays, addMonths, subMonths, isSameMonth, isSameDay, parseISO,
+  differenceInDays,
 } from "date-fns";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
@@ -25,26 +26,33 @@ function resolveImage(url: string) {
   return `${API}/api/uploads/${url.split("/").pop()}`;
 }
 
+const STATUS_ACCENT: Record<string, string> = {
+  pending:   "bg-amber-400",
+  confirmed: "bg-blue-500",
+  active:    "bg-emerald-500",
+  completed: "bg-gray-400",
+  cancelled: "bg-red-400",
+};
 const STATUS_COLORS: Record<string, string> = {
   pending:   "bg-amber-100  text-amber-900  border-amber-300",
   confirmed: "bg-blue-100   text-blue-900   border-blue-300",
-  active:    "bg-green-100  text-green-900  border-green-300",
+  active:    "bg-emerald-100 text-emerald-900 border-emerald-300",
   completed: "bg-gray-100   text-gray-600   border-gray-300",
   cancelled: "bg-red-100    text-red-700    border-red-300",
-};
-const STATUS_DOT: Record<string, string> = {
-  pending:   "bg-amber-400",
-  confirmed: "bg-blue-500",
-  active:    "bg-green-500",
-  completed: "bg-gray-400",
-  cancelled: "bg-red-400",
 };
 const STATUS_BADGE: Record<string, string> = {
   pending:   "bg-amber-100 text-amber-800 border-amber-200",
   confirmed: "bg-blue-100 text-blue-800 border-blue-200",
-  active:    "bg-green-100 text-green-800 border-green-200",
-  completed: "bg-gray-100 text-gray-700 border-gray-200",
-  cancelled: "bg-red-100 text-red-700 border-red-200",
+  active:    "bg-emerald-100 text-emerald-800 border-emerald-200",
+  completed: "bg-gray-100 text-gray-600 border-gray-200",
+  cancelled: "bg-red-100 text-red-600 border-red-200",
+};
+const STATUS_DOT: Record<string, string> = {
+  pending:   "bg-amber-400",
+  confirmed: "bg-blue-500",
+  active:    "bg-emerald-500",
+  completed: "bg-gray-400",
+  cancelled: "bg-red-400",
 };
 
 function getRentalTimeStatus(startStr: string, endStr: string, status: string) {
@@ -57,13 +65,13 @@ function getRentalTimeStatus(startStr: string, endStr: string, status: string) {
   const totalDays   = Math.max(1, differenceInDays(end, start));
   const elapsed     = Math.max(0, differenceInDays(today, start));
   const pct         = Math.min(100, Math.round((elapsed / totalDays) * 100));
-  if (daysToStart > 1)  return { label: `Starts in ${daysToStart}d`,  color: "text-blue-600 bg-blue-50 border-blue-200",   pct: 0,   bar: "bg-blue-400" };
-  if (daysToStart === 1) return { label: "Starts tomorrow",            color: "text-blue-600 bg-blue-50 border-blue-200",   pct: 0,   bar: "bg-blue-400" };
-  if (daysToStart === 0) return { label: "Pickup day!",                color: "text-green-700 bg-green-50 border-green-200",pct: 0,   bar: "bg-green-500" };
-  if (daysToEnd > 1)    return { label: `${daysToEnd}d remaining`,    color: "text-green-700 bg-green-50 border-green-200",pct,      bar: "bg-green-500" };
-  if (daysToEnd === 1)  return { label: "Returns tomorrow",            color: "text-amber-700 bg-amber-50 border-amber-200",pct,      bar: "bg-amber-500" };
-  if (daysToEnd === 0)  return { label: "Due back today",              color: "text-amber-700 bg-amber-50 border-amber-200",pct: 100, bar: "bg-amber-500" };
-  return                        { label: `Overdue ${Math.abs(daysToEnd)}d`, color: "text-red-700 bg-red-50 border-red-300", pct: 100, bar: "bg-red-500" };
+  if (daysToStart > 1)   return { label: `Starts in ${daysToStart}d`,     color: "text-blue-700 bg-blue-50 border-blue-200",     pct: 0,   bar: "bg-blue-400",    urgent: false };
+  if (daysToStart === 1) return { label: "Starts tomorrow",                color: "text-blue-700 bg-blue-50 border-blue-200",     pct: 0,   bar: "bg-blue-400",    urgent: false };
+  if (daysToStart === 0) return { label: "Pickup day!",                    color: "text-emerald-700 bg-emerald-50 border-emerald-200", pct: 0, bar: "bg-emerald-500", urgent: true  };
+  if (daysToEnd > 1)     return { label: `${daysToEnd}d remaining`,        color: "text-emerald-700 bg-emerald-50 border-emerald-200", pct,  bar: "bg-emerald-500", urgent: false };
+  if (daysToEnd === 1)   return { label: "Returns tomorrow",               color: "text-amber-700 bg-amber-50 border-amber-200",   pct,  bar: "bg-amber-400",   urgent: true  };
+  if (daysToEnd === 0)   return { label: "Due back today",                 color: "text-amber-700 bg-amber-50 border-amber-200",   pct: 100, bar: "bg-amber-400", urgent: true  };
+  return                         { label: `Overdue ${Math.abs(daysToEnd)}d`, color: "text-red-700 bg-red-50 border-red-300",      pct: 100, bar: "bg-red-400",   urgent: true  };
 }
 
 type RenterBooking = {
@@ -151,69 +159,121 @@ export default function MyBookings() {
   if (!session) return null;
 
   const initials = session.name?.split(" ").map(w => w[0]).join("").slice(0, 2).toUpperCase() ?? "";
-  const memberSince = profile?.createdAt
-    ? new Date(profile.createdAt).toLocaleDateString("en-US", { month: "long", year: "numeric" })
-    : null;
   const totalSpent = bookings.reduce((sum, b) => sum + parseFloat(b.totalPrice || "0"), 0);
+  const activeBooking = bookings.find(b => b.status === "active");
+  const upcomingCount = bookings.filter(b =>
+    b.status !== "cancelled" && startOfDay(parseISO(b.startDate)) >= startOfDay(new Date())
+  ).length;
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-
-        {/* Header card */}
-        <div className="bg-white rounded-2xl border border-gray-200 p-5 mb-6 flex items-center justify-between gap-4">
-          <div className="flex items-center gap-4">
-            <div className="h-14 w-14 rounded-full bg-primary flex items-center justify-center text-white font-bold text-xl flex-shrink-0">
-              {initials || <User className="w-6 h-6" />}
+      {/* Gradient hero header */}
+      <div className="bg-gradient-to-br from-primary/90 via-primary to-primary/80 text-white">
+        <div className="max-w-3xl mx-auto px-4 sm:px-6 py-6">
+          <div className="flex items-center justify-between gap-4">
+            <div className="flex items-center gap-4">
+              {/* Avatar */}
+              <div className="relative">
+                <div className="h-16 w-16 rounded-2xl bg-white/20 backdrop-blur-sm border border-white/30 flex items-center justify-center text-white font-bold text-2xl shadow-lg">
+                  {initials || <User className="w-8 h-8" />}
+                </div>
+                {activeBooking && (
+                  <span className="absolute -top-1 -right-1 h-4 w-4 rounded-full bg-emerald-400 border-2 border-white animate-pulse" title="Active rental" />
+                )}
+              </div>
+              <div>
+                <h1 className="text-xl font-bold leading-tight">{session.name}</h1>
+                <p className="text-white/70 text-sm mt-0.5">{session.email}</p>
+                {upcomingCount > 0 && (
+                  <p className="text-white/90 text-xs mt-1 flex items-center gap-1">
+                    <Sparkles className="h-3 w-3" />
+                    {upcomingCount} upcoming rental{upcomingCount !== 1 ? "s" : ""}
+                  </p>
+                )}
+              </div>
             </div>
-            <div>
-              <h1 className="text-xl font-bold text-gray-900">{session.name}</h1>
-              <p className="text-sm text-gray-500">{session.email}</p>
-              {session.phone && <p className="text-xs text-gray-400 mt-0.5">{session.phone}</p>}
-            </div>
+            <button
+              onClick={handleLogout}
+              className="flex items-center gap-1.5 text-white/70 hover:text-white text-sm transition-colors"
+            >
+              <LogOut className="h-4 w-4" />
+              <span className="hidden sm:inline">Sign out</span>
+            </button>
           </div>
-          <Button variant="outline" size="sm" onClick={handleLogout} className="gap-2 text-red-600 hover:text-red-700 hover:border-red-300 flex-shrink-0">
-            <LogOut className="h-4 w-4" />
-            <span className="hidden sm:inline">Sign Out</span>
-          </Button>
+
+          {/* Quick stats row */}
+          {!bookingsLoading && bookings.length > 0 && (
+            <div className="mt-5 grid grid-cols-3 gap-3">
+              <div className="bg-white/10 backdrop-blur-sm rounded-xl px-3 py-2.5 text-center border border-white/20">
+                <p className="text-xl font-bold">{bookings.length}</p>
+                <p className="text-white/70 text-[11px] mt-0.5">Total Rentals</p>
+              </div>
+              <div className="bg-white/10 backdrop-blur-sm rounded-xl px-3 py-2.5 text-center border border-white/20">
+                <p className="text-xl font-bold">{upcomingCount}</p>
+                <p className="text-white/70 text-[11px] mt-0.5">Upcoming</p>
+              </div>
+              <div className="bg-white/10 backdrop-blur-sm rounded-xl px-3 py-2.5 text-center border border-white/20">
+                <p className="text-xl font-bold">${totalSpent < 1000 ? totalSpent.toFixed(0) : (totalSpent / 1000).toFixed(1) + "k"}</p>
+                <p className="text-white/70 text-[11px] mt-0.5">Total Spent</p>
+              </div>
+            </div>
+          )}
+
+          {/* Active rental banner */}
+          {activeBooking && (
+            <button
+              onClick={() => {
+                const b = activeBooking.tenantSlug ? `/${activeBooking.tenantSlug}` : base;
+                setLocation(`${b}/my-bookings/${activeBooking.id}`);
+              }}
+              className="mt-4 w-full bg-emerald-500/30 hover:bg-emerald-500/40 border border-emerald-400/40 rounded-xl px-4 py-3 flex items-center gap-3 transition-colors text-left"
+            >
+              <div className="h-8 w-8 rounded-lg bg-emerald-400/40 flex items-center justify-center flex-shrink-0">
+                <Zap className="h-4 w-4 text-emerald-200" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-[11px] text-emerald-200 font-semibold uppercase tracking-wide">Active Rental</p>
+                <p className="text-white font-semibold text-sm line-clamp-1">{activeBooking.listingTitle}</p>
+              </div>
+              <ArrowRight className="h-4 w-4 text-white/60 flex-shrink-0" />
+            </button>
+          )}
         </div>
 
-        {/* Tab bar */}
-        <div className="flex gap-1 bg-gray-100 rounded-xl p-1 mb-6">
-          <button
-            onClick={() => setTab("bookings")}
-            className={`flex-1 flex items-center justify-center gap-2 text-sm font-medium py-2 rounded-lg transition-all ${tab === "bookings" ? "bg-white shadow text-blue-600" : "text-gray-500 hover:text-gray-700"}`}
-          >
-            <Calendar className={`h-4 w-4 ${tab === "bookings" ? "text-blue-600" : ""}`} />
-            <span className="hidden sm:inline">My Bookings</span>
-            <span className="sm:hidden">Bookings</span>
-            {bookings.length > 0 && (
-              <span className={`text-xs ${tab === "bookings" ? "text-blue-400" : "text-gray-400"}`}>({bookings.length})</span>
-            )}
-          </button>
-          <button
-            onClick={() => setTab("profile")}
-            className={`flex-1 flex items-center justify-center gap-2 text-sm font-medium py-2 rounded-lg transition-all ${tab === "profile" ? "bg-white shadow text-primary" : "text-gray-500 hover:text-gray-700"}`}
-          >
-            <User className={`h-4 w-4 ${tab === "profile" ? "text-primary" : ""}`} />
-            <span className="hidden sm:inline">My Profile</span>
-            <span className="sm:hidden">Profile</span>
-          </button>
-          <button
-            onClick={() => setTab("settings")}
-            className={`flex-1 flex items-center justify-center gap-2 text-sm font-medium py-2 rounded-lg transition-all ${tab === "settings" ? "bg-white shadow text-violet-600" : "text-gray-500 hover:text-gray-700"}`}
-          >
-            <Settings className={`h-4 w-4 ${tab === "settings" ? "text-violet-600" : ""}`} />
-            Settings
-          </button>
+        {/* Tab bar — sits at the bottom of the hero */}
+        <div className="max-w-3xl mx-auto px-4 sm:px-6">
+          <div className="flex border-b border-white/20">
+            {([
+              { key: "bookings" as Tab, label: "Bookings", icon: Calendar },
+              { key: "profile"  as Tab, label: "Profile",  icon: User     },
+              { key: "settings" as Tab, label: "Settings", icon: Settings },
+            ] as const).map(({ key, label, icon: Icon }) => (
+              <button
+                key={key}
+                onClick={() => setTab(key)}
+                className={`flex items-center gap-1.5 px-4 py-3 text-sm font-medium border-b-2 transition-colors ${
+                  tab === key
+                    ? "border-white text-white"
+                    : "border-transparent text-white/50 hover:text-white/80"
+                }`}
+              >
+                <Icon className="h-3.5 w-3.5" />
+                {label}
+              </button>
+            ))}
+          </div>
         </div>
+      </div>
 
+      {/* Page content */}
+      <div className="max-w-3xl mx-auto px-4 sm:px-6 py-6">
         {tab === "profile" && (
           <ProfileTab
             session={session}
-            memberSince={memberSince}
+            profile={profile}
             bookingCount={bookings.length}
             totalSpent={totalSpent}
+            upcomingCount={upcomingCount}
             onEditSettings={() => setTab("settings")}
           />
         )}
@@ -250,47 +310,97 @@ export default function MyBookings() {
 // ─── Profile Tab ─────────────────────────────────────────────────────────────
 
 function ProfileTab({
-  session, memberSince, bookingCount, totalSpent, onEditSettings,
+  session, profile, bookingCount, totalSpent, upcomingCount, onEditSettings,
 }: {
   session: Session;
-  memberSince: string | null;
+  profile: CustomerProfile | null;
   bookingCount: number;
   totalSpent: number;
+  upcomingCount: number;
   onEditSettings: () => void;
 }) {
-  const initials = session.name?.split(" ").map(w => w[0]).join("").slice(0, 2).toUpperCase() ?? "";
+  const memberSince = profile?.createdAt
+    ? new Date(profile.createdAt).toLocaleDateString("en-US", { month: "long", year: "numeric" })
+    : null;
+
   return (
     <div className="space-y-4">
-      <div className="bg-white rounded-2xl border border-gray-200 p-8 flex flex-col items-center text-center gap-3">
-        <div className="h-24 w-24 rounded-full bg-primary flex items-center justify-center text-white font-bold text-4xl shadow-sm">
-          {initials || <User className="w-10 h-10" />}
+      {/* Identity card */}
+      <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden">
+        <div className="h-16 bg-gradient-to-r from-primary/20 via-primary/10 to-transparent" />
+        <div className="px-6 pb-6 -mt-8">
+          <div className="h-16 w-16 rounded-2xl bg-primary flex items-center justify-center text-white font-bold text-2xl shadow-md ring-4 ring-white">
+            {session.name?.split(" ").map(w => w[0]).join("").slice(0, 2).toUpperCase() || <User className="w-7 h-7" />}
+          </div>
+          <div className="mt-3">
+            <h2 className="text-xl font-bold text-gray-900">{session.name}</h2>
+            <p className="text-sm text-gray-500 mt-0.5">{session.email}</p>
+            {session.phone && <p className="text-sm text-gray-400 mt-0.5">{session.phone}</p>}
+            {memberSince && (
+              <p className="text-xs text-gray-400 mt-2 flex items-center gap-1.5">
+                <Calendar className="h-3.5 w-3.5" /> Member since {memberSince}
+              </p>
+            )}
+          </div>
+          <Button variant="outline" size="sm" onClick={onEditSettings} className="mt-4 gap-2">
+            <Settings className="h-3.5 w-3.5" /> Edit Profile &amp; Settings
+          </Button>
         </div>
-        <div>
-          <h2 className="text-2xl font-bold text-gray-900">{session.name}</h2>
-          <p className="text-sm text-gray-500 mt-0.5">{session.email}</p>
-          {session.phone && <p className="text-sm text-gray-400 mt-0.5">{session.phone}</p>}
-          {memberSince && (
-            <p className="text-xs text-gray-400 mt-2 flex items-center justify-center gap-1">
-              <Calendar className="h-3.5 w-3.5" /> Member since {memberSince}
-            </p>
-          )}
-        </div>
-        <Button variant="outline" size="sm" onClick={onEditSettings} className="mt-1 gap-2">
-          <Settings className="h-4 w-4" />
-          Edit Profile
-        </Button>
       </div>
 
-      <div className="grid grid-cols-2 gap-3">
+      {/* Stats */}
+      <div className="grid grid-cols-3 gap-3">
         <div className="bg-white rounded-xl border border-gray-200 p-4 text-center">
+          <div className="h-8 w-8 rounded-lg bg-primary/10 flex items-center justify-center mx-auto mb-2">
+            <Package className="h-4 w-4 text-primary" />
+          </div>
           <p className="text-2xl font-bold text-gray-900">{bookingCount}</p>
-          <p className="text-xs text-gray-500 mt-0.5">Rentals Booked</p>
+          <p className="text-[11px] text-gray-500 mt-0.5">Rentals Booked</p>
         </div>
         <div className="bg-white rounded-xl border border-gray-200 p-4 text-center">
-          <p className="text-2xl font-bold text-gray-900">${totalSpent.toFixed(0)}</p>
-          <p className="text-xs text-gray-500 mt-0.5">Total Spent</p>
+          <div className="h-8 w-8 rounded-lg bg-blue-50 flex items-center justify-center mx-auto mb-2">
+            <Calendar className="h-4 w-4 text-blue-500" />
+          </div>
+          <p className="text-2xl font-bold text-gray-900">{upcomingCount}</p>
+          <p className="text-[11px] text-gray-500 mt-0.5">Upcoming</p>
+        </div>
+        <div className="bg-white rounded-xl border border-gray-200 p-4 text-center">
+          <div className="h-8 w-8 rounded-lg bg-emerald-50 flex items-center justify-center mx-auto mb-2">
+            <TrendingUp className="h-4 w-4 text-emerald-600" />
+          </div>
+          <p className="text-2xl font-bold text-gray-900">${totalSpent < 1000 ? totalSpent.toFixed(0) : (totalSpent / 1000).toFixed(1) + "k"}</p>
+          <p className="text-[11px] text-gray-500 mt-0.5">Total Spent</p>
         </div>
       </div>
+
+      {/* Billing summary */}
+      {profile && (profile.cardLastFour || profile.billingAddress) && (
+        <div className="bg-white rounded-xl border border-gray-200 divide-y divide-gray-100">
+          {profile.cardLastFour && (
+            <div className="flex items-center gap-3 px-5 py-3.5">
+              <div className="h-9 w-14 rounded-lg bg-gradient-to-br from-gray-700 to-gray-900 flex items-center justify-center flex-shrink-0">
+                <CreditCard className="h-4 w-4 text-white" />
+              </div>
+              <div>
+                <p className="text-sm font-medium text-gray-800">
+                  {profile.cardBrand ? profile.cardBrand.charAt(0).toUpperCase() + profile.cardBrand.slice(1) : "Card"} •••• {profile.cardLastFour}
+                </p>
+                <p className="text-xs text-gray-400">Saved payment method</p>
+              </div>
+            </div>
+          )}
+          {profile.billingAddress && (
+            <div className="flex items-center gap-3 px-5 py-3.5">
+              <div className="h-9 w-9 rounded-lg bg-gray-100 flex items-center justify-center flex-shrink-0">
+                <MapPin className="h-4 w-4 text-gray-500" />
+              </div>
+              <p className="text-sm text-gray-600">
+                {profile.billingAddress}{profile.billingCity ? `, ${profile.billingCity}` : ""}{profile.billingState ? ` ${profile.billingState}` : ""}
+              </p>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -361,6 +471,45 @@ function BookingsTab({
     );
   }, [tabFiltered, search]);
 
+  // Group bookings by month for visual breaks
+  const grouped = useMemo(() => {
+    if (search) return [{ label: null, items: displayed }];
+    if (activeTab === "upcoming") {
+      // Group upcoming by: This month, Next month, Later
+      const groups: { label: string; items: RenterBooking[] }[] = [];
+      const now = new Date();
+      const thisMonthStart = startOfMonth(now);
+      const nextMonthStart = startOfMonth(addMonths(now, 1));
+      const nextMonthEnd   = endOfMonth(nextMonthStart);
+
+      const thisMonth = displayed.filter(b => {
+        const s = parseISO(b.startDate);
+        return s >= thisMonthStart && s < nextMonthStart;
+      });
+      const nextMonth = displayed.filter(b => {
+        const s = parseISO(b.startDate);
+        return s >= nextMonthStart && s <= nextMonthEnd;
+      });
+      const later = displayed.filter(b => parseISO(b.startDate) > nextMonthEnd);
+
+      if (thisMonth.length) groups.push({ label: "This Month", items: thisMonth });
+      if (nextMonth.length) groups.push({ label: "Next Month", items: nextMonth });
+      if (later.length)     groups.push({ label: "Coming Up", items: later });
+      return groups.length ? groups : [{ label: null, items: displayed }];
+    }
+    // For recent/all/cancelled: group by month
+    const byMonth = new Map<string, RenterBooking[]>();
+    for (const b of displayed) {
+      try {
+        const key = format(parseISO(b.createdAt ?? b.startDate), "MMMM yyyy");
+        if (!byMonth.has(key)) byMonth.set(key, []);
+        byMonth.get(key)!.push(b);
+      } catch { /* skip */ }
+    }
+    const groups = Array.from(byMonth.entries()).map(([label, items]) => ({ label, items }));
+    return groups.length <= 1 ? [{ label: null, items: displayed }] : groups;
+  }, [displayed, activeTab, search]);
+
   const calendarDays = useMemo(() => {
     const start = startOfWeek(startOfMonth(calendarMonth));
     const end   = endOfWeek(endOfMonth(calendarMonth));
@@ -413,13 +562,15 @@ function BookingsTab({
 
   if (isLoading) {
     return (
-      <div className="space-y-4">
+      <div className="space-y-3">
         {[1, 2, 3].map(i => (
-          <div key={i} className="bg-white rounded-2xl border border-gray-200 p-5 animate-pulse">
-            <div className="flex gap-4">
-              <div className="h-20 w-24 bg-gray-200 rounded-xl" />
-              <div className="flex-1 space-y-2">
-                <div className="h-4 bg-gray-200 rounded w-1/2" />
+          <div key={i} className="bg-white rounded-2xl border border-gray-200 overflow-hidden animate-pulse flex">
+            <div className="w-1.5 bg-gray-200 flex-shrink-0" />
+            <div className="p-5 flex gap-4 flex-1">
+              <div className="h-24 w-28 bg-gray-200 rounded-xl flex-shrink-0" />
+              <div className="flex-1 space-y-2.5 pt-1">
+                <div className="h-4 bg-gray-200 rounded w-3/5" />
+                <div className="h-3 bg-gray-200 rounded w-2/5" />
                 <div className="h-3 bg-gray-200 rounded w-1/3" />
                 <div className="h-3 bg-gray-200 rounded w-1/4" />
               </div>
@@ -433,169 +584,98 @@ function BookingsTab({
   if (allBookings.length === 0) {
     return (
       <div className="text-center py-16 bg-white rounded-2xl border border-gray-200">
-        <div className="text-4xl mb-3">📋</div>
-        <h3 className="font-semibold text-gray-700 mb-1">No bookings yet</h3>
-        <p className="text-sm text-gray-400 mb-5">When you book a rental, it'll appear here</p>
-        <Button onClick={onBrowse} className="bg-primary hover:bg-primary/90 text-white">Browse Rentals</Button>
+        <div className="h-16 w-16 rounded-2xl bg-primary/10 flex items-center justify-center mx-auto mb-4">
+          <Package className="h-8 w-8 text-primary" />
+        </div>
+        <h3 className="font-semibold text-gray-700 mb-1.5">No bookings yet</h3>
+        <p className="text-sm text-gray-400 mb-5 max-w-xs mx-auto">When you book your first rental, it'll show up right here.</p>
+        <Button onClick={onBrowse} className="bg-primary hover:bg-primary/90 text-white gap-2">
+          Browse Rentals <ArrowRight className="h-4 w-4" />
+        </Button>
       </div>
     );
   }
 
   return (
     <div className="space-y-4">
-      {/* View toggle */}
-      <div className="flex items-center justify-between">
-        <p className="text-sm text-gray-500">{allBookings.length} booking{allBookings.length !== 1 ? "s" : ""}</p>
-        <div className="flex rounded-lg border bg-white overflow-hidden shadow-sm">
+      {/* View toggle + filter bar */}
+      <div className="flex items-center gap-2 flex-wrap">
+        {/* Filter pills */}
+        <div className="flex items-center gap-1 flex-wrap flex-1">
+          {BOOKING_TABS.map(t => (
+            <button
+              key={t.key}
+              onClick={() => setActiveTab(t.key)}
+              className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-all flex items-center gap-1.5 ${
+                activeTab === t.key
+                  ? "bg-primary text-white shadow-sm"
+                  : "bg-white border border-gray-200 text-gray-500 hover:border-gray-300 hover:text-gray-700"
+              }`}
+            >
+              {t.label}
+              <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-bold ${activeTab === t.key ? "bg-white/20 text-white" : "bg-gray-100 text-gray-500"}`}>
+                {tabCounts[t.key]}
+              </span>
+            </button>
+          ))}
+        </div>
+        {/* View mode toggle */}
+        <div className="flex rounded-lg border border-gray-200 bg-white overflow-hidden shadow-sm flex-shrink-0">
           <button
             onClick={() => setView("list")}
-            className={`flex items-center gap-1.5 px-3 py-2 text-sm font-medium transition-colors ${view === "list" ? "bg-primary text-white" : "text-gray-500 hover:text-gray-700"}`}
+            className={`flex items-center gap-1.5 px-3 py-2 text-xs font-semibold transition-colors ${view === "list" ? "bg-primary text-white" : "text-gray-400 hover:text-gray-700"}`}
           >
-            <List className="w-4 h-4" /> List
+            <List className="w-3.5 h-3.5" /> List
           </button>
           <button
             onClick={() => setView("calendar")}
-            className={`flex items-center gap-1.5 px-3 py-2 text-sm font-medium transition-colors ${view === "calendar" ? "bg-primary text-white" : "text-gray-500 hover:text-gray-700"}`}
+            className={`flex items-center gap-1.5 px-3 py-2 text-xs font-semibold transition-colors ${view === "calendar" ? "bg-primary text-white" : "text-gray-400 hover:text-gray-700"}`}
           >
-            <CalendarDays className="w-4 h-4" /> Calendar
+            <CalendarDays className="w-3.5 h-3.5" /> Cal
           </button>
         </div>
       </div>
 
+      {/* Search */}
+      <div className="relative">
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+        <input
+          value={search}
+          onChange={e => setSearch(e.target.value)}
+          placeholder="Search by listing, company, or status…"
+          className="w-full h-10 pl-9 pr-9 rounded-xl border border-gray-200 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary/40"
+        />
+        {search && (
+          <button onClick={() => setSearch("")} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
+            <X className="w-4 h-4" />
+          </button>
+        )}
+      </div>
+
       {/* LIST VIEW */}
       {view === "list" && (
-        <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden">
-          <div className="px-4 py-3 border-b bg-gray-50 flex flex-col gap-3">
-            <div className="flex flex-col sm:flex-row sm:items-center gap-3">
-              <div className="flex items-center gap-1 flex-wrap">
-                {BOOKING_TABS.map(t => (
-                  <button
-                    key={t.key}
-                    onClick={() => setActiveTab(t.key)}
-                    className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-colors flex items-center gap-1.5 ${
-                      activeTab === t.key
-                        ? "bg-primary text-white"
-                        : "bg-white border border-gray-200 text-gray-500 hover:text-gray-700"
-                    }`}
-                  >
-                    {t.label}
-                    <span className={`text-[10px] px-1.5 py-px rounded-full ${activeTab === t.key ? "bg-white/20 text-white" : "bg-gray-100 text-gray-500"}`}>
-                      {tabCounts[t.key]}
-                    </span>
-                  </button>
-                ))}
-              </div>
-              <div className="relative sm:ml-auto w-full sm:w-64">
-                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400 pointer-events-none" />
-                <input
-                  value={search}
-                  onChange={e => setSearch(e.target.value)}
-                  placeholder="Search listing, company, status…"
-                  className="w-full h-9 pl-8 pr-8 rounded-lg border border-gray-200 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
-                />
-                {search && (
-                  <button onClick={() => setSearch("")} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
-                    <X className="w-3.5 h-3.5" />
-                  </button>
-                )}
-              </div>
-            </div>
-          </div>
-
+        <div className="space-y-5">
           {displayed.length === 0 ? (
-            <div className="py-16 text-center">
+            <div className="py-14 text-center bg-white rounded-2xl border border-gray-200">
               <CalendarDays className="w-10 h-10 text-gray-300 mx-auto mb-3" />
               <p className="text-sm font-medium text-gray-500">{search ? "No bookings match your search" : "No bookings in this view"}</p>
               {search && <button onClick={() => setSearch("")} className="mt-2 text-xs text-primary underline">Clear search</button>}
             </div>
           ) : (
-            <div className="divide-y divide-gray-100">
-              {displayed.map(booking => {
-                const ts = getRentalTimeStatus(booking.startDate, booking.endDate, booking.status);
-                const badgeCls = STATUS_BADGE[booking.status] ?? "bg-gray-100 text-gray-700 border-gray-200";
-                const bookingBase = booking.tenantSlug ? `/${booking.tenantSlug}` : base;
-                const hasUpdate = booking.seenByRenter === false;
-                return (
-                  <div
-                    key={booking.id}
-                    className={`p-5 sm:p-6 hover:bg-gray-50 transition-colors cursor-pointer ${hasUpdate ? "bg-blue-50/40" : ""}`}
-                    onClick={() => setLocation(`${bookingBase}/my-bookings/${booking.id}`)}
-                  >
-                    <div className="flex gap-5 items-start">
-                      <div className="h-24 w-28 flex-shrink-0 rounded-xl overflow-hidden bg-gray-100 shadow-sm">
-                        {booking.listingImage ? (
-                          <img src={resolveImage(booking.listingImage)} alt={booking.listingTitle} className="w-full h-full object-cover" />
-                        ) : (
-                          <div className="w-full h-full flex items-center justify-center text-3xl">🏕️</div>
-                        )}
-                      </div>
-                      <div className="flex-1 min-w-0 space-y-1.5">
-                        {hasUpdate && (
-                          <div className="flex items-center gap-1.5 mb-1">
-                            <span className="w-2 h-2 rounded-full bg-blue-500 animate-pulse" />
-                            <span className="text-xs font-semibold text-blue-600">New update on your booking</span>
-                          </div>
-                        )}
-                        <div className="flex items-start justify-between gap-2 flex-wrap">
-                          <h3 className="font-semibold text-gray-800 text-base line-clamp-1">{booking.listingTitle}</h3>
-                          <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-[11px] font-semibold border capitalize flex-shrink-0 ${badgeCls}`}>
-                            {booking.status}
-                          </span>
-                        </div>
-                        {booking.businessName && (
-                          <div className="flex items-center gap-1.5 text-sm text-gray-500">
-                            {booking.businessLogoUrl && (
-                              <img src={resolveImage(booking.businessLogoUrl)} alt="" className="h-4 w-4 rounded-full object-cover" />
-                            )}
-                            <span>{booking.businessName}</span>
-                          </div>
-                        )}
-                        <div className="flex items-center gap-1.5 text-sm text-gray-400">
-                          <Calendar className="h-3.5 w-3.5 flex-shrink-0" />
-                          <span>{format(parseISO(booking.startDate), "MMM d")} – {format(parseISO(booking.endDate), "MMM d, yyyy")}</span>
-                        </div>
-                        {ts && (
-                          <div className="space-y-1.5 pt-0.5">
-                            <span className={`inline-flex items-center text-[11px] font-semibold px-2 py-0.5 rounded border ${ts.color}`}>
-                              {ts.label}
-                            </span>
-                            {ts.pct > 0 && (
-                              <div className="h-1.5 w-full bg-gray-100 rounded-full overflow-hidden">
-                                <div className={`h-full rounded-full ${ts.bar}`} style={{ width: `${ts.pct}%` }} />
-                              </div>
-                            )}
-                          </div>
-                        )}
-                        <div className="flex items-center justify-between pt-1">
-                          <span className="text-base font-bold text-gray-800">${parseFloat(booking.totalPrice || "0").toFixed(2)}</span>
-                          <div className="flex items-center gap-3">
-                            {booking.status === "cancelled" || booking.status === "completed" ? (
-                              <button
-                                className="text-xs text-primary hover:underline flex items-center gap-1 font-medium"
-                                onClick={e => { e.stopPropagation(); setLocation(`${bookingBase}/book?listingId=${booking.listingId}`); }}
-                              >
-                                <RotateCcw className="h-3 w-3" /> Book Again
-                              </button>
-                            ) : null}
-                            {booking.tenantSlug && (
-                              <button
-                                className="text-xs text-gray-400 hover:text-primary flex items-center gap-1"
-                                onClick={e => { e.stopPropagation(); window.open(`/${booking.tenantSlug}`, "_blank"); }}
-                              >
-                                View company <ExternalLink className="h-3 w-3" />
-                              </button>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                    </div>
+            grouped.map(({ label, items }) => (
+              <div key={label ?? "all"}>
+                {label && (
+                  <div className="flex items-center gap-3 mb-3">
+                    <p className="text-xs font-bold text-gray-400 uppercase tracking-widest whitespace-nowrap">{label}</p>
+                    <div className="flex-1 h-px bg-gray-200" />
+                    <p className="text-[11px] text-gray-400 whitespace-nowrap">{items.length} booking{items.length !== 1 ? "s" : ""}</p>
                   </div>
-                );
-              })}
-              <div className="px-4 py-2 text-xs text-gray-400 text-right">
-                {displayed.length} booking{displayed.length !== 1 ? "s" : ""}{search ? ` matching "${search}"` : ""}
+                )}
+                <div className="space-y-3">
+                  {items.map(booking => <BookingCard key={booking.id} booking={booking} base={base} />)}
+                </div>
               </div>
-            </div>
+            ))
           )}
         </div>
       )}
@@ -684,10 +764,9 @@ function BookingsTab({
                             <div className="flex items-center justify-between mt-1.5">
                               <span className="font-semibold text-gray-800">${parseFloat(b.totalPrice || "0").toFixed(2)}</span>
                               <div className="flex items-center gap-2">
-                                <button
-                                  className="text-xs text-primary hover:underline font-medium"
-                                  onClick={() => setLocation(`${bookingBase}/my-bookings/${b.id}`)}
-                                >View booking</button>
+                                <button className="text-xs text-primary hover:underline font-medium" onClick={() => setLocation(`${bookingBase}/my-bookings/${b.id}`)}>
+                                  View booking
+                                </button>
                                 <button onClick={() => setExpandedId(null)} className="text-gray-400 hover:text-gray-600"><X className="h-3.5 w-3.5" /></button>
                               </div>
                             </div>
@@ -711,8 +790,113 @@ function BookingsTab({
         </div>
       )}
 
-      {/* Feedback form */}
       <RenterFeedbackForm slug={base.replace(/^\//, "")} />
+    </div>
+  );
+}
+
+// ─── Booking Card ─────────────────────────────────────────────────────────────
+
+function BookingCard({ booking: b, base }: { booking: RenterBooking; base: string }) {
+  const [, setLocation] = useLocation();
+  const ts = getRentalTimeStatus(b.startDate, b.endDate, b.status);
+  const badgeCls  = STATUS_BADGE[b.status]  ?? "bg-gray-100 text-gray-700 border-gray-200";
+  const accentCls = STATUS_ACCENT[b.status] ?? "bg-gray-400";
+  const bookingBase = b.tenantSlug ? `/${b.tenantSlug}` : base;
+  const hasUpdate = b.seenByRenter === false;
+  const nights = differenceInDays(parseISO(b.endDate), parseISO(b.startDate));
+
+  return (
+    <div
+      className={`bg-white rounded-2xl border overflow-hidden cursor-pointer hover:shadow-md hover:-translate-y-0.5 transition-all duration-200 ${hasUpdate ? "border-blue-300 shadow-blue-100 shadow-sm" : "border-gray-200"}`}
+      onClick={() => setLocation(`${bookingBase}/my-bookings/${b.id}`)}
+    >
+      <div className="flex">
+        {/* Status accent stripe */}
+        <div className={`w-1.5 flex-shrink-0 ${accentCls}`} />
+
+        <div className="flex flex-1 min-w-0 p-4 gap-4">
+          {/* Listing image */}
+          <div className="h-28 w-32 flex-shrink-0 rounded-xl overflow-hidden bg-gray-100 shadow-sm relative">
+            {b.listingImage ? (
+              <img src={resolveImage(b.listingImage)} alt={b.listingTitle} className="w-full h-full object-cover" />
+            ) : (
+              <div className="w-full h-full flex flex-col items-center justify-center gap-1">
+                <span className="text-3xl">🏕️</span>
+              </div>
+            )}
+            {hasUpdate && (
+              <span className="absolute top-1.5 left-1.5 h-2 w-2 rounded-full bg-blue-500 border border-white animate-pulse" />
+            )}
+          </div>
+
+          {/* Info */}
+          <div className="flex-1 min-w-0 flex flex-col gap-1">
+            {hasUpdate && (
+              <p className="text-[11px] font-bold text-blue-600 flex items-center gap-1">
+                <span className="w-1.5 h-1.5 rounded-full bg-blue-500" /> New update
+              </p>
+            )}
+
+            <div className="flex items-start justify-between gap-2">
+              <h3 className="font-bold text-gray-900 text-sm leading-snug line-clamp-2">{b.listingTitle}</h3>
+              <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-bold border capitalize flex-shrink-0 ${badgeCls}`}>
+                {b.status}
+              </span>
+            </div>
+
+            {/* Company */}
+            {b.businessName && (
+              <div className="flex items-center gap-1.5 text-xs text-gray-500">
+                {b.businessLogoUrl && (
+                  <img src={resolveImage(b.businessLogoUrl)} alt="" className="h-3.5 w-3.5 rounded-full object-cover ring-1 ring-gray-200" />
+                )}
+                <span>{b.businessName}</span>
+              </div>
+            )}
+
+            {/* Date row */}
+            <div className="flex items-center gap-1.5 text-xs text-gray-400">
+              <Calendar className="h-3 w-3 flex-shrink-0" />
+              <span>{format(parseISO(b.startDate), "MMM d")} – {format(parseISO(b.endDate), "MMM d, yyyy")}</span>
+              {nights > 0 && <span className="text-[11px] text-gray-300">· {nights}d</span>}
+            </div>
+
+            {/* Time status */}
+            {ts && (
+              <div className="flex items-center gap-2 mt-0.5">
+                <span className={`inline-flex items-center text-[11px] font-semibold px-2 py-0.5 rounded-full border ${ts.color} ${ts.urgent ? "animate-pulse" : ""}`}>
+                  {ts.urgent && <Clock className="h-2.5 w-2.5 mr-1" />}
+                  {ts.label}
+                </span>
+                {ts.pct > 0 && (
+                  <div className="flex-1 h-1 bg-gray-100 rounded-full overflow-hidden max-w-24">
+                    <div className={`h-full rounded-full ${ts.bar}`} style={{ width: `${ts.pct}%` }} />
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Price + actions */}
+            <div className="flex items-center justify-between mt-auto pt-1">
+              <span className="text-base font-extrabold text-gray-900">
+                ${parseFloat(b.totalPrice || "0").toFixed(2)}
+              </span>
+              <div className="flex items-center gap-2" onClick={e => e.stopPropagation()}>
+                {(b.status === "cancelled" || b.status === "completed") && (
+                  <button
+                    className="text-[11px] text-primary hover:text-primary/80 font-semibold flex items-center gap-1 border border-primary/20 rounded-full px-2 py-0.5 hover:bg-primary/5 transition-colors"
+                    onClick={() => setLocation(`${bookingBase}/book?listingId=${b.listingId}`)}
+                  >
+                    <RotateCcw className="h-2.5 w-2.5" /> Book Again
+                  </button>
+                )}
+                <ArrowRight className="h-4 w-4 text-gray-300" />
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
@@ -722,16 +906,16 @@ function BookingsTab({
 function SettingsTab({ profile, onProfileUpdated }: { profile: CustomerProfile; onProfileUpdated: (p: CustomerProfile) => void }) {
   return (
     <div className="space-y-5">
-      <PersonalInfoSection profile={profile} onUpdated={onProfileUpdated} />
+      <PersonalInfoSection  profile={profile} onUpdated={onProfileUpdated} />
       <BillingAddressSection profile={profile} onUpdated={onProfileUpdated} />
-      <PaymentMethodSection profile={profile} onUpdated={onProfileUpdated} />
-      <PasswordSection profile={profile} />
+      <PaymentMethodSection  profile={profile} onUpdated={onProfileUpdated} />
+      <PasswordSection       profile={profile} />
     </div>
   );
 }
 
 function PersonalInfoSection({ profile, onUpdated }: { profile: CustomerProfile; onUpdated: (p: CustomerProfile) => void }) {
-  const [name, setName]   = useState(profile.name);
+  const [name,  setName]  = useState(profile.name);
   const [phone, setPhone] = useState(profile.phone ?? "");
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
@@ -748,8 +932,7 @@ function PersonalInfoSection({ profile, onUpdated }: { profile: CustomerProfile;
         body: JSON.stringify({ name: name.trim(), phone: phone.trim() || null }),
       });
       if (!res.ok) throw new Error("Save failed");
-      const updated: CustomerProfile = await res.json();
-      onUpdated(updated);
+      onUpdated(await res.json());
       setMsg({ ok: true, text: "Personal info saved." });
     } catch { setMsg({ ok: false, text: "Failed to save. Please try again." }); }
     finally { setSaving(false); }
@@ -757,11 +940,15 @@ function PersonalInfoSection({ profile, onUpdated }: { profile: CustomerProfile;
 
   return (
     <section className="bg-white rounded-xl border border-gray-200 p-6">
-      <div className="flex items-center gap-2 mb-1">
-        <User className="h-4 w-4 text-primary" />
-        <h2 className="font-semibold text-gray-900">Personal Information</h2>
+      <div className="flex items-center gap-2 mb-4">
+        <div className="h-7 w-7 rounded-lg bg-primary/10 flex items-center justify-center">
+          <User className="h-3.5 w-3.5 text-primary" />
+        </div>
+        <div>
+          <h2 className="font-semibold text-gray-900 text-sm">Personal Information</h2>
+          <p className="text-[11px] text-gray-400">Visible to rental companies</p>
+        </div>
       </div>
-      <p className="text-xs text-gray-400 mb-5">Your name and contact details visible to rental companies.</p>
       <div className="space-y-4">
         <div>
           <label className="text-xs font-medium text-gray-600 mb-1.5 flex items-center gap-1.5">
@@ -771,7 +958,6 @@ function PersonalInfoSection({ profile, onUpdated }: { profile: CustomerProfile;
             {profile.email}
             <span className="ml-auto text-[11px] text-gray-400 bg-gray-100 px-1.5 py-0.5 rounded">Read-only</span>
           </div>
-          <p className="text-[11px] text-gray-400 mt-1">Email is your login and cannot be changed.</p>
         </div>
         <div>
           <label className="text-xs font-medium text-gray-600 mb-1.5 flex items-center gap-1.5">
@@ -806,11 +992,11 @@ function PersonalInfoSection({ profile, onUpdated }: { profile: CustomerProfile;
 
 function BillingAddressSection({ profile, onUpdated }: { profile: CustomerProfile; onUpdated: (p: CustomerProfile) => void }) {
   const [address, setAddress] = useState(profile.billingAddress ?? "");
-  const [city, setCity]       = useState(profile.billingCity ?? "");
-  const [state, setState]     = useState(profile.billingState ?? "");
-  const [zip, setZip]         = useState(profile.billingZip ?? "");
-  const [saving, setSaving]   = useState(false);
-  const [msg, setMsg]         = useState<{ ok: boolean; text: string } | null>(null);
+  const [city,    setCity]    = useState(profile.billingCity    ?? "");
+  const [state,   setState]   = useState(profile.billingState   ?? "");
+  const [zip,     setZip]     = useState(profile.billingZip     ?? "");
+  const [saving, setSaving] = useState(false);
+  const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
 
   const isDirty =
     address !== (profile.billingAddress ?? "") ||
@@ -832,8 +1018,7 @@ function BillingAddressSection({ profile, onUpdated }: { profile: CustomerProfil
         }),
       });
       if (!res.ok) throw new Error("Save failed");
-      const updated: CustomerProfile = await res.json();
-      onUpdated(updated);
+      onUpdated(await res.json());
       setMsg({ ok: true, text: "Billing address saved." });
     } catch { setMsg({ ok: false, text: "Failed to save. Please try again." }); }
     finally { setSaving(false); }
@@ -841,18 +1026,22 @@ function BillingAddressSection({ profile, onUpdated }: { profile: CustomerProfil
 
   return (
     <section className="bg-white rounded-xl border border-gray-200 p-6">
-      <div className="flex items-center gap-2 mb-1">
-        <MapPin className="h-4 w-4 text-primary" />
-        <h2 className="font-semibold text-gray-900">Billing Address</h2>
+      <div className="flex items-center gap-2 mb-4">
+        <div className="h-7 w-7 rounded-lg bg-amber-50 flex items-center justify-center">
+          <MapPin className="h-3.5 w-3.5 text-amber-500" />
+        </div>
+        <div>
+          <h2 className="font-semibold text-gray-900 text-sm">Billing Address</h2>
+          <p className="text-[11px] text-gray-400">Used for receipts and mailed documents</p>
+        </div>
       </div>
-      <p className="text-xs text-gray-400 mb-5">Used for receipts and any mailed documents.</p>
       <div className="space-y-4">
         <div>
           <label className="text-xs font-medium text-gray-600 mb-1.5 block">Street address</label>
           <Input value={address} onChange={e => setAddress(e.target.value)} placeholder="123 Main Street" className="h-10" />
         </div>
         <div className="grid grid-cols-3 gap-3">
-          <div className="col-span-1">
+          <div>
             <label className="text-xs font-medium text-gray-600 mb-1.5 block">City</label>
             <Input value={city} onChange={e => setCity(e.target.value)} placeholder="City" className="h-10" />
           </div>
@@ -861,7 +1050,7 @@ function BillingAddressSection({ profile, onUpdated }: { profile: CustomerProfil
             <Input value={state} onChange={e => setState(e.target.value)} placeholder="TX" maxLength={2} className="h-10 uppercase" />
           </div>
           <div>
-            <label className="text-xs font-medium text-gray-600 mb-1.5 block">ZIP code</label>
+            <label className="text-xs font-medium text-gray-600 mb-1.5 block">ZIP</label>
             <Input value={zip} onChange={e => setZip(e.target.value)} placeholder="78701" className="h-10" />
           </div>
         </div>
@@ -887,9 +1076,7 @@ function BillingAddressSection({ profile, onUpdated }: { profile: CustomerProfil
 function PaymentMethodSection({ profile, onUpdated }: { profile: CustomerProfile; onUpdated: (p: CustomerProfile) => void }) {
   const [removing, setRemoving] = useState(false);
   const hasCard = !!(profile.cardLastFour && profile.cardBrand);
-  const brandLabel = profile.cardBrand
-    ? profile.cardBrand.charAt(0).toUpperCase() + profile.cardBrand.slice(1)
-    : "Card";
+  const brand = profile.cardBrand ? profile.cardBrand.charAt(0).toUpperCase() + profile.cardBrand.slice(1) : "Card";
 
   const handleRemove = async () => {
     setRemoving(true);
@@ -899,49 +1086,46 @@ function PaymentMethodSection({ profile, onUpdated }: { profile: CustomerProfile
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ cardLastFour: null, cardBrand: null }),
       });
-      if (!res.ok) throw new Error("Failed to remove");
-      const updated: CustomerProfile = await res.json();
-      onUpdated(updated);
+      if (!res.ok) throw new Error();
+      onUpdated(await res.json());
     } catch { /* silent */ }
     finally { setRemoving(false); }
   };
 
   return (
     <section className="bg-white rounded-xl border border-gray-200 p-6">
-      <div className="flex items-center gap-2 mb-1">
-        <CreditCard className="h-4 w-4 text-blue-600" />
-        <h2 className="font-semibold text-gray-900">Payment Method</h2>
+      <div className="flex items-center gap-2 mb-4">
+        <div className="h-7 w-7 rounded-lg bg-blue-50 flex items-center justify-center">
+          <CreditCard className="h-3.5 w-3.5 text-blue-500" />
+        </div>
+        <div>
+          <h2 className="font-semibold text-gray-900 text-sm">Payment Method</h2>
+          <p className="text-[11px] text-gray-400">Saved securely for faster checkout</p>
+        </div>
       </div>
-      <p className="text-xs text-gray-400 mb-5">
-        Your card is saved automatically after your first booking and used for faster checkout on future rentals.
-      </p>
       {hasCard ? (
-        <div className="flex items-center justify-between bg-gray-50 border border-gray-200 rounded-xl px-4 py-3">
+        <div className="flex items-center justify-between bg-gradient-to-r from-gray-50 to-white border border-gray-200 rounded-xl px-4 py-3">
           <div className="flex items-center gap-3">
-            <div className="h-9 w-14 rounded-lg bg-gradient-to-br from-blue-600 to-blue-800 flex items-center justify-center">
-              <CreditCard className="h-4 w-4 text-white" />
+            <div className="h-10 w-15 rounded-lg bg-gradient-to-br from-slate-700 to-slate-900 flex items-center justify-center px-2.5 shadow-sm">
+              <CreditCard className="h-5 w-5 text-white" />
             </div>
             <div>
-              <p className="text-sm font-semibold text-gray-800">{brandLabel} •••• {profile.cardLastFour}</p>
+              <p className="text-sm font-bold text-gray-800">{brand} •••• {profile.cardLastFour}</p>
               <p className="text-xs text-gray-400">Saved payment method</p>
             </div>
           </div>
-          <Button
-            variant="ghost" size="sm" onClick={handleRemove} disabled={removing}
-            className="text-red-500 hover:text-red-600 hover:bg-red-50 gap-1.5"
-          >
+          <Button variant="ghost" size="sm" onClick={handleRemove} disabled={removing}
+            className="text-red-500 hover:text-red-600 hover:bg-red-50 gap-1.5 text-xs">
             {removing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
             Remove
           </Button>
         </div>
       ) : (
-        <div className="flex items-start gap-3 bg-gray-50 border border-gray-200 rounded-xl px-4 py-4">
+        <div className="flex items-start gap-3 bg-gray-50 border border-dashed border-gray-200 rounded-xl px-4 py-4">
           <AlertCircle className="h-4 w-4 text-gray-400 flex-shrink-0 mt-0.5" />
           <div>
             <p className="text-sm font-medium text-gray-600">No saved payment method</p>
-            <p className="text-xs text-gray-400 mt-0.5">
-              Your card will be saved securely when you complete your next booking, enabling faster checkout in the future.
-            </p>
+            <p className="text-xs text-gray-400 mt-0.5">Your card will be saved securely after your next booking for faster checkout.</p>
           </div>
         </div>
       )}
@@ -950,10 +1134,10 @@ function PaymentMethodSection({ profile, onUpdated }: { profile: CustomerProfile
 }
 
 function PasswordSection({ profile }: { profile: CustomerProfile }) {
-  const [current,  setCurrent]  = useState("");
-  const [next,     setNext]     = useState("");
-  const [confirm,  setConfirm]  = useState("");
-  const [saving,   setSaving]   = useState(false);
+  const [current, setCurrent]   = useState("");
+  const [next,    setNext]      = useState("");
+  const [confirm, setConfirm]   = useState("");
+  const [saving,  setSaving]    = useState(false);
   const [msg, setMsg]           = useState<{ ok: boolean; text: string } | null>(null);
 
   const canSave = current.length > 0 && next.length >= 6 && next === confirm;
@@ -979,11 +1163,15 @@ function PasswordSection({ profile }: { profile: CustomerProfile }) {
 
   return (
     <section className="bg-white rounded-xl border border-gray-200 p-6">
-      <div className="flex items-center gap-2 mb-1">
-        <Lock className="h-4 w-4 text-gray-500" />
-        <h2 className="font-semibold text-gray-900">Change Password</h2>
+      <div className="flex items-center gap-2 mb-4">
+        <div className="h-7 w-7 rounded-lg bg-gray-100 flex items-center justify-center">
+          <Lock className="h-3.5 w-3.5 text-gray-500" />
+        </div>
+        <div>
+          <h2 className="font-semibold text-gray-900 text-sm">Change Password</h2>
+          <p className="text-[11px] text-gray-400">Use a strong password of at least 6 characters</p>
+        </div>
       </div>
-      <p className="text-xs text-gray-400 mb-5">Use a strong password of at least 6 characters.</p>
       <div className="space-y-4">
         <div>
           <label className="text-xs font-medium text-gray-600 mb-1.5 block">Current password</label>
