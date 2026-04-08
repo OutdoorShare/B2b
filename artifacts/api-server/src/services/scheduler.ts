@@ -643,7 +643,20 @@ async function autoChargeRemainingBalances() {
       const feePercent = tenant.platformFeePercent != null
         ? parseFloat(tenant.platformFeePercent) / 100
         : PLATFORM_FEE_PERCENT_SCH;
-      const platformFeeAmount = Math.round(remainingCents * feePercent);
+      // OutdoorShare keeps 100% of the protection fee — never split with the host.
+      // Allocate the proportional share of the total protection fee that falls in
+      // the remaining-balance charge, then apply feePercent only to the rental portion.
+      const totalPriceCents = Math.round(parseFloat(String(booking.totalPrice ?? "0")) * 100);
+      const ppFeeTotalCents = Math.round(parseFloat(String(booking.protectionPlanFee ?? "0")) * 100);
+      let platformFeeAmount: number;
+      if (tenant.isHost && ppFeeTotalCents > 0 && totalPriceCents > 0) {
+        const proportion = Math.min(remainingCents / totalPriceCents, 1);
+        const ppFeeInCharge = Math.round(ppFeeTotalCents * proportion);
+        const rentalInCharge = remainingCents - ppFeeInCharge;
+        platformFeeAmount = Math.round(rentalInCharge * feePercent) + ppFeeInCharge;
+      } else {
+        platformFeeAmount = Math.round(remainingCents * feePercent);
+      }
       const tenantConnected = !isTestMode && !!(tenant.stripeAccountId && tenant.stripeChargesEnabled);
 
       const intentParams: any = {

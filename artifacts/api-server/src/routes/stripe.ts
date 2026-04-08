@@ -1128,7 +1128,21 @@ router.post("/stripe/admin-charge-saved", requireAdminAuth, async (req, res) => 
     // amountOverride lets admin charge a specific amount (e.g. deposit only) instead of total
     const baseAmount = amountOverride != null ? parseFloat(String(amountOverride)) : parseFloat(String(booking.totalPrice));
     const amountCents = Math.round(baseAmount * 100);
-    const platformFeeAmount = Math.round(amountCents * feePercent);
+    const totalPriceCents = Math.round(parseFloat(String(booking.totalPrice ?? "0")) * 100);
+    const ppFeeTotalCents = Math.round(parseFloat(String(booking.protectionPlanFee ?? "0")) * 100);
+    // OutdoorShare keeps 100% of the protection fee — never split with the host.
+    // When charging a partial amount (e.g. deposit), allocate the proportional
+    // share of the protection fee to the platform and apply feePercent only to
+    // the rental portion.
+    let platformFeeAmount: number;
+    if (tenant.isHost && ppFeeTotalCents > 0 && totalPriceCents > 0) {
+      const proportion = Math.min(amountCents / totalPriceCents, 1);
+      const ppFeeInCharge = Math.round(ppFeeTotalCents * proportion);
+      const rentalInCharge = amountCents - ppFeeInCharge;
+      platformFeeAmount = Math.round(rentalInCharge * feePercent) + ppFeeInCharge;
+    } else {
+      platformFeeAmount = Math.round(amountCents * feePercent);
+    }
     const tenantConnected = !isTestMode && !!(tenant.stripeAccountId && tenant.stripeChargesEnabled);
     const isSplitDeposit = amountOverride != null && booking.paymentPlanEnabled;
 
@@ -1241,7 +1255,20 @@ router.post("/stripe/charge-remaining/:bookingId", requireAdminAuth, async (req,
     const feePercent = tenant.platformFeePercent != null
       ? parseFloat(tenant.platformFeePercent) / 100
       : PLATFORM_FEE_PERCENT;
-    const platformFeeAmount = Math.round(remainingCents * feePercent);
+    // OutdoorShare keeps 100% of the protection fee — allocate the remaining-balance
+    // proportion of the total protection fee to the platform, then apply feePercent
+    // only to the rental portion of this charge.
+    const totalPriceCents2 = Math.round(parseFloat(String(booking.totalPrice ?? "0")) * 100);
+    const ppFeeTotalCents2 = Math.round(parseFloat(String(booking.protectionPlanFee ?? "0")) * 100);
+    let platformFeeAmount: number;
+    if (tenant.isHost && ppFeeTotalCents2 > 0 && totalPriceCents2 > 0) {
+      const proportion = Math.min(remainingCents / totalPriceCents2, 1);
+      const ppFeeInCharge = Math.round(ppFeeTotalCents2 * proportion);
+      const rentalInCharge = remainingCents - ppFeeInCharge;
+      platformFeeAmount = Math.round(rentalInCharge * feePercent) + ppFeeInCharge;
+    } else {
+      platformFeeAmount = Math.round(remainingCents * feePercent);
+    }
     const tenantConnected = !isTestMode && !!(tenant.stripeAccountId && tenant.stripeChargesEnabled);
 
     const intentParams: any = {
