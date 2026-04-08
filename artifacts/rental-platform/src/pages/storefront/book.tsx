@@ -3778,6 +3778,14 @@ export default function StorefrontBook() {
                               </div>
                               <div className="p-5 space-y-3">
                                 <p className="text-sm text-muted-foreground">Save or share a direct link to your booking details and documents.</p>
+                                <Button
+                                  size="sm"
+                                  className="w-full font-bold"
+                                  onClick={() => { window.location.href = bookingDetailUrl!; }}
+                                >
+                                  <ExternalLink className="w-3.5 h-3.5 mr-1.5" />
+                                  View My Booking
+                                </Button>
                                 <div className="flex items-center gap-2 bg-muted/50 rounded-lg px-3 py-2 text-xs text-muted-foreground font-mono truncate select-all">
                                   {bookingDetailUrl}
                                 </div>
