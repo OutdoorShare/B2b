@@ -87,6 +87,8 @@ export default function AdminBookingDetail() {
   const [agreementSent, setAgreementSent] = useState(false);
   const [sendingIdentity, setSendingIdentity] = useState(false);
   const [identitySent, setIdentitySent] = useState(false);
+  const [markingIdentity, setMarkingIdentity] = useState(false);
+  const [identityMarkedVerified, setIdentityMarkedVerified] = useState(false);
 
   type VerifData = {
     found: boolean;
@@ -168,6 +170,21 @@ export default function AdminBookingDetail() {
       setIdentitySent(true);
       toast({ title: "Verification link sent!", description: `${booking!.customerEmail} has been emailed a Stripe Identity verification link.` });
     } finally { setSendingIdentity(false); }
+  };
+
+  const markIdentityVerified = async () => {
+    setMarkingIdentity(true);
+    try {
+      const r = await fetch(`${BASE}/api/bookings/${id}/mark-identity-verified`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...(getAdminSession()?.token ? { "x-admin-token": getAdminSession()!.token } : {}) },
+      });
+      const data = await r.json();
+      if (!r.ok || data.error) { toast({ title: "Error", description: data.error ?? "Failed to mark ID verified", variant: "destructive" }); return; }
+      setIdentityMarkedVerified(true);
+      setVerifData(prev => prev ? { ...prev, identityVerificationStatus: "verified", identityVerifiedAt: new Date().toISOString() } : prev);
+      toast({ title: "ID marked as verified", description: "The renter's identity has been manually confirmed." });
+    } finally { setMarkingIdentity(false); }
   };
 
   const copyPickupLink = async () => {
@@ -974,21 +991,29 @@ export default function AdminBookingDetail() {
 
                       {/* Step 2: Identity Verification */}
                       {renderStep({
-                        done: identVerified,
+                        done: identVerified || identityMarkedVerified,
                         pending: identPending,
                         label: "Identity Verified",
-                        sub: identVerified
-                          ? "Verified via Stripe Identity"
+                        sub: (identVerified || identityMarkedVerified)
+                          ? identityMarkedVerified && !identVerified
+                            ? "Manually confirmed by staff"
+                            : "Verified via Stripe Identity"
                           : identPending
                             ? "Verification link sent — awaiting completion"
                             : identStatus === "failed"
                               ? "Verification failed — resend link or check ID at pickup"
                               : "Not yet verified — send a link or check ID at pickup",
-                        actions: identNeedsAction ? (
-                          <Button size="sm" variant="outline" className="h-7 text-xs gap-1.5 shrink-0" onClick={sendIdentityLink} disabled={sendingIdentity}>
-                            {sendingIdentity ? <Loader2 className="w-3 h-3 animate-spin" /> : identitySent ? <MailCheck className="w-3 h-3 text-green-600" /> : <Send className="w-3 h-3" />}
-                            {identitySent ? "Sent!" : identStatus === "failed" ? "Retry" : "Send"}
-                          </Button>
+                        actions: (!identVerified && !identityMarkedVerified) ? (
+                          <div className="flex gap-1.5 shrink-0">
+                            <Button size="sm" variant="outline" className="h-7 text-xs gap-1.5 shrink-0" onClick={sendIdentityLink} disabled={sendingIdentity || markingIdentity}>
+                              {sendingIdentity ? <Loader2 className="w-3 h-3 animate-spin" /> : identitySent ? <MailCheck className="w-3 h-3 text-green-600" /> : <Send className="w-3 h-3" />}
+                              {identitySent ? "Sent!" : identStatus === "failed" ? "Retry" : "Send"}
+                            </Button>
+                            <Button size="sm" variant="outline" className="h-7 text-xs gap-1 px-2 shrink-0 border-green-300 text-green-700 hover:bg-green-50" onClick={markIdentityVerified} disabled={markingIdentity || sendingIdentity}>
+                              {markingIdentity ? <Loader2 className="w-3 h-3 animate-spin" /> : <ShieldCheck className="w-3 h-3" />}
+                              {markingIdentity ? "" : "Mark Verified"}
+                            </Button>
+                          </div>
                         ) : undefined,
                       })}
 

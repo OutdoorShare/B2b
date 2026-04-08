@@ -1059,6 +1059,35 @@ router.post("/bookings/:id/send-agreement-link", async (req, res) => {
   }
 });
 
+// ── POST /bookings/:id/mark-identity-verified ──────────────────────────────────
+// Admin: manually mark the renter's identity as verified (e.g. checked at pickup)
+router.post("/bookings/:id/mark-identity-verified", async (req, res) => {
+  try {
+    const bookingId = Number(req.params.id);
+    const booking = await findBookingForAdmin(bookingId, req.tenantId);
+    if (!booking) { res.status(404).json({ error: "Booking not found" }); return; }
+
+    const [customer] = await db
+      .select({ id: customersTable.id })
+      .from(customersTable)
+      .where(eq(customersTable.email, booking.customerEmail.toLowerCase()))
+      .limit(1);
+
+    if (!customer) { res.status(404).json({ error: "No customer account found for this email" }); return; }
+
+    await db.update(customersTable).set({
+      identityVerificationStatus: "verified",
+      identityVerifiedAt: new Date(),
+      updatedAt: new Date(),
+    }).where(eq(customersTable.id, customer.id));
+
+    res.json({ ok: true });
+  } catch (err: any) {
+    req.log.error(err);
+    res.status(500).json({ error: err.message || "Failed to mark identity verified" });
+  }
+});
+
 // ── POST /bookings/:id/send-identity-link ──────────────────────────────────────
 // Admin: create a Stripe Identity verification session and email the renter the link
 router.post("/bookings/:id/send-identity-link", async (req, res) => {
