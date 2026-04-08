@@ -698,6 +698,7 @@ export default function StorefrontBook() {
   const [bundlePickerOpen, setBundlePickerOpen] = useState(false);
   const [allListings, setAllListings] = useState<any[]>([]);
   const [bundleDiscountPercent, setBundleDiscountPercent] = useState(0);
+  const [bundlingEnabled, setBundlingEnabled] = useState(true);
   // Cache of categorySlug → protection fee per day for bundle items
   const [bundleProtectionCache, setBundleProtectionCache] = useState<Record<string, number>>({});
   const [showProtectionBreakdown, setShowProtectionBreakdown] = useState(false);
@@ -773,6 +774,7 @@ export default function StorefrontBook() {
     ]).then(([ls, biz, fees]) => {
       if (Array.isArray(ls)) setAllListings(ls);
       if (typeof biz?.bundleDiscountPercent === "number") setBundleDiscountPercent(biz.bundleDiscountPercent);
+      if (biz?.bundlingEnabled === false) setBundlingEnabled(false);
       if (Array.isArray(fees)) setCustomFees(fees);
     });
   }, [slug]);
@@ -2385,7 +2387,7 @@ export default function StorefrontBook() {
                 })()}
 
                 {/* ── Bundle Builder ── */}
-                {allListings.filter(l => l.id !== (listing?.id ?? 0) && l.status === "active").length > 0 && (
+                {bundlingEnabled && allListings.filter(l => l.id !== (listing?.id ?? 0) && l.status === "active").length > 0 && (
                   <>
                     <Separator />
                     <div>

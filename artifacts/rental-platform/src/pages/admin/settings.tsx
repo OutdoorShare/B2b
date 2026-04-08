@@ -265,7 +265,7 @@ export default function AdminSettings() {
   const TAB_FIELDS: Record<string, string[]> = {
     general:     ["name", "tagline", "description", "email", "outboundEmail", "senderEmail", "senderPassword", "phone", "website", "location", "address", "city", "state", "zipCode", "country", "socialInstagram", "socialFacebook", "socialTwitter"],
     branding:    ["logoUrl", "coverImageUrl", "primaryColor", "accentColor"],
-    policies:    ["depositRequired", "depositPercent", "cancellationPolicy", "rentalTerms", "bundleDiscountPercent", "instantBooking", "paymentPlanEnabled", "paymentPlanDepositType", "paymentPlanDepositFixed", "paymentPlanDepositPercent", "paymentPlanDaysBeforePickup", "passPlatformFeeToCustomer", "passPlatformFeePercent", "protectionPlanOptional"],
+    policies:    ["depositRequired", "depositPercent", "cancellationPolicy", "rentalTerms", "bundleDiscountPercent", "bundlingEnabled", "instantBooking", "paymentPlanEnabled", "paymentPlanDepositType", "paymentPlanDepositFixed", "paymentPlanDepositPercent", "paymentPlanDaysBeforePickup", "passPlatformFeeToCustomer", "passPlatformFeePercent", "protectionPlanOptional"],
     payments:    [],
     integration: ["kioskModeEnabled", "embedCode"],
   };
@@ -1628,37 +1628,54 @@ export default function AdminSettings() {
             {/* Bundle Discount */}
             <Card>
               <CardHeader>
-                <CardTitle>Bundle Discount</CardTitle>
+                <CardTitle>Bundle Ordering</CardTitle>
                 <CardDescription>
-                  Offer a percentage discount when renters add multiple items to their order.
-                  Set to 0 to disable bundle discounts.
+                  Allow renters to add multiple listings to a single order. Optionally offer a discount to incentivise bundling.
                 </CardDescription>
               </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="bundleDiscountPercent">Bundle Discount (%)</Label>
-                  <div className="flex items-center gap-3">
-                    <Input
-                      id="bundleDiscountPercent"
-                      name="bundleDiscountPercent"
-                      type="number"
-                      min="0"
-                      max="50"
-                      step="1"
-                      value={formData.bundleDiscountPercent ?? 0}
-                      onChange={handleChange}
-                      className="max-w-[120px]"
-                    />
-                    <span className="text-sm text-muted-foreground">
-                      {formData.bundleDiscountPercent > 0
-                        ? `${formData.bundleDiscountPercent}% off when renter bundles multiple items`
-                        : "No bundle discount currently active"}
-                    </span>
+              <CardContent className="space-y-5">
+                {/* Enable / disable bundling */}
+                <div className="flex items-center justify-between rounded-xl border p-4">
+                  <div className="space-y-0.5">
+                    <p className="font-medium text-sm">Enable Bundle Ordering</p>
+                    <p className="text-xs text-muted-foreground">
+                      When off, the "Build a Bundle" section is hidden from your storefront and renters can only book one item at a time.
+                    </p>
                   </div>
-                  <p className="text-xs text-muted-foreground">
-                    Applied to the entire order (primary item + bundle items) when the renter adds extra products.
-                  </p>
+                  <Switch
+                    checked={!!formData.bundlingEnabled}
+                    onCheckedChange={v => setFormData(p => ({ ...p, bundlingEnabled: v }))}
+                  />
                 </div>
+
+                {/* Bundle discount — only shown when bundling is on */}
+                {formData.bundlingEnabled && (
+                  <div className="space-y-2">
+                    <Label htmlFor="bundleDiscountPercent">Bundle Discount (%)</Label>
+                    <div className="flex items-center gap-3">
+                      <Input
+                        id="bundleDiscountPercent"
+                        name="bundleDiscountPercent"
+                        type="number"
+                        min="0"
+                        max="50"
+                        step="1"
+                        value={formData.bundleDiscountPercent ?? 0}
+                        onChange={handleChange}
+                        className="max-w-[120px]"
+                      />
+                      <span className="text-sm text-muted-foreground">
+                        {formData.bundleDiscountPercent > 0
+                          ? `${formData.bundleDiscountPercent}% off when renter bundles multiple items`
+                          : "No bundle discount currently active"}
+                      </span>
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      Applied to the entire order (primary item + bundle items) when the renter adds extra products. Set to 0 for no discount.
+                    </p>
+                  </div>
+                )}
+
                 <Button onClick={doSave} disabled={saving} size="sm">
                   {saving ? <><RefreshCw className="w-3.5 h-3.5 mr-2 animate-spin" />Saving…</> : "Save Bundle Settings"}
                 </Button>
