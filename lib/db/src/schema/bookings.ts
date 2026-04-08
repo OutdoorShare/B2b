@@ -44,6 +44,9 @@ export const bookingsTable = pgTable("bookings", {
   depositAutoAttemptedAt: timestamp("deposit_auto_attempted_at"),
   // Platform protection plan fee applied at booking time (from platformProtectionPlansTable)
   protectionPlanFee: decimal("protection_plan_fee", { precision: 10, scale: 2 }),
+  // True when the renter explicitly opted out of the protection plan at checkout.
+  // Bookings with this flag cannot have claims submitted against them.
+  protectionPlanDeclined: boolean("protection_plan_declined").notNull().default(false),
   // Per-rule initials: JSON array of {ruleId, title, initials, initialedAt}
   ruleInitials: text("rule_initials"),
   // Return documentation

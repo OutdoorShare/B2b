@@ -258,6 +258,7 @@ export default function MyBookingDetail() {
 
   const addonsTotal = addons.reduce((s: number, a: any) => s + Number(a.subtotal ?? 0), 0);
   const protectionPlanFee = Number((booking as any).protectionPlanFee ?? 0);
+  const protectionPlanDeclined = !!(booking as any).protectionPlanDeclined;
   const basePrice   = Number(booking.totalPrice ?? 0) - addonsTotal - protectionPlanFee;
   const totalPrice  = Number(booking.totalPrice ?? 0);
 
@@ -287,6 +288,19 @@ export default function MyBookingDetail() {
           {label}
         </div>
       </div>
+
+      {/* No-protection notice */}
+      {protectionPlanDeclined && (
+        <div className="rounded-2xl border border-red-200 bg-red-50 p-4 flex items-start gap-3">
+          <AlertCircle className="w-5 h-5 mt-0.5 shrink-0 text-red-500" />
+          <div className="space-y-1">
+            <p className="text-sm font-semibold text-red-800">No OutdoorShare Protection on This Rental</p>
+            <p className="text-sm text-red-700">
+              You opted out of the protection plan at checkout. OutdoorShare will <strong>not</strong> provide any assistance for damage, loss, or accident claims on this rental. You are responsible for any issues per the signed rental agreement. Claims cannot be submitted for this booking.
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* Status-specific banners */}
       {booking.status === "pending" && (

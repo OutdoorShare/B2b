@@ -205,7 +205,7 @@ export default function AdminSettings() {
   const TAB_FIELDS: Record<string, string[]> = {
     general:     ["name", "tagline", "description", "email", "outboundEmail", "senderEmail", "senderPassword", "phone", "website", "location", "address", "city", "state", "zipCode", "country", "socialInstagram", "socialFacebook", "socialTwitter"],
     branding:    ["logoUrl", "coverImageUrl", "primaryColor", "accentColor"],
-    policies:    ["depositRequired", "depositPercent", "cancellationPolicy", "rentalTerms", "bundleDiscountPercent", "instantBooking", "paymentPlanEnabled", "paymentPlanDepositType", "paymentPlanDepositFixed", "paymentPlanDepositPercent", "paymentPlanDaysBeforePickup", "passPlatformFeeToCustomer", "passPlatformFeePercent"],
+    policies:    ["depositRequired", "depositPercent", "cancellationPolicy", "rentalTerms", "bundleDiscountPercent", "instantBooking", "paymentPlanEnabled", "paymentPlanDepositType", "paymentPlanDepositFixed", "paymentPlanDepositPercent", "paymentPlanDaysBeforePickup", "passPlatformFeeToCustomer", "passPlatformFeePercent", "protectionPlanOptional"],
     payments:    [],
     integration: ["kioskModeEnabled", "embedCode"],
   };
@@ -301,6 +301,7 @@ export default function AdminSettings() {
   // ── Stripe Connect state ──────────────────────────────────────────────────
   const [connectStatus, setConnectStatus] = useState<{ connected: boolean; chargesEnabled: boolean; payoutsEnabled: boolean; email?: string } | null>(null);
   const [onboardLoading, setOnboardLoading] = useState(false);
+  const [protectionOptionalAcknowledged, setProtectionOptionalAcknowledged] = useState(false);
 
   const adminHeaders = (): HeadersInit => {
     try {
@@ -1339,6 +1340,68 @@ export default function AdminSettings() {
                           </div>
                         );
                       })()}
+                    </div>
+                  )}
+                </div>
+
+                {/* ── Protection Plan Optional ── */}
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between border rounded-lg p-4">
+                    <div className="space-y-0.5">
+                      <Label className="text-base">Make Protection Plan Optional</Label>
+                      <p className="text-sm text-muted-foreground">
+                        When enabled, renters can choose to opt out of the protection plan at checkout. It still applies by default.
+                      </p>
+                    </div>
+                    <Switch
+                      checked={!!formData.protectionPlanOptional}
+                      onCheckedChange={checked => {
+                        if (checked && !protectionOptionalAcknowledged) return; // must acknowledge first
+                        handleSwitchChange("protectionPlanOptional", checked);
+                        if (!checked) setProtectionOptionalAcknowledged(false);
+                      }}
+                    />
+                  </div>
+
+                  {/* Acknowledgment — must be checked before the toggle can be turned on */}
+                  {!formData.protectionPlanOptional && (
+                    <div className="ml-4 border-l-2 border-red-300 pl-4">
+                      <div className="rounded-lg bg-red-50 border border-red-200 p-4 space-y-3">
+                        <div className="flex items-start gap-2">
+                          <span className="text-red-600 mt-0.5">⚠️</span>
+                          <div>
+                            <p className="text-sm font-semibold text-red-800">Insurance Risk Warning</p>
+                            <p className="text-sm text-red-700 mt-1">
+                              If a renter declines the protection plan, their rental will not be covered by OutdoorShare. In the event of damage, loss, or accidents, OutdoorShare will <strong>not</strong> assist with claims and the renter will be held fully responsible under the signed rental agreement. Your equipment may be at risk.
+                            </p>
+                          </div>
+                        </div>
+                        <label className="flex items-start gap-2.5 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            className="mt-0.5 accent-red-600"
+                            checked={protectionOptionalAcknowledged}
+                            onChange={e => {
+                              setProtectionOptionalAcknowledged(e.target.checked);
+                              if (e.target.checked) handleSwitchChange("protectionPlanOptional", true);
+                            }}
+                          />
+                          <span className="text-sm text-red-800 font-medium">
+                            I understand that unprotected rentals may not be covered and I accept responsibility for this risk.
+                          </span>
+                        </label>
+                      </div>
+                    </div>
+                  )}
+
+                  {formData.protectionPlanOptional && (
+                    <div className="ml-4 border-l-2 border-amber-300 pl-4">
+                      <div className="rounded-lg bg-amber-50 border border-amber-200 p-3 flex items-start gap-2">
+                        <span className="text-amber-600 mt-0.5 shrink-0">⚠️</span>
+                        <p className="text-xs text-amber-800">
+                          Protection plan is optional. Renters who opt out will be shown a clear warning and will not be eligible for OutdoorShare claims. They remain responsible under the signed agreement.
+                        </p>
+                      </div>
                     </div>
                   )}
                 </div>

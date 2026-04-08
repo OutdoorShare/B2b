@@ -132,6 +132,7 @@ router.put("/business", requireTenant as any, async (req, res) => {
       paymentPlanDaysBeforePickup,
       passPlatformFeeToCustomer,
       passPlatformFeePercent,
+      protectionPlanOptional,
     } = req.body;
 
     // Require business address fields whenever they are submitted with content.
@@ -193,6 +194,7 @@ router.put("/business", requireTenant as any, async (req, res) => {
       ...(paymentPlanDaysBeforePickup !== undefined && { paymentPlanDaysBeforePickup: Number(paymentPlanDaysBeforePickup) }),
       ...(passPlatformFeeToCustomer  !== undefined && { passPlatformFeeToCustomer }),
       ...(passPlatformFeePercent     !== undefined && { passPlatformFeePercent: passPlatformFeePercent !== null ? String(passPlatformFeePercent) : null }),
+      ...(protectionPlanOptional     !== undefined && { protectionPlanOptional }),
     };
 
     // If this tenant is design-locked (e.g. the platform demo), strip design fields

@@ -287,6 +287,7 @@ router.post("/bookings", async (req, res) => {
       splitDepositAmount: reqSplitDeposit,
       splitRemainingAmount: reqSplitRemaining,
       splitRemainingDueDate: reqSplitDueDate,
+      protectionPlanDeclined: reqProtectionPlanDeclined,
       ...restBody
     } = body;
     const assignedUnitIds = Array.isArray(rawUnitIds) && rawUnitIds.length > 0 ? JSON.stringify(rawUnitIds) : null;
@@ -320,6 +321,7 @@ router.post("/bookings", async (req, res) => {
       agreementSignature: agreementSignatureDataUrl ?? null,
       ruleInitials: ruleInitialsJson ?? null,
       protectionPlanFee: protectionPlanFee > 0 ? String(protectionPlanFee) : null,
+      protectionPlanDeclined: !!reqProtectionPlanDeclined,
       // Split payment plan fields
       ...(usingSplitPayment ? {
         paymentPlanEnabled: true,

@@ -710,6 +710,8 @@ export default function StorefrontBook() {
   const [platformProtectionPlan, setPlatformProtectionPlan] = useState<{
     enabled: boolean; feeAmount: string; categoryName?: string; categorySlug?: string;
   } | null>(null);
+  // Renter opt-out of protection plan (only allowed when company has enabled protectionPlanOptional)
+  const [protectionDeclined, setProtectionDeclined] = useState(false);
 
   // Kiosk pickup photos (only used in kiosk mode)
   const beforePhotoInputRef = useRef<HTMLInputElement>(null);
@@ -1062,14 +1064,19 @@ export default function StorefrontBook() {
   }, [hasTimeSlots, selectedTimeSlot, listing, isOneDay, selectedOption, fullDayPrice, days, selectedHours, selectedQuantity]);
   const deposit = listing?.depositAmount ? parseFloat(String(listing.depositAmount)) : 0;
   const platformProtectionRate = platformProtectionPlan?.enabled ? parseFloat(platformProtectionPlan.feeAmount || "0") : 0;
-  const platformProtectionFee = platformProtectionRate * days;
+  const platformProtectionFeeBase = platformProtectionRate * days;
+  // Renter opt-out: if the company has made the protection plan optional, the renter
+  // can decline it. When declined, remove the fee from the total.
+  const protectionIsOptional = !!(businessProfile as any)?.protectionPlanOptional;
+  // effectiveProtectionFee is 0 when the renter has opted out
+  const platformProtectionFee = protectionIsOptional && protectionDeclined ? 0 : platformProtectionFeeBase;
   // When the platform protection plan is active, exclude listing addons named "protection"
   // to avoid double-counting the same fee.
   const addonsSubtotal = useMemo(() => {
     return availableAddons
-      .filter(a => selectedAddonIds.has(a.id) && !(platformProtectionFee > 0 && a.name.toLowerCase().includes("protection")))
+      .filter(a => selectedAddonIds.has(a.id) && !(platformProtectionFeeBase > 0 && a.name.toLowerCase().includes("protection")))
       .reduce((sum, a) => sum + (a.priceType === "per_day" ? a.price * days : a.price), 0);
-  }, [availableAddons, selectedAddonIds, days, platformProtectionFee]);
+  }, [availableAddons, selectedAddonIds, days, platformProtectionFeeBase]);
 
   const bundleItemsTotal = useMemo(() => bundleItems.reduce((s, i) => s + i.subtotal, 0), [bundleItems]);
   const bundleDiscountAmount = useMemo(() => {
@@ -1550,6 +1557,7 @@ export default function StorefrontBook() {
           discountAmount: promoDiscount > 0 ? promoDiscount : undefined,
           depositPaid: deposit > 0 ? String(deposit) : undefined,
           protectionPlanFee: platformProtectionFee > 0 ? String(platformProtectionFee) : undefined,
+          protectionPlanDeclined: protectionIsOptional && protectionDeclined ? true : undefined,
           // Payment plan (split deposit)
           ...(usePaymentPlan && planEnabled ? {
             paymentPlanEnabled: true,
@@ -1901,17 +1909,48 @@ export default function StorefrontBook() {
                       </span>
                       <span className="font-semibold">${subtotal.toFixed(2)}</span>
                     </div>
-                    {platformProtectionFee > 0 && (
-                      <div className="px-4 py-3 flex items-center justify-between text-sm">
-                        <span className="flex items-center gap-2">
-                          <ShieldCheck className="w-4 h-4 shrink-0" style={{ color: "#3ab549" }} />
-                          <span>
-                            <span className="font-semibold" style={{ color: "#1a2332" }}>Protection Plan</span>
-                            <span className="ml-1 text-xs font-bold px-1.5 py-0.5 rounded-full" style={{ background: "rgba(58,181,73,0.12)", color: "#3ab549" }}>Required</span>
+                    {platformProtectionFeeBase > 0 && (
+                      <div className="px-4 py-3 space-y-2 text-sm">
+                        <div className="flex items-center justify-between">
+                          <span className="flex items-center gap-2">
+                            <ShieldCheck className="w-4 h-4 shrink-0" style={{ color: protectionDeclined ? "#9ca3af" : "#3ab549" }} />
+                            <span>
+                              <span className="font-semibold" style={{ color: protectionDeclined ? "#9ca3af" : "#1a2332" }}>Protection Plan</span>
+                              {protectionIsOptional ? (
+                                <span className="ml-1 text-xs font-bold px-1.5 py-0.5 rounded-full bg-muted text-muted-foreground">Optional</span>
+                              ) : (
+                                <span className="ml-1 text-xs font-bold px-1.5 py-0.5 rounded-full" style={{ background: "rgba(58,181,73,0.12)", color: "#3ab549" }}>Required</span>
+                              )}
+                            </span>
+                            <span className="text-xs text-muted-foreground">${platformProtectionRate}/day × {days} day{days !== 1 ? "s" : ""}</span>
                           </span>
-                          <span className="text-xs text-muted-foreground">${platformProtectionRate}/day × {days} day{days !== 1 ? "s" : ""}</span>
-                        </span>
-                        <span className="font-semibold text-blue-700">+${platformProtectionFee.toFixed(2)}</span>
+                          <span className={`font-semibold ${protectionDeclined ? "line-through text-muted-foreground" : "text-blue-700"}`}>
+                            +${platformProtectionFeeBase.toFixed(2)}
+                          </span>
+                        </div>
+                        {/* Opt-out checkbox — only shown when company has made it optional */}
+                        {protectionIsOptional && (
+                          <label className="flex items-start gap-2 cursor-pointer pl-6">
+                            <input
+                              type="checkbox"
+                              className="mt-0.5"
+                              checked={protectionDeclined}
+                              onChange={e => setProtectionDeclined(e.target.checked)}
+                            />
+                            <span className="text-xs text-muted-foreground">I do not want the protection plan</span>
+                          </label>
+                        )}
+                        {/* Warning shown when renter opts out */}
+                        {protectionIsOptional && protectionDeclined && (
+                          <div className="ml-6 rounded-lg bg-red-50 border border-red-200 p-3 space-y-1">
+                            <p className="text-xs font-bold text-red-700 flex items-center gap-1.5">
+                              <span>⚠️</span> No OutdoorShare Protection
+                            </p>
+                            <p className="text-xs text-red-700">
+                              By declining the protection plan, you will have <strong>no assistance from OutdoorShare</strong> in the event of any accident, damage, or loss. You will <strong>not</strong> be able to submit a claim. You are fully responsible for any issues according to the signed rental agreement.
+                            </p>
+                          </div>
+                        )}
                       </div>
                     )}
                     {availableAddons
@@ -3823,13 +3862,19 @@ export default function StorefrontBook() {
                             <span>+${(a.priceType === "per_day" ? a.price * days : a.price).toFixed(2)}</span>
                           </div>
                         ))}
-                      {platformProtectionFee > 0 && (
+                      {platformProtectionFeeBase > 0 && !protectionDeclined && (
                         <div className="flex justify-between text-blue-700 font-medium">
                           <span className="flex items-center gap-1.5">
                             <img src="/outdoorshare-logo.png" alt="OutdoorShare" className="h-3.5 object-contain opacity-80" />
                             Protection Plan (${platformProtectionRate.toFixed(0)}/day × {days} day{days !== 1 ? "s" : ""})
                           </span>
-                          <span>+${platformProtectionFee.toFixed(2)}</span>
+                          <span>+${platformProtectionFeeBase.toFixed(2)}</span>
+                        </div>
+                      )}
+                      {platformProtectionFeeBase > 0 && protectionDeclined && (
+                        <div className="flex justify-between text-muted-foreground line-through">
+                          <span>Protection Plan — declined</span>
+                          <span>—</span>
                         </div>
                       )}
                       {bundleItems.map(item => (

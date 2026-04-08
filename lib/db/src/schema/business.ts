@@ -50,6 +50,9 @@ export const businessProfileTable = pgTable("business_profile", {
   // The % to charge the customer when pass-through is on. NULL = use the tenant's
   // platformFeePercent (i.e. exactly what OutdoorShare charges). Editable by admin.
   passPlatformFeePercent: decimal("pass_platform_fee_percent", { precision: 5, scale: 2 }),
+  // When true, renters may opt out of the platform protection plan at checkout.
+  // Admin must acknowledge the insurance-risk warning to enable this.
+  protectionPlanOptional: boolean("protection_plan_optional").notNull().default(false),
   lat: decimal("lat", { precision: 10, scale: 6 }),
   lng: decimal("lng", { precision: 10, scale: 6 }),
   createdAt: timestamp("created_at").defaultNow().notNull(),

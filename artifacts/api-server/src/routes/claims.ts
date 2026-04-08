@@ -82,6 +82,21 @@ router.post("/claims", async (req, res) => {
       return res.status(400).json({ error: "customerName, customerEmail, and description are required" });
     }
 
+    // Block claims on bookings where the renter explicitly declined the protection plan
+    if (bookingId) {
+      const [booking] = await db
+        .select({ protectionPlanDeclined: bookingsTable.protectionPlanDeclined })
+        .from(bookingsTable)
+        .where(eq(bookingsTable.id, Number(bookingId)))
+        .limit(1);
+      if (booking?.protectionPlanDeclined) {
+        return res.status(403).json({
+          error: "claim_not_eligible",
+          message: "This booking is not eligible for an OutdoorShare protection claim. The protection plan was declined at checkout. The renter acknowledged responsibility for any damage or loss per the signed rental agreement.",
+        });
+      }
+    }
+
     const now = new Date();
     const [created] = await db
       .insert(claimsTable)
