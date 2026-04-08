@@ -8,6 +8,7 @@ import {
   Info, CheckCircle2, Globe, Tag, Plus, Trash2, ChevronRight,
   Zap, UserCheck, FormInput, ToggleLeft, ToggleRight,
   Pencil, X, Hash, Calendar, AlignLeft, CheckSquare,
+  Maximize2, Minimize2,
 } from "lucide-react";
 import { format } from "date-fns";
 
@@ -149,10 +150,19 @@ function AgreementEditor({
 }) {
   const [text, setText] = useState(initialValue);
   const [viewMode, setViewMode] = useState<ViewMode>("split");
+  const [isFullscreen, setIsFullscreen] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const cursorRef = useRef<number>(0);
 
   useEffect(() => { setText(initialValue); }, [initialValue]);
+
+  // Escape key exits fullscreen
+  useEffect(() => {
+    if (!isFullscreen) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setIsFullscreen(false); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [isFullscreen]);
 
   const isDirty = text !== savedValue;
   const paragraphs = text.split(/\n{2,}/).filter(p => p.trim());
@@ -194,9 +204,9 @@ function AgreementEditor({
   }
 
   return (
-    <div className="flex-1 min-w-0 flex flex-col gap-3">
+    <div className={isFullscreen ? "fixed inset-0 z-50 flex flex-col bg-slate-900" : "flex-1 min-w-0 flex flex-col gap-3"}>
       {/* Header */}
-      <div className="flex items-start justify-between gap-4 flex-wrap">
+      <div className={`flex items-start justify-between gap-4 flex-wrap ${isFullscreen ? "px-4 pt-4" : ""}`}>
         <div>
           <h2 className="text-lg font-bold text-white">{label}</h2>
           <p className="text-sm text-slate-400 mt-0.5">{description}</p>
@@ -232,7 +242,7 @@ function AgreementEditor({
       </div>
 
       {/* Document editor card */}
-      <div className="border border-slate-700 rounded-2xl overflow-hidden flex flex-col shadow-xl">
+      <div className={`border border-slate-700 overflow-hidden flex flex-col shadow-xl ${isFullscreen ? "flex-1 rounded-none" : "rounded-2xl"}`}>
 
         {/* ── Toolbar bar: token insertion ─────────────────────────────── */}
         <div className="bg-slate-800 border-b border-slate-700 px-3 py-2 flex items-start gap-2 flex-wrap">
@@ -318,10 +328,17 @@ function AgreementEditor({
               Discard
             </button>
           )}
+          <button
+            onClick={() => setIsFullscreen(f => !f)}
+            title={isFullscreen ? "Exit fullscreen (Esc)" : "Fullscreen"}
+            className="ml-2 p-1 rounded text-slate-400 hover:text-slate-100 hover:bg-slate-700 transition-colors"
+          >
+            {isFullscreen ? <Minimize2 className="w-3.5 h-3.5" /> : <Maximize2 className="w-3.5 h-3.5" />}
+          </button>
         </div>
 
         {/* ── Editor + Preview panes ────────────────────────────────────── */}
-        <div className="flex min-h-[600px] overflow-hidden">
+        <div className={`flex overflow-hidden ${isFullscreen ? "flex-1" : "min-h-[600px]"}`}>
 
           {/* EDIT PANE */}
           {viewMode !== "preview" && (
