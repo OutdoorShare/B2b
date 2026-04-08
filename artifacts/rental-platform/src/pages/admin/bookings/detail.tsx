@@ -1,5 +1,5 @@
 import { adminPath, getAdminSession } from "@/lib/admin-nav";
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect } from "react";
 import { fireConfetti } from "@/hooks/use-confetti";
 import { AdminBookingTimeline } from "@/components/RentalCountdown";
 import { useParams } from "wouter";
@@ -50,20 +50,12 @@ export default function AdminBookingDetail() {
     query: { enabled: !!id, queryKey: getGetBookingQueryKey(id) }
   });
 
-  // Track whether this booking was unseen on first load (for confetti)
-  const firstViewFired = useRef(false);
-
-  // Mark booking as seen by admin when it loads; fire confetti on first view of unseen booking
+  // Mark booking as seen by admin when it loads
   useEffect(() => {
     if (!id || !(booking as any)?.id) return;
     const base = import.meta.env.BASE_URL.replace(/\/+$/, "");
     const session = getAdminSession();
     if (!session?.token) return;
-    // If booking was unseen by admin, fire confetti once before marking seen
-    if (!(booking as any).seenByAdmin && !firstViewFired.current) {
-      firstViewFired.current = true;
-      fireConfetti();
-    }
     fetch(`${base}/api/bookings/${id}/seen`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json", "x-admin-token": session.token },
