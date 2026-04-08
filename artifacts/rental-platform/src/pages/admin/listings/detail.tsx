@@ -1,4 +1,4 @@
-import { adminPath } from "@/lib/admin-nav";
+import { adminPath, getAdminSession } from "@/lib/admin-nav";
 import { useState, useEffect } from "react";
 import { useParams, useLocation, Link } from "wouter";
 import type { DateRange } from "react-day-picker";
@@ -97,6 +97,11 @@ export default function AdminListingDetail() {
   };
   useEffect(fetchBlockedDates, [id]);
 
+  const adminHeaders = () => {
+    const session = getAdminSession();
+    return session?.token ? { "x-admin-token": session.token } : {};
+  };
+
   const handleBlockSave = async () => {
     if (!blockRange?.from || !blockRange?.to) {
       toast({ title: "Select a date range to block", variant: "destructive" }); return;
@@ -105,20 +110,24 @@ export default function AdminListingDetail() {
     try {
       const res = await fetch(`${BASE}/api/listings/${id}/blocked-dates`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...adminHeaders() },
         body: JSON.stringify({
           startDate: format(blockRange.from, "yyyy-MM-dd"),
           endDate: format(blockRange.to, "yyyy-MM-dd"),
           reason: blockReason || null,
         }),
       });
+      if (res.status === 401) {
+        toast({ title: "Session expired", description: "Please log out and log back in, then try again.", variant: "destructive" });
+        return;
+      }
       if (!res.ok) throw new Error();
       toast({ title: "Dates blocked successfully" });
       setBlockRange(undefined);
       setBlockReason("");
       fetchBlockedDates();
     } catch {
-      toast({ title: "Failed to block dates", variant: "destructive" });
+      toast({ title: "Failed to block dates", description: "An unexpected error occurred. Please try again.", variant: "destructive" });
     } finally {
       setBlockSaving(false);
     }
@@ -126,7 +135,14 @@ export default function AdminListingDetail() {
 
   const handleBlockDelete = async (blockId: number) => {
     try {
-      const res = await fetch(`${BASE}/api/listings/blocked-dates/${blockId}`, { method: "DELETE" });
+      const res = await fetch(`${BASE}/api/listings/blocked-dates/${blockId}`, {
+        method: "DELETE",
+        headers: adminHeaders(),
+      });
+      if (res.status === 401) {
+        toast({ title: "Session expired", description: "Please log out and log back in, then try again.", variant: "destructive" });
+        return;
+      }
       if (!res.ok) throw new Error();
       toast({ title: "Block removed" });
       setBlockedDates(prev => prev.filter(b => b.id !== blockId));
