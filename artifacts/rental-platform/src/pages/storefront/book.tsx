@@ -1795,7 +1795,7 @@ export default function StorefrontBook() {
 
   return (
     <>
-    <div className="min-h-screen bg-muted/20">
+    <div className={`min-h-screen bg-muted/20 ${step === "book" && !isKiosk ? "pb-24 xl:pb-0" : ""}`}>
       {/* Slim 2-step progress bar */}
       <div className="sticky top-16 z-10 bg-background border-b shadow-sm">
         <div className="max-w-3xl mx-auto px-4 py-3">
@@ -2479,7 +2479,7 @@ export default function StorefrontBook() {
                 <Separator />
 
                 {/* ── Step 1: Contact Details ── */}
-                <div>
+                <div id="contact-details">
                   {/* Step header */}
                   <div className="flex items-center justify-between mb-4">
                     <div className="flex items-center gap-2.5">
@@ -4271,6 +4271,42 @@ export default function StorefrontBook() {
       onChange={setBundleItems}
       bundleDiscountPercent={bundleDiscountPercent}
     />
+
+    {/* ── Sticky "Book Now" bottom bar — mobile/tablet only ── */}
+    {step === "book" && !isKiosk && (
+      <div className="xl:hidden fixed bottom-0 inset-x-0 z-40 bg-background/95 backdrop-blur-md border-t border-border shadow-[0_-4px_24px_rgba(0,0,0,0.09)]">
+        <div className="max-w-3xl mx-auto px-4 py-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] flex items-center justify-between gap-4">
+          <div className="min-w-0">
+            <p className="text-[11px] text-muted-foreground truncate font-medium">{listing.title}</p>
+            {dateRange?.from && dateRange?.to ? (
+              <p className="font-bold text-base leading-tight">
+                ${discountedTotal.toFixed(2)}
+                <span className="text-xs font-normal text-muted-foreground ml-1.5">· {days} day{days !== 1 ? "s" : ""}</span>
+              </p>
+            ) : (
+              <p className="font-bold text-base leading-tight">
+                <span className="text-xs font-normal text-muted-foreground">From </span>
+                ${fullDayPrice.toFixed(2)}
+                <span className="text-xs font-normal text-muted-foreground">/day</span>
+              </p>
+            )}
+          </div>
+          <Button
+            className="shrink-0 rounded-xl px-7 font-bold h-11 text-sm"
+            onClick={() => {
+              const el = document.getElementById("contact-details");
+              if (el) {
+                const offset = 80;
+                const top = el.getBoundingClientRect().top + window.scrollY - offset;
+                window.scrollTo({ top, behavior: "smooth" });
+              }
+            }}
+          >
+            Book Now
+          </Button>
+        </div>
+      </div>
+    )}
     </>
   );
 }
