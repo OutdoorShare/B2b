@@ -713,6 +713,9 @@ export default function StorefrontBook() {
   // Renter opt-out of protection plan (only allowed when company has enabled protectionPlanOptional)
   const [protectionDeclined, setProtectionDeclined] = useState(false);
 
+  // Business-defined custom fees (mandatory line items on every booking)
+  const [customFees, setCustomFees] = useState<Array<{ id: number; name: string; amount: string; priceType: string }>>([]);
+
   // Kiosk pickup photos (only used in kiosk mode)
   const beforePhotoInputRef = useRef<HTMLInputElement>(null);
   const [beforePhotos, setBeforePhotos] = useState<File[]>([]);
@@ -761,9 +764,11 @@ export default function StorefrontBook() {
     Promise.all([
       fetch(`${BASE}/api/listings?status=active`, { headers }).then(r => r.json()).catch(() => []),
       fetch(`${BASE}/api/business`, { headers }).then(r => r.json()).catch(() => ({})),
-    ]).then(([ls, biz]) => {
+      fetch(`${BASE}/api/custom-fees`, { headers }).then(r => r.json()).catch(() => []),
+    ]).then(([ls, biz, fees]) => {
       if (Array.isArray(ls)) setAllListings(ls);
       if (typeof biz?.bundleDiscountPercent === "number") setBundleDiscountPercent(biz.bundleDiscountPercent);
+      if (Array.isArray(fees)) setCustomFees(fees);
     });
   }, [slug]);
 
@@ -1078,14 +1083,28 @@ export default function StorefrontBook() {
       .reduce((sum, a) => sum + (a.priceType === "per_day" ? a.price * days : a.price), 0);
   }, [availableAddons, selectedAddonIds, days, platformProtectionFeeBase]);
 
+  // Business-defined custom fees (flat or per-day, mandatory for every booking)
+  const customFeesSubtotal = useMemo(() =>
+    customFees.reduce((sum, f) => {
+      const amt = parseFloat(f.amount);
+      return sum + (f.priceType === "per_day" ? amt * days : amt);
+    }, 0),
+  [customFees, days]);
+
+  // Platform processes 3% of custom fees when their total exceeds $100
+  const CUSTOM_FEE_THRESHOLD = 100;
+  const customFeePlatformCharge = customFeesSubtotal > CUSTOM_FEE_THRESHOLD
+    ? parseFloat((customFeesSubtotal * 0.03).toFixed(2))
+    : 0;
+
   const bundleItemsTotal = useMemo(() => bundleItems.reduce((s, i) => s + i.subtotal, 0), [bundleItems]);
   const bundleDiscountAmount = useMemo(() => {
     if (bundleItems.length === 0 || bundleDiscountPercent === 0) return 0;
-    const allBeforeDiscount = subtotal + bundleItemsTotal + addonsSubtotal + platformProtectionFee;
+    const allBeforeDiscount = subtotal + bundleItemsTotal + addonsSubtotal + platformProtectionFee + customFeesSubtotal;
     return allBeforeDiscount * (bundleDiscountPercent / 100);
-  }, [bundleItems, bundleDiscountPercent, subtotal, bundleItemsTotal, addonsSubtotal, platformProtectionFee]);
+  }, [bundleItems, bundleDiscountPercent, subtotal, bundleItemsTotal, addonsSubtotal, platformProtectionFee, customFeesSubtotal]);
 
-  const total = subtotal + bundleItemsTotal + addonsSubtotal + platformProtectionFee - bundleDiscountAmount;
+  const total = subtotal + bundleItemsTotal + addonsSubtotal + platformProtectionFee + customFeesSubtotal + customFeePlatformCharge - bundleDiscountAmount;
   const promoDiscount = appliedPromo ? Math.min(appliedPromo.discountAmount, total) : 0;
   const afterPromo = total - promoDiscount;
 
@@ -1337,6 +1356,8 @@ export default function StorefrontBook() {
           protectionFeeCents: platformProtectionFee > 0 ? Math.round(platformProtectionFee * (dateRange?.days ?? 1) * 100) : undefined,
           // Pass-through: tell the backend the exact service fee charged to the customer
           passthroughFeeCents: serviceFee > 0 ? Math.round(serviceFee * 100) : undefined,
+          // Custom fees: backend adds 3% platform processing fee if total > $100
+          customFeesCents: customFeesSubtotal > 0 ? Math.round(customFeesSubtotal * 100) : undefined,
         }),
       });
       if (!res.ok) {
@@ -1961,6 +1982,30 @@ export default function StorefrontBook() {
                           <span>+${(a.priceType === "per_day" ? a.price * days : a.price).toFixed(2)}</span>
                         </div>
                       ))}
+                    {/* Business custom fees — mandatory, auto-applied */}
+                    {customFees.map(f => {
+                      const amt = parseFloat(f.amount);
+                      const lineAmt = f.priceType === "per_day" ? amt * days : amt;
+                      return (
+                        <div key={f.id} className="px-4 py-3 flex items-center justify-between text-sm text-muted-foreground">
+                          <span className="flex items-center gap-1.5">
+                            {f.name}
+                            {f.priceType === "per_day" && <span className="text-xs opacity-70">(${amt.toFixed(2)}/day × {days})</span>}
+                          </span>
+                          <span>+${lineAmt.toFixed(2)}</span>
+                        </div>
+                      );
+                    })}
+                    {/* OutdoorShare processing fee on custom fees > $100 */}
+                    {customFeePlatformCharge > 0 && (
+                      <div className="px-4 py-3 flex items-center justify-between text-sm text-muted-foreground">
+                        <span className="flex items-center gap-1.5 text-xs">
+                          <img src="/outdoorshare-logo.png" alt="OutdoorShare" className="h-3.5 object-contain opacity-60" />
+                          Processing fee (3% of custom fees)
+                        </span>
+                        <span>+${customFeePlatformCharge.toFixed(2)}</span>
+                      </div>
+                    )}
                     {promoDiscount > 0 && (
                       <div className="px-4 py-3 flex items-center justify-between text-sm text-green-700">
                         <span>Promo discount</span>

@@ -222,7 +222,7 @@ router.get("/stripe/connect/check/:slug", async (req, res) => {
 // If tenant has NOT connected → funds sit on OutdoorShare platform until they do.
 router.post("/stripe/payment-intent", async (req, res) => {
   try {
-    const { tenantSlug, amountCents, customerEmail, customerName, bookingMeta, customerId, protectionFeeCents, passthroughFeeCents } = req.body ?? {};
+    const { tenantSlug, amountCents, customerEmail, customerName, bookingMeta, customerId, protectionFeeCents, passthroughFeeCents, customFeesCents } = req.body ?? {};
     console.log(`[payment-intent] slug="${tenantSlug}" amount=${amountCents} body-keys=${Object.keys(req.body ?? {}).join(",")}`);
     if (!tenantSlug || !amountCents || amountCents < 50) {
       res.status(400).json({ error: "tenantSlug and amountCents (min 50) required" });
@@ -242,11 +242,18 @@ router.post("/stripe/payment-intent", async (req, res) => {
       ? parseFloat(tenant.platformFeePercent) / 100
       : PLATFORM_FEE_PERCENT;
 
+    // Custom fees platform charge: if custom fees total > $100, OutdoorShare keeps 3% of them.
+    const CUSTOM_FEE_THRESHOLD_CENTS = 10000; // $100 in cents
+    const customFeeChargeCents = (customFeesCents != null && customFeesCents > CUSTOM_FEE_THRESHOLD_CENTS)
+      ? Math.round(customFeesCents * 0.03)
+      : 0;
+
     // Determine platform fee:
     //  1. passthroughFeeCents — company has opted to pass the service fee to the customer;
     //     the frontend already added it to amountCents, so use the explicit amount directly.
     //  2. Host tenants with a protection fee — keep 100% of protection + feePercent of rental.
     //  3. Default — flat feePercent of the total.
+    //  In all cases, add customFeeChargeCents to platform fee (already included in amountCents).
     let platformFeeAmount: number;
     let transferAmount: number;
     if (passthroughFeeCents != null && passthroughFeeCents > 0) {
@@ -254,17 +261,20 @@ router.post("/stripe/payment-intent", async (req, res) => {
       // and must flow entirely to the company — OutdoorShare takes ZERO commission from it.
       // OutdoorShare's platform fee is calculated only from the base rental amount.
       const ppCents = protectionFeeCents != null && protectionFeeCents > 0 ? protectionFeeCents : 0;
-      const rentalBase = amountCents - Math.round(passthroughFeeCents) - ppCents;
-      platformFeeAmount = Math.round(rentalBase * feePercent) + ppCents;
+      const rentalBase = amountCents - Math.round(passthroughFeeCents) - ppCents - customFeeChargeCents;
+      platformFeeAmount = Math.round(rentalBase * feePercent) + ppCents + customFeeChargeCents;
       // transferAmount = rental base net of platform fee + 100% of service fee
       transferAmount = amountCents - platformFeeAmount;
     } else if (tenant.isHost && protectionFeeCents != null && protectionFeeCents > 0) {
-      const rentalSubtotal = amountCents - protectionFeeCents;
+      const rentalSubtotal = amountCents - protectionFeeCents - customFeeChargeCents;
       const rentalFee = Math.round(rentalSubtotal * feePercent);
-      platformFeeAmount = rentalFee + protectionFeeCents; // feePercent of rental + 100% of protection
+      platformFeeAmount = rentalFee + protectionFeeCents + customFeeChargeCents;
       transferAmount = rentalSubtotal - rentalFee;
     } else {
-      platformFeeAmount = Math.round(amountCents * feePercent);
+      // Exclude the custom fee charge from the base when calculating % so we don't
+      // double-dip — the 3% custom charge is separate from the rental commission.
+      const rentalBase = amountCents - customFeeChargeCents;
+      platformFeeAmount = Math.round(rentalBase * feePercent) + customFeeChargeCents;
       transferAmount = amountCents - platformFeeAmount;
     }
 

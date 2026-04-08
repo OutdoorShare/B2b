@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
-import { businessProfileTable, tenantsTable } from "@workspace/db/schema";
+import { businessProfileTable, tenantsTable, businessCustomFeesTable } from "@workspace/db/schema";
 import { eq, ne, and } from "drizzle-orm";
 import { PLATFORM_FEE_PERCENT } from "../services/stripe";
 import { requireTenant } from "../middleware/admin-auth";
@@ -266,6 +266,84 @@ router.put("/business", requireTenant as any, async (req, res) => {
   } catch (err) {
     req.log.error(err);
     res.status(500).json({ error: "Failed to update business profile" });
+  }
+});
+
+// ── Custom Fees ───────────────────────────────────────────────────────────────
+// Company-defined mandatory fees that auto-apply to every booking.
+// Platform rule: total custom fees > $100 on a booking → OutdoorShare takes 3%.
+export const CUSTOM_FEE_THRESHOLD = 100;   // dollars
+export const CUSTOM_FEE_PLATFORM_RATE = 0.03; // 3%
+
+// Public: fetch active custom fees for a tenant (used in booking page)
+router.get("/custom-fees", async (req, res) => {
+  try {
+    if (!req.tenantId) { res.status(404).json({ error: "Tenant not found" }); return; }
+    const fees = await db.select()
+      .from(businessCustomFeesTable)
+      .where(and(eq(businessCustomFeesTable.tenantId, req.tenantId), eq(businessCustomFeesTable.isActive, true)));
+    res.json(fees);
+  } catch (err) {
+    req.log.error(err);
+    res.status(500).json({ error: "Failed to fetch custom fees" });
+  }
+});
+
+// Admin: create a new custom fee
+router.post("/custom-fees", requireTenant, async (req, res) => {
+  try {
+    if (!req.tenantId) { res.status(401).json({ error: "Unauthorized" }); return; }
+    const { name, amount, priceType } = req.body ?? {};
+    if (!name || !amount) { res.status(400).json({ error: "name and amount required" }); return; }
+    const [fee] = await db.insert(businessCustomFeesTable).values({
+      tenantId: req.tenantId,
+      name: String(name).trim(),
+      amount: String(parseFloat(amount).toFixed(2)),
+      priceType: priceType === "per_day" ? "per_day" : "flat",
+      isActive: true,
+    }).returning();
+    res.json(fee);
+  } catch (err) {
+    req.log.error(err);
+    res.status(500).json({ error: "Failed to create custom fee" });
+  }
+});
+
+// Admin: update a custom fee
+router.put("/custom-fees/:id", requireTenant, async (req, res) => {
+  try {
+    if (!req.tenantId) { res.status(401).json({ error: "Unauthorized" }); return; }
+    const feeId = parseInt(req.params.id, 10);
+    const { name, amount, priceType, isActive } = req.body ?? {};
+    const update: Record<string, unknown> = {};
+    if (name !== undefined) update.name = String(name).trim();
+    if (amount !== undefined) update.amount = String(parseFloat(amount).toFixed(2));
+    if (priceType !== undefined) update.priceType = priceType === "per_day" ? "per_day" : "flat";
+    if (isActive !== undefined) update.isActive = !!isActive;
+    const [updated] = await db.update(businessCustomFeesTable)
+      .set(update)
+      .where(and(eq(businessCustomFeesTable.id, feeId), eq(businessCustomFeesTable.tenantId, req.tenantId)))
+      .returning();
+    if (!updated) { res.status(404).json({ error: "Fee not found" }); return; }
+    res.json(updated);
+  } catch (err) {
+    req.log.error(err);
+    res.status(500).json({ error: "Failed to update custom fee" });
+  }
+});
+
+// Admin: delete (soft-delete) a custom fee
+router.delete("/custom-fees/:id", requireTenant, async (req, res) => {
+  try {
+    if (!req.tenantId) { res.status(401).json({ error: "Unauthorized" }); return; }
+    const feeId = parseInt(req.params.id, 10);
+    await db.update(businessCustomFeesTable)
+      .set({ isActive: false })
+      .where(and(eq(businessCustomFeesTable.id, feeId), eq(businessCustomFeesTable.tenantId, req.tenantId)));
+    res.json({ ok: true });
+  } catch (err) {
+    req.log.error(err);
+    res.status(500).json({ error: "Failed to delete custom fee" });
   }
 });
 

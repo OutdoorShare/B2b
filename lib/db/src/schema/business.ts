@@ -62,3 +62,19 @@ export const businessProfileTable = pgTable("business_profile", {
 export const insertBusinessProfileSchema = createInsertSchema(businessProfileTable).omit({ id: true, createdAt: true, updatedAt: true });
 export type InsertBusinessProfile = z.infer<typeof insertBusinessProfileSchema>;
 export type BusinessProfile = typeof businessProfileTable.$inferSelect;
+
+// ── Business Custom Fees ──────────────────────────────────────────────────────
+// Mandatory fees the company defines that auto-apply to every booking.
+// If the total of these fees on a single booking exceeds $100, OutdoorShare
+// collects an additional 3% of that custom-fee total as a platform processing fee.
+export const businessCustomFeesTable = pgTable("business_custom_fees", {
+  id: serial("id").primaryKey(),
+  tenantId: integer("tenant_id").notNull(),
+  name: text("name").notNull(),
+  amount: decimal("amount", { precision: 10, scale: 2 }).notNull(),
+  priceType: text("price_type", { enum: ["flat", "per_day"] }).notNull().default("flat"),
+  isActive: boolean("is_active").notNull().default(true),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export type BusinessCustomFee = typeof businessCustomFeesTable.$inferSelect;

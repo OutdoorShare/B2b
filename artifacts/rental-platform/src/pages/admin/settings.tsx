@@ -157,6 +157,66 @@ export default function AdminSettings() {
     applyBrandColors(preset.primary, preset.accent);
   };
 
+  // ── Custom Fees ──────────────────────────────────────────────────────
+  type CustomFee = { id: number; name: string; amount: string; priceType: string };
+  const [customFees, setCustomFees] = useState<CustomFee[]>([]);
+  const [customFeesSaving, setCustomFeesSaving] = useState(false);
+  const [newFeeForm, setNewFeeForm] = useState({ name: "", amount: "", priceType: "flat" });
+  const [editingFeeId, setEditingFeeId] = useState<number | null>(null);
+  const [editFeeForm, setEditFeeForm] = useState({ name: "", amount: "", priceType: "flat" });
+
+  useEffect(() => {
+    fetch(`${BASE}/api/custom-fees`, { headers: adminHeaders() })
+      .then(r => r.ok ? r.json() : [])
+      .then(data => { if (Array.isArray(data)) setCustomFees(data); })
+      .catch(() => {});
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const createCustomFee = async () => {
+    if (!newFeeForm.name.trim() || !newFeeForm.amount) return;
+    setCustomFeesSaving(true);
+    try {
+      const res = await fetch(`${BASE}/api/custom-fees`, {
+        method: "POST",
+        headers: { ...adminHeaders(), "Content-Type": "application/json" },
+        body: JSON.stringify(newFeeForm),
+      });
+      if (!res.ok) { toast({ title: "Failed to add fee", variant: "destructive" }); return; }
+      const fee = await res.json();
+      setCustomFees(prev => [...prev, fee]);
+      setNewFeeForm({ name: "", amount: "", priceType: "flat" });
+      toast({ title: "Custom fee added" });
+    } finally {
+      setCustomFeesSaving(false);
+    }
+  };
+
+  const saveEditFee = async () => {
+    if (editingFeeId == null) return;
+    setCustomFeesSaving(true);
+    try {
+      const res = await fetch(`${BASE}/api/custom-fees/${editingFeeId}`, {
+        method: "PUT",
+        headers: { ...adminHeaders(), "Content-Type": "application/json" },
+        body: JSON.stringify(editFeeForm),
+      });
+      if (!res.ok) { toast({ title: "Failed to update fee", variant: "destructive" }); return; }
+      const updated = await res.json();
+      setCustomFees(prev => prev.map(f => f.id === editingFeeId ? updated : f));
+      setEditingFeeId(null);
+      toast({ title: "Fee updated" });
+    } finally {
+      setCustomFeesSaving(false);
+    }
+  };
+
+  const deleteCustomFee = async (id: number) => {
+    await fetch(`${BASE}/api/custom-fees/${id}`, { method: "DELETE", headers: adminHeaders() });
+    setCustomFees(prev => prev.filter(f => f.id !== id));
+    toast({ title: "Fee removed" });
+  };
+
   // ── Rental Rules list ────────────────────────────────────────────────
   const [newRule, setNewRule] = useState("");
 
@@ -426,11 +486,12 @@ export default function AdminSettings() {
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-        <TabsList className="grid w-full grid-cols-5">
+        <TabsList className="grid w-full grid-cols-6">
           <TabsTrigger value="general">General</TabsTrigger>
           <TabsTrigger value="branding">Branding</TabsTrigger>
           <TabsTrigger value="policies">Policies</TabsTrigger>
           <TabsTrigger value="payments">Payments</TabsTrigger>
+          <TabsTrigger value="fees">Custom Fees</TabsTrigger>
           <TabsTrigger value="integration">Integration</TabsTrigger>
         </TabsList>
 
@@ -1601,6 +1662,139 @@ export default function AdminSettings() {
                 <Button onClick={doSave} disabled={saving} size="sm">
                   {saving ? <><RefreshCw className="w-3.5 h-3.5 mr-2 animate-spin" />Saving…</> : "Save Bundle Settings"}
                 </Button>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          {/* ── CUSTOM FEES ── */}
+          <TabsContent value="fees" className="space-y-6 pt-6">
+            {/* Platform policy notice */}
+            <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 flex items-start gap-3">
+              <AlertCircle className="w-5 h-5 mt-0.5 shrink-0 text-amber-600" />
+              <div className="space-y-1">
+                <p className="text-sm font-semibold text-amber-800">OutdoorShare Custom Fee Policy</p>
+                <p className="text-sm text-amber-700">
+                  Custom fees are mandatory line items added to every booking (e.g. cleaning fee, delivery fee). They appear transparently on the customer's checkout.
+                </p>
+                <p className="text-sm text-amber-700 font-medium">
+                  If the total custom fees on any single booking exceed <strong>$100</strong>, OutdoorShare automatically collects a <strong>3% processing fee</strong> on those custom fees. This is shown to the customer as a separate "Processing fee" line item.
+                </p>
+                <p className="text-xs text-amber-600 mt-1">Example: $120 in custom fees → $3.60 OutdoorShare processing fee added to booking.</p>
+              </div>
+            </div>
+
+            <Card>
+              <CardHeader>
+                <CardTitle>Your Custom Fees</CardTitle>
+                <CardDescription>
+                  These fees automatically appear on every booking checkout. Add things like cleaning fees, delivery fees, or setup charges.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {/* Existing fees list */}
+                {customFees.length === 0 ? (
+                  <p className="text-sm text-muted-foreground italic">No custom fees yet. Add one below.</p>
+                ) : (
+                  <div className="divide-y rounded-lg border overflow-hidden">
+                    {customFees.map(fee => (
+                      <div key={fee.id} className="p-3 bg-card">
+                        {editingFeeId === fee.id ? (
+                          <div className="flex flex-col sm:flex-row gap-2">
+                            <Input
+                              value={editFeeForm.name}
+                              onChange={e => setEditFeeForm(p => ({ ...p, name: e.target.value }))}
+                              placeholder="Fee name"
+                              className="flex-1"
+                            />
+                            <Input
+                              type="number"
+                              min="0.01"
+                              step="0.01"
+                              value={editFeeForm.amount}
+                              onChange={e => setEditFeeForm(p => ({ ...p, amount: e.target.value }))}
+                              placeholder="Amount ($)"
+                              className="w-32"
+                            />
+                            <select
+                              className="h-9 rounded-md border border-input bg-background px-3 py-1 text-sm"
+                              value={editFeeForm.priceType}
+                              onChange={e => setEditFeeForm(p => ({ ...p, priceType: e.target.value }))}
+                            >
+                              <option value="flat">Flat fee</option>
+                              <option value="per_day">Per day</option>
+                            </select>
+                            <div className="flex gap-2">
+                              <Button size="sm" onClick={saveEditFee} disabled={customFeesSaving}>Save</Button>
+                              <Button size="sm" variant="outline" onClick={() => setEditingFeeId(null)}>Cancel</Button>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="flex items-center justify-between gap-3">
+                            <div>
+                              <p className="font-medium text-sm">{fee.name}</p>
+                              <p className="text-xs text-muted-foreground">
+                                ${parseFloat(fee.amount).toFixed(2)} {fee.priceType === "per_day" ? "/ day" : "flat"}
+                              </p>
+                            </div>
+                            <div className="flex gap-2 shrink-0">
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => {
+                                  setEditingFeeId(fee.id);
+                                  setEditFeeForm({ name: fee.name, amount: fee.amount, priceType: fee.priceType });
+                                }}
+                              >
+                                Edit
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                className="text-destructive hover:text-destructive"
+                                onClick={() => deleteCustomFee(fee.id)}
+                              >
+                                <X className="w-4 h-4" />
+                              </Button>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* Add new fee form */}
+                <div className="pt-2 border-t">
+                  <p className="text-sm font-semibold mb-3">Add New Custom Fee</p>
+                  <div className="flex flex-col sm:flex-row gap-2">
+                    <Input
+                      value={newFeeForm.name}
+                      onChange={e => setNewFeeForm(p => ({ ...p, name: e.target.value }))}
+                      placeholder="Fee name (e.g. Cleaning Fee)"
+                      className="flex-1"
+                    />
+                    <Input
+                      type="number"
+                      min="0.01"
+                      step="0.01"
+                      value={newFeeForm.amount}
+                      onChange={e => setNewFeeForm(p => ({ ...p, amount: e.target.value }))}
+                      placeholder="Amount ($)"
+                      className="w-36"
+                    />
+                    <select
+                      className="h-9 rounded-md border border-input bg-background px-3 py-1 text-sm"
+                      value={newFeeForm.priceType}
+                      onChange={e => setNewFeeForm(p => ({ ...p, priceType: e.target.value }))}
+                    >
+                      <option value="flat">Flat fee</option>
+                      <option value="per_day">Per day</option>
+                    </select>
+                    <Button onClick={createCustomFee} disabled={customFeesSaving || !newFeeForm.name.trim() || !newFeeForm.amount} className="gap-2">
+                      <Plus className="w-4 h-4" /> Add Fee
+                    </Button>
+                  </div>
+                </div>
               </CardContent>
             </Card>
           </TabsContent>
