@@ -1,5 +1,7 @@
 import { useState } from "react";
 import { Link, useParams } from "wouter";
+import type { DateRange } from "react-day-picker";
+import { format } from "date-fns";
 import {
   useGetBusinessProfile,
   useGetListings,
@@ -12,13 +14,15 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Slider } from "@/components/ui/slider";
 import { Badge } from "@/components/ui/badge";
+import { Calendar } from "@/components/ui/calendar";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
   Search, MapPin, ArrowRight, Car,
   Waves, Bus, Truck, Anchor, Bike, Zap,
   Package, Snowflake, CarFront, Gauge, SlidersHorizontal, ShieldCheck,
   Phone, Mail, ChevronDown, ChevronUp,
   CheckCircle2, Umbrella, Users, AlertTriangle,
-  Clock, Star, Layers, Gift,
+  Clock, Star, Layers, Gift, CalendarIcon, X,
 } from "lucide-react";
 
 const CATEGORY_ICONS: Record<string, React.ElementType> = {
@@ -159,6 +163,11 @@ export default function StorefrontHome() {
   const [activeCategorySlug, setActiveCategorySlug] = useState<string | null>(null);
   const [priceRange, setPriceRange] = useState([0, 500]);
   const [showFilters, setShowFilters] = useState(false);
+  const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined);
+  const [datePickerOpen, setDatePickerOpen] = useState(false);
+
+  const availableFrom = dateRange?.from ? format(dateRange.from, "yyyy-MM-dd") : undefined;
+  const availableTo   = dateRange?.to   ? format(dateRange.to,   "yyyy-MM-dd") : undefined;
 
   const { data: profile } = useGetBusinessProfile({
     query: { queryKey: getGetBusinessProfileQueryKey() }
@@ -178,16 +187,18 @@ export default function StorefrontHome() {
       categoryId: activeCategory || undefined,
       minPrice: priceRange[0],
       maxPrice: priceRange[1] >= 500 ? undefined : priceRange[1],
-    },
+      availableFrom,
+      availableTo,
+    } as any,
     {
       query: {
-        queryKey: getGetListingsQueryKey({
+        queryKey: [...getGetListingsQueryKey({
           status: "active",
           search: search || undefined,
           categoryId: activeCategory || undefined,
           minPrice: priceRange[0],
           maxPrice: priceRange[1] >= 500 ? undefined : priceRange[1],
-        })
+        }), availableFrom, availableTo]
       }
     }
   );
@@ -288,11 +299,47 @@ export default function StorefrontHome() {
             </div>
             {showFilters && (
               <div className="mt-3 bg-white/95 backdrop-blur-md rounded-2xl p-4 shadow-xl text-left">
-                <div className="flex items-center justify-between mb-3">
-                  <span className="text-sm font-semibold text-slate-700">Price per day</span>
-                  <span className="text-sm text-slate-500">${priceRange[0]} — {priceRange[1] >= 500 ? "Any" : `$${priceRange[1]}`}</span>
+                {/* Date range picker */}
+                <div className="mb-5">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-sm font-semibold text-slate-700 flex items-center gap-1.5">
+                      <CalendarIcon className="w-3.5 h-3.5 text-primary" />
+                      Rental dates
+                    </span>
+                    {dateRange?.from && (
+                      <button
+                        onClick={() => setDateRange(undefined)}
+                        className="text-xs text-slate-400 hover:text-red-500 flex items-center gap-1 transition-colors"
+                      >
+                        <X className="w-3 h-3" /> Clear
+                      </button>
+                    )}
+                  </div>
+                  {dateRange?.from ? (
+                    <div className="text-xs font-medium text-primary bg-primary/10 rounded-lg px-3 py-1.5 flex items-center gap-1">
+                      <CalendarIcon className="w-3 h-3" />
+                      {format(dateRange.from, "MMM d")}
+                      {dateRange.to && dateRange.to.getTime() !== dateRange.from.getTime()
+                        ? ` – ${format(dateRange.to, "MMM d, yyyy")}`
+                        : `, ${format(dateRange.from, "yyyy")}`}
+                    </div>
+                  ) : null}
+                  <Calendar
+                    mode="range"
+                    selected={dateRange}
+                    onSelect={setDateRange}
+                    numberOfMonths={1}
+                    disabled={{ before: new Date() }}
+                    className="mt-2 rounded-xl border border-slate-100 w-full"
+                  />
                 </div>
-                <Slider defaultValue={[0, 500]} max={500} step={10} value={priceRange} onValueChange={setPriceRange} />
+                <div className="border-t border-slate-100 pt-4">
+                  <div className="flex items-center justify-between mb-3">
+                    <span className="text-sm font-semibold text-slate-700">Price per day</span>
+                    <span className="text-sm text-slate-500">${priceRange[0]} — {priceRange[1] >= 500 ? "Any" : `$${priceRange[1]}`}</span>
+                  </div>
+                  <Slider defaultValue={[0, 500]} max={500} step={10} value={priceRange} onValueChange={setPriceRange} />
+                </div>
               </div>
             )}
           </div>
@@ -300,15 +347,29 @@ export default function StorefrontHome() {
       </section>
 
       {/* Active filter bar */}
-      {(activeCategory || search) && (
+      {(activeCategory || search || dateRange?.from) && (
         <div className="bg-muted/50 border-b border-border py-3 px-6">
-          <div className="max-w-6xl mx-auto flex items-center justify-between">
-            <span className="text-sm text-muted-foreground">
-              {listings?.length ?? 0} {activeCategorySlug ? categories?.find(c => c.slug === activeCategorySlug)?.name : "item"}
-              {(listings?.length ?? 0) !== 1 ? "s" : ""} available
-              {search ? ` matching "${search}"` : ""}
-            </span>
-            <button className="text-sm text-primary font-medium hover:underline" onClick={() => { setActiveCategory(null); setActiveCategorySlug(null); setSearch(""); }}>
+          <div className="max-w-6xl mx-auto flex items-center justify-between gap-4 flex-wrap">
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-sm text-muted-foreground">
+                {listings?.length ?? 0} {activeCategorySlug ? categories?.find(c => c.slug === activeCategorySlug)?.name : "item"}
+                {(listings?.length ?? 0) !== 1 ? "s" : ""} available
+                {search ? ` matching "${search}"` : ""}
+              </span>
+              {dateRange?.from && (
+                <span className="inline-flex items-center gap-1 text-xs font-medium bg-primary/10 text-primary border border-primary/20 rounded-full px-2.5 py-0.5">
+                  <CalendarIcon className="w-3 h-3" />
+                  {format(dateRange.from, "MMM d")}
+                  {dateRange.to && dateRange.to.getTime() !== dateRange.from.getTime()
+                    ? ` – ${format(dateRange.to, "MMM d")}`
+                    : ""}
+                  <button onClick={() => setDateRange(undefined)} className="ml-0.5 hover:text-red-500 transition-colors">
+                    <X className="w-3 h-3" />
+                  </button>
+                </span>
+              )}
+            </div>
+            <button className="text-sm text-primary font-medium hover:underline shrink-0" onClick={() => { setActiveCategory(null); setActiveCategorySlug(null); setSearch(""); setDateRange(undefined); }}>
               Clear filters
             </button>
           </div>
@@ -358,8 +419,12 @@ export default function StorefrontHome() {
               const qty        = l.availableQuantity ?? l.quantity ?? 1;
               const included   = Array.isArray(l.includedItems) ? l.includedItems as string[] : [];
 
+              const listingHref = availableFrom && availableTo
+                ? `${sfBase}/listings/${listing.id}?startDate=${availableFrom}&endDate=${availableTo}`
+                : `${sfBase}/listings/${listing.id}`;
+
               return (
-                <Link key={listing.id} href={`${sfBase}/listings/${listing.id}`}>
+                <Link key={listing.id} href={listingHref}>
                   <div
                     data-testid={`listing-card-${listing.id}`}
                     className="group flex flex-col h-full bg-card rounded-2xl overflow-hidden border border-border hover:border-primary/50 transition-all shadow-sm hover:shadow-lg hover:-translate-y-0.5"

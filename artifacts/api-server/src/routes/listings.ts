@@ -69,7 +69,7 @@ router.get("/listings", async (req, res) => {
       return;
     }
 
-    const { categoryId, status, search, minPrice, maxPrice } = req.query;
+    const { categoryId, status, search, minPrice, maxPrice, availableFrom, availableTo } = req.query;
 
     const conditions = [];
     if (req.tenantId) conditions.push(eq(listingsTable.tenantId, req.tenantId));
@@ -84,11 +84,88 @@ router.get("/listings", async (req, res) => {
       )!);
     }
 
-    const listings = await db
+    let listings = await db
       .select()
       .from(listingsTable)
       .where(conditions.length > 0 ? and(...conditions) : undefined)
       .orderBy(listingsTable.createdAt);
+
+    // ── Date availability filter ─────────────────────────────────────────────
+    if (availableFrom && availableTo && listings.length > 0) {
+      const fromStr = String(availableFrom);
+      const toStr   = String(availableTo);
+      const listingIds = listings.map(l => l.id);
+
+      // Overlapping active bookings for these listings
+      const overlappingBookings = await db
+        .select({
+          listingId: bookingsTable.listingId,
+          startDate: bookingsTable.startDate,
+          endDate:   bookingsTable.endDate,
+          quantity:  bookingsTable.quantity,
+        })
+        .from(bookingsTable)
+        .where(and(
+          inArray(bookingsTable.listingId, listingIds),
+          eq(bookingsTable.tenantId, req.tenantId!),
+          sql`${bookingsTable.status} NOT IN ('cancelled', 'rejected')`,
+          lte(bookingsTable.startDate, toStr),
+          gte(bookingsTable.endDate, fromStr),
+        ));
+
+      // Overlapping blocked dates (listing-specific + global)
+      const overlappingBlocks = await db
+        .select({
+          listingId: blockedDatesTable.listingId,
+          startDate: blockedDatesTable.startDate,
+          endDate:   blockedDatesTable.endDate,
+        })
+        .from(blockedDatesTable)
+        .where(and(
+          eq(blockedDatesTable.tenantId, req.tenantId!),
+          lte(blockedDatesTable.startDate, toStr),
+          gte(blockedDatesTable.endDate, fromStr),
+        ));
+
+      // Group by listing
+      const bookingsByListing = new Map<number, typeof overlappingBookings>();
+      for (const b of overlappingBookings) {
+        const arr = bookingsByListing.get(b.listingId!) ?? [];
+        arr.push(b);
+        bookingsByListing.set(b.listingId!, arr);
+      }
+      const blocksByListing = new Map<number | null, typeof overlappingBlocks>();
+      for (const b of overlappingBlocks) {
+        const arr = blocksByListing.get(b.listingId) ?? [];
+        arr.push(b);
+        blocksByListing.set(b.listingId, arr);
+      }
+      const globalBlocks = blocksByListing.get(null) ?? [];
+
+      listings = listings.filter(listing => {
+        const qty      = listing.quantity ?? 1;
+        const bookings = bookingsByListing.get(listing.id) ?? [];
+        const blocks   = [...(blocksByListing.get(listing.id) ?? []), ...globalBlocks];
+
+        // Walk each day in the requested range
+        const from = new Date(fromStr);
+        const to   = new Date(toStr);
+        for (const d = new Date(from); d <= to; d.setDate(d.getDate() + 1)) {
+          const day = d.toISOString().split("T")[0];
+
+          // Any block covering this day → listing unavailable
+          if (blocks.some(b => b.startDate <= day && b.endDate >= day)) return false;
+
+          // Sum booked units for this day
+          const booked = bookings.reduce((sum, b) => {
+            return b.startDate <= day && b.endDate >= day ? sum + (b.quantity ?? 1) : sum;
+          }, 0);
+          if (booked >= qty) return false;
+        }
+        return true;
+      });
+    }
+    // ────────────────────────────────────────────────────────────────────────
 
     // Scope categories to this tenant
     const catConditions = req.tenantId ? [eq(categoriesTable.tenantId, req.tenantId)] : [];
