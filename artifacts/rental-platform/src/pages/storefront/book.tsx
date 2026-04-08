@@ -1,5 +1,6 @@
 import { useState, useMemo, useEffect, useRef, useCallback } from "react";
 import { useLocation, useParams, useSearch } from "wouter";
+import { useConfetti } from "@/hooks/use-confetti";
 import type { DateRange } from "react-day-picker";
 import { 
   useGetListing,
@@ -600,6 +601,7 @@ export default function StorefrontBook() {
   // Sub-state within "complete" screen (kiosk adds "photos" before "confirmed")
   type CompletePhase = "agreement" | "verification" | "photos" | "confirmed";
   const [completePhase, setCompletePhase] = useState<CompletePhase>("agreement");
+  useConfetti(completePhase === "confirmed");
 
   const [session, setSession] = useState<CustomerSession | null>(loadSession);
 
