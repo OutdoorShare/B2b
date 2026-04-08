@@ -251,8 +251,9 @@ router.post("/stripe/payment-intent", async (req, res) => {
     // Determine platform fee:
     //  1. passthroughFeeCents — company has opted to pass the service fee to the customer;
     //     the frontend already added it to amountCents, so use the explicit amount directly.
-    //  2. Host tenants with a protection fee — keep 100% of protection + feePercent of rental.
-    //  3. Default — flat feePercent of the total.
+    //  2. Protection plan is ALWAYS kept 100% by OutdoorShare (applies to all tenants).
+    //     feePercent is applied only to the rental base (base rental + bundle items).
+    //  3. Default (no protection plan) — flat feePercent of total minus custom fee charge.
     //  In all cases, add customFeeChargeCents to platform fee (already included in amountCents).
     let platformFeeAmount: number;
     let transferAmount: number;
@@ -265,7 +266,9 @@ router.post("/stripe/payment-intent", async (req, res) => {
       platformFeeAmount = Math.round(rentalBase * feePercent) + ppCents + customFeeChargeCents;
       // transferAmount = rental base net of platform fee + 100% of service fee
       transferAmount = amountCents - platformFeeAmount;
-    } else if (tenant.isHost && protectionFeeCents != null && protectionFeeCents > 0) {
+    } else if (protectionFeeCents != null && protectionFeeCents > 0) {
+      // Protection plan is kept 100% by OutdoorShare for ALL tenants.
+      // feePercent applies only to the remaining rental + bundle amount.
       const rentalSubtotal = amountCents - protectionFeeCents - customFeeChargeCents;
       const rentalFee = Math.round(rentalSubtotal * feePercent);
       platformFeeAmount = rentalFee + protectionFeeCents + customFeeChargeCents;
@@ -433,8 +436,11 @@ async function sweepPendingPayouts(tenantId: number): Promise<{ swept: number; t
         continue;
       }
       // Funds are on platform — calculate and sweep
+      // Protection plan is kept 100% by platform; feePercent applies only to rental+bundle base.
       const totalCentsForBooking = Math.round(parseFloat(booking.totalPrice) * 100);
-      const platformFee = Math.round(totalCentsForBooking * feePercent);
+      const ppCentsForBooking = booking.protectionPlanFee ? Math.round(parseFloat(booking.protectionPlanFee) * 100) : 0;
+      const rentalBaseCents = totalCentsForBooking - ppCentsForBooking;
+      const platformFee = Math.round(rentalBaseCents * feePercent) + ppCentsForBooking;
       const transferAmt = totalCentsForBooking - platformFee;
       if (transferAmt < 50) continue; // Stripe minimum
 
