@@ -563,7 +563,18 @@ router.get("/bookings/:id", async (req, res) => {
 
     const depositAmount = listing?.depositAmount ? parseFloat(String(listing.depositAmount)) : null;
 
-    res.json({ ...formatBooking(booking, listing?.title ?? "Unknown"), contactCard, depositAmount });
+    // Include platform fee % from tenant so the admin detail view can show an earnings breakdown
+    let platformFeePercent: number | null = null;
+    const tenantId = booking.tenantId ?? req.tenantId ?? null;
+    if (tenantId) {
+      const [tenantRow] = await db.select({ platformFeePercent: tenantsTable.platformFeePercent })
+        .from(tenantsTable).where(eq(tenantsTable.id, tenantId)).limit(1);
+      if (tenantRow?.platformFeePercent != null) {
+        platformFeePercent = parseFloat(String(tenantRow.platformFeePercent));
+      }
+    }
+
+    res.json({ ...formatBooking(booking, listing?.title ?? "Unknown"), contactCard, depositAmount, platformFeePercent });
   } catch (err) {
     req.log.error(err);
     res.status(500).json({ error: "Failed to fetch booking" });

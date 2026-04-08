@@ -1506,9 +1506,74 @@ export default function AdminBookingDetail() {
                     )}
                     <Separator />
                     <div className="flex justify-between items-center">
-                      <span className="font-bold text-lg">Total</span>
+                      <span className="font-bold text-lg">Total charged</span>
                       <span className="font-bold text-2xl">${booking.totalPrice.toFixed(2)}</span>
                     </div>
+
+                    {/* ── Earnings breakdown ── */}
+                    {(() => {
+                      const feePercent: number = (booking as any).platformFeePercent ?? 5;
+                      const total = booking.totalPrice;
+                      const ppFee = platformProtectionFee; // already defined above
+
+                      // If Stripe stored the exact application fee, use it
+                      const exactFee = (booking as any).stripePlatformFee != null
+                        ? parseFloat(String((booking as any).stripePlatformFee))
+                        : null;
+
+                      // Estimated fee = service fee on (total - protection plan) + protection plan
+                      const rentalBase = total - ppFee;
+                      const estimatedServiceFee = Math.round(rentalBase * (feePercent / 100) * 100) / 100;
+                      const estimatedPlatformTotal = estimatedServiceFee + ppFee;
+
+                      const platformTake = exactFee ?? estimatedPlatformTotal;
+                      const yourEarnings = total - platformTake;
+
+                      return (
+                        <div className="rounded-xl bg-emerald-50 border border-emerald-200 p-4 space-y-2.5 mt-1">
+                          <p className="text-xs font-semibold text-emerald-800 uppercase tracking-wide flex items-center gap-1.5">
+                            <DollarSign className="w-3.5 h-3.5" /> Your Earnings
+                          </p>
+                          <div className="space-y-1.5 text-sm">
+                            <div className="flex justify-between text-muted-foreground">
+                              <span>Gross booking total</span>
+                              <span className="font-medium text-foreground">${total.toFixed(2)}</span>
+                            </div>
+                            {ppFee > 0 && (
+                              <div className="flex justify-between text-muted-foreground">
+                                <span className="flex items-center gap-1">
+                                  <Shield className="w-3 h-3 text-emerald-500" />
+                                  Protection plan (platform)
+                                </span>
+                                <span className="font-medium text-red-500">−${ppFee.toFixed(2)}</span>
+                              </div>
+                            )}
+                            <div className="flex justify-between text-muted-foreground">
+                              <span>
+                                OutdoorShare service fee{exactFee == null ? ` (est. ${feePercent}%)` : ""}
+                              </span>
+                              <span className="font-medium text-red-500">
+                                −${exactFee != null ? (exactFee - ppFee).toFixed(2) : estimatedServiceFee.toFixed(2)}
+                              </span>
+                            </div>
+                          </div>
+                          <Separator className="border-emerald-200" />
+                          <div className="flex justify-between items-center">
+                            <span className="font-bold text-sm text-emerald-900">
+                              {exactFee != null ? "Your net payout" : "Estimated payout"}
+                            </span>
+                            <span className="font-extrabold text-xl text-emerald-700">
+                              ${yourEarnings.toFixed(2)}
+                            </span>
+                          </div>
+                          {exactFee == null && (
+                            <p className="text-[10px] text-muted-foreground leading-tight">
+                              Estimate based on your {feePercent}% service fee rate. Exact amount confirmed after Stripe payment settles.
+                            </p>
+                          )}
+                        </div>
+                      );
+                    })()}
                   </>
                 );
               })()}
