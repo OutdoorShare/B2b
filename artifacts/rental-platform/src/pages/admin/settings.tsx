@@ -205,7 +205,7 @@ export default function AdminSettings() {
   const TAB_FIELDS: Record<string, string[]> = {
     general:     ["name", "tagline", "description", "email", "outboundEmail", "senderEmail", "senderPassword", "phone", "website", "location", "address", "city", "state", "zipCode", "country", "socialInstagram", "socialFacebook", "socialTwitter"],
     branding:    ["logoUrl", "coverImageUrl", "primaryColor", "accentColor"],
-    policies:    ["depositRequired", "depositPercent", "cancellationPolicy", "rentalTerms", "bundleDiscountPercent", "instantBooking", "paymentPlanEnabled", "paymentPlanDepositType", "paymentPlanDepositFixed", "paymentPlanDepositPercent", "paymentPlanDaysBeforePickup", "passPlatformFeeToCustomer"],
+    policies:    ["depositRequired", "depositPercent", "cancellationPolicy", "rentalTerms", "bundleDiscountPercent", "instantBooking", "paymentPlanEnabled", "paymentPlanDepositType", "paymentPlanDepositFixed", "paymentPlanDepositPercent", "paymentPlanDaysBeforePickup", "passPlatformFeeToCustomer", "passPlatformFeePercent"],
     payments:    [],
     integration: ["kioskModeEnabled", "embedCode"],
   };
@@ -1290,13 +1290,55 @@ export default function AdminSettings() {
                     />
                   </div>
                   {formData.passPlatformFeeToCustomer && (
-                    <div className="ml-4 border-l-2 border-primary/20 pl-4">
-                      <div className="rounded-lg bg-green-50 border border-green-200 p-3">
-                        <p className="text-xs font-semibold text-green-700 mb-1">Example for a $300 rental</p>
-                        <p className="text-xs text-green-600">
-                          Customer pays: ${(300 * (1 + (parseFloat(String(formData.platformFeePercent ?? "5")) / 100))).toFixed(2)} (rental + {formData.platformFeePercent ?? 5}% service fee of ${(300 * parseFloat(String(formData.platformFeePercent ?? "5")) / 100).toFixed(2)}) · You receive: $300.00
+                    <div className="ml-4 border-l-2 border-primary/20 pl-4 space-y-3">
+                      {/* Editable fee % */}
+                      <div className="space-y-1.5">
+                        <Label htmlFor="passPlatformFeePercent" className="text-sm">
+                          Service Fee %
+                        </Label>
+                        <p className="text-xs text-muted-foreground">
+                          Defaults to the OutdoorShare platform rate ({formData.platformFeePercent ?? 5}%). Adjust only if you need to charge a different amount.
                         </p>
+                        <div className="flex items-center gap-2">
+                          <Input
+                            id="passPlatformFeePercent"
+                            name="passPlatformFeePercent"
+                            type="number"
+                            min={0}
+                            max={100}
+                            step={0.5}
+                            className="w-28"
+                            placeholder={String(formData.platformFeePercent ?? 5)}
+                            value={formData.passPlatformFeePercent != null ? String(formData.passPlatformFeePercent) : ""}
+                            onChange={handleChange}
+                          />
+                          <span className="text-sm text-muted-foreground">%</span>
+                          {formData.passPlatformFeePercent != null && (
+                            <button
+                              type="button"
+                              className="text-xs text-muted-foreground underline underline-offset-2"
+                              onClick={() => setFormData(prev => ({ ...prev, passPlatformFeePercent: null }))}
+                            >
+                              Reset to default ({formData.platformFeePercent ?? 5}%)
+                            </button>
+                          )}
+                        </div>
                       </div>
+                      {/* Live preview */}
+                      {(() => {
+                        const feePercent = formData.passPlatformFeePercent != null
+                          ? parseFloat(String(formData.passPlatformFeePercent))
+                          : parseFloat(String(formData.platformFeePercent ?? "5"));
+                        const fee = 300 * (feePercent / 100);
+                        return (
+                          <div className="rounded-lg bg-green-50 border border-green-200 p-3">
+                            <p className="text-xs font-semibold text-green-700 mb-1">Example for a $300 rental</p>
+                            <p className="text-xs text-green-600">
+                              Customer pays: ${(300 + fee).toFixed(2)} (rental + {feePercent}% service fee of ${fee.toFixed(2)}) · You receive: $300.00
+                            </p>
+                          </div>
+                        );
+                      })()}
                     </div>
                   )}
                 </div>

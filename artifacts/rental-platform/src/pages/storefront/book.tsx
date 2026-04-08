@@ -1088,9 +1088,14 @@ export default function StorefrontBook() {
   // goes 100% to OutdoorShare and is not subject to the percentage split).
   const bpRaw = businessProfile as any;
   const passThrough = !!bpRaw?.passPlatformFeeToCustomer;
-  const platformFeePercent = passThrough
-    ? (bpRaw?.platformFeePercent != null ? parseFloat(String(bpRaw.platformFeePercent)) / 100 : 0.05)
+  // Use the admin-configured pass-through rate if set; otherwise fall back to the
+  // platform's actual fee for this tenant (both returned by GET /api/business).
+  const effectiveFeePercent = passThrough
+    ? (bpRaw?.passPlatformFeePercent != null
+        ? parseFloat(String(bpRaw.passPlatformFeePercent))
+        : (bpRaw?.platformFeePercent != null ? parseFloat(String(bpRaw.platformFeePercent)) : 5))
     : 0;
+  const platformFeePercent = effectiveFeePercent / 100;
   // Fee applies only to the rental portion (excluding protection plan fee)
   const rentalAfterDiscounts = Math.max(0, afterPromo - platformProtectionFee);
   const serviceFee = passThrough ? rentalAfterDiscounts * platformFeePercent : 0;
@@ -1927,7 +1932,7 @@ export default function StorefrontBook() {
                       <div className="px-4 py-3 flex items-center justify-between text-sm text-muted-foreground">
                         <span className="flex items-center gap-1.5">
                           <span>Service fee</span>
-                          <span className="text-xs bg-muted rounded-full px-1.5 py-0.5">{bpRaw?.platformFeePercent != null ? `${parseFloat(String(bpRaw.platformFeePercent))}%` : "5%"}</span>
+                          <span className="text-xs bg-muted rounded-full px-1.5 py-0.5">{effectiveFeePercent}%</span>
                         </span>
                         <span>+${serviceFee.toFixed(2)}</span>
                       </div>
@@ -3853,7 +3858,7 @@ export default function StorefrontBook() {
                       )}
                       {serviceFee > 0 && (
                         <div className="flex justify-between text-sm text-muted-foreground">
-                          <span>Service fee ({bpRaw?.platformFeePercent != null ? `${parseFloat(String(bpRaw.platformFeePercent))}%` : "5%"})</span>
+                          <span>Service fee ({effectiveFeePercent}%)</span>
                           <span>+${serviceFee.toFixed(2)}</span>
                         </div>
                       )}
