@@ -9,6 +9,13 @@ import {
 import { MapPin, Clock, Tag, Star, ExternalLink, ChevronLeft, ChevronRight } from "lucide-react";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
+const API_URL = import.meta.env.VITE_API_URL ?? "";
+
+function resolveImage(url: string): string {
+  if (!url) return "";
+  if (url.startsWith("http://") || url.startsWith("https://") || url.startsWith("/")) return url;
+  return `${API_URL}/api/uploads/${url.split("/").pop()}`;
+}
 
 const CONDITION_LABEL: Record<string, string> = {
   excellent: "Excellent",
@@ -73,8 +80,11 @@ export default function EmbedListing() {
   }
 
   const l = listing as any;
-  const images: string[] = Array.isArray(l.images) ? l.images : (l.imageUrl ? [l.imageUrl] : []);
-  const heroImage = images[activeImage] || l.imageUrl || null;
+  const rawImages: string[] = Array.isArray(l.imageUrls) && l.imageUrls.length > 0
+    ? l.imageUrls
+    : (l.imageUrl ? [l.imageUrl] : []);
+  const images = rawImages.map(resolveImage).filter(Boolean);
+  const heroImage = images[activeImage] || null;
   const pricePerDay = l.pricePerDay ? parseFloat(String(l.pricePerDay)) : null;
   const bp = profile as any;
   const primaryColor = bp?.primaryColor || "hsl(127,55%,38%)";
@@ -222,7 +232,7 @@ export default function EmbedListing() {
       {/* Powered-by footer */}
       <div className="border-t border-gray-100 px-4 py-1.5 flex items-center justify-center gap-1.5 shrink-0">
         {bp?.logoUrl && (
-          <img src={bp.logoUrl} alt={bp.name} className="h-3.5 object-contain opacity-60" />
+          <img src={resolveImage(bp.logoUrl)} alt={bp.name} className="h-3.5 object-contain opacity-60" />
         )}
         <span className="text-[10px] text-gray-400">
           {bp?.name ? `Powered by ${bp.name}` : "Powered by OutdoorShare"}
