@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, Fragment } from "react";
 import { useLocation, useParams } from "wouter";
 import {
   User, LogOut, Calendar, CalendarDays, List, Settings,
@@ -54,6 +54,19 @@ const STATUS_DOT: Record<string, string> = {
   active:    "bg-emerald-500",
   completed: "bg-gray-400",
   cancelled: "bg-red-400",
+};
+
+const BOOKING_STEPS = [
+  { key: "pending",   label: "Requested" },
+  { key: "confirmed", label: "Confirmed" },
+  { key: "active",    label: "Active"    },
+  { key: "completed", label: "Returned"  },
+];
+const STATUS_STEP_IDX: Record<string, number> = {
+  pending:   0,
+  confirmed: 1,
+  active:    2,
+  completed: 3,
 };
 
 function getRentalTimeStatus(startStr: string, endStr: string, status: string) {
@@ -170,26 +183,33 @@ export default function MyBookings() {
   ).length;
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Gradient hero header */}
-      <div className="bg-gradient-to-br from-primary/90 via-primary to-primary/80 text-white">
-        <div className="max-w-3xl mx-auto px-4 sm:px-6 py-6">
+    <div className="min-h-screen" style={{ background: "linear-gradient(160deg,#f0f4f0 0%,#f5f7fa 100%)" }}>
+      {/* ── Hero ── */}
+      <div className="relative bg-gradient-to-br from-[#0f1f12] via-[#1a3320] to-[#0d2116] text-white overflow-hidden">
+        {/* Dot-grid overlay */}
+        <div className="absolute inset-0 opacity-[0.07]" style={{ backgroundImage: "radial-gradient(circle,#fff 1px,transparent 1px)", backgroundSize: "24px 24px" }} />
+        {/* Glow orbs */}
+        <div className="absolute -top-24 -right-24 w-72 h-72 rounded-full bg-primary/25 blur-3xl pointer-events-none" />
+        <div className="absolute top-10 -left-16 w-48 h-48 rounded-full bg-emerald-400/10 blur-3xl pointer-events-none" />
+
+        <div className="relative max-w-3xl mx-auto px-4 sm:px-6 py-6">
+          {/* Top row */}
           <div className="flex items-center justify-between gap-4">
             <div className="flex items-center gap-4">
               {/* Avatar */}
               <div className="relative">
-                <div className="h-16 w-16 rounded-2xl bg-white/20 backdrop-blur-sm border border-white/30 flex items-center justify-center text-white font-bold text-2xl shadow-lg">
+                <div className={`h-16 w-16 rounded-2xl bg-gradient-to-br from-primary to-emerald-700 flex items-center justify-center text-white font-black text-2xl shadow-xl ring-2 ring-white/10`}>
                   {initials || <User className="w-8 h-8" />}
                 </div>
                 {activeBooking && (
-                  <span className="absolute -top-1 -right-1 h-4 w-4 rounded-full bg-emerald-400 border-2 border-white animate-pulse" title="Active rental" />
+                  <span className="absolute -top-1 -right-1 h-4 w-4 rounded-full bg-emerald-400 border-2 border-[#1a3320] shadow animate-pulse" title="Active rental" />
                 )}
               </div>
               <div>
-                <h1 className="text-xl font-bold leading-tight">{session.name}</h1>
-                <p className="text-white/70 text-sm mt-0.5">{session.email}</p>
+                <h1 className="text-xl font-black leading-tight tracking-tight">{session.name}</h1>
+                <p className="text-white/50 text-sm mt-0.5 font-medium">{session.email}</p>
                 {upcomingCount > 0 && (
-                  <p className="text-white/90 text-xs mt-1 flex items-center gap-1">
+                  <p className="text-emerald-300 text-xs mt-1 flex items-center gap-1 font-semibold">
                     <Sparkles className="h-3 w-3" />
                     {upcomingCount} upcoming rental{upcomingCount !== 1 ? "s" : ""}
                   </p>
@@ -198,28 +218,29 @@ export default function MyBookings() {
             </div>
             <button
               onClick={handleLogout}
-              className="flex items-center gap-1.5 text-white/70 hover:text-white text-sm transition-colors"
+              className="flex items-center gap-1.5 text-white/40 hover:text-white/80 text-sm transition-colors px-3 py-2 rounded-xl hover:bg-white/5"
             >
               <LogOut className="h-4 w-4" />
-              <span className="hidden sm:inline">Sign out</span>
+              <span className="hidden sm:inline font-medium">Sign out</span>
             </button>
           </div>
 
-          {/* Quick stats row */}
+          {/* Stats strip */}
           {!bookingsLoading && bookings.length > 0 && (
-            <div className="mt-5 grid grid-cols-3 gap-3">
-              <div className="bg-white/10 backdrop-blur-sm rounded-xl px-3 py-2.5 text-center border border-white/20">
-                <p className="text-xl font-bold">{bookings.length}</p>
-                <p className="text-white/70 text-[11px] mt-0.5">Total Rentals</p>
-              </div>
-              <div className="bg-white/10 backdrop-blur-sm rounded-xl px-3 py-2.5 text-center border border-white/20">
-                <p className="text-xl font-bold">{upcomingCount}</p>
-                <p className="text-white/70 text-[11px] mt-0.5">Upcoming</p>
-              </div>
-              <div className="bg-white/10 backdrop-blur-sm rounded-xl px-3 py-2.5 text-center border border-white/20">
-                <p className="text-xl font-bold">${totalSpent < 1000 ? totalSpent.toFixed(0) : (totalSpent / 1000).toFixed(1) + "k"}</p>
-                <p className="text-white/70 text-[11px] mt-0.5">Total Spent</p>
-              </div>
+            <div className="mt-5 grid grid-cols-3 gap-2.5">
+              {[
+                { label: "Rentals",  value: String(bookings.length),  icon: Package,    color: "text-primary" },
+                { label: "Upcoming", value: String(upcomingCount),     icon: Calendar,   color: "text-sky-300" },
+                { label: "Spent",    value: `$${totalSpent < 1000 ? totalSpent.toFixed(0) : (totalSpent / 1000).toFixed(1) + "k"}`, icon: TrendingUp, color: "text-amber-300" },
+              ].map(({ label, value, icon: Icon, color }) => (
+                <div key={label} className="relative rounded-2xl border border-white/10 bg-white/5 backdrop-blur-sm px-3 py-3 flex items-center gap-3 overflow-hidden">
+                  <div className={`${color} shrink-0`}><Icon className="h-4 w-4" /></div>
+                  <div>
+                    <p className="text-xl font-black leading-none">{value}</p>
+                    <p className="text-white/45 text-[11px] mt-0.5 font-medium">{label}</p>
+                  </div>
+                </div>
+              ))}
             </div>
           )}
 
@@ -230,23 +251,23 @@ export default function MyBookings() {
                 const b = activeBooking.tenantSlug ? `/${activeBooking.tenantSlug}` : base;
                 setLocation(`${b}/my-bookings/${activeBooking.id}`);
               }}
-              className="mt-4 w-full bg-emerald-500/30 hover:bg-emerald-500/40 border border-emerald-400/40 rounded-xl px-4 py-3 flex items-center gap-3 transition-colors text-left"
+              className="mt-4 w-full group bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-500/30 rounded-2xl px-4 py-3 flex items-center gap-3 transition-all text-left"
             >
-              <div className="h-8 w-8 rounded-lg bg-emerald-400/40 flex items-center justify-center flex-shrink-0">
-                <Zap className="h-4 w-4 text-emerald-200" />
+              <div className="h-9 w-9 rounded-xl bg-emerald-400/20 flex items-center justify-center flex-shrink-0 group-hover:bg-emerald-400/30 transition-colors">
+                <Zap className="h-4 w-4 text-emerald-300" />
               </div>
               <div className="flex-1 min-w-0">
-                <p className="text-[11px] text-emerald-200 font-semibold uppercase tracking-wide">Active Rental</p>
-                <p className="text-white font-semibold text-sm line-clamp-1">{activeBooking.listingTitle}</p>
+                <p className="text-[10px] text-emerald-400 font-bold uppercase tracking-widest">Active Rental</p>
+                <p className="text-white font-bold text-sm line-clamp-1 mt-0.5">{activeBooking.listingTitle}</p>
               </div>
-              <ArrowRight className="h-4 w-4 text-white/60 flex-shrink-0" />
+              <ArrowRight className="h-4 w-4 text-white/30 group-hover:text-white/70 group-hover:translate-x-1 transition-all flex-shrink-0" />
             </button>
           )}
         </div>
 
-        {/* Tab bar — sits at the bottom of the hero */}
-        <div className="max-w-3xl mx-auto px-4 sm:px-6">
-          <div className="flex border-b border-white/20">
+        {/* Tab bar */}
+        <div className="relative max-w-3xl mx-auto px-4 sm:px-6">
+          <div className="flex border-b border-white/10">
             {([
               { key: "bookings"  as Tab, label: "Bookings",  icon: Calendar },
               { key: "memories"  as Tab, label: "Memories",  icon: Camera   },
@@ -256,14 +277,15 @@ export default function MyBookings() {
               <button
                 key={key}
                 onClick={() => setTab(key)}
-                className={`flex items-center gap-1.5 px-4 py-3 text-sm font-medium border-b-2 transition-colors ${
-                  tab === key
-                    ? "border-white text-white"
-                    : "border-transparent text-white/50 hover:text-white/80"
+                className={`relative flex items-center gap-1.5 px-4 py-3.5 text-sm font-bold transition-all ${
+                  tab === key ? "text-white" : "text-white/35 hover:text-white/65"
                 }`}
               >
                 <Icon className="h-3.5 w-3.5" />
                 {label}
+                {tab === key && (
+                  <span className="absolute bottom-0 left-2 right-2 h-0.5 bg-emerald-400 rounded-t-full" />
+                )}
               </button>
             ))}
           </div>
@@ -573,16 +595,19 @@ function BookingsTab({
     return (
       <div className="space-y-3">
         {[1, 2, 3].map(i => (
-          <div key={i} className="bg-white rounded-2xl border border-gray-200 overflow-hidden animate-pulse flex">
-            <div className="w-1.5 bg-gray-200 flex-shrink-0" />
-            <div className="p-5 flex gap-4 flex-1">
-              <div className="h-24 w-28 bg-gray-200 rounded-xl flex-shrink-0" />
+          <div key={i} className="bg-white rounded-3xl border border-gray-100 overflow-hidden animate-pulse shadow-sm">
+            <div className="h-1 bg-gray-200" />
+            <div className="p-4 flex gap-3.5">
+              <div className="h-28 w-28 bg-gray-200 rounded-2xl flex-shrink-0" />
               <div className="flex-1 space-y-2.5 pt-1">
-                <div className="h-4 bg-gray-200 rounded w-3/5" />
-                <div className="h-3 bg-gray-200 rounded w-2/5" />
-                <div className="h-3 bg-gray-200 rounded w-1/3" />
-                <div className="h-3 bg-gray-200 rounded w-1/4" />
+                <div className="h-4 bg-gray-200 rounded-full w-3/5" />
+                <div className="h-3 bg-gray-200 rounded-full w-2/5" />
+                <div className="h-3 bg-gray-200 rounded-full w-1/3" />
+                <div className="h-3 bg-gray-200 rounded-full w-1/4" />
               </div>
+            </div>
+            <div className="mx-4 pb-4 pt-3 border-t border-gray-100">
+              <div className="h-3 bg-gray-200 rounded-full w-full" />
             </div>
           </div>
         ))}
@@ -859,20 +884,22 @@ function BookingCard({ booking: b, base }: { booking: RenterBooking; base: strin
     }
   };
 
+  const stepIdx = STATUS_STEP_IDX[b.status] ?? 0;
+
   return (
     <div
-      className={`bg-white rounded-2xl border overflow-hidden cursor-pointer hover:shadow-md hover:-translate-y-0.5 transition-all duration-200 ${hasUpdate ? "border-blue-300 shadow-blue-100 shadow-sm" : "border-gray-200"}`}
+      className={`group bg-white rounded-3xl overflow-hidden cursor-pointer hover:shadow-xl hover:-translate-y-1 transition-all duration-300 border ${hasUpdate ? "border-blue-300 shadow-blue-100 shadow-sm" : "border-gray-100 shadow-sm"}`}
       onClick={() => setLocation(`${bookingBase}/my-bookings/${b.id}`)}
     >
-      <div className="flex">
-        {/* Status accent stripe */}
-        <div className={`w-1.5 flex-shrink-0 ${accentCls}`} />
+      {/* Top accent bar */}
+      <div className={`h-1 ${accentCls}`} />
 
-        <div className="flex flex-1 min-w-0 p-4 gap-4">
+      <div className="p-4">
+        <div className="flex gap-3.5">
           {/* Listing image */}
-          <div className="h-28 w-32 flex-shrink-0 rounded-xl overflow-hidden bg-gray-100 shadow-sm relative">
+          <div className="h-28 w-28 flex-shrink-0 rounded-2xl overflow-hidden bg-gray-100 shadow-sm relative">
             {b.listingImage ? (
-              <img src={resolveImage(b.listingImage)} alt={b.listingTitle} className="w-full h-full object-cover" />
+              <img src={resolveImage(b.listingImage)} alt={b.listingTitle} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
             ) : (
               <div className="w-full h-full flex flex-col items-center justify-center gap-1">
                 <span className="text-3xl">🏕️</span>
@@ -886,100 +913,144 @@ function BookingCard({ booking: b, base }: { booking: RenterBooking; base: strin
           {/* Info */}
           <div className="flex-1 min-w-0 flex flex-col gap-1">
             {hasUpdate && (
-              <p className="text-[11px] font-bold text-blue-600 flex items-center gap-1">
-                <span className="w-1.5 h-1.5 rounded-full bg-blue-500" /> New update
+              <p className="text-[10px] font-black text-blue-600 uppercase tracking-wider flex items-center gap-1">
+                <span className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse" /> New update
               </p>
             )}
 
+            {/* Title + status */}
             <div className="flex items-start justify-between gap-2">
-              <h3 className="font-bold text-gray-900 text-sm leading-snug line-clamp-2">{b.listingTitle}</h3>
-              <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-bold border capitalize flex-shrink-0 ${badgeCls}`}>
+              <h3 className="font-black text-gray-900 text-sm leading-snug line-clamp-2">{b.listingTitle}</h3>
+              <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-black border capitalize flex-shrink-0 ${badgeCls}`}>
                 {b.status}
               </span>
             </div>
 
             {/* Company */}
             {b.businessName && (
-              <div className="flex items-center gap-1.5 text-xs text-gray-500">
-                {b.businessLogoUrl && (
-                  <img src={resolveImage(b.businessLogoUrl)} alt="" className="h-3.5 w-3.5 rounded-full object-cover ring-1 ring-gray-200" />
-                )}
+              <div className="flex items-center gap-1.5 text-xs text-gray-400 font-medium">
+                {b.businessLogoUrl
+                  ? <img src={resolveImage(b.businessLogoUrl)} alt="" className="h-3.5 w-3.5 rounded-full object-cover ring-1 ring-gray-200" />
+                  : <Building2 className="h-3 w-3" />
+                }
                 <span>{b.businessName}</span>
               </div>
             )}
 
-            {/* Date row */}
+            {/* Dates */}
             <div className="flex items-center gap-1.5 text-xs text-gray-400">
               <Calendar className="h-3 w-3 flex-shrink-0" />
               <span>{format(parseISO(b.startDate), "MMM d")} – {format(parseISO(b.endDate), "MMM d, yyyy")}</span>
-              {nights > 0 && <span className="text-[11px] text-gray-300">· {nights}d</span>}
+              {nights > 0 && <span className="text-[11px] text-gray-300 font-medium">· {nights}d</span>}
             </div>
 
-            {/* Time status */}
+            {/* Time status chip + progress bar */}
             {ts && (
-              <div className="flex items-center gap-2 mt-0.5">
-                <span className={`inline-flex items-center text-[11px] font-semibold px-2 py-0.5 rounded-full border ${ts.color} ${ts.urgent ? "animate-pulse" : ""}`}>
+              <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+                <span className={`inline-flex items-center text-[10px] font-bold px-2 py-0.5 rounded-full border ${ts.color} ${ts.urgent ? "animate-pulse" : ""}`}>
                   {ts.urgent && <Clock className="h-2.5 w-2.5 mr-1" />}
                   {ts.label}
                 </span>
                 {ts.pct > 0 && (
-                  <div className="flex-1 h-1 bg-gray-100 rounded-full overflow-hidden max-w-24">
-                    <div className={`h-full rounded-full ${ts.bar}`} style={{ width: `${ts.pct}%` }} />
+                  <div className="flex-1 h-1 bg-gray-100 rounded-full overflow-hidden min-w-[40px] max-w-[80px]">
+                    <div className={`h-full rounded-full transition-all ${ts.bar}`} style={{ width: `${ts.pct}%` }} />
                   </div>
                 )}
               </div>
             )}
 
-            {/* Pending reminder notice */}
-            {canRemind && (
-              <div className="mt-1" onClick={e => e.stopPropagation()}>
-                {reminderOnCooldown ? (
-                  <p className="text-[11px] text-amber-600 flex items-center gap-1">
-                    <CheckCircle2 className="h-3 w-3" /> Reminder sent — available again in ~3 hrs
-                  </p>
-                ) : reminderSent ? (
-                  <p className="text-[11px] text-emerald-600 flex items-center gap-1 font-semibold">
-                    <CheckCircle2 className="h-3 w-3" /> Reminder sent to the company!
-                  </p>
-                ) : (
-                  <button
-                    onClick={handleRemind}
-                    disabled={reminding}
-                    className="flex items-center gap-1.5 text-[11px] font-semibold text-amber-700 bg-amber-50 border border-amber-200 rounded-full px-2.5 py-1 hover:bg-amber-100 transition-colors disabled:opacity-50"
-                  >
-                    {reminding ? (
-                      <Loader2 className="h-3 w-3 animate-spin" />
-                    ) : (
-                      <Clock className="h-3 w-3" />
-                    )}
-                    Remind company to review
-                  </button>
-                )}
-                {reminderErr && (
-                  <p className="text-[11px] text-red-500 mt-1">{reminderErr}</p>
-                )}
-              </div>
-            )}
-
             {/* Price + actions */}
-            <div className="flex items-center justify-between mt-auto pt-1">
-              <span className="text-base font-extrabold text-gray-900">
+            <div className="flex items-center justify-between mt-auto pt-0.5">
+              <span className="text-base font-black text-gray-900">
                 ${parseFloat(b.totalPrice || "0").toFixed(2)}
               </span>
               <div className="flex items-center gap-2" onClick={e => e.stopPropagation()}>
                 {(b.status === "cancelled" || b.status === "completed") && (
                   <button
-                    className="text-[11px] text-primary hover:text-primary/80 font-semibold flex items-center gap-1 border border-primary/20 rounded-full px-2 py-0.5 hover:bg-primary/5 transition-colors"
+                    className="text-[11px] text-primary hover:text-primary/80 font-bold flex items-center gap-1 border border-primary/20 rounded-full px-2.5 py-0.5 hover:bg-primary/5 transition-colors"
                     onClick={() => setLocation(`${bookingBase}/book?listingId=${b.listingId}`)}
                   >
                     <RotateCcw className="h-2.5 w-2.5" /> Book Again
                   </button>
                 )}
-                <ArrowRight className="h-4 w-4 text-gray-300" />
+                <ArrowRight className="h-4 w-4 text-gray-300 group-hover:text-primary group-hover:translate-x-0.5 transition-all duration-200" />
               </div>
             </div>
           </div>
         </div>
+
+        {/* ── Progress stepper ── */}
+        {b.status !== "cancelled" ? (
+          <div className="mt-4 pt-3.5 border-t border-gray-100">
+            <div className="flex items-start">
+              {BOOKING_STEPS.map((step, i) => (
+                <Fragment key={step.key}>
+                  <div className="flex flex-col items-center gap-1.5 shrink-0">
+                    <div className={`w-6 h-6 rounded-full flex items-center justify-center font-black text-[10px] transition-all ${
+                      i < stepIdx
+                        ? "bg-primary text-white"
+                        : i === stepIdx
+                        ? "bg-primary text-white ring-4 ring-primary/20"
+                        : "bg-gray-100 text-gray-300"
+                    }`}>
+                      {i < stepIdx
+                        ? <CheckCircle2 className="h-3.5 w-3.5" />
+                        : i === stepIdx
+                        ? <span className="block w-2 h-2 rounded-full bg-white" />
+                        : <span>{i + 1}</span>
+                      }
+                    </div>
+                    <span className={`text-[9px] font-bold whitespace-nowrap leading-none ${
+                      i === stepIdx ? "text-primary" : i < stepIdx ? "text-gray-500" : "text-gray-300"
+                    }`}>{step.label}</span>
+                  </div>
+                  {i < BOOKING_STEPS.length - 1 && (
+                    <div className="flex-1 flex items-center mt-3 mx-1">
+                      <div className="w-full h-0.5 rounded-full overflow-hidden bg-gray-100">
+                        <div
+                          className={`h-full rounded-full transition-all duration-500 ${i < stepIdx ? "bg-primary w-full" : "w-0"}`}
+                        />
+                      </div>
+                    </div>
+                  )}
+                </Fragment>
+              ))}
+            </div>
+          </div>
+        ) : (
+          <div className="mt-3 pt-3 border-t border-red-100 flex items-center gap-2">
+            <div className="h-5 w-5 rounded-full bg-red-100 flex items-center justify-center flex-shrink-0">
+              <X className="h-3 w-3 text-red-500" />
+            </div>
+            <span className="text-xs text-red-400 font-bold">Booking cancelled</span>
+            <div className="flex-1 h-px bg-red-100" />
+          </div>
+        )}
+
+        {/* Pending reminder notice */}
+        {canRemind && (
+          <div className="mt-2" onClick={e => e.stopPropagation()}>
+            {reminderOnCooldown ? (
+              <p className="text-[11px] text-amber-600 flex items-center gap-1 font-semibold">
+                <CheckCircle2 className="h-3 w-3" /> Reminder sent — available again in ~3 hrs
+              </p>
+            ) : reminderSent ? (
+              <p className="text-[11px] text-emerald-600 flex items-center gap-1 font-semibold">
+                <CheckCircle2 className="h-3 w-3" /> Reminder sent to the company!
+              </p>
+            ) : (
+              <button
+                onClick={handleRemind}
+                disabled={reminding}
+                className="flex items-center gap-1.5 text-[11px] font-bold text-amber-700 bg-amber-50 border border-amber-200 rounded-full px-2.5 py-1 hover:bg-amber-100 transition-colors disabled:opacity-50"
+              >
+                {reminding ? <Loader2 className="h-3 w-3 animate-spin" /> : <Clock className="h-3 w-3" />}
+                Remind company to review
+              </button>
+            )}
+            {reminderErr && <p className="text-[11px] text-red-500 mt-1">{reminderErr}</p>}
+          </div>
+        )}
       </div>
     </div>
   );
