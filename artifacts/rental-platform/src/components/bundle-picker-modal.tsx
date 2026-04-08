@@ -49,6 +49,7 @@ export default function BundlePickerModal({
   bundleDiscountPercent,
 }: BundlePickerModalProps) {
   const [search, setSearch] = useState("");
+  const [preview, setPreview] = useState<AvailableListing | null>(null);
 
   const filtered = useMemo(() => {
     const q = search.toLowerCase();
@@ -99,9 +100,11 @@ export default function BundlePickerModal({
 
   if (!isOpen) return null;
 
+  const previewIsInCart = preview ? !!getSelected(preview.id) : false;
+
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm">
-      <div className="bg-background w-full max-w-lg rounded-t-3xl sm:rounded-2xl shadow-2xl flex flex-col max-h-[90vh]">
+      <div className="relative bg-background w-full max-w-lg rounded-t-3xl sm:rounded-2xl shadow-2xl flex flex-col max-h-[90vh]">
 
         {/* Header */}
         <div className="flex items-center justify-between px-5 pt-5 pb-4 border-b shrink-0">
@@ -158,47 +161,51 @@ export default function BundlePickerModal({
                   selected ? "border-primary/50 bg-primary/5" : "border-border bg-background hover:bg-muted/30"
                 }`}
               >
-                {/* Thumbnail */}
-                <div className="w-14 h-14 rounded-lg overflow-hidden bg-muted shrink-0">
-                  {listing.imageUrls?.[0] ? (
-                    <img src={listing.imageUrls[0]} alt={listing.title} className="w-full h-full object-cover" />
-                  ) : (
-                    <div className="w-full h-full flex items-center justify-center">
-                      <ShoppingBag className="w-5 h-5 text-muted-foreground" />
-                    </div>
-                  )}
-                </div>
+                {/* Clickable thumbnail + title area → opens preview */}
+                <button
+                  type="button"
+                  className="flex items-center gap-3 flex-1 min-w-0 text-left"
+                  onClick={() => setPreview(listing)}
+                >
+                  <div className="w-14 h-14 rounded-lg overflow-hidden bg-muted shrink-0">
+                    {listing.imageUrls?.[0] ? (
+                      <img src={listing.imageUrls[0]} alt={listing.title} className="w-full h-full object-cover" />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center">
+                        <ShoppingBag className="w-5 h-5 text-muted-foreground" />
+                      </div>
+                    )}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="font-semibold text-sm leading-snug truncate">{listing.title}</p>
+                    {listing.categoryName && (
+                      <p className="text-xs text-muted-foreground">{listing.categoryName}</p>
+                    )}
+                    <p className="text-sm font-bold text-primary mt-0.5">
+                      ${price.toFixed(2)}/day
+                      {days > 1 && <span className="font-normal text-muted-foreground text-xs ml-1">× {days} days = ${(price * days).toFixed(2)}</span>}
+                    </p>
+                  </div>
+                </button>
 
-                {/* Details */}
-                <div className="flex-1 min-w-0">
-                  <p className="font-semibold text-sm leading-snug truncate">{listing.title}</p>
-                  {listing.categoryName && (
-                    <p className="text-xs text-muted-foreground">{listing.categoryName}</p>
-                  )}
-                  <p className="text-sm font-bold text-primary mt-0.5">
-                    ${price.toFixed(2)}/day
-                    {days > 1 && <span className="font-normal text-muted-foreground text-xs ml-1">× {days} days = ${(price * days).toFixed(2)}</span>}
-                  </p>
-                </div>
-
-                {/* Controls */}
+                {/* Controls (stop propagation so they don't open preview) */}
                 {selected ? (
                   <div className="flex items-center gap-2 shrink-0">
                     <button
-                      onClick={() => changeQty(listing.id, -1)}
+                      onClick={e => { e.stopPropagation(); changeQty(listing.id, -1); }}
                       className="w-7 h-7 rounded-full bg-muted flex items-center justify-center hover:bg-muted/70 transition-colors"
                     >
                       <Minus className="w-3.5 h-3.5" />
                     </button>
                     <span className="w-5 text-center font-bold text-sm">{selected.qty}</span>
                     <button
-                      onClick={() => changeQty(listing.id, 1)}
+                      onClick={e => { e.stopPropagation(); changeQty(listing.id, 1); }}
                       className="w-7 h-7 rounded-full bg-primary/10 flex items-center justify-center hover:bg-primary/20 transition-colors"
                     >
                       <Plus className="w-3.5 h-3.5 text-primary" />
                     </button>
                     <button
-                      onClick={() => removeItem(listing.id)}
+                      onClick={e => { e.stopPropagation(); removeItem(listing.id); }}
                       className="w-7 h-7 rounded-full bg-destructive/10 flex items-center justify-center hover:bg-destructive/20 transition-colors ml-1"
                     >
                       <X className="w-3.5 h-3.5 text-destructive" />
@@ -206,7 +213,7 @@ export default function BundlePickerModal({
                   </div>
                 ) : (
                   <button
-                    onClick={() => addItem(listing)}
+                    onClick={e => { e.stopPropagation(); addItem(listing); }}
                     className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-primary text-primary-foreground text-sm font-semibold hover:bg-primary/90 transition-colors"
                   >
                     <Plus className="w-3.5 h-3.5" /> Add
@@ -253,6 +260,78 @@ export default function BundlePickerModal({
           </div>
         </div>
       </div>
+
+      {/* Listing Quick-View overlay */}
+      {preview && (
+        <div
+          className="absolute inset-0 z-10 flex items-end sm:items-center justify-center bg-black/50 backdrop-blur-sm rounded-t-3xl sm:rounded-2xl"
+          onClick={() => setPreview(null)}
+        >
+          <div
+            className="bg-background w-full rounded-t-3xl sm:rounded-2xl shadow-2xl overflow-hidden max-h-[90vh] flex flex-col"
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="relative aspect-video bg-muted shrink-0">
+              {preview.imageUrls?.[0] ? (
+                <img src={preview.imageUrls[0]} alt={preview.title} className="w-full h-full object-cover" />
+              ) : (
+                <div className="w-full h-full flex items-center justify-center">
+                  <ShoppingBag className="w-12 h-12 text-muted-foreground/30" />
+                </div>
+              )}
+              <button
+                onClick={() => setPreview(null)}
+                className="absolute top-3 right-3 w-8 h-8 rounded-full bg-black/50 text-white flex items-center justify-center hover:bg-black/70 transition-colors"
+              >
+                <X className="w-4 h-4" />
+              </button>
+              {preview.categoryName && (
+                <div className="absolute bottom-3 left-3 bg-black/50 text-white text-xs font-semibold px-2.5 py-1 rounded-full backdrop-blur-sm">
+                  {preview.categoryName}
+                </div>
+              )}
+            </div>
+            <div className="p-5 overflow-y-auto space-y-4">
+              <div>
+                <h2 className="text-xl font-bold leading-snug">{preview.title}</h2>
+                <p className="text-primary font-bold text-lg mt-1">
+                  ${parseFloat(String(preview.pricePerDay)).toFixed(2)}<span className="text-sm font-normal text-muted-foreground">/day</span>
+                  {days > 1 && (
+                    <span className="text-sm font-normal text-muted-foreground ml-2">
+                      × {days} days = <span className="font-semibold text-foreground">${(parseFloat(String(preview.pricePerDay)) * days).toFixed(2)}</span>
+                    </span>
+                  )}
+                </p>
+              </div>
+              {(preview as any).description && (
+                <p className="text-sm text-muted-foreground leading-relaxed">{(preview as any).description}</p>
+              )}
+              {preview.imageUrls?.length > 1 && (
+                <div className="flex gap-2 overflow-x-auto pb-1">
+                  {preview.imageUrls.slice(1).map((url, i) => (
+                    <img key={i} src={url} alt="" className="w-20 h-20 rounded-xl object-cover shrink-0 border" />
+                  ))}
+                </div>
+              )}
+              {previewIsInCart ? (
+                <div className="flex items-center gap-2 w-full px-4 py-3 rounded-xl bg-green-50 border border-green-200 text-green-700 font-semibold text-sm">
+                  <svg className="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                  </svg>
+                  Already in cart
+                </div>
+              ) : (
+                <button
+                  onClick={() => { addItem(preview); setPreview(null); }}
+                  className="w-full flex items-center justify-center gap-1.5 px-4 py-3 rounded-xl bg-primary text-primary-foreground font-semibold text-sm hover:bg-primary/90 transition-colors"
+                >
+                  <Plus className="w-4 h-4" /> Add to Bundle
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -701,6 +701,8 @@ export default function StorefrontBook() {
   // Cache of categorySlug → protection fee per day for bundle items
   const [bundleProtectionCache, setBundleProtectionCache] = useState<Record<string, number>>({});
   const [showProtectionBreakdown, setShowProtectionBreakdown] = useState(false);
+  // Listing quick-view preview
+  const [previewListingId, setPreviewListingId] = useState<number | null>(null);
 
   // Quantity selection (multi-unit listings)
   const [selectedQuantity, setSelectedQuantity] = useState(1);
@@ -2412,15 +2414,25 @@ export default function StorefrontBook() {
                         <div className="rounded-xl border border-primary/20 bg-primary/5 divide-y divide-primary/10">
                           {bundleItems.map(item => (
                             <div key={item.listingId} className="flex items-center gap-3 px-4 py-3">
-                              {item.imageUrl && (
-                                <img src={item.imageUrl} alt={item.title} className="w-10 h-10 rounded-lg object-cover shrink-0" />
-                              )}
-                              <div className="flex-1 min-w-0">
-                                <p className="font-medium text-sm truncate">{item.title}</p>
-                                <p className="text-xs text-muted-foreground">
-                                  ${item.pricePerDay.toFixed(2)}/day × {item.qty} × {item.days} day{item.days !== 1 ? "s" : ""}
-                                </p>
-                              </div>
+                              <button
+                                type="button"
+                                onClick={() => setPreviewListingId(item.listingId)}
+                                className="flex items-center gap-3 flex-1 min-w-0 text-left hover:opacity-80 transition-opacity"
+                              >
+                                {item.imageUrl ? (
+                                  <img src={item.imageUrl} alt={item.title} className="w-10 h-10 rounded-lg object-cover shrink-0" />
+                                ) : (
+                                  <div className="w-10 h-10 rounded-lg bg-muted shrink-0 flex items-center justify-center">
+                                    <Package className="w-4 h-4 text-muted-foreground" />
+                                  </div>
+                                )}
+                                <div className="flex-1 min-w-0">
+                                  <p className="font-medium text-sm truncate underline-offset-2 group-hover:underline">{item.title}</p>
+                                  <p className="text-xs text-muted-foreground">
+                                    ${item.pricePerDay.toFixed(2)}/day × {item.qty} × {item.days} day{item.days !== 1 ? "s" : ""}
+                                  </p>
+                                </div>
+                              </button>
                               <div className="text-right shrink-0">
                                 <p className="font-bold text-sm">${item.subtotal.toFixed(2)}</p>
                               </div>
@@ -4129,6 +4141,106 @@ export default function StorefrontBook() {
         </div>
       </div>
     </div>
+
+    {/* Bundle Listing Quick-View Modal */}
+    {previewListingId !== null && (() => {
+      const pl = allListings.find(l => l.id === previewListingId);
+      if (!pl) return null;
+      const isInCart = bundleItems.some(b => b.listingId === previewListingId);
+      const price = parseFloat(String(pl.pricePerDay));
+      return (
+        <div
+          className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm"
+          onClick={() => setPreviewListingId(null)}
+        >
+          <div
+            className="bg-background w-full max-w-md rounded-t-3xl sm:rounded-2xl shadow-2xl overflow-hidden max-h-[90vh] flex flex-col"
+            onClick={e => e.stopPropagation()}
+          >
+            {/* Image */}
+            <div className="relative aspect-video bg-muted shrink-0">
+              {pl.imageUrls?.[0] ? (
+                <img src={pl.imageUrls[0]} alt={pl.title} className="w-full h-full object-cover" />
+              ) : (
+                <div className="w-full h-full flex items-center justify-center">
+                  <Package className="w-12 h-12 text-muted-foreground/30" />
+                </div>
+              )}
+              <button
+                onClick={() => setPreviewListingId(null)}
+                className="absolute top-3 right-3 w-8 h-8 rounded-full bg-black/50 text-white flex items-center justify-center hover:bg-black/70 transition-colors"
+              >
+                <X className="w-4 h-4" />
+              </button>
+              {pl.categoryName && (
+                <div className="absolute bottom-3 left-3 bg-black/50 text-white text-xs font-semibold px-2.5 py-1 rounded-full backdrop-blur-sm">
+                  {pl.categoryName}
+                </div>
+              )}
+            </div>
+
+            {/* Content */}
+            <div className="p-5 overflow-y-auto space-y-4">
+              <div>
+                <h2 className="text-xl font-bold leading-snug">{pl.title}</h2>
+                <p className="text-primary font-bold text-lg mt-1">
+                  ${price.toFixed(2)}<span className="text-sm font-normal text-muted-foreground">/day</span>
+                  {days > 1 && (
+                    <span className="text-sm font-normal text-muted-foreground ml-2">
+                      × {days} days = <span className="font-semibold text-foreground">${(price * days).toFixed(2)}</span>
+                    </span>
+                  )}
+                </p>
+              </div>
+
+              {pl.description && (
+                <p className="text-sm text-muted-foreground leading-relaxed">{pl.description}</p>
+              )}
+
+              {/* Multiple images strip */}
+              {pl.imageUrls?.length > 1 && (
+                <div className="flex gap-2 overflow-x-auto pb-1">
+                  {pl.imageUrls.slice(1).map((url: string, i: number) => (
+                    <img key={i} src={url} alt="" className="w-20 h-20 rounded-xl object-cover shrink-0 border" />
+                  ))}
+                </div>
+              )}
+
+              {/* CTA */}
+              {isInCart ? (
+                <div className="flex items-center gap-2 w-full px-4 py-3 rounded-xl bg-green-50 border border-green-200 text-green-700 font-semibold text-sm">
+                  <CheckCircle2 className="w-4 h-4 shrink-0" />
+                  Already in cart
+                </div>
+              ) : (
+                <Button
+                  className="w-full"
+                  onClick={() => {
+                    const priceParsed = parseFloat(String(pl.pricePerDay));
+                    const newItem: BundleItem = {
+                      listingId: pl.id,
+                      title: pl.title,
+                      qty: 1,
+                      pricePerDay: priceParsed,
+                      days,
+                      subtotal: priceParsed * days,
+                      imageUrl: pl.imageUrls?.[0],
+                      categoryName: pl.categoryName ?? undefined,
+                      categorySlug: pl.categorySlug ?? undefined,
+                    };
+                    setBundleItems(prev => [...prev.filter(i => i.listingId !== pl.id), newItem]);
+                    setPreviewListingId(null);
+                  }}
+                >
+                  <Plus className="w-4 h-4 mr-1.5" />
+                  Add to Bundle
+                </Button>
+              )}
+            </div>
+          </div>
+        </div>
+      );
+    })()}
 
     {/* Bundle Picker Modal */}
     <BundlePickerModal
