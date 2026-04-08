@@ -2190,7 +2190,10 @@ export default function StorefrontBook() {
                 )}
 
                 <div className="space-y-2">
-                  <Label htmlFor="notes">Notes (optional)</Label>
+                  <div className="flex items-center gap-2">
+                    <Label htmlFor="notes">Notes</Label>
+                    <span className="text-[10px] font-bold uppercase tracking-wide bg-slate-100 text-slate-500 border border-slate-200 px-1.5 py-0.5 rounded-full">Optional</span>
+                  </div>
                   <Textarea id="notes" value={notes} onChange={e => setNotes(e.target.value)} placeholder="Any special requests?" rows={2} />
                 </div>
 
@@ -2475,9 +2478,27 @@ export default function StorefrontBook() {
 
                 <Separator />
 
-                {/* ── Your Information ── */}
+                {/* ── Step 1: Contact Details ── */}
                 <div>
-                  <h2 className="text-lg font-semibold mb-4">Your Information</h2>
+                  {/* Step header */}
+                  <div className="flex items-center justify-between mb-4">
+                    <div className="flex items-center gap-2.5">
+                      <div className="w-7 h-7 rounded-full bg-primary flex items-center justify-center shrink-0">
+                        <span className="text-xs font-bold text-primary-foreground">1</span>
+                      </div>
+                      <h2 className="text-lg font-semibold">Contact Details</h2>
+                      <span className="text-[10px] font-bold uppercase tracking-wide bg-red-100 text-red-600 border border-red-200 px-1.5 py-0.5 rounded-full">Required</span>
+                    </div>
+                    {!isKiosk && !session && !showLoginPanel && (
+                      <button
+                        onClick={() => { setShowLoginPanel(true); setAuthError(""); }}
+                        className="flex items-center gap-1.5 text-xs font-medium text-primary hover:underline"
+                      >
+                        <User className="w-3.5 h-3.5" />
+                        Sign in instead
+                      </button>
+                    )}
+                  </div>
 
                   {isKiosk ? (
                     <div className="flex items-start gap-3 bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 rounded-xl px-4 py-3 mb-4">
@@ -2492,7 +2513,7 @@ export default function StorefrontBook() {
                         <div className="flex items-center justify-between">
                           <div className="flex items-center gap-2">
                             <Lock className="w-4 h-4 text-primary" />
-                            <h3 className="font-semibold text-sm">Log in to your account</h3>
+                            <h3 className="font-semibold text-sm">Sign in to your account</h3>
                           </div>
                           <button onClick={() => { setShowLoginPanel(false); setAuthError(""); setPassword(""); }} className="text-xs text-muted-foreground hover:text-foreground">Cancel</button>
                         </div>
@@ -2543,21 +2564,7 @@ export default function StorefrontBook() {
                           </button>
                         </p>
                       </div>
-                    ) : (
-                      <button
-                        onClick={() => { setShowLoginPanel(true); setAuthError(""); }}
-                        className="w-full flex items-center gap-3 bg-muted/50 hover:bg-muted border border-border hover:border-primary/40 rounded-xl px-4 py-3 transition-all group text-left mb-4"
-                      >
-                        <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
-                          <User className="w-4 h-4 text-primary" />
-                        </div>
-                        <div className="flex-1">
-                          <p className="text-sm font-semibold text-foreground">Returning customer?</p>
-                          <p className="text-xs text-muted-foreground">Log in to pre-fill your details</p>
-                        </div>
-                        <ArrowRight className="w-4 h-4 text-muted-foreground group-hover:text-primary transition-colors" />
-                      </button>
-                    )
+                    ) : null
                   ) : (
                     <div className="bg-primary/5 border border-primary/20 rounded-xl p-4 flex items-center gap-3 mb-4">
                       <ShieldCheck className="w-5 h-5 text-primary shrink-0" />
@@ -2571,30 +2578,31 @@ export default function StorefrontBook() {
 
                   <div className="space-y-4">
                     <div>
-                      <Label htmlFor="name">Full Name</Label>
+                      <Label htmlFor="name" className="flex items-center gap-1">Full Name <span className="text-red-500 font-bold">*</span></Label>
                       <Input id="name" value={name} onChange={e => setName(e.target.value)} className="mt-1.5 h-11" required />
                     </div>
                     <div className="grid grid-cols-2 gap-3">
                       <div>
-                        <Label htmlFor="email">Email</Label>
+                        <Label htmlFor="email" className="flex items-center gap-1">Email <span className="text-red-500 font-bold">*</span></Label>
                         <Input id="email" type="email" value={email} onChange={e => setEmail(e.target.value)} className="mt-1.5 h-11" required disabled={!!session} />
                       </div>
                       <div>
-                        <Label htmlFor="phone">Phone</Label>
+                        <Label htmlFor="phone" className="flex items-center gap-1">Phone <span className="text-red-500 font-bold">*</span></Label>
                         <Input id="phone" type="tel" value={phone} onChange={e => setPhone(e.target.value)} className="mt-1.5 h-11" required />
                       </div>
                     </div>
                   </div>
 
+                  {/* Optional: account creation */}
                   {!isKiosk && !session && !showLoginPanel && (
-                    <div className="bg-muted/40 rounded-2xl p-5 space-y-3 border mt-4">
+                    <div className="mt-5 rounded-2xl border border-dashed border-muted-foreground/30 bg-muted/20 p-4 space-y-3">
                       <div className="flex items-center gap-2">
-                        <Lock className="w-4 h-4 text-primary" />
-                        <h3 className="font-semibold text-sm">Make a profile to view your booking details</h3>
+                        <span className="text-[10px] font-bold uppercase tracking-wide bg-slate-100 text-slate-500 border border-slate-200 px-1.5 py-0.5 rounded-full">Optional</span>
+                        <h3 className="text-sm font-medium text-muted-foreground">Save your info for future bookings</h3>
                       </div>
                       <div className="space-y-3">
                         <div className="relative">
-                          <Input type={showPassword ? "text" : "password"} placeholder="Create password (min 6 chars)" value={password} onChange={e => setPassword(e.target.value)} className="h-11 pr-10" />
+                          <Input type={showPassword ? "text" : "password"} placeholder="Create a password (min 6 chars)" value={password} onChange={e => setPassword(e.target.value)} className="h-11 pr-10" />
                           <button type="button" onClick={() => setShowPassword(v => !v)} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground">
                             {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                           </button>
@@ -2602,16 +2610,22 @@ export default function StorefrontBook() {
                         <Input type="password" placeholder="Confirm password" value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} className="h-11" />
                       </div>
                       {authError && <p className="text-destructive text-sm">{authError}</p>}
-                      <p className="text-xs text-muted-foreground">Saves your info for future bookings.</p>
+                      <p className="text-xs text-muted-foreground">Skip this to book without an account.</p>
                     </div>
                   )}
                 </div>
 
                 <Separator />
 
-                {/* ── Payment ── */}
+                {/* ── Step 2: Payment ── */}
                 <div>
-                  <h2 className="text-lg font-semibold mb-4">Payment</h2>
+                  <div className="flex items-center gap-2.5 mb-4">
+                    <div className="w-7 h-7 rounded-full bg-primary flex items-center justify-center shrink-0">
+                      <span className="text-xs font-bold text-primary-foreground">2</span>
+                    </div>
+                    <h2 className="text-lg font-semibold">Payment</h2>
+                    <span className="text-[10px] font-bold uppercase tracking-wide bg-red-100 text-red-600 border border-red-200 px-1.5 py-0.5 rounded-full">Required</span>
+                  </div>
 
                   {isKiosk && !paymentConfirmed && (
                     <div className="bg-background rounded-2xl border shadow-sm p-1.5 flex gap-1 mb-4">
