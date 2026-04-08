@@ -211,7 +211,7 @@ router.get("/bookings", async (req, res) => {
         const profiles = await db
           .select({
             tenantId: businessProfileTable.tenantId,
-            businessName: businessProfileTable.businessName,
+            businessName: businessProfileTable.name,
             slug: tenantsTable.slug,
           })
           .from(businessProfileTable)
