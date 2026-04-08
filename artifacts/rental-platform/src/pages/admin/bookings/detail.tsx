@@ -67,7 +67,6 @@ export default function AdminBookingDetail() {
   const [sendingPickupLink, setSendingPickupLink] = useState(false);
   const [pickupLinkSent, setPickupLinkSent] = useState(false);
   const [pickupUrl, setPickupUrl] = useState<string | null>(null);
-  const [hostPickupMode, setHostPickupMode] = useState(false);
   const [copySuccess, setCopySuccess] = useState(false);
   const [depositLoading, setDepositLoading] = useState<"authorize" | "release" | "capture" | null>(null);
   const [depositHoldStatus, setDepositHoldStatus] = useState<string | null>(null);
@@ -782,113 +781,34 @@ export default function AdminBookingDetail() {
         {/* Right Column: Payment + Pickup Photos */}
         <div className="lg:col-span-1 space-y-8">
 
-          {/* ── Rental Progress Checklist — confirmed / active / completed ── */}
+          {/* ── Unified Rental Task Card — confirmed / active / completed ── */}
           {['confirmed', 'active', 'completed'].includes(booking.status) && (() => {
             const isConfirmed  = booking.status === 'confirmed';
             const isActive     = booking.status === 'active';
             const isCompleted  = booking.status === 'completed';
 
-            const signed       = !!(booking as any).agreementSignerName;
-            const identStatus  = verifData?.identityVerificationStatus ?? "unverified";
-            const identVerified = identStatus === "verified";
-            const identPending  = identStatus === "pending";
+            const signed           = !!(booking as any).agreementSignerName;
+            const identStatus      = verifData?.identityVerificationStatus ?? "unverified";
+            const identVerified    = identStatus === "verified";
+            const identPending     = identStatus === "pending";
             const identNeedsAction = identStatus === "unverified" || identStatus === "failed";
 
-            const pickupPhotos  = (booking as any).pickupPhotos ?? [];
-            const pickupDone    = pickupPhotos.length > 0;
+            const pickupPhotos   = (booking as any).pickupPhotos ?? [];
+            const pickupDone     = pickupPhotos.length > 0;
+            const pickupSentFlag = (booking as any).pickupLinkSent || pickupLinkSent;
 
-            const returnPhotos  = (booking as any).returnPhotos ?? [];
-            const returnDone    = returnPhotos.length > 0;
+            const returnPhotos   = (booking as any).returnPhotos ?? [];
+            const returnDone     = returnPhotos.length > 0;
             const returnSentFlag = !!(booking as any).returnToken || returnLinkSent;
 
-            // Step rows: [stepNum, done, pending, label, sublabel, action?]
-            type StepRow = {
-              num: number;
-              done: boolean;
-              pending?: boolean;
-              label: string;
-              sub: string;
-              action?: React.ReactNode;
-            };
-
-            const steps: StepRow[] = [
-              {
-                num: 1,
-                done: signed,
-                label: "Rental Agreement",
-                sub: signed
-                  ? `Signed by ${(booking as any).agreementSignerName}`
-                  : "Not yet signed by renter",
-                action: (!signed && isConfirmed) ? (
-                  <Button size="sm" variant="outline" className="h-7 text-xs gap-1.5 shrink-0" onClick={sendAgreementLink} disabled={sendingAgreement}>
-                    {sendingAgreement ? <Loader2 className="w-3 h-3 animate-spin" /> : agreementSent ? <MailCheck className="w-3 h-3 text-green-600" /> : <Send className="w-3 h-3" />}
-                    {agreementSent ? "Sent!" : "Send"}
-                  </Button>
-                ) : undefined,
-              },
-              {
-                num: 2,
-                done: identVerified,
-                pending: identPending,
-                label: "Identity Verified",
-                sub: identVerified
-                  ? "Verified via Stripe Identity"
-                  : identPending
-                    ? "Verification link sent — awaiting completion"
-                    : identStatus === "failed"
-                      ? "Verification failed — resend link or check ID at pickup"
-                      : "Not yet verified — send a link or check ID at pickup",
-                action: (identNeedsAction && isConfirmed) ? (
-                  <Button size="sm" variant="outline" className="h-7 text-xs gap-1.5 shrink-0" onClick={sendIdentityLink} disabled={sendingIdentity}>
-                    {sendingIdentity ? <Loader2 className="w-3 h-3 animate-spin" /> : identitySent ? <MailCheck className="w-3 h-3 text-green-600" /> : <Send className="w-3 h-3" />}
-                    {identitySent ? "Sent!" : identStatus === "failed" ? "Retry" : "Send"}
-                  </Button>
-                ) : undefined,
-              },
-              {
-                num: 3,
-                done: pickupDone,
-                label: "Pickup Photos",
-                sub: pickupDone
-                  ? `${pickupPhotos.length} photo${pickupPhotos.length !== 1 ? "s" : ""} submitted`
-                  : "Renter hasn't submitted photos yet",
-                action: (!pickupDone && isConfirmed) ? (
-                  <Button size="sm" variant="outline" className="h-7 text-xs gap-1.5 shrink-0" onClick={() => sendPickupLink(false)} disabled={sendingPickupLink}>
-                    {sendingPickupLink ? <Loader2 className="w-3 h-3 animate-spin" /> : pickupLinkSent ? <MailCheck className="w-3 h-3 text-green-600" /> : <Send className="w-3 h-3" />}
-                    {pickupLinkSent ? "Sent!" : "Send"}
-                  </Button>
-                ) : undefined,
-              },
-              {
-                num: 4,
-                done: returnDone,
-                pending: returnSentFlag && !returnDone,
-                label: "Return Photos",
-                sub: returnDone
-                  ? `${returnPhotos.length} photo${returnPhotos.length !== 1 ? "s" : ""} submitted`
-                  : returnSentFlag
-                    ? "Return link sent — awaiting photos"
-                    : isActive
-                      ? "Send a return link when the renter is ready to return"
-                      : "Collected at return",
-                action: (!returnDone && isActive) ? (
-                  <Button size="sm" variant="outline" className="h-7 text-xs gap-1.5 shrink-0" onClick={sendReturnLink} disabled={sendingReturnLink}>
-                    {sendingReturnLink ? <Loader2 className="w-3 h-3 animate-spin" /> : returnLinkSent ? <MailCheck className="w-3 h-3 text-green-600" /> : <Send className="w-3 h-3" />}
-                    {returnLinkSent ? "Sent!" : returnSentFlag ? "Resend" : "Send"}
-                  </Button>
-                ) : undefined,
-              },
-            ];
-
-            // Required steps for pre-pickup (agreement is mandatory; identity if pending/failed)
             const requiredMissing: string[] = [];
             if (!signed) requiredMissing.push("Rental Agreement");
             if (identNeedsAction) requiredMissing.push("Identity Verification");
 
-            const hasBlockers   = isConfirmed && requiredMissing.length > 0;
-            const today         = startOfDay(new Date());
-            const pickupDay     = startOfDay(new Date(booking.startDate + "T00:00:00"));
-            const daysUntil     = differenceInDays(pickupDay, today);
+            const hasBlockers     = isConfirmed && requiredMissing.length > 0;
+            const today           = startOfDay(new Date());
+            const pickupDay       = startOfDay(new Date(booking.startDate + "T00:00:00"));
+            const daysUntil       = differenceInDays(pickupDay, today);
             const isPickupOverdue = isConfirmed && daysUntil < 0;
             const isPickupUrgent  = isConfirmed && daysUntil <= 1;
 
@@ -897,7 +817,7 @@ export default function AdminBookingDetail() {
               : isActive
                 ? "border-blue-200"
                 : hasBlockers
-                  ? isPickupOverdue ? "border-red-300" : isPickupUrgent ? "border-amber-300" : "border-amber-200"
+                  ? isPickupOverdue ? "border-red-300" : "border-amber-200"
                   : "border-green-200";
 
             const titleColor = isCompleted
@@ -913,29 +833,82 @@ export default function AdminBookingDetail() {
               : isActive
                 ? <PackageCheck className="w-5 h-5 text-blue-600" />
                 : hasBlockers
-                  ? isPickupOverdue
-                    ? <AlertCircle className="w-5 h-5 text-red-600" />
-                    : <AlertCircle className="w-5 h-5 text-amber-500" />
+                  ? <AlertCircle className={`w-5 h-5 ${isPickupOverdue ? "text-red-600" : "text-amber-500"}`} />
                   : <CheckCircle2 className="w-5 h-5 text-green-600" />;
 
             const descText = isCompleted
               ? "Rental is complete. All steps finished."
               : isActive
-                ? "Rental is in progress. Send the return link when the renter is ready."
+                ? "Rental is active — send the return link when the renter is ready to return."
                 : hasBlockers
                   ? "Required steps must be completed before this rental can start."
                   : "All required steps done — ready to mark as picked up.";
+
+            // Inline photo grid helper
+            const renderPhotos = (photos: string[], completedAt?: string) => (
+              <div className="px-3 pb-3 space-y-2 border-t border-inherit mt-0 pt-3">
+                <div className="grid grid-cols-3 gap-1.5">
+                  {photos.map((url, i) => (
+                    <a key={i} href={url} target="_blank" rel="noopener noreferrer" className="relative group">
+                      <div className="aspect-square rounded-lg overflow-hidden bg-gray-100">
+                        <img src={url} alt={`Photo ${i + 1}`} className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
+                      </div>
+                      <div className="absolute inset-0 flex items-center justify-center bg-black/0 group-hover:bg-black/20 rounded-lg transition-colors">
+                        <ExternalLink className="w-4 h-4 text-white opacity-0 group-hover:opacity-100 transition-opacity" />
+                      </div>
+                    </a>
+                  ))}
+                </div>
+                {completedAt && (
+                  <p className="text-xs text-muted-foreground">
+                    Submitted {format(new Date(completedAt), "MMM d, yyyy h:mm a")}
+                  </p>
+                )}
+              </div>
+            );
+
+            // Step row helper
+            const renderStep = (opts: {
+              done: boolean; pending?: boolean;
+              label: string; sub: string;
+              actions?: React.ReactNode;
+              children?: React.ReactNode;
+            }) => {
+              const rowBg      = opts.done ? "bg-green-50 border-green-200" : opts.pending ? "bg-amber-50 border-amber-200" : "bg-muted/30 border-border";
+              const dotBg      = opts.done ? "bg-green-500" : opts.pending ? "bg-amber-400" : "bg-muted-foreground/20";
+              const labelColor = opts.done ? "text-green-800" : opts.pending ? "text-amber-800" : "text-foreground";
+              return (
+                <div className={`rounded-xl border ${rowBg}`}>
+                  <div className="flex items-center gap-3 p-3">
+                    <div className={`w-6 h-6 rounded-full flex items-center justify-center shrink-0 ${dotBg}`}>
+                      {opts.done
+                        ? <CheckCircle2 className="w-4 h-4 text-white" />
+                        : opts.pending
+                          ? <Clock className="w-3.5 h-3.5 text-white" />
+                          : <span className="w-2 h-2 rounded-full bg-muted-foreground/30 block" />}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className={`text-sm font-semibold ${labelColor}`}>{opts.label}</p>
+                      <p className="text-xs text-muted-foreground">{opts.sub}</p>
+                    </div>
+                    {opts.actions}
+                  </div>
+                  {opts.children}
+                </div>
+              );
+            };
 
             return (
               <Card className={cardBorder}>
                 <CardHeader className="pb-3">
                   <CardTitle className={`flex items-center gap-2 text-base ${titleColor}`}>
                     {titleIcon}
-                    {isCompleted ? "Rental Summary" : isActive ? "Rental Progress" : "Pickup Checklist"}
+                    {isCompleted ? "Rental Summary" : isActive ? "Rental In Progress" : "Pickup Checklist"}
                   </CardTitle>
                   <CardDescription className="text-xs">{descText}</CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-3">
+
                   {/* ── Blocker banner ── */}
                   {hasBlockers && (
                     <div className={`rounded-xl border-2 p-4 ${isPickupOverdue ? "bg-red-50 border-red-300" : "bg-amber-50 border-amber-300"}`}>
@@ -951,7 +924,7 @@ export default function AdminBookingDetail() {
                           </p>
                           <p className={`text-xs leading-relaxed ${isPickupOverdue ? "text-red-700" : "text-amber-700"}`}>
                             {isPickupOverdue
-                              ? "The pickup date has passed. Do not release the equipment until all required steps are resolved. Notifications have been sent to the renter."
+                              ? "The pickup date has passed. Do not release the equipment until all required steps are resolved."
                               : "The renter cannot take the equipment until these steps are done. Use the Send buttons below or contact them directly."}
                           </p>
                           <ul className={`mt-2 space-y-0.5 ${isPickupOverdue ? "text-red-700" : "text-amber-700"}`}>
@@ -966,329 +939,215 @@ export default function AdminBookingDetail() {
                       </div>
                     </div>
                   )}
-                  {steps.map(step => {
-                    const rowBg = step.done
-                      ? "bg-green-50 border-green-200"
-                      : step.pending
-                        ? "bg-amber-50 border-amber-200"
-                        : "bg-muted/30 border-border";
-                    const dotBg = step.done
-                      ? "bg-green-500"
-                      : step.pending
-                        ? "bg-amber-400"
-                        : "bg-muted-foreground/20";
-                    const labelColor = step.done
-                      ? "text-green-800"
-                      : step.pending
-                        ? "text-amber-800"
-                        : "text-foreground";
-                    return (
-                      <div key={step.num} className={`flex items-center gap-3 rounded-xl p-3 border ${rowBg}`}>
-                        <div className={`w-6 h-6 rounded-full flex items-center justify-center shrink-0 ${dotBg}`}>
-                          {step.done
-                            ? <CheckCircle2 className="w-4 h-4 text-white" />
-                            : step.pending
-                              ? <Clock className="w-3.5 h-3.5 text-white" />
-                              : <span className="text-muted-foreground text-xs font-bold">{step.num}</span>}
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <p className={`text-sm font-semibold ${labelColor}`}>{step.label}</p>
-                          <p className="text-xs text-muted-foreground">{step.sub}</p>
-                        </div>
-                        {step.action}
-                      </div>
-                    );
-                  })}
 
-                  {/* CTA */}
+                  {/* ── CONFIRMED phase: Steps 1–3 + CTA ── */}
                   {isConfirmed && (
-                    <Button className="w-full gap-2 bg-green-600 hover:bg-green-700 text-white mt-1" onClick={() => handleStatusChange('active')}>
-                      <CheckCircle2 className="w-4 h-4" />
-                      Mark as Picked Up
-                    </Button>
+                    <>
+                      {/* Step 1: Rental Agreement */}
+                      {renderStep({
+                        done: signed,
+                        label: "Rental Agreement",
+                        sub: signed
+                          ? `Signed by ${(booking as any).agreementSignerName}`
+                          : "Not yet signed by renter",
+                        actions: !signed ? (
+                          <Button size="sm" variant="outline" className="h-7 text-xs gap-1.5 shrink-0" onClick={sendAgreementLink} disabled={sendingAgreement}>
+                            {sendingAgreement ? <Loader2 className="w-3 h-3 animate-spin" /> : agreementSent ? <MailCheck className="w-3 h-3 text-green-600" /> : <Send className="w-3 h-3" />}
+                            {agreementSent ? "Sent!" : "Send"}
+                          </Button>
+                        ) : undefined,
+                      })}
+
+                      {/* Step 2: Identity Verification */}
+                      {renderStep({
+                        done: identVerified,
+                        pending: identPending,
+                        label: "Identity Verified",
+                        sub: identVerified
+                          ? "Verified via Stripe Identity"
+                          : identPending
+                            ? "Verification link sent — awaiting completion"
+                            : identStatus === "failed"
+                              ? "Verification failed — resend link or check ID at pickup"
+                              : "Not yet verified — send a link or check ID at pickup",
+                        actions: identNeedsAction ? (
+                          <Button size="sm" variant="outline" className="h-7 text-xs gap-1.5 shrink-0" onClick={sendIdentityLink} disabled={sendingIdentity}>
+                            {sendingIdentity ? <Loader2 className="w-3 h-3 animate-spin" /> : identitySent ? <MailCheck className="w-3 h-3 text-green-600" /> : <Send className="w-3 h-3" />}
+                            {identitySent ? "Sent!" : identStatus === "failed" ? "Retry" : "Send"}
+                          </Button>
+                        ) : undefined,
+                      })}
+
+                      {/* Step 3: Pickup Photos */}
+                      {renderStep({
+                        done: pickupDone,
+                        pending: !pickupDone && pickupSentFlag,
+                        label: "Pickup Photos",
+                        sub: pickupDone
+                          ? `${pickupPhotos.length} photo${pickupPhotos.length !== 1 ? "s" : ""} submitted`
+                          : pickupSentFlag
+                            ? "Link sent — awaiting photos"
+                            : "Renter hasn't submitted photos yet",
+                        actions: (
+                          <div className="flex gap-1.5 shrink-0">
+                            {!pickupDone && (
+                              <Button size="sm" variant="outline" className="h-7 text-xs gap-1 px-2" onClick={() => sendPickupLink(false)} disabled={sendingPickupLink}>
+                                {sendingPickupLink ? <Loader2 className="w-3 h-3 animate-spin" /> : pickupLinkSent ? <MailCheck className="w-3 h-3 text-green-600" /> : <Send className="w-3 h-3" />}
+                                {pickupLinkSent ? "Sent!" : "Send"}
+                              </Button>
+                            )}
+                            <Button size="sm" variant="outline" className="h-7 text-xs gap-1 px-2" onClick={copyPickupLink} disabled={fetchingPickupLink}>
+                              {fetchingPickupLink ? <Loader2 className="w-3 h-3 animate-spin" /> : copySuccess ? <CheckCircle2 className="w-3 h-3 text-green-600" /> : <Copy className="w-3 h-3" />}
+                              {copySuccess ? "Copied!" : "Copy"}
+                            </Button>
+                          </div>
+                        ),
+                        children: pickupDone
+                          ? renderPhotos(pickupPhotos, (booking as any).pickupCompletedAt)
+                          : undefined,
+                      })}
+
+                      {/* Inline URL reveal */}
+                      {revealedPickupUrl && (
+                        <div className="space-y-1.5 px-1">
+                          <p className="text-xs text-muted-foreground font-medium flex items-center gap-1.5">
+                            <Link2 className="w-3.5 h-3.5" /> Photo upload link — share via text or chat
+                          </p>
+                          <div className="flex gap-2">
+                            <Input readOnly value={revealedPickupUrl} className="font-mono text-xs h-8 bg-muted" onFocus={e => e.target.select()} />
+                            <button
+                              className="shrink-0 px-3 h-8 rounded-md bg-primary text-primary-foreground text-xs font-semibold hover:bg-primary/90 transition-colors"
+                              onClick={async () => { try { await navigator.clipboard.writeText(revealedPickupUrl); toast({ title: "Copied!" }); } catch {} }}
+                            >Copy</button>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Mark as Picked Up */}
+                      <Button className="w-full gap-2 bg-green-600 hover:bg-green-700 text-white mt-1" onClick={() => handleStatusChange('active')}>
+                        <CheckCircle2 className="w-4 h-4" />
+                        Mark as Picked Up
+                      </Button>
+                    </>
                   )}
+
+                  {/* ── ACTIVE phase: Return Photos + CTA ── */}
                   {isActive && (
-                    <Button className="w-full gap-2 bg-blue-600 hover:bg-blue-700 text-white mt-1" onClick={() => handleStatusChange('completed')}>
-                      <PackageCheck className="w-4 h-4" />
-                      Mark as Returned
-                    </Button>
+                    <>
+                      {/* Step 4: Return Photos */}
+                      {renderStep({
+                        done: returnDone,
+                        pending: !returnDone && returnSentFlag,
+                        label: "Return Photos",
+                        sub: returnDone
+                          ? `${returnPhotos.length} photo${returnPhotos.length !== 1 ? "s" : ""} submitted`
+                          : returnSentFlag
+                            ? "Return link sent — awaiting photos"
+                            : "Send a return link when the renter is ready to return",
+                        actions: (
+                          <div className="flex gap-1.5 shrink-0">
+                            <Button size="sm" variant="outline" className="h-7 text-xs gap-1 px-2" onClick={sendReturnLink} disabled={sendingReturnLink}>
+                              {sendingReturnLink ? <Loader2 className="w-3 h-3 animate-spin" /> : returnLinkSent ? <MailCheck className="w-3 h-3 text-green-600" /> : <Send className="w-3 h-3" />}
+                              {returnLinkSent ? "Sent!" : returnSentFlag ? "Resend" : "Send"}
+                            </Button>
+                            <Button size="sm" variant="outline" className="h-7 text-xs gap-1 px-2" onClick={copyReturnLink} disabled={fetchingReturnLink}>
+                              {fetchingReturnLink ? <Loader2 className="w-3 h-3 animate-spin" /> : copyReturnSuccess ? <CheckCircle2 className="w-3 h-3 text-green-600" /> : <Copy className="w-3 h-3" />}
+                              {copyReturnSuccess ? "Copied!" : "Copy"}
+                            </Button>
+                          </div>
+                        ),
+                        children: returnDone
+                          ? renderPhotos(returnPhotos, (booking as any).returnCompletedAt)
+                          : undefined,
+                      })}
+
+                      {/* Inline URL reveal */}
+                      {revealedReturnUrl && (
+                        <div className="space-y-1.5 px-1">
+                          <p className="text-xs text-muted-foreground font-medium flex items-center gap-1.5">
+                            <Link2 className="w-3.5 h-3.5" /> Return photo link — share via text or chat
+                          </p>
+                          <div className="flex gap-2">
+                            <Input readOnly value={revealedReturnUrl} className="font-mono text-xs h-8 bg-muted" onFocus={e => e.target.select()} />
+                            <button
+                              className="shrink-0 px-3 h-8 rounded-md bg-primary text-primary-foreground text-xs font-semibold hover:bg-primary/90 transition-colors"
+                              onClick={async () => { try { await navigator.clipboard.writeText(revealedReturnUrl); toast({ title: "Copied!" }); } catch {} }}
+                            >Copy</button>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Mark as Returned */}
+                      <Button className="w-full gap-2 bg-blue-600 hover:bg-blue-700 text-white mt-1" onClick={() => handleStatusChange('completed')}>
+                        <PackageCheck className="w-4 h-4" />
+                        Mark as Returned
+                      </Button>
+                    </>
                   )}
+
+                  {/* ── COMPLETED phase: compact 4-step summary + photos ── */}
+                  {isCompleted && (
+                    <div className="space-y-2">
+                      {[
+                        { label: "Rental Agreement",  done: signed,       sub: signed      ? `Signed by ${(booking as any).agreementSignerName}` : "Not signed" },
+                        { label: "Identity Verified",  done: identVerified, sub: identVerified ? "Verified via Stripe Identity"             : "Not verified" },
+                        { label: "Pickup Photos",      done: pickupDone,   sub: pickupDone  ? `${pickupPhotos.length} photo${pickupPhotos.length !== 1 ? "s" : ""}` : "Not submitted" },
+                        { label: "Return Photos",      done: returnDone,   sub: returnDone  ? `${returnPhotos.length} photo${returnPhotos.length !== 1 ? "s" : ""}` : "Not submitted" },
+                      ].map((item, i) => (
+                        <div key={i} className="flex items-center gap-2.5 text-sm py-1">
+                          {item.done
+                            ? <CheckCircle2 className="w-4 h-4 text-green-600 shrink-0" />
+                            : <div className="w-4 h-4 rounded-full border-2 border-muted-foreground/30 shrink-0" />}
+                          <span className={item.done ? "text-foreground font-medium" : "text-muted-foreground"}>{item.label}</span>
+                          <span className="ml-auto text-xs text-muted-foreground">{item.sub}</span>
+                        </div>
+                      ))}
+                      {/* Photo grids for completed photos */}
+                      {pickupDone && (
+                        <div className="pt-2">
+                          <p className="text-xs font-semibold text-muted-foreground mb-2 flex items-center gap-1.5">
+                            <Camera className="w-3.5 h-3.5" /> Pickup Photos
+                          </p>
+                          <div className="grid grid-cols-3 gap-1.5">
+                            {pickupPhotos.map((url: string, i: number) => (
+                              <a key={i} href={url} target="_blank" rel="noopener noreferrer" className="relative group">
+                                <div className="aspect-square rounded-lg overflow-hidden bg-gray-100">
+                                  <img src={url} alt={`Pickup ${i + 1}`} className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
+                                </div>
+                                <div className="absolute inset-0 flex items-center justify-center bg-black/0 group-hover:bg-black/20 rounded-lg transition-colors">
+                                  <ExternalLink className="w-4 h-4 text-white opacity-0 group-hover:opacity-100 transition-opacity" />
+                                </div>
+                              </a>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                      {returnDone && (
+                        <div className="pt-2">
+                          <p className="text-xs font-semibold text-muted-foreground mb-2 flex items-center gap-1.5">
+                            <PackageCheck className="w-3.5 h-3.5" /> Return Photos
+                          </p>
+                          <div className="grid grid-cols-3 gap-1.5">
+                            {returnPhotos.map((url: string, i: number) => (
+                              <a key={i} href={url} target="_blank" rel="noopener noreferrer" className="relative group">
+                                <div className="aspect-square rounded-lg overflow-hidden bg-gray-100">
+                                  <img src={url} alt={`Return ${i + 1}`} className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
+                                </div>
+                                <div className="absolute inset-0 flex items-center justify-center bg-black/0 group-hover:bg-black/20 rounded-lg transition-colors">
+                                  <ExternalLink className="w-4 h-4 text-white opacity-0 group-hover:opacity-100 transition-opacity" />
+                                </div>
+                              </a>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
                 </CardContent>
               </Card>
             );
           })()}
-
-          {/* ── Pickup Documentation Card — always visible for confirmed/active ── */}
-          {['confirmed', 'active'].includes(booking.status) && (
-            <Card>
-              <CardHeader className="pb-3">
-                <CardTitle className="flex items-center gap-2 text-base">
-                  <Camera className="w-5 h-5 text-primary" />
-                  Pickup Documentation
-                  {(booking as any).pickupCompletedAt && (
-                    <span className="ml-auto">
-                      <CheckCircle2 className="w-4 h-4 text-green-600" />
-                    </span>
-                  )}
-                </CardTitle>
-                <CardDescription className="text-xs leading-relaxed">
-                  Ask the renter to photograph equipment condition. Protects both parties against damage disputes.
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                {/* ── STATE 1: Photos received ── */}
-                {(booking as any).pickupPhotos?.length > 0 ? (
-                  <>
-                    <div className="grid grid-cols-2 gap-2">
-                      {(booking as any).pickupPhotos.map((url: string, i: number) => (
-                        <a key={i} href={url} target="_blank" rel="noopener noreferrer" className="relative group">
-                          <div className="aspect-square rounded-lg overflow-hidden bg-gray-100">
-                            <img src={url} alt={`Pickup photo ${i + 1}`} className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
-                          </div>
-                          <div className="absolute inset-0 flex items-center justify-center bg-black/0 group-hover:bg-black/20 rounded-lg transition-colors">
-                            <ExternalLink className="w-5 h-5 text-white opacity-0 group-hover:opacity-100 transition-opacity" />
-                          </div>
-                        </a>
-                      ))}
-                    </div>
-                    {(booking as any).pickupCompletedAt && (
-                      <p className="text-xs text-muted-foreground">
-                        Submitted {format(new Date((booking as any).pickupCompletedAt), "MMM d, yyyy h:mm a")}
-                      </p>
-                    )}
-                    {/* Allow resending even when photos received */}
-                    <Button variant="ghost" size="sm" className="w-full text-muted-foreground gap-1.5" onClick={copyPickupLink} disabled={fetchingPickupLink}>
-                      {fetchingPickupLink ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : copySuccess ? <CheckCircle2 className="w-3.5 h-3.5 text-green-600" /> : <Copy className="w-3.5 h-3.5" />}
-                      {fetchingPickupLink ? "Getting link…" : copySuccess ? "Copied!" : "Copy upload link"}
-                    </Button>
-                  </>
-                ) : (booking as any).pickupLinkSent || pickupLinkSent ? (
-                  /* ── STATE 2: Link sent, awaiting photos ── */
-                  <>
-                    <div className="flex items-center gap-3 bg-blue-50 border border-blue-200 rounded-xl p-3">
-                      <div className="relative flex h-2.5 w-2.5 shrink-0">
-                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75" />
-                        <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-blue-500" />
-                      </div>
-                      <div>
-                        <p className="text-sm font-semibold text-blue-800">Link sent — awaiting photos</p>
-                        <p className="text-xs text-blue-700">The renter will receive an email with an upload link.</p>
-                      </div>
-                    </div>
-                    <div className="grid grid-cols-2 gap-2">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="gap-1.5 border-blue-200 text-blue-700 hover:bg-blue-50"
-                        onClick={copyPickupLink}
-                        disabled={copySuccess || fetchingPickupLink}
-                      >
-                        {fetchingPickupLink ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : copySuccess ? <CheckCircle2 className="w-3.5 h-3.5 text-green-600" /> : <Copy className="w-3.5 h-3.5" />}
-                        {fetchingPickupLink ? "Getting…" : copySuccess ? "Copied!" : "Copy Link"}
-                      </Button>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="gap-1.5"
-                        onClick={() => sendPickupLink(hostPickupMode)}
-                        disabled={sendingPickupLink}
-                      >
-                        {sendingPickupLink ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />}
-                        Resend Email
-                      </Button>
-                    </div>
-                  </>
-                ) : (
-                  /* ── STATE 3: Not sent yet ── */
-                  <>
-                    {/* Host pickup toggle */}
-                    <div className="flex items-start gap-3 p-3 rounded-xl border bg-muted/40">
-                      <button
-                        onClick={() => setHostPickupMode(v => !v)}
-                        className={`relative shrink-0 w-9 h-5 rounded-full transition-colors mt-0.5 ${hostPickupMode ? "bg-primary" : "bg-muted-foreground/30"}`}
-                        role="switch"
-                        aria-checked={hostPickupMode}
-                      >
-                        <span className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform ${hostPickupMode ? "translate-x-4" : ""}`} />
-                      </button>
-                      <div>
-                        <p className="text-sm font-semibold flex items-center gap-1.5">
-                          <UserCheck className="w-4 h-4 text-muted-foreground" />
-                          Host did the pickup
-                        </p>
-                        <p className="text-xs text-muted-foreground leading-relaxed mt-0.5">
-                          {hostPickupMode
-                            ? "Email will say the host completed the handoff and ask the renter to document the condition."
-                            : "Email will ask the renter to photograph the equipment before pickup."}
-                        </p>
-                      </div>
-                    </div>
-
-                    <Button
-                      className="w-full gap-2"
-                      onClick={() => sendPickupLink(hostPickupMode)}
-                      disabled={sendingPickupLink}
-                    >
-                      {sendingPickupLink ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
-                      Email Upload Link to Renter
-                    </Button>
-
-                    <div className="flex items-center gap-2">
-                      <div className="flex-1 border-t" />
-                      <span className="text-xs text-muted-foreground">or</span>
-                      <div className="flex-1 border-t" />
-                    </div>
-
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="w-full gap-2"
-                      onClick={copyPickupLink}
-                    >
-                      {copySuccess ? <CheckCircle2 className="w-4 h-4 text-green-600" /> : <Copy className="w-4 h-4" />}
-                      {copySuccess ? "Copied to clipboard!" : "Copy link to share manually"}
-                    </Button>
-                    <p className="text-xs text-muted-foreground text-center -mt-1">
-                      Paste in a text message, WhatsApp, or chat
-                    </p>
-                  </>
-                )}
-
-                {/* ── Inline URL reveal — shown after copy attempt ── */}
-                {revealedPickupUrl && (
-                  <div className="mt-2 space-y-1.5">
-                    <p className="text-xs text-muted-foreground font-medium flex items-center gap-1.5">
-                      <Link2 className="w-3.5 h-3.5" /> Photo upload link — share via text or chat
-                    </p>
-                    <div className="flex gap-2">
-                      <Input
-                        readOnly
-                        value={revealedPickupUrl}
-                        className="font-mono text-xs h-8 bg-muted"
-                        onFocus={e => e.target.select()}
-                      />
-                      <button
-                        className="shrink-0 px-3 h-8 rounded-md bg-primary text-primary-foreground text-xs font-semibold hover:bg-primary/90 transition-colors"
-                        onClick={async () => {
-                          try { await navigator.clipboard.writeText(revealedPickupUrl); toast({ title: "Copied!" }); } catch {}
-                        }}
-                      >
-                        Copy
-                      </button>
-                    </div>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          )}
-          {/* ── Return Documentation Card ── */}
-          {['active', 'completed'].includes(booking.status) && (
-            <Card>
-              <CardHeader className="pb-3">
-                <CardTitle className="flex items-center gap-2 text-base">
-                  <PackageCheck className="w-5 h-5 text-blue-600" />
-                  Return Documentation
-                  {(booking as any).returnCompletedAt && (
-                    <span className="ml-auto"><CheckCircle2 className="w-4 h-4 text-green-600" /></span>
-                  )}
-                </CardTitle>
-                <CardDescription className="text-xs leading-relaxed">
-                  Ask the renter to photograph equipment condition at return. Protects against post-return damage disputes.
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                {(booking as any).returnPhotos?.length > 0 ? (
-                  <>
-                    <div className="grid grid-cols-2 gap-2">
-                      {(booking as any).returnPhotos.map((url: string, i: number) => (
-                        <a key={i} href={url} target="_blank" rel="noopener noreferrer" className="relative group">
-                          <div className="aspect-square rounded-lg overflow-hidden bg-gray-100">
-                            <img src={url} alt={`Return photo ${i + 1}`} className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
-                          </div>
-                          <div className="absolute inset-0 flex items-center justify-center bg-black/0 group-hover:bg-black/20 rounded-lg transition-colors">
-                            <ExternalLink className="w-5 h-5 text-white opacity-0 group-hover:opacity-100 transition-opacity" />
-                          </div>
-                        </a>
-                      ))}
-                    </div>
-                    {(booking as any).returnCompletedAt && (
-                      <p className="text-xs text-muted-foreground">
-                        Submitted {format(new Date((booking as any).returnCompletedAt), "MMM d, yyyy h:mm a")}
-                      </p>
-                    )}
-                    <Button variant="ghost" size="sm" className="w-full text-muted-foreground gap-1.5" onClick={copyReturnLink}>
-                      {copyReturnSuccess ? <CheckCircle2 className="w-3.5 h-3.5 text-green-600" /> : <Copy className="w-3.5 h-3.5" />}
-                      {copyReturnSuccess ? "Copied!" : "Copy upload link"}
-                    </Button>
-                  </>
-                ) : (booking as any).returnToken || returnLinkSent ? (
-                  <>
-                    <div className="flex items-center gap-3 bg-blue-50 border border-blue-200 rounded-xl p-3">
-                      <div className="relative flex h-2.5 w-2.5 shrink-0">
-                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75" />
-                        <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-blue-500" />
-                      </div>
-                      <div>
-                        <p className="text-sm font-semibold text-blue-800">Link sent — awaiting return photos</p>
-                        <p className="text-xs text-blue-700">Renter will receive an email with the upload link.</p>
-                      </div>
-                    </div>
-                    <div className="grid grid-cols-2 gap-2">
-                      <Button variant="outline" size="sm" className="gap-1.5 border-blue-200 text-blue-700 hover:bg-blue-50" onClick={copyReturnLink} disabled={copyReturnSuccess}>
-                        {copyReturnSuccess ? <CheckCircle2 className="w-3.5 h-3.5 text-green-600" /> : <Copy className="w-3.5 h-3.5" />}
-                        {copyReturnSuccess ? "Copied!" : "Copy Link"}
-                      </Button>
-                      <Button variant="outline" size="sm" className="gap-1.5" onClick={sendReturnLink} disabled={sendingReturnLink}>
-                        {sendingReturnLink ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />}
-                        Resend Email
-                      </Button>
-                    </div>
-                  </>
-                ) : (
-                  <>
-                    <Button className="w-full gap-2 bg-blue-600 hover:bg-blue-700" onClick={sendReturnLink} disabled={sendingReturnLink}>
-                      {sendingReturnLink ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
-                      Email Return Link to Renter
-                    </Button>
-                    <div className="flex items-center gap-2">
-                      <div className="flex-1 border-t" />
-                      <span className="text-xs text-muted-foreground">or</span>
-                      <div className="flex-1 border-t" />
-                    </div>
-                    <Button variant="outline" size="sm" className="w-full gap-2" onClick={copyReturnLink} disabled={fetchingReturnLink}>
-                      {fetchingReturnLink ? <Loader2 className="w-4 h-4 animate-spin" /> : copyReturnSuccess ? <CheckCircle2 className="w-4 h-4 text-green-600" /> : <Copy className="w-4 h-4" />}
-                      {fetchingReturnLink ? "Getting link…" : copyReturnSuccess ? "Copied to clipboard!" : "Copy link to share manually"}
-                    </Button>
-                  </>
-                )}
-
-                {/* ── Inline URL reveal ── */}
-                {revealedReturnUrl && (
-                  <div className="mt-2 space-y-1.5">
-                    <p className="text-xs text-muted-foreground font-medium flex items-center gap-1.5">
-                      <Link2 className="w-3.5 h-3.5" /> Return photo link — share via text or chat
-                    </p>
-                    <div className="flex gap-2">
-                      <Input
-                        readOnly
-                        value={revealedReturnUrl}
-                        className="font-mono text-xs h-8 bg-muted"
-                        onFocus={e => e.target.select()}
-                      />
-                      <button
-                        className="shrink-0 px-3 h-8 rounded-md bg-primary text-primary-foreground text-xs font-semibold hover:bg-primary/90 transition-colors"
-                        onClick={async () => {
-                          try { await navigator.clipboard.writeText(revealedReturnUrl); toast({ title: "Copied!" }); } catch {}
-                        }}
-                      >
-                        Copy
-                      </button>
-                    </div>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          )}
 
           {/* ── AI Return Inspection Card ── */}
           {['active', 'completed'].includes(booking.status) && (() => {

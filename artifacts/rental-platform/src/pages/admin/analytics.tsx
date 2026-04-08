@@ -24,6 +24,14 @@ function adminHeaders(): HeadersInit {
 }
 
 const PIE_COLORS  = ["#0f5132", "#3b82f6", "#f59e0b", "#ef4444", "#64748b"];
+
+const STATUS_PIE_COLORS: Record<string, string> = {
+  active:    "#22c55e",
+  confirmed: "#3b82f6",
+  completed: "#f59e0b",
+  cancelled: "#ef4444",
+  pending:   "#64748b",
+};
 const BAR_COLOR   = "#0f5132";
 const LOC_COLORS  = ["#0f5132","#166534","#15803d","#16a34a","#22c55e","#4ade80","#86efac","#bbf7d0"];
 
@@ -173,8 +181,8 @@ export default function AdminAnalytics() {
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
                     <Pie data={statusBreakdown || []} cx="50%" cy="50%" innerRadius={60} outerRadius={80} paddingAngle={5} dataKey="count" nameKey="status">
-                      {(statusBreakdown || []).map((_, i) => (
-                        <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />
+                      {(statusBreakdown || []).map((entry: any, i) => (
+                        <Cell key={i} fill={STATUS_PIE_COLORS[entry.status] ?? PIE_COLORS[i % PIE_COLORS.length]} />
                       ))}
                     </Pie>
                     <Tooltip formatter={(v: number, n: string) => [v, n.charAt(0).toUpperCase() + n.slice(1)]} />
@@ -187,7 +195,7 @@ export default function AdminAnalytics() {
               {statusBreakdown?.map((stat, idx) => (
                 <div key={stat.status} className="flex items-center justify-between text-sm">
                   <div className="flex items-center gap-2">
-                    <div className="w-3 h-3 rounded-full" style={{ backgroundColor: PIE_COLORS[idx % PIE_COLORS.length] }} />
+                    <div className="w-3 h-3 rounded-full" style={{ backgroundColor: STATUS_PIE_COLORS[stat.status] ?? PIE_COLORS[idx % PIE_COLORS.length] }} />
                     <span className="capitalize">{stat.status}</span>
                   </div>
                   <span className="font-medium">{stat.count} ({stat.percentage.toFixed(1)}%)</span>
