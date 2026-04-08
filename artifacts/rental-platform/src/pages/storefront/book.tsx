@@ -1590,6 +1590,7 @@ export default function StorefrontBook() {
             ? JSON.stringify(listingRules.map(r => ({
                 ruleId: r.id,
                 title: r.title,
+                description: r.description ?? "",
                 fee: r.fee,
                 initials: ruleChecks[r.id] ? "✓" : "",
                 initialedAt: new Date().toISOString(),
@@ -3059,7 +3060,36 @@ export default function StorefrontBook() {
                           </div>
                         )
                       }
-                      <p className="text-xs italic">By signing below, you confirm you have read, understood, and agree to all terms in this rental agreement.</p>
+
+                      {/* ── Listing Rules — embedded in agreement document ── */}
+                      {listingRules.length > 0 && (
+                        <>
+                          <Separator />
+                          <div>
+                            <p className="text-xs font-bold uppercase tracking-widest text-foreground mb-0.5">Rental Rules & Policies</p>
+                            <p className="text-xs text-muted-foreground mb-3">
+                              The following rules apply specifically to this listing. You must acknowledge each rule individually before signing.
+                            </p>
+                            <div className="space-y-3">
+                              {listingRules.map((rule, i) => (
+                                <div key={rule.id} className="pl-3 border-l-2 border-primary/25">
+                                  <p className="text-xs font-semibold text-foreground">{i + 1}. {rule.title}</p>
+                                  {rule.description && (
+                                    <p className="text-xs mt-0.5 leading-relaxed">{rule.description}</p>
+                                  )}
+                                  {rule.fee > 0 && (
+                                    <p className="text-xs mt-1 font-medium text-amber-700">
+                                      Violation fee: ${(rule.fee).toFixed(2)}
+                                    </p>
+                                  )}
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        </>
+                      )}
+
+                      <p className="text-xs italic">By signing below, you confirm you have read, understood, and agree to all terms in this rental agreement{listingRules.length > 0 ? ", including all rental rules and policies listed above" : ""}.</p>
                     </div>
 
                     {/* Listing rules — checkbox acknowledgment */}
@@ -3067,10 +3097,10 @@ export default function StorefrontBook() {
                       <div className="bg-background rounded-2xl border shadow-sm p-6 space-y-4">
                         <div className="flex items-center gap-2">
                           <ShieldCheck className="w-4 h-4 text-primary" />
-                          <h3 className="font-semibold">Rental Rules — Check Each to Acknowledge</h3>
+                          <h3 className="font-semibold">Acknowledge Each Rule Before Signing</h3>
                         </div>
                         <p className="text-sm text-muted-foreground">
-                          Check the box next to each rule to confirm you have read and agree to it before signing.
+                          The rules listed in the agreement above require your individual acknowledgment. Check each box to confirm you have read and agree to it.
                         </p>
                         <div className="space-y-2.5">
                           {listingRules.map(rule => {

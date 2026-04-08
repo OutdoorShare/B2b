@@ -8,6 +8,7 @@ const UPLOADS_DIR = path.resolve(process.cwd(), "uploads");
 export interface RuleInitialEntry {
   ruleId: number;
   title: string;
+  description?: string;
   fee: number;
   initials: string;
   initialedAt: string;
@@ -92,8 +93,48 @@ export async function generateAgreementPdf(opts: AgreementPdfOptions): Promise<s
     doc.fillColor(DARK).font("Helvetica").fontSize(9.5).lineGap(3);
     const paragraphs = opts.agreementText.split("\n\n").filter(Boolean);
     for (const para of paragraphs) {
+      if (doc.y > doc.page.height - 100) { doc.addPage(); }
       doc.text(para, 60, doc.y, { width: PAGE_WIDTH, align: "justify" });
       doc.moveDown(0.8);
+    }
+
+    // ── Rental Rules & Policies (embedded in agreement body) ─────────────────
+    if (opts.ruleInitials && opts.ruleInitials.length > 0) {
+      if (doc.y > doc.page.height - 150) { doc.addPage(); }
+      doc.moveDown(0.5);
+      doc.moveTo(60, doc.y).lineTo(60 + PAGE_WIDTH, doc.y).strokeColor("#dddddd").lineWidth(1).stroke();
+      doc.moveDown(0.5);
+      doc.fillColor(PRIMARY).font("Helvetica-Bold").fontSize(11)
+        .text("RENTAL RULES & POLICIES", 60, doc.y);
+      doc.moveDown(0.3);
+      doc.fillColor(MID_GRAY).font("Helvetica").fontSize(8.5)
+        .text(
+          `The following rules apply specifically to the rental of "${opts.listingTitle}". The renter must acknowledge each rule prior to signing.`,
+          60, doc.y, { width: PAGE_WIDTH }
+        );
+      doc.moveDown(0.6);
+
+      for (let idx = 0; idx < opts.ruleInitials.length; idx++) {
+        const rule = opts.ruleInitials[idx];
+        if (doc.y > doc.page.height - 80) { doc.addPage(); }
+        doc.fillColor(DARK).font("Helvetica-Bold").fontSize(9.5)
+          .text(`${idx + 1}. ${rule.title}`, 60, doc.y, { width: PAGE_WIDTH - 80 });
+        if (rule.description) {
+          doc.fillColor(MID_GRAY).font("Helvetica").fontSize(8.5)
+            .text(rule.description, 75, doc.y, { width: PAGE_WIDTH - 30 });
+        }
+        if (rule.fee > 0) {
+          doc.fillColor("#92400e").font("Helvetica").fontSize(8)
+            .text(`Violation fee: $${rule.fee.toFixed(2)}`, 75, doc.y);
+        }
+        doc.moveDown(0.5);
+      }
+      doc.moveDown(0.3);
+      doc.fillColor(DARK).font("Helvetica-Oblique").fontSize(8.5)
+        .text(
+          "By signing this agreement, the renter confirms they have read, understood, and agree to all rules and policies listed above.",
+          60, doc.y, { width: PAGE_WIDTH }
+        );
     }
 
     // ── Signature section ────────────────────────────────────────────────────
