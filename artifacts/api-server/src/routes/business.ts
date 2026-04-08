@@ -2,6 +2,7 @@ import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
 import { businessProfileTable, tenantsTable } from "@workspace/db/schema";
 import { eq, ne, and } from "drizzle-orm";
+import { PLATFORM_FEE_PERCENT } from "../services/stripe";
 import { requireTenant } from "../middleware/admin-auth";
 import { encrypt, isEncrypted } from "../lib/crypto";
 
@@ -70,9 +71,10 @@ router.get("/business", async (req, res) => {
     return;
   }
   try {
-    const [profileWhere, trialInfo] = await Promise.all([
+    const [profileWhere, trialInfo, tenantRow] = await Promise.all([
       db.select().from(businessProfileTable).where(eq(businessProfileTable.tenantId, req.tenantId)).limit(1),
       getTenantTrialInfo(req.tenantId),
+      db.select({ platformFeePercent: tenantsTable.platformFeePercent }).from(tenantsTable).where(eq(tenantsTable.id, req.tenantId)).limit(1),
     ]);
 
     let profiles = profileWhere;
@@ -86,11 +88,16 @@ router.get("/business", async (req, res) => {
 
     const p = profiles[0];
     const { senderPassword: _sp, ...pSafe } = p;
+    // Expose the platform fee percent so the storefront can compute pass-through amounts.
+    const tenantFeePercent = tenantRow[0]?.platformFeePercent != null
+      ? parseFloat(tenantRow[0].platformFeePercent)
+      : PLATFORM_FEE_PERCENT * 100;
     res.json({
       ...pSafe,
       senderPasswordSet: !!p.senderPassword,
       depositPercent: parseFloat(p.depositPercent ?? "25"),
       bundleDiscountPercent: parseFloat(p.bundleDiscountPercent ?? "0"),
+      platformFeePercent: tenantFeePercent,
       createdAt: p.createdAt.toISOString(),
       updatedAt: p.updatedAt.toISOString(),
       ...trialInfo,
@@ -123,6 +130,7 @@ router.put("/business", requireTenant as any, async (req, res) => {
       paymentPlanEnabled, paymentPlanDepositType,
       paymentPlanDepositFixed, paymentPlanDepositPercent,
       paymentPlanDaysBeforePickup,
+      passPlatformFeeToCustomer,
     } = req.body;
 
     // Require business address fields whenever they are submitted with content.
@@ -182,6 +190,7 @@ router.put("/business", requireTenant as any, async (req, res) => {
       ...(paymentPlanDepositFixed    !== undefined && { paymentPlanDepositFixed: String(paymentPlanDepositFixed) }),
       ...(paymentPlanDepositPercent  !== undefined && { paymentPlanDepositPercent: String(paymentPlanDepositPercent) }),
       ...(paymentPlanDaysBeforePickup !== undefined && { paymentPlanDaysBeforePickup: Number(paymentPlanDaysBeforePickup) }),
+      ...(passPlatformFeeToCustomer  !== undefined && { passPlatformFeeToCustomer }),
     };
 
     // If this tenant is design-locked (e.g. the platform demo), strip design fields

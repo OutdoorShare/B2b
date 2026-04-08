@@ -43,6 +43,10 @@ export const businessProfileTable = pgTable("business_profile", {
   paymentPlanDepositFixed: decimal("payment_plan_deposit_fixed", { precision: 10, scale: 2 }).default("0"),
   paymentPlanDepositPercent: decimal("payment_plan_deposit_percent", { precision: 5, scale: 2 }).default("25"),
   paymentPlanDaysBeforePickup: integer("payment_plan_days_before_pickup").default(0),
+  // ── Platform fee pass-through ─────────────────────────────────────────────
+  // When true, the OutdoorShare service fee is added on top of the rental price
+  // and charged to the customer instead of being deducted from the host's payout.
+  passPlatformFeeToCustomer: boolean("pass_platform_fee_to_customer").notNull().default(false),
   lat: decimal("lat", { precision: 10, scale: 6 }),
   lng: decimal("lng", { precision: 10, scale: 6 }),
   createdAt: timestamp("created_at").defaultNow().notNull(),

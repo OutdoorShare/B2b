@@ -1080,10 +1080,24 @@ export default function StorefrontBook() {
 
   const total = subtotal + bundleItemsTotal + addonsSubtotal + platformProtectionFee - bundleDiscountAmount;
   const promoDiscount = appliedPromo ? Math.min(appliedPromo.discountAmount, total) : 0;
-  const discountedTotal = Math.max(0.50, total - promoDiscount);
+  const afterPromo = total - promoDiscount;
+
+  // ── Service fee pass-through ──────────────────────────────────────────────
+  // When the company has opted to pass the OutdoorShare service fee to the customer,
+  // add it on top of the rental (excluding the protection plan fee, which already
+  // goes 100% to OutdoorShare and is not subject to the percentage split).
+  const bpRaw = businessProfile as any;
+  const passThrough = !!bpRaw?.passPlatformFeeToCustomer;
+  const platformFeePercent = passThrough
+    ? (bpRaw?.platformFeePercent != null ? parseFloat(String(bpRaw.platformFeePercent)) / 100 : 0.05)
+    : 0;
+  // Fee applies only to the rental portion (excluding protection plan fee)
+  const rentalAfterDiscounts = Math.max(0, afterPromo - platformProtectionFee);
+  const serviceFee = passThrough ? rentalAfterDiscounts * platformFeePercent : 0;
+  const discountedTotal = Math.max(0.50, afterPromo + serviceFee);
 
   // ── Payment plan / split deposit ──────────────────────────────────────────
-  const bp = businessProfile as any;
+  const bp = bpRaw;
   const planEnabled = !!bp?.paymentPlanEnabled;
   const planDepositType: "percent" | "fixed" = bp?.paymentPlanDepositType ?? "percent";
   const planDepositRaw = planDepositType === "percent"
@@ -1309,6 +1323,8 @@ export default function StorefrontBook() {
           customerId: session?.id ?? undefined,
           // For host tenants: pass protection fee separately so OutdoorShare keeps 100% of it
           protectionFeeCents: platformProtectionFee > 0 ? Math.round(platformProtectionFee * (dateRange?.days ?? 1) * 100) : undefined,
+          // Pass-through: tell the backend the exact service fee charged to the customer
+          passthroughFeeCents: serviceFee > 0 ? Math.round(serviceFee * 100) : undefined,
         }),
       });
       if (!res.ok) {
@@ -1901,6 +1917,21 @@ export default function StorefrontBook() {
                           <span>+${(a.priceType === "per_day" ? a.price * days : a.price).toFixed(2)}</span>
                         </div>
                       ))}
+                    {promoDiscount > 0 && (
+                      <div className="px-4 py-3 flex items-center justify-between text-sm text-green-700">
+                        <span>Promo discount</span>
+                        <span>-${promoDiscount.toFixed(2)}</span>
+                      </div>
+                    )}
+                    {serviceFee > 0 && (
+                      <div className="px-4 py-3 flex items-center justify-between text-sm text-muted-foreground">
+                        <span className="flex items-center gap-1.5">
+                          <span>Service fee</span>
+                          <span className="text-xs bg-muted rounded-full px-1.5 py-0.5">{bpRaw?.platformFeePercent != null ? `${parseFloat(String(bpRaw.platformFeePercent))}%` : "5%"}</span>
+                        </span>
+                        <span>+${serviceFee.toFixed(2)}</span>
+                      </div>
+                    )}
                     <div className="px-4 py-3 flex items-center justify-between font-bold text-base">
                       <span>Total due</span>
                       <span>${discountedTotal.toFixed(2)}</span>
@@ -3818,6 +3849,12 @@ export default function StorefrontBook() {
                             {appliedPromo.code}
                           </span>
                           <span>-${promoDiscount.toFixed(2)}</span>
+                        </div>
+                      )}
+                      {serviceFee > 0 && (
+                        <div className="flex justify-between text-sm text-muted-foreground">
+                          <span>Service fee ({bpRaw?.platformFeePercent != null ? `${parseFloat(String(bpRaw.platformFeePercent))}%` : "5%"})</span>
+                          <span>+${serviceFee.toFixed(2)}</span>
                         </div>
                       )}
                       <Separator />

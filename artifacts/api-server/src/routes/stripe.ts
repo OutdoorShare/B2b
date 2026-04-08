@@ -222,7 +222,7 @@ router.get("/stripe/connect/check/:slug", async (req, res) => {
 // If tenant has NOT connected → funds sit on OutdoorShare platform until they do.
 router.post("/stripe/payment-intent", async (req, res) => {
   try {
-    const { tenantSlug, amountCents, customerEmail, customerName, bookingMeta, customerId, protectionFeeCents } = req.body ?? {};
+    const { tenantSlug, amountCents, customerEmail, customerName, bookingMeta, customerId, protectionFeeCents, passthroughFeeCents } = req.body ?? {};
     console.log(`[payment-intent] slug="${tenantSlug}" amount=${amountCents} body-keys=${Object.keys(req.body ?? {}).join(",")}`);
     if (!tenantSlug || !amountCents || amountCents < 50) {
       res.status(400).json({ error: "tenantSlug and amountCents (min 50) required" });
@@ -242,15 +242,24 @@ router.post("/stripe/payment-intent", async (req, res) => {
       ? parseFloat(tenant.platformFeePercent) / 100
       : PLATFORM_FEE_PERCENT;
 
-    // For host tenants: OutdoorShare keeps 20% of the rental subtotal + 100% of the protection fee.
-    // protectionFeeCents must be passed from the booking checkout when isHost=true.
+    // Determine platform fee:
+    //  1. passthroughFeeCents — company has opted to pass the service fee to the customer;
+    //     the frontend already added it to amountCents, so use the explicit amount directly.
+    //  2. Host tenants with a protection fee — keep 100% of protection + feePercent of rental.
+    //  3. Default — flat feePercent of the total.
     let platformFeeAmount: number;
     let transferAmount: number;
-    if (tenant.isHost && protectionFeeCents != null && protectionFeeCents > 0) {
+    if (passthroughFeeCents != null && passthroughFeeCents > 0) {
+      // Pass-through: customer already paid the fee; platform keeps exactly passthroughFeeCents
+      // (plus 100% of any protection fee if this is also a host tenant).
+      const ppCents = protectionFeeCents != null && protectionFeeCents > 0 ? protectionFeeCents : 0;
+      platformFeeAmount = Math.round(passthroughFeeCents) + ppCents;
+      transferAmount = amountCents - platformFeeAmount;
+    } else if (tenant.isHost && protectionFeeCents != null && protectionFeeCents > 0) {
       const rentalSubtotal = amountCents - protectionFeeCents;
       const rentalFee = Math.round(rentalSubtotal * feePercent);
-      platformFeeAmount = rentalFee + protectionFeeCents; // 20% of rental + 100% of protection
-      transferAmount = rentalSubtotal - rentalFee; // 80% of rental
+      platformFeeAmount = rentalFee + protectionFeeCents; // feePercent of rental + 100% of protection
+      transferAmount = rentalSubtotal - rentalFee;
     } else {
       platformFeeAmount = Math.round(amountCents * feePercent);
       transferAmount = amountCents - platformFeeAmount;
