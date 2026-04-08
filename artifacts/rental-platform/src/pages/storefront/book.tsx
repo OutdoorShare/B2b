@@ -2786,7 +2786,7 @@ export default function StorefrontBook() {
                         <div className="space-y-3">
                           {!isKiosk && !session && !showLoginPanel ? (
                             <Button size="lg" className="w-full h-13 text-base font-bold rounded-xl" onClick={handleRegisterAndPay} disabled={isSubmitting}>
-                              {isSubmitting ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Creating account…</> : <><ShieldCheck className="w-4 h-4 mr-2" />Create Account & Pay {appliedPromo ? `— $${discountedTotal.toFixed(2)}` : ""}</>}
+                              {isSubmitting ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Saving…</> : <><ShieldCheck className="w-4 h-4 mr-2" />Save & Pay {appliedPromo ? `— $${discountedTotal.toFixed(2)}` : ""}</>}
                             </Button>
                           ) : isKiosk && (!name || !email) ? (
                             <div className="flex items-start gap-3 rounded-xl border border-dashed border-muted-foreground/30 bg-muted/30 px-4 py-4">
