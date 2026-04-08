@@ -1681,8 +1681,9 @@ export async function sendReturnLinkEmail(opts: {
   endDate: string;
   companyName: string;
   companyEmail?: string;
+  memoriesUrl?: string;
 }): Promise<void> {
-  const { toEmail, customerName, returnUrl, listingTitle, startDate, endDate, companyName, companyEmail } = opts;
+  const { toEmail, customerName, returnUrl, listingTitle, startDate, endDate, companyName, companyEmail, memoriesUrl } = opts;
   const fromHeader = `${companyName} <samhos@myoutdoorshare.com>`;
   const replyToEmail = companyEmail || undefined;
 
@@ -1713,9 +1714,19 @@ export async function sendReturnLinkEmail(opts: {
       </ul>
     </div>
     ${ctaButton("Upload Return Photos", returnUrl, "#1d4ed8")}
-    <p style="margin:0;font-size:13px;color:#9ca3af;text-align:center;">
+    <p style="margin:0 0 28px;font-size:13px;color:#9ca3af;text-align:center;">
       This link is unique to your booking. You can upload multiple photos.
     </p>
+    ${memoriesUrl ? `
+    <div style="background:linear-gradient(135deg,#f0fdf4 0%,#dcfce7 100%);border:1px solid #86efac;border-radius:12px;padding:20px;margin:8px 0 0;text-align:center;">
+      <p style="margin:0 0 4px;font-size:20px;">📸</p>
+      <p style="margin:0 0 6px;font-size:16px;font-weight:800;color:#14532d;">Share Your Adventure!</p>
+      <p style="margin:0 0 14px;font-size:13px;color:#166534;line-height:1.6;">
+        Add your trip photos to <strong>Memories</strong> and make them public — so others can see what fun awaits outdoors. Share the adventure with your friends!
+      </p>
+      ${ctaButton("Add My Memories", memoriesUrl, BRAND_GREEN)}
+    </div>
+    ` : ""}
   `;
 
   const html = emailShell({ preheader, badgeLabel: "Action Required — Return Photo Check", badgeColor: "#1d4ed8", body });

@@ -891,6 +891,7 @@ router.put("/bookings/:id", async (req, res) => {
             const BASE = process.env.APP_URL || `https://${process.env.REPLIT_DEV_DOMAIN}`;
             const returnUrl = `${BASE}/${tenantRow?.slug ?? ""}/return/${returnToken}`;
 
+            const memoriesUrl = `${BASE}/${tenantRow?.slug ?? ""}/my-bookings`;
             await withBrand(brand, () => withSmtpCreds(smtpCreds, () => sendReturnLinkEmail({
               toEmail: updated.customerEmail,
               customerName: updated.customerName,
@@ -900,6 +901,7 @@ router.put("/bookings/:id", async (req, res) => {
               endDate: updated.endDate,
               companyName,
               companyEmail,
+              memoriesUrl,
             })));
             await appendEmailEvent(updated.id, "return_link", updated.customerEmail);
           } catch (e) {
@@ -1495,6 +1497,7 @@ router.post("/bookings/:id/send-return-link", async (req, res) => {
     const slug = req.headers["x-tenant-slug"] as string ?? "";
     const returnUrl = `${BASE}/${slug}/return/${token}`;
 
+    const memoriesUrl = `${BASE}/${slug}/my-bookings`;
     Promise.all([getTenantSmtpCreds(req.tenantId), getTenantBrand(req.tenantId)])
       .then(([smtpCreds, brand]) => withBrand(brand, () => withSmtpCreds(smtpCreds, () => sendReturnLinkEmail({
         toEmail: booking.customerEmail,
@@ -1505,6 +1508,7 @@ router.post("/bookings/:id/send-return-link", async (req, res) => {
         endDate: booking.endDate,
         companyName,
         companyEmail,
+        memoriesUrl,
       }))))
       .then(() => appendEmailEvent(bookingId, "return_link", booking.customerEmail))
       .catch(err => console.error("[return email]", err));
