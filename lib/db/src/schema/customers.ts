@@ -16,6 +16,7 @@ export const customersTable = pgTable("customers", {
   cardLastFour: text("card_last_four"),
   cardBrand: text("card_brand"),
   stripeCustomerId: text("stripe_customer_id"),
+  avatarUrl: text("avatar_url"),
   identityVerificationStatus: text("identity_verification_status", { enum: ["unverified", "pending", "verified", "failed"] }).default("unverified"),
   identityVerificationSessionId: text("identity_verification_session_id"),
   identityVerifiedAt: timestamp("identity_verified_at"),

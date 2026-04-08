@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, Fragment } from "react";
+import { useState, useMemo, useEffect, useRef, Fragment } from "react";
 import { useLocation, useParams } from "wouter";
 import {
   User, LogOut, Calendar, CalendarDays, List, Settings,
@@ -119,6 +119,7 @@ type CustomerProfile = {
   billingZip: string | null;
   cardLastFour: string | null;
   cardBrand: string | null;
+  avatarUrl: string | null;
   identityVerificationStatus: string | null;
   createdAt: string;
 };
@@ -1313,8 +1314,59 @@ function PersonalInfoSection({ profile, onUpdated }: { profile: CustomerProfile;
   const [phone, setPhone] = useState(profile.phone ?? "");
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(profile.avatarUrl ?? null);
+  const [uploadingAvatar, setUploadingAvatar] = useState(false);
+  const avatarInputRef = useRef<HTMLInputElement>(null);
 
   const isDirty = name !== profile.name || phone !== (profile.phone ?? "");
+  const initials = profile.name.split(" ").map(p => p[0]).join("").toUpperCase().slice(0, 2);
+
+  const handleAvatarSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploadingAvatar(true);
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      const up = await fetch(`${API}/api/upload/image`, { method: "POST", body: fd });
+      if (!up.ok) throw new Error("Upload failed");
+      const { url } = await up.json();
+      const fullUrl = url.startsWith("http") ? url : `${API}${url}`;
+      const res = await fetch(`${API}/api/customers/${profile.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ avatarUrl: fullUrl }),
+      });
+      if (!res.ok) throw new Error("Save failed");
+      const updated = await res.json();
+      setAvatarUrl(fullUrl);
+      onUpdated(updated);
+      setMsg({ ok: true, text: "Profile photo updated." });
+    } catch {
+      setMsg({ ok: false, text: "Failed to upload photo. Please try again." });
+    } finally {
+      setUploadingAvatar(false);
+      if (avatarInputRef.current) avatarInputRef.current.value = "";
+    }
+  };
+
+  const handleRemoveAvatar = async () => {
+    setUploadingAvatar(true);
+    try {
+      const res = await fetch(`${API}/api/customers/${profile.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ avatarUrl: null }),
+      });
+      if (!res.ok) throw new Error("Save failed");
+      const updated = await res.json();
+      setAvatarUrl(null);
+      onUpdated(updated);
+      setMsg({ ok: true, text: "Profile photo removed." });
+    } catch {
+      setMsg({ ok: false, text: "Failed to remove photo. Please try again." });
+    } finally { setUploadingAvatar(false); }
+  };
 
   const handleSave = async () => {
     if (!name.trim()) { setMsg({ ok: false, text: "Name is required." }); return; }
@@ -1334,7 +1386,7 @@ function PersonalInfoSection({ profile, onUpdated }: { profile: CustomerProfile;
 
   return (
     <section className="bg-white rounded-xl border border-gray-200 p-6">
-      <div className="flex items-center gap-2 mb-4">
+      <div className="flex items-center gap-2 mb-5">
         <div className="h-7 w-7 rounded-lg bg-primary/10 flex items-center justify-center">
           <User className="h-3.5 w-3.5 text-primary" />
         </div>
@@ -1343,6 +1395,63 @@ function PersonalInfoSection({ profile, onUpdated }: { profile: CustomerProfile;
           <p className="text-[11px] text-gray-400">Visible to rental companies</p>
         </div>
       </div>
+
+      {/* ── Profile Photo ── */}
+      <div className="flex items-center gap-4 mb-6 pb-5 border-b border-gray-100">
+        <div className="relative shrink-0">
+          {avatarUrl ? (
+            <img
+              src={avatarUrl}
+              alt={profile.name}
+              className="w-20 h-20 rounded-full object-cover border-2 border-gray-200 shadow-sm"
+            />
+          ) : (
+            <div className="w-20 h-20 rounded-full bg-primary/10 border-2 border-primary/20 flex items-center justify-center">
+              <span className="text-xl font-bold text-primary">{initials}</span>
+            </div>
+          )}
+          {uploadingAvatar && (
+            <div className="absolute inset-0 rounded-full bg-black/40 flex items-center justify-center">
+              <Loader2 className="h-5 w-5 text-white animate-spin" />
+            </div>
+          )}
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className="text-sm font-semibold text-gray-900 mb-1">Profile Photo</p>
+          <p className="text-xs text-gray-400 mb-3">JPG, PNG or WebP · max 5 MB</p>
+          <div className="flex flex-wrap gap-2">
+            <input
+              ref={avatarInputRef}
+              type="file"
+              accept="image/jpeg,image/png,image/webp"
+              className="hidden"
+              onChange={handleAvatarSelect}
+            />
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-8 text-xs gap-1.5"
+              onClick={() => avatarInputRef.current?.click()}
+              disabled={uploadingAvatar}
+            >
+              <Camera className="h-3.5 w-3.5" />
+              {avatarUrl ? "Change Photo" : "Upload Photo"}
+            </Button>
+            {avatarUrl && (
+              <Button
+                size="sm"
+                variant="ghost"
+                className="h-8 text-xs text-red-500 hover:text-red-600 hover:bg-red-50"
+                onClick={handleRemoveAvatar}
+                disabled={uploadingAvatar}
+              >
+                Remove
+              </Button>
+            )}
+          </div>
+        </div>
+      </div>
+
       <div className="space-y-4">
         <div>
           <label className="text-xs font-medium text-gray-600 mb-1.5 flex items-center gap-1.5">

@@ -449,7 +449,7 @@ router.get("/admin/renters/:email/bookings", async (req, res) => {
 
 router.put("/customers/:id", async (req, res) => {
   try {
-    const { name, phone, billingAddress, billingCity, billingState, billingZip, cardLastFour, cardBrand } = req.body;
+    const { name, phone, billingAddress, billingCity, billingState, billingZip, cardLastFour, cardBrand, avatarUrl } = req.body;
     const updateData: Record<string, any> = { updatedAt: new Date() };
     if (name) updateData.name = name;
     if (phone !== undefined) updateData.phone = phone;
@@ -459,6 +459,7 @@ router.put("/customers/:id", async (req, res) => {
     if (billingZip !== undefined) updateData.billingZip = billingZip;
     if (cardLastFour !== undefined) updateData.cardLastFour = cardLastFour;
     if (cardBrand !== undefined) updateData.cardBrand = cardBrand;
+    if (avatarUrl !== undefined) updateData.avatarUrl = avatarUrl;
 
     const [updated] = await db
       .update(customersTable)
