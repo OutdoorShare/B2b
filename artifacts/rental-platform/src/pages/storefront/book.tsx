@@ -487,7 +487,7 @@ function CardScanHelper() {
 }
 
 // ── Stripe Payment Form ────────────────────────────────────────────────────────
-function StripePaymentForm({ onSuccess, customerEmail }: { onSuccess: () => void; customerEmail: string }) {
+function StripePaymentForm({ onSuccess, customerEmail, testMode }: { onSuccess: () => void; customerEmail: string; testMode?: boolean }) {
   const stripe = useStripe();
   const elements = useElements();
   const [paying, setPaying] = useState(false);
@@ -527,7 +527,7 @@ function StripePaymentForm({ onSuccess, customerEmail }: { onSuccess: () => void
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
-      <PaymentElement options={{ layout: "tabs" }} />
+      <PaymentElement options={{ layout: "tabs", ...(testMode ? { wallets: { link: "never" } } : {}) }} />
       {error && (
         <div className="flex items-center gap-2 text-destructive text-sm bg-destructive/10 rounded-lg px-4 py-3">
           <AlertTriangle className="w-4 h-4 shrink-0" />
@@ -2882,6 +2882,7 @@ export default function StorefrontBook() {
                                   <StripePaymentForm
                                     onSuccess={() => setPaymentConfirmed(true)}
                                     customerEmail={email}
+                                    testMode={isTestMode}
                                   />
                                 </Elements>
                               </div>
