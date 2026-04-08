@@ -906,6 +906,9 @@ router.put("/bookings/:id", async (req, res) => {
             console.error("[auto return email]", e);
           }
         })();
+
+        // Auto-trigger deposit hold when admin marks as active (non-fatal)
+        triggerDepositAtPickup(updated as any, req.log).catch(() => {});
       }
     }
 
@@ -1258,6 +1261,63 @@ router.post("/bookings/:id/before-photos", pickupUpload.array("photos", 15), asy
   } catch (err) {
     req.log.error(err);
     res.status(500).json({ error: "Failed to upload before-rental photos" });
+  }
+});
+
+// ── POST /bookings/:id/renter-confirm-pickup ──────────────────────────────────
+// Public: renter confirms they have picked up the rental.
+// Requires: customerEmail query param (ownership check) + at least 1 pickup photo.
+// Sets status → active, sets pickupCompletedAt, triggers deposit hold (non-fatal).
+router.post("/bookings/:id/renter-confirm-pickup", async (req, res) => {
+  try {
+    const bookingId = parseInt(req.params.id, 10);
+    const { customerEmail } = req.query as { customerEmail?: string };
+    if (isNaN(bookingId)) { res.status(400).json({ error: "Invalid booking id" }); return; }
+    if (!customerEmail) { res.status(400).json({ error: "customerEmail is required" }); return; }
+
+    const [booking] = await db.select().from(bookingsTable).where(eq(bookingsTable.id, bookingId));
+    if (!booking) { res.status(404).json({ error: "Booking not found" }); return; }
+
+    // Ownership check
+    if ((booking.customerEmail ?? "").toLowerCase().trim() !== customerEmail.toLowerCase().trim()) {
+      res.status(403).json({ error: "Forbidden" }); return;
+    }
+
+    // Must be in confirmed status
+    if (booking.status !== "confirmed") {
+      res.status(409).json({ error: "Booking is not in confirmed status" }); return;
+    }
+
+    // Must have at least 1 pickup photo
+    const existingPhotos: string[] = booking.pickupPhotos ? JSON.parse(booking.pickupPhotos) : [];
+    if (existingPhotos.length === 0) {
+      res.status(422).json({ error: "Before photos are required before confirming pickup" }); return;
+    }
+
+    // Mark as active
+    const [updated] = await db.update(bookingsTable).set({
+      status: "active",
+      pickupCompletedAt: booking.pickupCompletedAt ?? new Date(),
+      seenByAdmin: false,
+      updatedAt: new Date(),
+    }).where(eq(bookingsTable.id, bookingId)).returning();
+
+    if (!updated) { res.status(404).json({ error: "Not found" }); return; }
+
+    // Trigger deposit hold (non-fatal)
+    await triggerDepositAtPickup(updated as any, req.log);
+
+    // Re-fetch deposit status to return in response
+    const [fresh] = await db.select({ depositHoldStatus: bookingsTable.depositHoldStatus })
+      .from(bookingsTable).where(eq(bookingsTable.id, bookingId));
+
+    const [listing] = await db.select({ title: listingsTable.title })
+      .from(listingsTable).where(eq(listingsTable.id, updated.listingId));
+
+    res.json({ ...formatBooking(updated, listing?.title ?? "Unknown"), depositHoldStatus: fresh?.depositHoldStatus ?? null });
+  } catch (err) {
+    req.log.error(err);
+    res.status(500).json({ error: "Failed to confirm pickup" });
   }
 });
 

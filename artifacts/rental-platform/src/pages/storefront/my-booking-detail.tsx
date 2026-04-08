@@ -152,6 +152,7 @@ export default function MyBookingDetail() {
   const [countdown, setCountdown] = useState({ d: 0, h: 0, m: 0, s: 0, past: false });
   const [sendingAgreement, setSendingAgreement] = useState(false);
   const [agreementLinkSent, setAgreementLinkSent] = useState(false);
+  const [confirmingPickup, setConfirmingPickup] = useState(false);
 
   useEffect(() => {
     if (!booking) return;
@@ -247,6 +248,26 @@ export default function MyBookingDetail() {
     }
   };
 
+  const confirmPickup = async () => {
+    if (!id || !session) return;
+    setConfirmingPickup(true);
+    try {
+      const r = await fetch(
+        `${BASE}/api/bookings/${id}/renter-confirm-pickup?customerEmail=${encodeURIComponent(session.email)}`,
+        { method: "POST" }
+      );
+      const data = await r.json();
+      if (!r.ok || data.error) return;
+      setBooking(data);
+      // Navigate to the booking with the adventure banner
+      const slug = (booking as any)?.tenantSlug;
+      const b = slug ? `/${slug}` : base;
+      setLocation(`${b}/my-bookings/${id}?adventure=1`);
+    } finally {
+      setConfirmingPickup(false);
+    }
+  };
+
   if (!session) return null;
 
   if (isLoading) {
@@ -304,8 +325,18 @@ export default function MyBookingDetail() {
   const now = new Date();
   const photoWindowOpen = now >= photoWindowOpensAt;
   const hoursUntilWindow = Math.ceil((photoWindowOpensAt.getTime() - now.getTime()) / (1000 * 60 * 60));
-  const canShowPhotoUpload = (booking.status === "confirmed" || booking.status === "active") && photoWindowOpen;
-  const photoWindowPending = booking.status === "confirmed" && !photoWindowOpen;
+
+  // Compute pickup day/past for use in the checklist and canShowPhotoUpload
+  const todayStart = startOfDay(new Date());
+  const pickupStart = startOfDay(startDate);
+  const daysUntilPickup = differenceInDays(pickupStart, todayStart);
+  const isPickupDayOrPast = daysUntilPickup <= 0;
+
+  // Standalone photo section: only show for active bookings OR confirmed-but-not-yet-pickup-day
+  // (on pickup day/past for confirmed, the pickup checklist below embeds the photo upload)
+  const canShowPhotoUpload = booking.status === "active" ||
+    (booking.status === "confirmed" && photoWindowOpen && !isPickupDayOrPast);
+  const photoWindowPending = booking.status === "confirmed" && !photoWindowOpen && !isPickupDayOrPast;
 
   let addons: Array<{ id: number; name: string; price: number; priceType: string; subtotal: number }> = [];
   try {
@@ -455,48 +486,122 @@ export default function MyBookingDetail() {
           );
         }
 
-        // ── CASE B: Steps done, pickup day → ADVENTURE! ─────────────────────
+        // ── CASE B: Steps done, pickup day → PICKUP CHECKLIST ───────────────
         if (isPickupDay || isPast) {
+          const hasPhotos = photoDone || savedPhotos.length > 0;
+          const allDone = agreementSigned && hasPhotos;
           return (
             <div className="rounded-2xl border-2 border-green-400 overflow-hidden">
-              <div className="bg-gradient-to-br from-green-500 to-green-700 px-6 py-8 text-center relative overflow-hidden">
-                {/* Background decoration */}
+              {/* Header */}
+              <div className="bg-gradient-to-br from-[#1a4731] to-[#2d6a4f] px-6 py-5 relative overflow-hidden">
                 <div className="absolute inset-0 opacity-10">
-                  <div className="absolute top-2 left-4 text-6xl">🏔️</div>
-                  <div className="absolute bottom-2 right-4 text-5xl">⛺</div>
+                  <div className="absolute top-1 left-3 text-4xl">🏔️</div>
+                  <div className="absolute bottom-1 right-3 text-3xl">⛺</div>
                 </div>
                 <div className="relative">
-                  <div className="w-16 h-16 rounded-full bg-white/20 flex items-center justify-center mx-auto mb-3">
-                    <Mountain className="w-8 h-8 text-white" />
+                  <div className="flex items-center gap-3 mb-1">
+                    <div className="w-9 h-9 rounded-full bg-white/20 flex items-center justify-center shrink-0">
+                      <Mountain className="w-5 h-5 text-white" />
+                    </div>
+                    <h2 className="text-lg font-black text-white tracking-tight">Pickup Day Checklist</h2>
                   </div>
-                  <h2 className="text-2xl font-black text-white tracking-tight leading-tight">
-                    Ready to Start Your Adventure!
-                  </h2>
-                  <p className="text-green-100 text-sm mt-2">
-                    Head over to pick up your <strong>{booking.listingTitle}</strong>
-                  </p>
-                  <div className="mt-4 flex items-center justify-center gap-2">
-                    <Sparkles className="w-4 h-4 text-yellow-300" />
-                    <span className="text-white font-semibold text-sm">All steps complete — you're all set!</span>
-                    <Sparkles className="w-4 h-4 text-yellow-300" />
-                  </div>
+                  <p className="text-green-200 text-xs ml-12">Complete all steps before leaving with your rental</p>
                 </div>
               </div>
-              <div className="px-5 py-4 bg-green-50 border-t border-green-200">
-                <div className="space-y-2">
-                  {[
-                    { icon: <User className="w-4 h-4 text-green-600" />, text: "Bring a valid government-issued photo ID" },
-                    { icon: <FileSignature className="w-4 h-4 text-green-600" />, text: "Rental agreement signed ✓" },
-                    { icon: <CreditCard className="w-4 h-4 text-green-600" />, text: "Payment method on file ✓" },
-                  ].map(({ icon, text }, i) => (
-                    <div key={i} className="flex items-center gap-2.5 text-sm text-green-800">
-                      <div className="w-6 h-6 rounded-full bg-green-100 border border-green-200 flex items-center justify-center shrink-0">
-                        {icon}
-                      </div>
-                      {text}
-                    </div>
-                  ))}
+
+              {/* Steps */}
+              <div className="p-4 space-y-3 bg-white">
+                {/* Step 1: Agreement */}
+                <div className={`flex items-center gap-3 p-3 rounded-xl border ${agreementSigned ? "border-green-200 bg-green-50" : "border-amber-200 bg-amber-50"}`}>
+                  <div className={`w-7 h-7 rounded-full flex items-center justify-center shrink-0 ${agreementSigned ? "bg-green-500" : "bg-amber-400"}`}>
+                    {agreementSigned
+                      ? <CheckCircle2 className="w-4 h-4 text-white" />
+                      : <FileSignature className="w-3.5 h-3.5 text-white" />}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className={`text-sm font-semibold ${agreementSigned ? "text-green-800" : "text-amber-800"}`}>Rental Agreement</p>
+                    <p className="text-xs text-muted-foreground">{agreementSigned ? "Signed ✓" : "Not yet signed"}</p>
+                  </div>
                 </div>
+
+                {/* Step 2: Before Photos */}
+                <div className={`rounded-xl border overflow-hidden ${hasPhotos ? "border-green-200 bg-green-50" : "border-primary/30 bg-white"}`}>
+                  <div className="flex items-center gap-3 p-3">
+                    <div className={`w-7 h-7 rounded-full flex items-center justify-center shrink-0 ${hasPhotos ? "bg-green-500" : "bg-muted-foreground/20"}`}>
+                      {hasPhotos
+                        ? <CheckCircle2 className="w-4 h-4 text-white" />
+                        : <Camera className="w-3.5 h-3.5 text-muted-foreground" />}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className={`text-sm font-semibold ${hasPhotos ? "text-green-800" : "text-foreground"}`}>Before Photos</p>
+                      <p className="text-xs text-muted-foreground">
+                        {hasPhotos
+                          ? `${savedPhotos.length} photo${savedPhotos.length !== 1 ? "s" : ""} submitted ✓`
+                          : "Required — photograph the equipment before leaving"}
+                      </p>
+                    </div>
+                    {hasPhotos && <CheckCircle2 className="w-4 h-4 text-green-600 shrink-0" />}
+                  </div>
+                  {!hasPhotos && (
+                    <div className="px-3 pb-3 space-y-3 border-t border-primary/15 pt-3">
+                      <p className="text-xs text-muted-foreground">Take photos of all sides, existing scratches, and serial numbers. This protects you from damage claims.</p>
+                      <div
+                        className="rounded-xl border-2 border-dashed border-muted-foreground/25 hover:border-primary/50 hover:bg-primary/5 transition-colors p-4 text-center cursor-pointer"
+                        onDragOver={e => e.preventDefault()}
+                        onDrop={e => { e.preventDefault(); addFiles(e.dataTransfer.files); }}
+                        onClick={() => fileInputRef.current?.click()}
+                      >
+                        <ImagePlus className="w-6 h-6 mx-auto mb-1.5 text-muted-foreground/40" />
+                        <p className="text-xs font-medium text-muted-foreground">Tap to take / add photos</p>
+                        <input ref={fileInputRef} type="file" accept="image/*" multiple className="hidden" onChange={e => addFiles(e.target.files)} capture="environment" />
+                      </div>
+                      {previews.length > 0 && (
+                        <div className="grid grid-cols-3 gap-2">
+                          {previews.map((src, i) => (
+                            <div key={i} className="relative aspect-square rounded-lg overflow-hidden bg-muted group">
+                              <img src={src} alt={`Preview ${i + 1}`} className="w-full h-full object-cover" />
+                              <button onClick={e => { e.stopPropagation(); removeStaged(i); }} className="absolute top-1 right-1 bg-black/60 rounded-full p-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                                <XIcon className="w-3 h-3 text-white" />
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                      {staged.length > 0 && (
+                        <Button onClick={submitPhotos} disabled={uploading} className="w-full gap-2">
+                          {uploading ? <><Loader2 className="w-4 h-4 animate-spin" />Uploading…</> : <><Upload className="w-4 h-4" />Submit {staged.length} Photo{staged.length !== 1 ? "s" : ""}</>}
+                        </Button>
+                      )}
+                    </div>
+                  )}
+                </div>
+
+                {/* Step 3: Confirm Pickup */}
+                <div className={`flex items-center gap-3 p-3 rounded-xl border ${allDone ? "border-green-300 bg-green-50" : "border-gray-200 bg-gray-50"}`}>
+                  <div className={`w-7 h-7 rounded-full flex items-center justify-center shrink-0 ${allDone ? "bg-green-100" : "bg-gray-100"}`}>
+                    <CheckCircle2 className={`w-4 h-4 ${allDone ? "text-green-600" : "text-gray-300"}`} />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className={`text-sm font-semibold ${allDone ? "text-green-800" : "text-gray-500"}`}>Confirm Pickup</p>
+                    <p className="text-xs text-muted-foreground">{allDone ? "Ready — tap the button to start your rental" : "Complete steps above first"}</p>
+                  </div>
+                </div>
+
+                {/* Confirm button */}
+                <Button
+                  className="w-full gap-2 bg-green-600 hover:bg-green-700 text-white text-base py-5 h-auto mt-1"
+                  disabled={!allDone || confirmingPickup}
+                  onClick={confirmPickup}
+                >
+                  {confirmingPickup
+                    ? <><Loader2 className="w-5 h-5 animate-spin" />Starting rental…</>
+                    : <><Mountain className="w-5 h-5" />I've Got It — Start My Rental</>}
+                </Button>
+                {!allDone && (
+                  <p className="text-xs text-center text-muted-foreground">
+                    {!agreementSigned ? "Sign your rental agreement, then" : "Submit before photos, then"} the confirm button will unlock
+                  </p>
+                )}
               </div>
             </div>
           );

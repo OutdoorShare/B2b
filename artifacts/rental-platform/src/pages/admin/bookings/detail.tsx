@@ -993,15 +993,26 @@ export default function AdminBookingDetail() {
                       })}
 
                       {/* Step 3: Pickup Photos */}
+                      {!pickupDone && isPickupUrgent && (
+                        <div className="rounded-xl border border-orange-300 bg-orange-50 p-3 flex items-start gap-2.5">
+                          <Camera className="w-4 h-4 text-orange-600 shrink-0 mt-0.5" />
+                          <div>
+                            <p className="text-xs font-bold text-orange-800">Before photos not yet submitted</p>
+                            <p className="text-xs text-orange-700 mt-0.5">
+                              Remind the renter to photograph the equipment condition before leaving. Send the photo link below or verbally confirm photos were taken at pickup.
+                            </p>
+                          </div>
+                        </div>
+                      )}
                       {renderStep({
                         done: pickupDone,
                         pending: !pickupDone && pickupSentFlag,
-                        label: "Pickup Photos",
+                        label: "Before Photos",
                         sub: pickupDone
                           ? `${pickupPhotos.length} photo${pickupPhotos.length !== 1 ? "s" : ""} submitted`
                           : pickupSentFlag
-                            ? "Link sent — awaiting photos"
-                            : "Renter hasn't submitted photos yet",
+                            ? "Link sent — renter hasn't submitted yet"
+                            : "Not submitted — send the photo link to the renter",
                         actions: (
                           <div className="flex gap-1.5 shrink-0">
                             {!pickupDone && (
