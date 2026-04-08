@@ -1,6 +1,7 @@
 import { adminPath, getAdminSession } from "@/lib/admin-nav";
 import { useState, useEffect, useRef } from "react";
 import { fireConfetti } from "@/hooks/use-confetti";
+import { AdminBookingTimeline } from "@/components/RentalCountdown";
 import { useParams } from "wouter";
 import { 
   useGetBooking, 
@@ -413,6 +414,17 @@ export default function AdminBookingDetail() {
           Cancel
         </Button>
       </div>
+
+      {/* ── Rental Timeline / Countdown ── */}
+      {!["cancelled"].includes(booking.status) && (
+        <AdminBookingTimeline
+          status={booking.status}
+          startDate={booking.startDate}
+          endDate={booking.endDate}
+          listingTitle={booking.listingTitle}
+          listingImage={(booking as any).listingImage ?? null}
+        />
+      )}
 
       {/* Pickup-day callout for confirmed bookings */}
       {booking.status === 'confirmed' && (() => {

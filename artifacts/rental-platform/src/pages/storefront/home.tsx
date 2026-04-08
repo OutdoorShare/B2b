@@ -1,7 +1,8 @@
-import { useState } from "react";
-import { Link, useParams } from "wouter";
+import { useState, useEffect } from "react";
+import { Link, useLocation, useParams } from "wouter";
 import type { DateRange } from "react-day-picker";
-import { format } from "date-fns";
+import { format, parseISO, isAfter, isBefore, addDays } from "date-fns";
+import { UpcomingCountdown, ActiveRentalProgress } from "@/components/RentalCountdown";
 import {
   useGetBusinessProfile,
   useGetListings,
@@ -40,6 +41,109 @@ const CATEGORY_ICONS: Record<string, React.ElementType> = {
 
 function getCategoryIcon(slug: string): React.ElementType {
   return CATEGORY_ICONS[slug] || Gauge;
+}
+
+// ── Renter session helper ──────────────────────────────────────────────────────
+type RSession = { id: number; email: string; name?: string };
+function loadRenterSession(): RSession | null {
+  try { return JSON.parse(localStorage.getItem("rental_customer") ?? "null"); }
+  catch { return null; }
+}
+
+type RBooking = {
+  id: number; status: string;
+  startDate: string; endDate: string;
+  listingTitle: string; listingImage: string | null;
+  businessName: string | null;
+};
+
+const API_BASE = import.meta.env.BASE_URL.replace(/\/+$/, "");
+
+// ── Upcoming + Active rentals banner shown on home page when renter is logged in ──
+function RenterRentalsBanner({ sfBase }: { sfBase: string }) {
+  const [, setLocation] = useLocation();
+  const [bookings, setBookings] = useState<RBooking[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const s = loadRenterSession();
+    if (!s?.id) { setLoading(false); return; }
+    fetch(`${API_BASE}/api/marketplace/renter/bookings?customerId=${s.id}`)
+      .then(r => r.ok ? r.json() : [])
+      .then((data: RBooking[]) => {
+        const now = new Date();
+        // Keep active + upcoming (within next 60 days)
+        const relevant = data.filter(b =>
+          b.status === "active" ||
+          (b.status === "confirmed" && isAfter(parseISO(b.startDate), now) && isBefore(parseISO(b.startDate), addDays(now, 60)))
+        );
+        // Sort: active first, then soonest upcoming
+        relevant.sort((a, b) => {
+          if (a.status === "active" && b.status !== "active") return -1;
+          if (b.status === "active" && a.status !== "active") return 1;
+          return parseISO(a.startDate).getTime() - parseISO(b.startDate).getTime();
+        });
+        setBookings(relevant.slice(0, 3));
+      })
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, []);
+
+  const session = loadRenterSession();
+  if (!session || loading || bookings.length === 0) return null;
+
+  return (
+    <div className="border-b border-border bg-gradient-to-r from-slate-50 to-slate-100/50">
+      <div className="max-w-6xl mx-auto px-4 py-6">
+        <div className="flex items-center justify-between mb-4">
+          <div>
+            <p className="text-xs font-bold uppercase tracking-widest text-primary mb-0.5">My Rentals</p>
+            <h3 className="text-lg font-bold text-foreground">
+              {bookings.some(b => b.status === "active")
+                ? "You have an active rental!"
+                : "Upcoming rentals"}
+            </h3>
+          </div>
+          <button
+            className="text-sm font-semibold text-primary hover:underline flex items-center gap-1"
+            onClick={() => setLocation(`${sfBase}/my-bookings`)}
+          >
+            View all <ArrowRight className="w-3.5 h-3.5" />
+          </button>
+        </div>
+
+        <div className={`grid gap-3 ${bookings.length === 1 ? "grid-cols-1 max-w-md" : bookings.length === 2 ? "grid-cols-1 sm:grid-cols-2 max-w-2xl" : "grid-cols-1 sm:grid-cols-2 lg:grid-cols-3"}`}>
+          {bookings.map(b => (
+            <div
+              key={b.id}
+              className="cursor-pointer"
+              onClick={() => setLocation(`${sfBase}/my-bookings`)}
+            >
+              {b.status === "active" ? (
+                <ActiveRentalProgress
+                  startDate={b.startDate}
+                  endDate={b.endDate}
+                  title={b.listingTitle}
+                  image={b.listingImage}
+                  businessName={b.businessName}
+                  compact
+                />
+              ) : (
+                <UpcomingCountdown
+                  startDate={b.startDate}
+                  endDate={b.endDate}
+                  title={b.listingTitle}
+                  image={b.listingImage}
+                  businessName={b.businessName}
+                  compact
+                />
+              )}
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
 }
 
 /** Returns "City, State" from a full address — hides street & zip for privacy. */
@@ -345,6 +449,9 @@ export default function StorefrontHome() {
           </div>
         </div>
       </section>
+
+      {/* ── Renter: Upcoming & Active Rentals ── */}
+      <RenterRentalsBanner sfBase={sfBase} />
 
       {/* Active filter bar */}
       {(activeCategory || search || dateRange?.from) && (
