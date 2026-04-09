@@ -49,7 +49,7 @@ export const PLATFORM_FEATURES: Array<{
   { name: "Waivers",             slug: "waivers",             description: "Collect digital waiver signatures before pickup.",                             status: "stable",       category: "Customers" },
   { name: "Communications",      slug: "communications",      description: "Automated email notifications for every booking lifecycle event.",              status: "stable",       category: "Customers" },
   // AI & Tools
-  { name: "OutdoorBot AI",       slug: "outdoorbot-ai",       description: "AI assistant for renters on the storefront and for admins in the dashboard.", status: "stable",       category: "AI & Tools" },
+  { name: "Roamio AI",       slug: "roamio-ai",       description: "AI assistant for renters on the storefront and for admins in the dashboard.", status: "stable",       category: "AI & Tools" },
   { name: "Kiosk Mode",          slug: "kiosk-mode",          description: "Self-service booking kiosk for walk-in customers at a physical location.",     status: "stable",       category: "AI & Tools" },
   { name: "Analytics",           slug: "analytics",           description: "Revenue, booking, and occupancy dashboards for informed business decisions.",   status: "stable",       category: "AI & Tools" },
   // Account

@@ -237,7 +237,7 @@ async function runTool(name: string, args: Record<string, unknown>, tenantId: nu
 // ── Admin system prompt ────────────────────────────────────────────────────────
 
 function buildAdminSystemPrompt(companyName: string, slug: string): string {
-  return `You are OutdoorBot, an AI assistant embedded in the OutdoorShare rental management platform for ${companyName}.
+  return `You are Roamio AI, an AI assistant embedded in the OutdoorShare rental management platform for ${companyName}.
 
 You help the admin team operate their rental business more efficiently. You are knowledgeable, concise, and action-oriented.
 
@@ -283,7 +283,7 @@ function buildRenterSystemPrompt(
   cancellationPolicy?: string | null,
   rentalTerms?: string | null,
 ): string {
-  return `You are OutdoorBot, a renter-facing assistant for ${companyName}, a rental service powered by OutdoorShare.
+  return `You are Roamio AI, a renter-facing assistant for ${companyName}, a rental service powered by OutdoorShare.
 
 ## Your role — and strict limits
 You help RENTERS only. You have no access to admin tools, business data, or management functions.

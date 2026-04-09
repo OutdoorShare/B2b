@@ -201,7 +201,7 @@ export function OutdoorBot() {
       const res = await fetch(`${API_BASE}/api/openai/conversations`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ title: "OutdoorBot chat" }),
+        body: JSON.stringify({ title: "Roamio AI chat" }),
       });
       if (!res.ok) throw new Error(await res.text());
       const conv = (await res.json()) as Conversation;
@@ -210,7 +210,7 @@ export function OutdoorBot() {
       setMsgs([{
         id: "welcome",
         role: "assistant",
-        content: "Hey adventurer! 🏕️ I'm OutdoorBot. Tell me what you'd like to rent and I can find the perfect listing and help you book it!",
+        content: "Hey adventurer! 🏕️ I'm Roamio AI. Tell me what you'd like to rent and I can find the perfect listing and help you book it!",
       }]);
       return conv;
     } catch {
@@ -352,10 +352,10 @@ export function OutdoorBot() {
           "focus:outline-none focus:ring-2 focus:ring-[hsl(127,55%,38%)] focus:ring-offset-2",
           open && "opacity-0 pointer-events-none"
         )}
-        aria-label="Open OutdoorBot"
+        aria-label="Open Roamio AI"
       >
         <Bot className="size-5" />
-        <span className="text-sm font-semibold">OutdoorBot</span>
+        <span className="text-sm font-semibold">Roamio AI</span>
       </button>
 
       {/* Chat panel */}
@@ -376,7 +376,7 @@ export function OutdoorBot() {
             <Bot className="size-4" />
           </div>
           <div className="flex-1">
-            <p className="text-sm font-semibold leading-tight">OutdoorBot</p>
+            <p className="text-sm font-semibold leading-tight">Roamio AI</p>
             <p className="text-xs text-white/70 leading-tight">Find & book your adventure</p>
           </div>
           <div className="flex items-center gap-1">
