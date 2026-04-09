@@ -11,8 +11,8 @@ const OS_GREEN = "#3ab549";
 
 const PLANS = [
   { id: "half_throttle", name: "Half Throttle", price: 0, priceLabel: "Free", priceSuffix: "", sub: "15% platform fee per booking", features: ["Booking platform with custom branding", "Protection plan on every rental", "OutdoorShare Marketplace listing", "Automated booking & payments"] },
-  { id: "full_throttle", name: "Full Throttle", price: 895, priceLabel: "$895", priceSuffix: "/year", sub: "Tiered fee — as low as 7%", features: ["Everything in Half Throttle", "White-labeled OutdoorShare website", "AI answering agent included", "In-person setup support"], popular: true },
-  { id: "growth_scale", name: "Growth & Scale", price: null, priceLabel: "Custom", priceSuffix: "", sub: "$500/mo or $3,400/yr", features: ["Everything in Full Throttle", "No OutdoorShare branding", "Active marketing management", "Ad spend management"] },
+  { id: "full_throttle", name: "Full Throttle", price: 895, priceLabel: "$895", priceSuffix: "/year", sub: "Tiered fee — as low as 7%", features: ["Protection plan on every rental", "White-labeled OutdoorShare website", "AI answering agent included", "In-person setup support"], popular: true },
+  { id: "growth_scale", name: "Growth & Scale", price: null, priceLabel: "Custom", priceSuffix: "", sub: "$500/mo or $3,400/yr", features: ["Protection plan on every rental", "No OutdoorShare branding", "Active marketing management", "Ad spend management"] },
 ];
 
 type Step = "info" | "plan" | "payment" | "done";

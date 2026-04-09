@@ -232,6 +232,7 @@ export default function AdminBilling() {
             ))}
             {billing?.plan === "professional" && [
               "Everything in Half Throttle",
+              "Protection plan on every rental",
               "Tiered commissions — as low as 7%",
               "CRM tools",
               "AI answering agent",
@@ -244,6 +245,7 @@ export default function AdminBilling() {
             ))}
             {billing?.plan === "enterprise" && [
               "Everything in Full Throttle",
+              "Protection plan on every rental",
               "No OutdoorShare branding",
               "Tiered commissions — minimum 7% fee",
               "Active marketing management",
