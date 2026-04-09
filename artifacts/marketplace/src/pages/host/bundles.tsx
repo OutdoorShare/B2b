@@ -25,6 +25,7 @@ async function uploadImage(file: File): Promise<string> {
 function resolveImage(url: string | null | undefined) {
   if (!url) return null;
   if (url.startsWith("http")) return url;
+  if (url.startsWith("/")) return url;
   const filename = url.split("/").pop() ?? "";
   return `${API_BASE}/uploads/${filename}`;
 }

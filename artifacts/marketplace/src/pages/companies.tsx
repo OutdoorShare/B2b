@@ -8,6 +8,7 @@ const API_UPLOAD_BASE = "/api/uploads/";
 function resolveImage(url: string) {
   if (!url) return "";
   if (url.startsWith("http")) return url;
+  if (url.startsWith("/")) return url;
   return `${API_UPLOAD_BASE}${url.split("/").pop()}`;
 }
 
