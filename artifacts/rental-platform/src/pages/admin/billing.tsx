@@ -223,7 +223,7 @@ export default function AdminBilling() {
               "Protection plan on every rental",
               "OutdoorShare Marketplace listing",
               "Automated booking & payments",
-              "10% flat platform fee per booking",
+              "15% flat platform fee per booking",
               "\"Powered by OutdoorShare\" branding",
             ].map(f => (
               <li key={f} className="flex items-center gap-2 text-sm text-muted-foreground">

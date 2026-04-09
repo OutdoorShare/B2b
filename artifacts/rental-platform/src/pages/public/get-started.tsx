@@ -502,7 +502,7 @@ export default function GetStartedPage() {
                   <span className="text-base text-muted-foreground font-medium">/month</span>
                 </div>
                 <p className="text-sm text-muted-foreground mb-1">Free to start — no subscription required</p>
-                <p className="text-sm font-bold mb-6" style={{ color: OS_GREEN }}>10% flat platform fee per booking</p>
+                <p className="text-sm font-bold mb-6" style={{ color: OS_GREEN }}>15% flat platform fee per booking</p>
               </div>
               <ul className="space-y-3 mb-6 flex-1">
                 {[
@@ -641,7 +641,7 @@ export default function GetStartedPage() {
               ))}
             </div>
             <p className="text-center text-xs text-gray-500 mt-6">
-              Tiered revenue share applies to Full Throttle and Growth &amp; Scale plans. Half Throttle has a flat 10% platform fee per booking.
+              Tiered revenue share applies to Full Throttle and Growth &amp; Scale plans. Half Throttle has a flat 15% platform fee per booking.
             </p>
           </div>
         </div>
