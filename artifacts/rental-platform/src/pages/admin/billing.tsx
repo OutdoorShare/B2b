@@ -23,9 +23,9 @@ interface BillingStatus {
 }
 
 const PLAN_DISPLAY: Record<string, { label: string; price: string; icon: typeof Zap; color: string }> = {
-  starter: { label: "Half Throttle", price: "$25 / month", icon: Zap, color: "#3ab549" },
+  starter: { label: "Half Throttle", price: "Free — 10% flat fee per booking", icon: Zap, color: "#3ab549" },
   professional: { label: "Full Throttle", price: "$895 / year", icon: Star, color: "#29b4d4" },
-  enterprise: { label: "Growth & Scale", price: "Custom pricing", icon: Building2, color: "#f59e0b" },
+  enterprise: { label: "Growth & Scale", price: "$500 / month or $3,400 / year", icon: Building2, color: "#f59e0b" },
 };
 
 function StatusBadge({ status }: { status: string | null }) {
@@ -219,10 +219,12 @@ export default function AdminBilling() {
           <h3 className="font-bold text-gray-900 mb-3">What's included in your plan</h3>
           <ul className="space-y-2">
             {billing?.plan === "starter" && [
-              "Protection plan on every booking",
-              "Priority OutdoorShare listings",
-              "Tiered revenue share — as low as 7%",
-              "Booking software with custom garage",
+              "Booking platform with custom branding",
+              "Protection plan on every rental",
+              "OutdoorShare Marketplace listing",
+              "Automated booking & payments",
+              "10% flat platform fee per booking",
+              "\"Powered by OutdoorShare\" branding",
             ].map(f => (
               <li key={f} className="flex items-center gap-2 text-sm text-muted-foreground">
                 <CheckCircle2 className="w-4 h-4 text-green-500 shrink-0" /> {f}
@@ -230,8 +232,10 @@ export default function AdminBilling() {
             ))}
             {billing?.plan === "professional" && [
               "Everything in Half Throttle",
-              "White-labeled OutdoorShare website",
-              "AI assistants included",
+              "Tiered commissions — as low as 7%",
+              "CRM tools",
+              "AI answering agent",
+              "Custom branding",
               "In-person setup support",
             ].map(f => (
               <li key={f} className="flex items-center gap-2 text-sm text-muted-foreground">
@@ -240,9 +244,11 @@ export default function AdminBilling() {
             ))}
             {billing?.plan === "enterprise" && [
               "Everything in Full Throttle",
-              "Marketing partnership included",
+              "No OutdoorShare branding",
+              "Tiered commissions — minimum 7% fee",
+              "Active marketing management",
               "Social media post management",
-              "Ad management",
+              "Ad spend management ($250/mo first 3 months*)",
             ].map(f => (
               <li key={f} className="flex items-center gap-2 text-sm text-muted-foreground">
                 <CheckCircle2 className="w-4 h-4 text-green-500 shrink-0" /> {f}

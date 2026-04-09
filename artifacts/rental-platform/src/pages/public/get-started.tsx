@@ -53,7 +53,7 @@ function HeroSignIn() {
               className="h-13 px-8 text-base font-bold gap-2 text-white hover:opacity-90 shadow-lg shadow-green-900/40"
               style={{ backgroundColor: OS_GREEN }}
             >
-              Start Free Trial <ArrowRight className="w-4 h-4" />
+              Get Started Free <ArrowRight className="w-4 h-4" />
             </Button>
           </Link>
           <Button
@@ -209,9 +209,9 @@ function SignInDropdown() {
 }
 
 const revenueTiers = [
-  { rate: "20%", threshold: "Under $25K /year", label: "Starting rate", best: false },
-  { rate: "15%", threshold: "$50K+ /year", label: null, best: false },
-  { rate: "10%", threshold: "$100K+ /year", label: null, best: false },
+  { rate: "15%", threshold: "Under $25K /year", label: "Starting rate", best: false },
+  { rate: "12%", threshold: "$50K+ /year", label: null, best: false },
+  { rate: "9%", threshold: "$100K+ /year", label: null, best: false },
   { rate: "7%", threshold: "$150K+ /year", label: "Best rate", best: true },
 ];
 
@@ -488,7 +488,7 @@ export default function GetStartedPage() {
         <div className="max-w-6xl mx-auto px-6">
           <div className="text-center mb-16">
             <h2 className="text-4xl font-black text-gray-900 mb-4">Simple, transparent pricing</h2>
-            <p className="text-lg text-muted-foreground">Start free, upgrade when you're ready. All plans include a 14-day trial.</p>
+            <p className="text-lg text-muted-foreground">Start free forever, or unlock more power as you grow.</p>
           </div>
 
           <div className="grid md:grid-cols-3 gap-6 items-start">
@@ -498,22 +498,20 @@ export default function GetStartedPage() {
               <div>
                 <p className="text-sm font-semibold text-gray-500 mb-1">Half Throttle</p>
                 <div className="flex items-baseline gap-1 mb-1">
-                  <span className="text-5xl font-black text-gray-900">$25</span>
-                  <span className="text-base text-muted-foreground font-medium">/mo</span>
+                  <span className="text-5xl font-black text-gray-900">$0</span>
+                  <span className="text-base text-muted-foreground font-medium">/month</span>
                 </div>
-                <p className="text-sm text-muted-foreground mb-1">or $250/year — includes 1 month free</p>
-                <p className="text-sm font-bold mb-6" style={{ color: OS_GREEN }}>No fee on your first rental!</p>
+                <p className="text-sm text-muted-foreground mb-1">Free to start — no subscription required</p>
+                <p className="text-sm font-bold mb-6" style={{ color: OS_GREEN }}>10% flat platform fee per booking</p>
               </div>
               <ul className="space-y-3 mb-6 flex-1">
                 {[
-                  "Protection plan on every booking",
-                  "Priority OutdoorShare listings",
-                  "Tiered revenue share — as low as 7%",
-                  "Customer management tools",
-                  "Marketing tools included",
-                  "Booking software with custom garage",
-                  "Automated bookings",
-                  "Mobile app management",
+                  "Booking platform with custom branding",
+                  "Protection plan on every rental",
+                  "OutdoorShare Marketplace listing",
+                  "Automated booking & payments",
+                  "Customer-facing renter portal",
+                  "\"Powered by OutdoorShare\" branding",
                 ].map(f => (
                   <li key={f} className="flex items-start gap-2.5 text-sm text-gray-700">
                     <CheckCircle2 className="w-4 h-4 mt-0.5 shrink-0" style={{ color: OS_GREEN }} />
@@ -521,10 +519,10 @@ export default function GetStartedPage() {
                   </li>
                 ))}
               </ul>
-              <p className="text-xs text-muted-foreground italic mb-5">Typically pays for itself with 1 booking.</p>
+              <p className="text-xs text-muted-foreground italic mb-5">No monthly cost — only pay when you earn.</p>
               <Link href="/signup">
                 <Button variant="outline" className="w-full font-bold border-gray-300 hover:border-gray-400">
-                  Get Started
+                  Get Started Free
                 </Button>
               </Link>
             </div>
@@ -542,18 +540,16 @@ export default function GetStartedPage() {
                   <span className="text-5xl font-black text-white">$895</span>
                   <span className="text-base text-gray-400 font-medium">/year</span>
                 </div>
-                <p className="text-sm text-gray-400 mb-1">+ Revenue share (decreases as you grow)</p>
+                <p className="text-sm text-gray-400 mb-1">+ Tiered platform fee (drops as you grow)</p>
                 <p className="text-sm font-bold mb-6" style={{ color: OS_GREEN }}>Revenue share as low as 7%</p>
               </div>
               <ul className="space-y-3 mb-6 flex-1">
                 {[
                   "Everything in Half Throttle",
-                  "White-labeled OutdoorShare website",
-                  "Build your own brand",
-                  "Custom branded booking page",
-                  "AI assistants included",
-                  "Tiered revenue share — as low as 7%",
-                  "Custom scheduling",
+                  "Tiered commissions — as low as 7%",
+                  "CRM tools",
+                  "AI answering agent",
+                  "Custom branding",
                   "In-person setup support",
                 ].map(f => (
                   <li key={f} className="flex items-start gap-2.5 text-sm text-gray-200">
@@ -562,7 +558,7 @@ export default function GetStartedPage() {
                   </li>
                 ))}
               </ul>
-              <p className="text-xs text-gray-500 italic mb-5">Typically pays for itself with 2–3 bookings.</p>
+              <p className="text-xs text-gray-500 italic mb-5">Typically pays for itself with a few bookings.</p>
               <Link href="/signup">
                 <Button className="w-full font-bold text-white hover:opacity-90" style={{ backgroundColor: OS_GREEN }}>
                   Get Started
@@ -574,23 +570,24 @@ export default function GetStartedPage() {
             <div className="bg-white rounded-2xl p-8 border border-gray-200 flex flex-col">
               <div>
                 <p className="text-sm font-semibold text-gray-500 mb-1">Growth &amp; Scale</p>
-                <div className="mb-1">
-                  <span className="text-5xl font-black text-gray-900">Custom</span>
+                <div className="flex items-baseline gap-1 mb-1">
+                  <span className="text-5xl font-black text-gray-900">$500</span>
+                  <span className="text-base text-muted-foreground font-medium">/month</span>
                 </div>
-                <p className="text-sm text-muted-foreground mb-6">Schedule a free consultation for your business</p>
+                <p className="text-sm text-muted-foreground mb-1">or $3,400/year — save 2 months</p>
+                <p className="text-sm font-bold mb-6" style={{ color: OS_GREEN }}>$250/mo ad spend included for first 3 months*</p>
               </div>
               <ul className="space-y-3 mb-6 flex-1">
                 {[
                   "Everything in Full Throttle",
-                  "Marketing partnership included",
-                  "Manage renter relationships",
+                  "No OutdoorShare branding",
+                  "Tiered commissions — minimum 7% fee",
+                  "Active marketing management",
                   "Social media post management",
+                  "Ad spend management",
                   "Marketing funnels & automations",
-                  "AI agents & resources",
-                  "Email & text campaigns",
                   "Reputation management",
-                  "Tracking & analytics",
-                  "Ad management",
+                  "Email & text campaigns",
                 ].map(f => (
                   <li key={f} className="flex items-start gap-2.5 text-sm text-gray-700">
                     <CheckCircle2 className="w-4 h-4 mt-0.5 shrink-0" style={{ color: OS_GREEN }} />
@@ -598,6 +595,7 @@ export default function GetStartedPage() {
                   </li>
                 ))}
               </ul>
+              <p className="text-xs text-muted-foreground italic mb-5">*$250/mo ad spend for first 3 months with 6-month contract.</p>
               <Link href="/signup">
                 <Button variant="outline" className="w-full font-bold border-gray-300 hover:border-gray-400">
                   Schedule a Consultation
@@ -643,7 +641,7 @@ export default function GetStartedPage() {
               ))}
             </div>
             <p className="text-center text-xs text-gray-500 mt-6">
-              Tiered revenue share applies to Half Throttle and Full Throttle plans. Not applicable on the Growth &amp; Scale plan.
+              Tiered revenue share applies to Full Throttle and Growth &amp; Scale plans. Half Throttle has a flat 10% platform fee per booking.
             </p>
           </div>
         </div>
