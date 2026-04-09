@@ -1557,7 +1557,9 @@ router.post("/superadmin/invite-signup", requireSuperAdmin, async (req, res) => 
       return;
     }
 
-    const appUrl = process.env.APP_URL || "https://myoutdoorshare.com";
+    const appUrl =
+      process.env.APP_URL ||
+      (process.env.REPLIT_DEV_DOMAIN ? `https://${process.env.REPLIT_DEV_DOMAIN}` : "https://myoutdoorshare.com");
     const signupUrl = `${appUrl}/signup?plan=starter&email=${encodeURIComponent(toEmail)}`;
 
     await sendSignupInviteEmail({
