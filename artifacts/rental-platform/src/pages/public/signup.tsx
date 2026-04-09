@@ -268,7 +268,7 @@ export default function SignupPage() {
                   {[
                     { stat: "500+", label: "Rental companies launched" },
                     { stat: "50k+", label: "Bookings processed" },
-                    { stat: "14-day", label: "Free trial, no card required" },
+                    { stat: "Free", label: "Lowest tier, no credit card required" },
                   ].map(item => (
                     <div key={item.stat} className="flex items-center gap-3">
                       <span className="font-black text-lg" style={{ color: OS_GREEN }}>{item.stat}</span>
@@ -469,7 +469,7 @@ export default function SignupPage() {
             <div className="space-y-5">
               <div className="mb-2">
                 <h1 className="text-2xl font-black text-white">Choose your plan</h1>
-                <p className="text-white/50 text-sm mt-1">Start free or upgrade anytime. Full Throttle includes a 14-day free trial.</p>
+                <p className="text-white/50 text-sm mt-1">Start free on Half Throttle or upgrade anytime.</p>
               </div>
 
               <div className="space-y-3">
@@ -615,7 +615,7 @@ export default function SignupPage() {
                     <div>
                       <h3 className="font-bold text-white">Add a payment method</h3>
                       <p className="text-sm text-white/40 mt-1">
-                        Your 14-day free trial is running. No charge until your trial ends.
+                        Secured by Stripe. You can cancel or change plans at any time.
                       </p>
                     </div>
                     {checkoutError && (
@@ -633,7 +633,7 @@ export default function SignupPage() {
                       {checkoutLoading ? "Redirecting to checkout…" : "Set Up Payment — Secure Checkout"}
                     </button>
                     <p className="text-xs text-white/25 text-center">
-                      You won't be charged until your 14-day trial ends. Cancel anytime.
+                      Secured by Stripe. Cancel anytime.
                     </p>
                   </>
                 )}
@@ -642,7 +642,7 @@ export default function SignupPage() {
               {/* Quick launch */}
               <div className="rounded-xl p-6 space-y-4" style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.08)" }}>
                 <h3 className="font-bold text-white">Ready to set up your site?</h3>
-                <p className="text-sm text-white/40">{selectedPlan?.id === "half_throttle" ? "Your account is active — start setting it up now." : "Start configuring your rental site now while your trial is active."}</p>
+                <p className="text-sm text-white/40">Your account is active — start setting it up now.</p>
                 <div className="grid grid-cols-2 gap-3">
                   <Link href={`/${created.siteSlug}/admin`}>
                     <button className="w-full h-11 rounded-xl font-semibold text-white/60 border border-white/10 hover:border-white/20 hover:text-white/80 transition-all" style={{ background: "rgba(255,255,255,0.03)" }}>

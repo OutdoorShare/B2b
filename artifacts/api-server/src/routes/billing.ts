@@ -26,21 +26,15 @@ router.get("/billing/status", requireAdmin, async (req, res) => {
     const [tenant] = await db.select().from(tenantsTable).where(eq(tenantsTable.id, req.tenantId!)).limit(1);
     if (!tenant) { res.status(404).json({ error: "Tenant not found" }); return; }
 
-    const now = Date.now();
-    const trialMs = tenant.trialEndsAt ? tenant.trialEndsAt.getTime() : null;
-    const subscriptionActive = ["active", "trialing"].includes(tenant.subscriptionStatus ?? "");
-    const trialActive = trialMs !== null && trialMs > now && !subscriptionActive;
-    const trialExpired = trialMs !== null && trialMs <= now && !subscriptionActive;
-    const daysLeft = trialMs ? Math.max(0, Math.ceil((trialMs - now) / (1000 * 60 * 60 * 24))) : null;
-    const isBlocked = trialExpired;
+    const isBlocked = tenant.status === "suspended";
 
     res.json({
       plan: tenant.plan,
       status: tenant.status,
-      trialEndsAt: tenant.trialEndsAt?.toISOString() ?? null,
-      trialActive,
-      trialExpired,
-      daysLeft,
+      trialActive: false,
+      trialExpired: false,
+      daysLeft: null,
+      trialEndsAt: null,
       subscriptionStatus: tenant.subscriptionStatus ?? null,
       subscriptionId: tenant.subscriptionId ?? null,
       currentPeriodEnd: tenant.currentPeriodEnd?.toISOString() ?? null,
@@ -81,10 +75,6 @@ router.post("/billing/checkout-session", requireAdmin, async (req, res) => {
         .where(eq(tenantsTable.id, tenant.id));
     }
 
-    const trialDaysLeft = tenant.trialEndsAt
-      ? Math.max(0, Math.ceil((tenant.trialEndsAt.getTime() - Date.now()) / (1000 * 60 * 60 * 24)))
-      : 0;
-
     const session = await stripe.checkout.sessions.create({
       customer: customerId,
       mode: "subscription",
@@ -97,7 +87,6 @@ router.post("/billing/checkout-session", requireAdmin, async (req, res) => {
         },
         quantity: 1,
       }],
-      subscription_data: trialDaysLeft > 0 ? { trial_period_days: trialDaysLeft } : undefined,
       success_url: `${baseUrl}/${tenant.slug}/admin/billing?success=true&session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${baseUrl}/${tenant.slug}/admin/billing?canceled=true`,
       metadata: { tenant_id: String(tenant.id), tenant_slug: tenant.slug },

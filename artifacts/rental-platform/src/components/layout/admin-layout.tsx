@@ -16,7 +16,6 @@ import {
   Users,
   MessageSquare,
   MessageCircle,
-  AlertTriangle,
   FileSignature,
   Wallet,
   Tag,
@@ -25,7 +24,6 @@ import {
   CreditCard,
   MessageSquarePlus,
   IdCard,
-  Clock,
   Warehouse,
   BookOpen,
   ExternalLink,
@@ -152,85 +150,6 @@ function EmailVerificationBanner() {
   );
 }
 
-function TrialStatusBanner() {
-  const slug = getAdminSlug();
-  const { data: profile } = useGetBusinessProfile({
-    query: { queryKey: ["/api/business", "admin"] }
-  });
-
-  const trialActive  = (profile as any)?.trialActive  as boolean | undefined;
-  const trialExpired = (profile as any)?.trialExpired as boolean | undefined;
-  const isBlocked    = (profile as any)?.isBlocked    as boolean | undefined;
-  const trialEndsAt  = (profile as any)?.trialEndsAt  as string | null | undefined;
-  const graceEndsAt  = (profile as any)?.graceEndsAt  as string | null | undefined;
-
-  if (!trialActive && !trialExpired) return null;
-
-  const billingHref = `/${slug}/admin/billing`;
-
-  // Hard blocked — grace period over, storefront is offline
-  if (isBlocked) {
-    return (
-      <div className="w-full bg-red-600 text-white text-xs font-semibold px-4 py-2 flex items-center justify-between gap-4">
-        <span className="flex items-center gap-1.5">
-          <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
-          Your storefront is offline — subscribe to restore customer access.
-        </span>
-        <Link
-          href={billingHref}
-          className="shrink-0 bg-white text-red-600 rounded px-2.5 py-0.5 text-xs font-bold hover:bg-red-50 transition-colors"
-        >
-          Subscribe Now
-        </Link>
-      </div>
-    );
-  }
-
-  // Grace period — trial expired but storefront still online (3 days)
-  if (trialExpired && graceEndsAt) {
-    const endsAt   = new Date(graceEndsAt);
-    const msLeft   = Math.max(0, endsAt.getTime() - Date.now());
-    const daysLeft = Math.ceil(msLeft / (1000 * 60 * 60 * 24));
-    const label    = daysLeft <= 1 ? "less than 1 day" : `${daysLeft} days`;
-    return (
-      <div className="w-full bg-orange-600 text-white text-xs font-semibold px-4 py-2 flex items-center justify-between gap-4">
-        <span className="flex items-center gap-1.5">
-          <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
-          Your free trial has ended. Your storefront goes offline in {label} — subscribe now to keep it running.
-        </span>
-        <Link
-          href={billingHref}
-          className="shrink-0 bg-white text-orange-600 rounded px-2.5 py-0.5 text-xs font-bold hover:bg-orange-50 transition-colors"
-        >
-          Subscribe Now
-        </Link>
-      </div>
-    );
-  }
-
-  // Active trial — show days remaining
-  if (trialActive && trialEndsAt) {
-    const endsAt   = new Date(trialEndsAt);
-    const daysLeft = Math.max(0, Math.ceil((endsAt.getTime() - Date.now()) / (1000 * 60 * 60 * 24)));
-    const label    = daysLeft === 0 ? "less than 1 day" : daysLeft === 1 ? "1 day" : `${daysLeft} days`;
-    return (
-      <div className="w-full bg-amber-500 text-white text-xs font-semibold px-4 py-2 flex items-center justify-between gap-4">
-        <span className="flex items-center gap-1.5">
-          <Clock className="w-3.5 h-3.5 shrink-0" />
-          Free trial: {label} remaining. Subscribe to keep your storefront live after the trial ends.
-        </span>
-        <Link
-          href={billingHref}
-          className="shrink-0 bg-white text-amber-600 rounded px-2.5 py-0.5 text-xs font-bold hover:bg-amber-50 transition-colors"
-        >
-          Subscribe
-        </Link>
-      </div>
-    );
-  }
-
-  return null;
-}
 
 export function AdminLayout({ children }: { children: React.ReactNode }) {
   const [location] = useLocation();
@@ -442,7 +361,6 @@ export function AdminLayout({ children }: { children: React.ReactNode }) {
       {/* Main Content */}
       <main className="flex-1 flex flex-col min-w-0 min-h-0 overflow-hidden">
         <EmailVerificationBanner />
-        <TrialStatusBanner />
 
         <header className="h-14 flex items-center justify-between px-6 border-b border-border/70 bg-background/80 backdrop-blur-sm sticky top-0 z-10">
           <div className="flex items-center gap-2.5">

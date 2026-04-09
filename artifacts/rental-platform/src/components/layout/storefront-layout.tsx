@@ -2,7 +2,7 @@ import { useState, useEffect, useLayoutEffect, useReducer } from "react";
 import { AIAssistant } from "@/components/ai-assistant";
 import { StorefrontChat } from "@/components/storefront-chat";
 import { Link, useParams, useLocation } from "wouter";
-import { Mountain, Clock, Lock, User, LogOut, BookOpen, UserCircle, Eye, EyeOff, ShieldAlert } from "lucide-react";
+import { Mountain, Lock, User, LogOut, BookOpen, UserCircle, Eye, EyeOff, ShieldAlert } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -166,100 +166,7 @@ function darken(hex: string, amt = 20): string {
   return `#${r}${g}${b}`;
 }
 
-function TrialExpiredPaywall({ companyName, companyEmail }: { companyName: string; companyEmail?: string | null }) {
-  const mailtoHref = companyEmail
-    ? `mailto:${companyEmail}?subject=Booking%20Inquiry&body=Hi%2C%20I%27d%20like%20to%20make%20a%20booking%20through%20${encodeURIComponent(companyName)}.`
-    : undefined;
 
-  return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm">
-      <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-2xl p-8 max-w-md w-full mx-4 text-center space-y-5">
-        <div className="w-14 h-14 rounded-full bg-orange-100 flex items-center justify-center mx-auto">
-          <Lock className="w-7 h-7 text-orange-500" />
-        </div>
-        <div>
-          <h2 className="text-xl font-bold text-foreground mb-2">Website temporarily unavailable</h2>
-          <p className="text-sm text-muted-foreground">
-            <strong>{companyName}</strong>'s online storefront is currently unavailable. Please contact them directly to make a booking or get more information.
-          </p>
-        </div>
-        {mailtoHref ? (
-          <a
-            href={mailtoHref}
-            className="block w-full py-2.5 rounded-lg text-white text-sm font-bold transition-opacity hover:opacity-90"
-            style={{ background: `linear-gradient(90deg, #1a6b2e, ${OS_GREEN})` }}
-          >
-            Contact {companyName}
-          </a>
-        ) : (
-          <div
-            className="block w-full py-2.5 rounded-lg text-white text-sm font-bold"
-            style={{ background: `linear-gradient(90deg, #1a6b2e, ${OS_GREEN})` }}
-          >
-            Contact {companyName}
-          </div>
-        )}
-        <p className="text-xs text-muted-foreground">
-          Is this your business?{" "}
-          <button
-            className="underline hover:text-foreground transition-colors"
-            onClick={() => window.location.reload()}
-          >
-            Refresh
-          </button>
-        </p>
-      </div>
-    </div>
-  );
-}
-
-function TrialBanner({ trialEndsAt }: { trialEndsAt: string }) {
-  const endsAt = new Date(trialEndsAt);
-  const msLeft = Math.max(0, endsAt.getTime() - Date.now());
-  const daysLeft = Math.ceil(msLeft / (1000 * 60 * 60 * 24));
-  const hoursLeft = Math.ceil(msLeft / (1000 * 60 * 60));
-  const label = daysLeft > 1 ? `${daysLeft} days` : hoursLeft <= 1 ? "less than 1 hour" : `${hoursLeft} hour${hoursLeft === 1 ? "" : "s"}`;
-
-  return (
-    <div className="w-full px-4 py-1 flex items-center justify-center gap-2 bg-gray-950 border-b border-white/5">
-      <Clock className="w-2.5 h-2.5 text-white/25 shrink-0" />
-      <span className="text-[11px] text-white/30 tracking-wide">
-        Free trial &mdash; {label} remaining
-      </span>
-      <span className="text-white/10">·</span>
-      <a
-        href="/get-started"
-        className="text-[11px] text-white/35 hover:text-white/60 transition-colors underline underline-offset-2"
-      >
-        Upgrade
-      </a>
-    </div>
-  );
-}
-
-function GraceBanner({ graceEndsAt }: { graceEndsAt: string }) {
-  const endsAt = new Date(graceEndsAt);
-  const msLeft = Math.max(0, endsAt.getTime() - Date.now());
-  const daysLeft = Math.ceil(msLeft / (1000 * 60 * 60 * 24));
-  const hoursLeft = Math.ceil(msLeft / (1000 * 60 * 60));
-  const label = daysLeft > 1 ? `${daysLeft} days` : hoursLeft <= 1 ? "less than 1 hour" : `${hoursLeft} hour${hoursLeft === 1 ? "" : "s"}`;
-
-  return (
-    <div className="w-full px-4 py-2 flex items-center justify-center gap-2 bg-amber-950 border-b border-amber-800/40">
-      <Clock className="w-3 h-3 text-amber-400 shrink-0" />
-      <span className="text-[11px] text-amber-300 tracking-wide font-medium">
-        Your free trial has ended &mdash; grace period expires in {label}. Your storefront will go offline after that.
-      </span>
-      <span className="text-amber-700">·</span>
-      <a
-        href="/get-started"
-        className="text-[11px] text-amber-400 hover:text-amber-200 transition-colors underline underline-offset-2 font-semibold"
-      >
-        Upgrade now
-      </a>
-    </div>
-  );
-}
 
 interface CustomerSession { id: number; email: string; name: string; }
 
@@ -289,11 +196,6 @@ export function StorefrontLayout({ children }: { children: React.ReactNode }) {
     query: { queryKey: ["/api/business", slug] }
   });
 
-  const trialActive = (profile as any)?.trialActive as boolean | undefined;
-  const trialExpired = (profile as any)?.trialExpired as boolean | undefined;
-  const isBlocked = (profile as any)?.isBlocked as boolean | undefined;
-  const trialEndsAt = (profile as any)?.trialEndsAt as string | null | undefined;
-  const graceEndsAt = (profile as any)?.graceEndsAt as string | null | undefined;
   const plan = (profile as any)?.plan as string | undefined;
   const isPaid = plan && plan !== "starter";
   const companyEmail = (profile as any)?.email as string | null | undefined;
@@ -403,7 +305,7 @@ export function StorefrontLayout({ children }: { children: React.ReactNode }) {
       setMeta('meta[name="apple-mobile-web-app-title"]', "content", "OutdoorShare");
 
       const OS_TITLE = "OutdoorShare — Rental Management Software for Outdoor Equipment Businesses";
-      const OS_DESC  = "Launch your outdoor rental business online in minutes. White-label branded storefront, booking engine, analytics & admin dashboard. Free 14-day trial.";
+      const OS_DESC  = "Launch your outdoor rental business online in minutes. White-label branded storefront, booking engine, analytics & admin dashboard.";
       const OS_IMG   = "https://myoutdoorshare.com/opengraph.jpg";
       const OS_URL   = "https://myoutdoorshare.com/";
 
@@ -451,15 +353,6 @@ export function StorefrontLayout({ children }: { children: React.ReactNode }) {
   return (
     <DemoGate slug={slug ?? ""}>
     <div className="min-h-[100dvh] flex flex-col bg-background">
-      {/* Blocked paywall: trial expired AND 3-day grace period has passed */}
-      {isBlocked && (
-        <TrialExpiredPaywall
-          companyName={profile?.name || "This company"}
-          companyEmail={companyEmail}
-        />
-      )}
-
-
       {/* ── Tenant header ── */}
       <header
         className="sticky top-0 z-50 w-full border-b"
@@ -608,8 +501,8 @@ export function StorefrontLayout({ children }: { children: React.ReactNode }) {
         </div>
       </footer>
 
-      {/* Fixed corner badge — shown for Half Throttle (free plan) and during trial */}
-      {(!isPaid || trialActive) && <PoweredByBadge variant="fixed" />}
+      {/* Fixed corner badge — shown for Half Throttle (free plan) */}
+      {!isPaid && <PoweredByBadge variant="fixed" />}
 
       {/* Renter Chat Widget — available to all visitors, guests included */}
       {slug && (

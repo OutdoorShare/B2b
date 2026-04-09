@@ -33,34 +33,20 @@ async function uniqueSlug(base: string, excludeTenantId: number): Promise<string
 
 const router: IRouter = Router();
 
-async function getTenantTrialInfo(tenantId: number | undefined) {
-  const fallback = { plan: "starter" as const, trialEndsAt: null, trialActive: false, trialExpired: false, isBlocked: false, siteSlug: null as string | null, testMode: false };
+async function getTenantInfo(tenantId: number | undefined) {
+  const fallback = { plan: "starter" as const, isBlocked: false, siteSlug: null as string | null, testMode: false };
   if (!tenantId) return fallback;
   const [tenant] = await db.select({
     plan: tenantsTable.plan,
     slug: tenantsTable.slug,
-    trialEndsAt: tenantsTable.trialEndsAt,
+    status: tenantsTable.status,
     testMode: tenantsTable.testMode,
-    subscriptionStatus: tenantsTable.subscriptionStatus,
   }).from(tenantsTable).where(eq(tenantsTable.id, tenantId)).limit(1);
   if (!tenant) return fallback;
-  const now = Date.now();
-  const GRACE_MS = 3 * 24 * 60 * 60 * 1000; // 3 days in ms
-  const trialMs = tenant.trialEndsAt ? tenant.trialEndsAt.getTime() : null;
-  const subscriptionActive = ["active", "trialing"].includes(tenant.subscriptionStatus ?? "");
-  const trialActive = trialMs !== null && trialMs > now && !subscriptionActive;
-  const trialExpired = trialMs !== null && trialMs <= now && !subscriptionActive;
-  // Only block the storefront after the 3-day grace period has passed
-  const isBlocked = trialExpired && (now - (trialMs ?? 0)) > GRACE_MS;
-  const graceEndsAt = trialMs !== null ? new Date(trialMs + GRACE_MS).toISOString() : null;
   return {
     plan: tenant.plan,
     siteSlug: tenant.slug,
-    trialEndsAt: tenant.trialEndsAt ? tenant.trialEndsAt.toISOString() : null,
-    trialActive,
-    trialExpired,
-    isBlocked,
-    graceEndsAt,
+    isBlocked: tenant.status === "suspended",
     testMode: !!tenant.testMode,
   };
 }
@@ -71,9 +57,9 @@ router.get("/business", async (req, res) => {
     return;
   }
   try {
-    const [profileWhere, trialInfo, tenantRow] = await Promise.all([
+    const [profileWhere, tenantInfo, tenantRow] = await Promise.all([
       db.select().from(businessProfileTable).where(eq(businessProfileTable.tenantId, req.tenantId)).limit(1),
-      getTenantTrialInfo(req.tenantId),
+      getTenantInfo(req.tenantId),
       db.select({ platformFeePercent: tenantsTable.platformFeePercent }).from(tenantsTable).where(eq(tenantsTable.id, req.tenantId)).limit(1),
     ]);
 
@@ -100,7 +86,7 @@ router.get("/business", async (req, res) => {
       platformFeePercent: tenantFeePercent,
       createdAt: p.createdAt.toISOString(),
       updatedAt: p.updatedAt.toISOString(),
-      ...trialInfo,
+      ...tenantInfo,
     });
   } catch (err) {
     req.log.error(err);
@@ -250,8 +236,8 @@ router.put("/business", requireTenant as any, async (req, res) => {
       }
     }
 
-    // Re-fetch trial info with potentially new slug
-    const trialInfo = await getTenantTrialInfo(req.tenantId);
+    // Re-fetch tenant info with potentially new slug
+    const tenantInfo = await getTenantInfo(req.tenantId);
 
     const p = updated;
     const { senderPassword: _sp3, ...pSafe3 } = p;
@@ -261,7 +247,7 @@ router.put("/business", requireTenant as any, async (req, res) => {
       depositPercent: parseFloat(p.depositPercent ?? "25"),
       createdAt: p.createdAt.toISOString(),
       updatedAt: p.updatedAt.toISOString(),
-      ...trialInfo,
+      ...tenantInfo,
     });
   } catch (err) {
     req.log.error(err);

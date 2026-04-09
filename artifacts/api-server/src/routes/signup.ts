@@ -112,7 +112,6 @@ router.post("/public/signup", async (req, res) => {
     const normalizedPlan = planMap[plan] ?? "starter";
 
     const adminPasswordHash = await hashPassword(password);
-    const trialEndsAt = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000);
     const [tenant] = await db.insert(tenantsTable).values({
       name: companyName.trim(),
       slug,
@@ -122,7 +121,6 @@ router.post("/public/signup", async (req, res) => {
       status: "active",
       contactName: contactName.trim(),
       phone: phone ?? null,
-      trialEndsAt,
     }).returning();
 
     // Seed business profile with ONLY what the user actually provided — no placeholder text

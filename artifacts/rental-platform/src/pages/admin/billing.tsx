@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
-import { CheckCircle2, AlertTriangle, Clock, CreditCard, ExternalLink, Zap, Star, Building2 } from "lucide-react";
+import { CheckCircle2, AlertTriangle, CreditCard, ExternalLink, Zap, Star, Building2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { AdminLayout } from "@/components/layout/admin-layout";
@@ -144,26 +144,6 @@ export default function AdminBilling() {
             </div>
             {billing?.subscriptionStatus && <StatusBadge status={billing.subscriptionStatus} />}
           </div>
-
-          {/* Trial status */}
-          {billing?.trialActive && billing.daysLeft !== null && (
-            <div className="flex items-center gap-2 p-3 bg-amber-50 border border-amber-200 rounded-lg text-sm">
-              <Clock className="w-4 h-4 text-amber-500 shrink-0" />
-              <span className="text-amber-800">
-                <strong>{billing.daysLeft} {billing.daysLeft === 1 ? "day" : "days"} left</strong> in your free trial
-                {billing.trialEndsAt && <span className="text-amber-600"> · ends {new Date(billing.trialEndsAt).toLocaleDateString()}</span>}
-              </span>
-            </div>
-          )}
-
-          {billing?.trialExpired && (
-            <div className="flex items-center gap-2 p-3 bg-red-50 border border-red-200 rounded-lg text-sm">
-              <AlertTriangle className="w-4 h-4 text-red-500 shrink-0" />
-              <span className="text-red-800">
-                <strong>Trial expired.</strong> Your storefront is paused. Subscribe to restore access.
-              </span>
-            </div>
-          )}
 
           {/* Active subscription details */}
           {billing?.subscriptionStatus === "active" && billing.currentPeriodEnd && (
