@@ -4,7 +4,7 @@ import { tenantsTable, listingsTable, bookingsTable, superadminUsersTable, busin
 import { eq, sql, desc, and, ne } from "drizzle-orm";
 import { scrypt, randomBytes, timingSafeEqual } from "crypto";
 import { promisify } from "util";
-import { sendWelcomeEmail, sendAccountUpdatedEmail, sendClaimChargeEmail, sendClaimSettlementEmail } from "../services/gmail";
+import { sendWelcomeEmail, sendAccountUpdatedEmail, sendClaimChargeEmail, sendClaimSettlementEmail, sendSuperAdminInviteEmail } from "../services/gmail";
 import { stripe } from "../services/stripe";
 import { provisionGHLIfNeeded } from "./billing";
 
@@ -107,9 +107,16 @@ function safeTenant(t: typeof tenantsTable.$inferSelect) {
   return { ...safe, createdAt: t.createdAt.toISOString(), updatedAt: t.updatedAt.toISOString() };
 }
 
+const APP_URL_SA =
+  process.env.APP_URL ||
+  (process.env.REPLIT_DEV_DOMAIN ? `https://${process.env.REPLIT_DEV_DOMAIN}` : "https://outdoorshare.app");
+
 function safeSAUser(u: typeof superadminUsersTable.$inferSelect) {
-  const { passwordHash: _, token: __, ...safe } = u;
-  return { ...safe, createdAt: u.createdAt.toISOString(), updatedAt: u.updatedAt.toISOString() };
+  const { passwordHash: _, token: __, inviteToken: _t, inviteExpiresAt: _e, ...safe } = u;
+  const inviteStatus = !u.passwordHash
+    ? (u.inviteToken && u.inviteExpiresAt && u.inviteExpiresAt > new Date() ? "pending" : "expired")
+    : "accepted";
+  return { ...safe, inviteStatus, createdAt: u.createdAt.toISOString(), updatedAt: u.updatedAt.toISOString() };
 }
 
 // ── Super admin auth middleware (token only) ───────────────────────────────────
@@ -391,6 +398,7 @@ router.post("/superadmin/auth/login", async (req, res) => {
     const [user] = await db.select().from(superadminUsersTable)
       .where(eq(superadminUsersTable.email, email.toLowerCase().trim())).limit(1);
     if (!user || user.status !== "active") { res.status(401).json({ error: "Invalid email or password" }); return; }
+    if (!user.passwordHash) { res.status(401).json({ error: "Your invitation is pending. Please check your email and set a password first." }); return; }
     const valid = await verifySAPassword(password, user.passwordHash);
     if (!valid) { res.status(401).json({ error: "Invalid email or password" }); return; }
     const token = randomBytes(32).toString("hex");
@@ -414,18 +422,102 @@ router.get("/superadmin/team", requireSuperAdmin, async (_req, res) => {
 // ── POST /superadmin/team ──────────────────────────────────────────────────────
 router.post("/superadmin/team", requireSuperAdmin, async (req, res) => {
   try {
-    const { name, email, password, role, notes } = req.body;
-    if (!name || !email || !password) { res.status(400).json({ error: "name, email and password are required" }); return; }
-    if (password.length < 6) { res.status(400).json({ error: "Password must be at least 6 characters" }); return; }
-    const passwordHash = await hashSAPassword(password);
+    const { name, email, role, notes } = req.body;
+    if (!name || !email) { res.status(400).json({ error: "name and email are required" }); return; }
+    const inviteToken = randomBytes(32).toString("hex");
+    const inviteExpiresAt = new Date(Date.now() + 48 * 60 * 60 * 1000); // 48 hours
     const [user] = await db.insert(superadminUsersTable).values({
-      name: name.trim(), email: email.toLowerCase().trim(), passwordHash,
-      role: role ?? "admin", notes: notes ?? null,
+      name: name.trim(),
+      email: email.toLowerCase().trim(),
+      passwordHash: null,
+      role: role ?? "admin",
+      notes: notes ?? null,
+      inviteToken,
+      inviteExpiresAt,
     }).returning();
+    // Send invite email (fire-and-forget — don't block the response)
+    const inviteUrl = `${APP_URL_SA}/superadmin/accept-invite?token=${inviteToken}`;
+    const inviterName = (req as any).saUser?.name as string | undefined;
+    sendSuperAdminInviteEmail({
+      toEmail: email.toLowerCase().trim(),
+      toName: name.trim(),
+      role: role ?? "admin",
+      inviteUrl,
+      inviterName,
+    }).catch(err => console.error("[superadmin invite email] failed:", err?.message));
     res.status(201).json(safeSAUser(user));
   } catch (err: any) {
     if (err?.code === "23505") { res.status(409).json({ error: "Email already in use" }); return; }
     res.status(500).json({ error: "Failed to create team member" });
+  }
+});
+
+// ── POST /superadmin/team/:id/resend-invite ────────────────────────────────────
+router.post("/superadmin/team/:id/resend-invite", requireSuperAdmin, async (req, res) => {
+  try {
+    const id = parseInt(req.params.id);
+    const [existing] = await db.select().from(superadminUsersTable).where(eq(superadminUsersTable.id, id)).limit(1);
+    if (!existing) { res.status(404).json({ error: "Team member not found" }); return; }
+    if (existing.passwordHash) { res.status(400).json({ error: "This user has already accepted their invitation" }); return; }
+    const inviteToken = randomBytes(32).toString("hex");
+    const inviteExpiresAt = new Date(Date.now() + 48 * 60 * 60 * 1000);
+    const [updated] = await db.update(superadminUsersTable)
+      .set({ inviteToken, inviteExpiresAt, updatedAt: new Date() })
+      .where(eq(superadminUsersTable.id, id))
+      .returning();
+    const inviteUrl = `${APP_URL_SA}/superadmin/accept-invite?token=${inviteToken}`;
+    const inviterName = (req as any).saUser?.name as string | undefined;
+    sendSuperAdminInviteEmail({
+      toEmail: existing.email,
+      toName: existing.name,
+      role: existing.role,
+      inviteUrl,
+      inviterName,
+    }).catch(err => console.error("[superadmin resend invite] failed:", err?.message));
+    res.json(safeSAUser(updated));
+  } catch {
+    res.status(500).json({ error: "Failed to resend invitation" });
+  }
+});
+
+// ── GET /superadmin/team/accept-invite?token=... (public — verify token) ───────
+router.get("/superadmin/team/accept-invite", async (req, res) => {
+  const token = req.query.token as string | undefined;
+  if (!token) { res.status(400).json({ error: "Token is required" }); return; }
+  try {
+    const [user] = await db.select().from(superadminUsersTable)
+      .where(eq(superadminUsersTable.inviteToken, token)).limit(1);
+    if (!user) { res.status(404).json({ error: "Invalid invitation link" }); return; }
+    if (!user.inviteExpiresAt || user.inviteExpiresAt < new Date()) {
+      res.status(410).json({ error: "This invitation link has expired. Please ask an admin to resend it." }); return;
+    }
+    if (user.passwordHash) { res.status(409).json({ error: "This invitation has already been accepted. Please log in." }); return; }
+    res.json({ name: user.name, email: user.email, role: user.role });
+  } catch {
+    res.status(500).json({ error: "Failed to verify invitation" });
+  }
+});
+
+// ── POST /superadmin/team/accept-invite (public — set password) ────────────────
+router.post("/superadmin/team/accept-invite", async (req, res) => {
+  const { token, password } = req.body;
+  if (!token || !password) { res.status(400).json({ error: "token and password are required" }); return; }
+  if (password.length < 8) { res.status(400).json({ error: "Password must be at least 8 characters" }); return; }
+  try {
+    const [user] = await db.select().from(superadminUsersTable)
+      .where(eq(superadminUsersTable.inviteToken, token)).limit(1);
+    if (!user) { res.status(404).json({ error: "Invalid invitation link" }); return; }
+    if (!user.inviteExpiresAt || user.inviteExpiresAt < new Date()) {
+      res.status(410).json({ error: "This invitation link has expired. Please ask an admin to resend it." }); return;
+    }
+    if (user.passwordHash) { res.status(409).json({ error: "This invitation has already been accepted. Please log in." }); return; }
+    const passwordHash = await hashSAPassword(password);
+    await db.update(superadminUsersTable)
+      .set({ passwordHash, inviteToken: null, inviteExpiresAt: null, status: "active", updatedAt: new Date() })
+      .where(eq(superadminUsersTable.id, user.id));
+    res.json({ ok: true, email: user.email });
+  } catch {
+    res.status(500).json({ error: "Failed to set password" });
   }
 });
 

@@ -2241,3 +2241,55 @@ export async function sendPendingBookingReminderEmail(opts: {
     },
   });
 }
+
+// ── Super Admin team invite email ──────────────────────────────────────────────
+export async function sendSuperAdminInviteEmail(opts: {
+  toEmail: string;
+  toName: string;
+  role: string;
+  inviteUrl: string;
+  inviterName?: string;
+}): Promise<void> {
+  const { toEmail, toName, role, inviteUrl, inviterName } = opts;
+  const roleLabel = role === "super_admin" ? "Super Admin" : "Admin";
+
+  const body = `
+    <p style="margin:0 0 8px;font-size:18px;font-weight:700;color:${BRAND_DARK};">You've been invited to the platform! 🎉</p>
+    <p style="margin:0 0 20px;font-size:15px;color:#374151;line-height:1.6;">
+      Hi <strong>${esc(toName)}</strong>,${inviterName ? ` <strong>${esc(inviterName)}</strong> has added you as a` : " You've been added as a"}
+      <strong>${esc(roleLabel)}</strong> on the OutdoorShare super admin console.
+      Click the button below to set your password and activate your account.
+    </p>
+
+    ${infoTable([
+      { label: "Email", value: toEmail },
+      { label: "Role", value: roleLabel },
+    ])}
+
+    ${ctaButton("Set Password & Log In", inviteUrl)}
+
+    <p style="margin:20px 0 0;font-size:13px;color:#9ca3af;text-align:center;">
+      This invitation link expires in <strong>48 hours</strong>. If you didn't expect this, you can safely ignore it.
+    </p>
+  `;
+
+  const html = emailShell({
+    preheader: `You've been invited to manage the OutdoorShare platform as ${roleLabel}. Set your password to get started.`,
+    badgeLabel: "Platform Invitation",
+    badgeColor: BRAND_GREEN,
+    body,
+  });
+
+  const gmail = await getUncachableGmailClient();
+  await gmail.users.messages.send({
+    userId: "me",
+    requestBody: {
+      raw: makeRawEmail(
+        toEmail,
+        `You've been invited to OutdoorShare — set your password`,
+        html,
+        PLATFORM_FROM,
+      ),
+    },
+  });
+}

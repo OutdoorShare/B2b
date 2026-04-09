@@ -70,6 +70,7 @@ import SuperAdminAnalytics from "@/pages/superadmin/analytics";
 import SuperAdminFeedback from "@/pages/superadmin/feedback";
 import SuperAdminDeveloper from "@/pages/superadmin/developer";
 import DocsAdminPage from "@/pages/superadmin/docs-admin";
+import SuperAdminAcceptInvite from "@/pages/superadmin/accept-invite";
 import AdminFeedback from "@/pages/admin/feedback";
 import AdminMessages from "@/pages/admin/messages";
 import AdminContactCards from "@/pages/admin/contact-cards";
@@ -241,6 +242,9 @@ function Router() {
       </Route>
 
       {/* Super Admin Routes */}
+      <Route path="/superadmin/accept-invite">
+        <SuperAdminAcceptInvite />
+      </Route>
       <Route path="/superadmin">
         <SuperAdminLogin />
       </Route>
