@@ -376,6 +376,13 @@ export function HomePage({ onAuthOpen }: { onAuthOpen: () => void }) {
 
   const activeCats = (categories ?? []).filter(cat => (cat as any).listingCount > 0);
 
+  // If activities load empty, fall back to rentals mode
+  useEffect(() => {
+    if (activities && activities.length === 0 && mode === "experiences") {
+      setMode("rentals");
+    }
+  }, [activities, mode]);
+
   // Derived experience data
   const expCategories = useMemo(() => {
     const seen = new Set<string>();
@@ -456,7 +463,8 @@ export function HomePage({ onAuthOpen }: { onAuthOpen: () => void }) {
               Find the perfect outdoor experience today!
             </p>
 
-            {/* ── MODE TABS ── */}
+            {/* ── MODE TABS — only shown when experiences exist ── */}
+            {activities && activities.length > 0 && (
             <div className="flex justify-center mb-5">
               <div className="inline-flex bg-black/30 backdrop-blur-md rounded-full p-1 border border-white/15 shadow-lg">
                 <button
@@ -483,6 +491,7 @@ export function HomePage({ onAuthOpen }: { onAuthOpen: () => void }) {
                 </button>
               </div>
             </div>
+            )}
 
             {/* ── SEARCH + FILTER ROW ── */}
             <div className="max-w-2xl mx-auto">
