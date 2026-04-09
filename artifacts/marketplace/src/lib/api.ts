@@ -12,6 +12,10 @@ export interface MarketplaceActivity {
   durationMinutes: number;
   maxCapacity: number;
   location: string;
+  businessCity: string | null;
+  businessState: string | null;
+  businessLat: number | null;
+  businessLng: number | null;
   imageUrls: string[];
   highlights: string[];
   whatToBring: string;

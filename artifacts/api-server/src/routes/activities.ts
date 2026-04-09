@@ -16,6 +16,8 @@ router.get("/public/activities", async (req, res) => {
         bizName: businessProfileTable.name,
         bizCity: businessProfileTable.city,
         bizState: businessProfileTable.state,
+        bizLat: businessProfileTable.lat,
+        bizLng: businessProfileTable.lng,
         listing: {
           id: listingsTable.id,
           title: listingsTable.title,
@@ -37,6 +39,10 @@ router.get("/public/activities", async (req, res) => {
       tenantName: r.bizName || r.tenantName,
       tenantSlug: r.tenantSlug,
       location: r.activity.location || `${r.bizCity || ""}${r.bizCity && r.bizState ? ", " : ""}${r.bizState || ""}` || r.tenantName,
+      businessCity: r.bizCity ?? null,
+      businessState: r.bizState ?? null,
+      businessLat: r.bizLat ? parseFloat(r.bizLat) : null,
+      businessLng: r.bizLng ? parseFloat(r.bizLng) : null,
       linkedListing: r.listing?.id ? {
         ...r.listing,
         pricePerDay: r.listing.pricePerDay ? parseFloat(r.listing.pricePerDay) : 0,

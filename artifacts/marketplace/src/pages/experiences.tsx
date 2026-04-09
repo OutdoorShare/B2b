@@ -4,9 +4,10 @@ import { api } from "@/lib/api";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import {
-  Search, Mountain, Clock, Users, MapPin, ArrowRight, X,
+  Search, Mountain, Clock, Users, MapPin, ArrowRight, X, LayoutGrid, Map,
 } from "lucide-react";
 import type { MarketplaceActivity } from "@/lib/api";
+import { ExperienceMapView } from "@/components/experience-map-view";
 
 function fmtDuration(minutes: number) {
   if (minutes < 60) return `${minutes} min`;
@@ -115,6 +116,7 @@ function ActivityCard({ act }: { act: MarketplaceActivity }) {
 export function ExperiencesPage(_: { onAuthOpen: () => void }) {
   const [search, setSearch] = useState("");
   const [activeCategory, setActiveCategory] = useState<string | null>(null);
+  const [viewMode, setViewMode] = useState<"grid" | "map">("grid");
 
   const { data: activities = [], isLoading } = useQuery({
     queryKey: ["marketplace-activities"],
@@ -210,44 +212,73 @@ export function ExperiencesPage(_: { onAuthOpen: () => void }) {
           </div>
         )}
 
-        {/* Results count */}
-        <p className="text-sm text-gray-500 mb-4">
-          {isLoading ? "Loading experiences…" : `${filtered.length} experience${filtered.length !== 1 ? "s" : ""} available`}
-        </p>
+        {/* Results header + Grid/Map toggle */}
+        <div className="flex items-center justify-between mb-5">
+          <p className="text-sm text-gray-500">
+            {isLoading ? "Loading…" : `${filtered.length} experience${filtered.length !== 1 ? "s" : ""} available`}
+          </p>
+          <div className="flex items-center bg-white border border-gray-200 rounded-lg p-0.5 shadow-sm">
+            <button
+              onClick={() => setViewMode("grid")}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition-all ${
+                viewMode === "grid" ? "bg-primary text-white shadow-sm" : "text-gray-500 hover:text-gray-700"
+              }`}
+            >
+              <LayoutGrid className="h-4 w-4" />
+              Grid
+            </button>
+            <button
+              onClick={() => setViewMode("map")}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition-all ${
+                viewMode === "map" ? "bg-primary text-white shadow-sm" : "text-gray-500 hover:text-gray-700"
+              }`}
+            >
+              <Map className="h-4 w-4" />
+              Map
+            </button>
+          </div>
+        </div>
 
-        {/* Grid */}
-        {isLoading ? (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
-            {[1, 2, 3, 4, 5, 6].map((i) => (
-              <div key={i} className="bg-white rounded-2xl border border-gray-200 h-72 animate-pulse" />
-            ))}
-          </div>
-        ) : filtered.length === 0 ? (
-          <div className="text-center py-20">
-            <Mountain className="h-12 w-12 text-gray-300 mx-auto mb-3" />
-            <h3 className="font-semibold text-gray-700 mb-1">No experiences found</h3>
-            <p className="text-sm text-gray-400">
-              {search || activeCategory
-                ? "Try adjusting your search or filters."
-                : "No experiences are available yet. Check back soon!"}
-            </p>
-            {(search || activeCategory) && (
-              <Button
-                variant="outline"
-                size="sm"
-                className="mt-4"
-                onClick={() => { setSearch(""); setActiveCategory(null); }}
-              >
-                Clear filters
-              </Button>
-            )}
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
-            {filtered.map((act) => (
-              <ActivityCard key={act.id} act={act} />
-            ))}
-          </div>
+        {/* Map view */}
+        {viewMode === "map" && !isLoading && (
+          <ExperienceMapView activities={filtered} />
+        )}
+
+        {/* Grid view */}
+        {viewMode === "grid" && (
+          isLoading ? (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
+              {[1, 2, 3, 4, 5, 6].map((i) => (
+                <div key={i} className="bg-white rounded-2xl border border-gray-200 h-72 animate-pulse" />
+              ))}
+            </div>
+          ) : filtered.length === 0 ? (
+            <div className="text-center py-20">
+              <Mountain className="h-12 w-12 text-gray-300 mx-auto mb-3" />
+              <h3 className="font-semibold text-gray-700 mb-1">No experiences found</h3>
+              <p className="text-sm text-gray-400">
+                {search || activeCategory
+                  ? "Try adjusting your search or filters."
+                  : "No experiences are available yet. Check back soon!"}
+              </p>
+              {(search || activeCategory) && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="mt-4"
+                  onClick={() => { setSearch(""); setActiveCategory(null); }}
+                >
+                  Clear filters
+                </Button>
+              )}
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
+              {filtered.map((act) => (
+                <ActivityCard key={act.id} act={act} />
+              ))}
+            </div>
+          )
         )}
       </div>
     </div>

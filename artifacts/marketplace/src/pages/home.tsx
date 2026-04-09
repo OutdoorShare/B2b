@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import { ListingCard } from "@/components/listing-card";
 import { MapView } from "@/components/map-view";
+import { ExperienceMapView } from "@/components/experience-map-view";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import {
@@ -331,6 +332,7 @@ export function HomePage({ onAuthOpen }: { onAuthOpen: () => void }) {
   const [viewMode, setViewMode] = useState<"grid" | "map">("grid");
   const [expSearch, setExpSearch] = useState("");
   const [expCategory, setExpCategory] = useState<string | null>(null);
+  const [expViewMode, setExpViewMode] = useState<"grid" | "map">("grid");
 
   useEffect(() => {
     const t = setTimeout(() => setDebouncedSearch(search), 350);
@@ -835,17 +837,45 @@ export function HomePage({ onAuthOpen }: { onAuthOpen: () => void }) {
               <p className="text-sm text-gray-500">
                 {`${filteredActivities.length} experience${filteredActivities.length !== 1 ? "s" : ""} available`}
               </p>
-              {(expSearch || expCategory) && (
-                <button
-                  onClick={() => { setExpSearch(""); setExpCategory(null); }}
-                  className="flex items-center gap-1 text-sm text-gray-500 hover:text-red-500 transition-colors"
-                >
-                  <X className="h-3.5 w-3.5" /> Clear filters
-                </button>
-              )}
+              <div className="flex items-center gap-3">
+                {(expSearch || expCategory) && (
+                  <button
+                    onClick={() => { setExpSearch(""); setExpCategory(null); }}
+                    className="flex items-center gap-1 text-sm text-gray-500 hover:text-red-500 transition-colors"
+                  >
+                    <X className="h-3.5 w-3.5" /> Clear filters
+                  </button>
+                )}
+                <div className="flex items-center bg-white border border-gray-200 rounded-lg p-0.5 shadow-sm">
+                  <button
+                    onClick={() => setExpViewMode("grid")}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition-all ${
+                      expViewMode === "grid" ? "bg-primary text-white shadow-sm" : "text-gray-500 hover:text-gray-700"
+                    }`}
+                  >
+                    <LayoutGrid className="h-4 w-4" />
+                    Grid
+                  </button>
+                  <button
+                    onClick={() => setExpViewMode("map")}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition-all ${
+                      expViewMode === "map" ? "bg-primary text-white shadow-sm" : "text-gray-500 hover:text-gray-700"
+                    }`}
+                  >
+                    <Map className="h-4 w-4" />
+                    Map
+                  </button>
+                </div>
+              </div>
             </div>
 
-            {filteredActivities.length === 0 ? (
+            {/* Map view */}
+            {expViewMode === "map" && (
+              <ExperienceMapView activities={filteredActivities} />
+            )}
+
+            {/* Grid view */}
+            {expViewMode === "grid" && (filteredActivities.length === 0 ? (
               <div className="text-center py-20">
                 <Compass className="h-12 w-12 text-gray-200 mx-auto mb-4" />
                 <h3 className="text-lg font-semibold text-gray-700 mb-2">No experiences found</h3>
@@ -921,7 +951,7 @@ export function HomePage({ onAuthOpen }: { onAuthOpen: () => void }) {
                   </a>
                 ))}
               </div>
-            )}
+            ))}
           </>
         )}
 
