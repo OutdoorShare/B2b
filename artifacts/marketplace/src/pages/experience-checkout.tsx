@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { useRoute, useLocation } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "@/lib/api";
+import { useAuth } from "@/context/auth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -30,6 +31,7 @@ export function ExperienceCheckoutPage() {
   const [, navigate] = useLocation();
   const activityId = parseInt(params?.id ?? "0");
   const qp = useQueryParams();
+  const { customer } = useAuth();
 
   const selectedDate = qp.get("date") ?? "";
   const selectedTime = qp.get("time") ?? "";
@@ -39,6 +41,15 @@ export function ExperienceCheckoutPage() {
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
   const [notes, setNotes] = useState("");
+
+  useEffect(() => {
+    if (customer) {
+      if (customer.name) setName(customer.name);
+      if (customer.email) setEmail(customer.email);
+      if (customer.phone) setPhone(customer.phone);
+    }
+  }, [customer]);
+
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
 
