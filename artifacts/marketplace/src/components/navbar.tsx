@@ -9,7 +9,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { User, ChevronDown, LogOut, BookOpen, Menu, X, LayoutDashboard, Home, Mountain, Settings } from "lucide-react";
+import { User, ChevronDown, LogOut, BookOpen, Menu, X, LayoutDashboard, Home, Mountain, Settings, Compass } from "lucide-react";
 
 const BASE_URL = import.meta.env.BASE_URL.replace(/\/$/, "");
 
@@ -85,6 +85,13 @@ export function Navbar({
           <nav className="hidden md:flex items-center gap-6">
             <button onClick={() => setLocation("/")} className={linkClass}>
               Browse
+            </button>
+            <button
+              onClick={() => setLocation("/experiences")}
+              className={`${linkClass} flex items-center gap-1`}
+            >
+              <Compass className={`h-3.5 w-3.5 ${transparent ? "text-white/70" : "text-brand-blue"}`} />
+              Experiences
             </button>
             <button
               onClick={() => setLocation("/memories")}
@@ -234,6 +241,14 @@ export function Navbar({
               }`}
             >
               Browse
+            </button>
+            <button
+              onClick={() => { setLocation("/experiences"); setMobileOpen(false); }}
+              className={`block w-full text-left px-2 py-2 text-sm rounded-md ${
+                transparent ? "text-white/90 hover:bg-white/10" : "text-gray-700 hover:bg-gray-50"
+              }`}
+            >
+              Experiences
             </button>
             <button
               onClick={() => { setLocation("/memories"); setMobileOpen(false); }}
