@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import { ListingCard } from "@/components/listing-card";
@@ -16,7 +16,7 @@ import {
   Waves, Bus, Truck, Car, Anchor, Bike, Zap,
   Package, Snowflake, CarFront, Gauge, Mountain,
   CalendarDays, ChevronLeft, ChevronRight,
-  Clock, Users, MapPin, ArrowRight,
+  Clock, Users, MapPin, ArrowRight, Compass,
 } from "lucide-react";
 import type { MarketplaceActivity } from "@/lib/api";
 
@@ -214,6 +214,20 @@ const ACTIVITY_CATEGORY_LABELS: Record<string, string> = {
   other: "Other",
 };
 
+const ACTIVITY_CATEGORY_EMOJIS: Record<string, string> = {
+  adventure: "🏔️",
+  "water-sport": "🌊",
+  "guided-tour": "🧭",
+  lesson: "📚",
+  "wildlife-tour": "🦁",
+  "off-road": "🚙",
+  camping: "⛺",
+  climbing: "🧗",
+  "snow-sport": "🎿",
+  fishing: "🎣",
+  other: "🌿",
+};
+
 // ── Experiences Section ───────────────────────────────────────────────────────
 function ExperiencesSection({ activities }: { activities: MarketplaceActivity[] }) {
   return (
@@ -304,6 +318,7 @@ function ExperiencesSection({ activities }: { activities: MarketplaceActivity[] 
 }
 
 export function HomePage({ onAuthOpen }: { onAuthOpen: () => void }) {
+  const [mode, setMode] = useState<"rentals" | "experiences">("rentals");
   const [search, setSearch] = useState("");
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [selectedCategoryName, setSelectedCategoryName] = useState<string | null>(null);
@@ -314,6 +329,8 @@ export function HomePage({ onAuthOpen }: { onAuthOpen: () => void }) {
   const [endDate, setEndDate] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [viewMode, setViewMode] = useState<"grid" | "map">("grid");
+  const [expSearch, setExpSearch] = useState("");
+  const [expCategory, setExpCategory] = useState<string | null>(null);
 
   useEffect(() => {
     const t = setTimeout(() => setDebouncedSearch(search), 350);
@@ -358,6 +375,28 @@ export function HomePage({ onAuthOpen }: { onAuthOpen: () => void }) {
   });
 
   const activeCats = (categories ?? []).filter(cat => (cat as any).listingCount > 0);
+
+  // Derived experience data
+  const expCategories = useMemo(() => {
+    const seen = new Set<string>();
+    (activities ?? []).forEach(a => seen.add(a.category));
+    return Array.from(seen).sort();
+  }, [activities]);
+
+  const filteredActivities = useMemo(() => {
+    let list = activities ?? [];
+    if (expCategory) list = list.filter(a => a.category === expCategory);
+    if (expSearch.trim()) {
+      const q = expSearch.toLowerCase();
+      list = list.filter(a =>
+        a.title.toLowerCase().includes(q) ||
+        a.description?.toLowerCase().includes(q) ||
+        a.location?.toLowerCase().includes(q) ||
+        a.tenantName.toLowerCase().includes(q)
+      );
+    }
+    return list;
+  }, [activities, expCategory, expSearch]);
 
   const handleCategoryClick = (id: string | null, name: string | null) => {
     setSelectedCategory(id);
@@ -413,9 +452,37 @@ export function HomePage({ onAuthOpen }: { onAuthOpen: () => void }) {
             <h1 className="text-4xl md:text-5xl font-bold mb-3 leading-tight">
               Your adventure starts here.
             </h1>
-            <p className="text-white/75 text-lg mb-8">
+            <p className="text-white/75 text-lg mb-6">
               Find the perfect outdoor experience today!
             </p>
+
+            {/* ── MODE TABS ── */}
+            <div className="flex justify-center mb-5">
+              <div className="inline-flex bg-black/30 backdrop-blur-md rounded-full p-1 border border-white/15 shadow-lg">
+                <button
+                  onClick={() => setMode("rentals")}
+                  className={`flex items-center gap-2 px-5 py-2 rounded-full text-sm font-semibold transition-all duration-200 ${
+                    mode === "rentals"
+                      ? "bg-white text-gray-900 shadow-md"
+                      : "text-white/80 hover:text-white"
+                  }`}
+                >
+                  <Gauge className="h-4 w-4" />
+                  Rentals
+                </button>
+                <button
+                  onClick={() => setMode("experiences")}
+                  className={`flex items-center gap-2 px-5 py-2 rounded-full text-sm font-semibold transition-all duration-200 ${
+                    mode === "experiences"
+                      ? "bg-white text-gray-900 shadow-md"
+                      : "text-white/80 hover:text-white"
+                  }`}
+                >
+                  <Compass className="h-4 w-4" />
+                  Experiences
+                </button>
+              </div>
+            </div>
 
             {/* ── SEARCH + FILTER ROW ── */}
             <div className="max-w-2xl mx-auto">
@@ -423,28 +490,39 @@ export function HomePage({ onAuthOpen }: { onAuthOpen: () => void }) {
                 {/* Search input */}
                 <div className="relative flex-1">
                   <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" />
-                  <Input
-                    placeholder={selectedCategoryName ? `Search ${selectedCategoryName}…` : "Search jet skis, ATVs, campers…"}
-                    value={search}
-                    onChange={e => setSearch(e.target.value)}
-                    className="pl-11 h-12 text-base bg-white text-gray-900 border-0 shadow-xl rounded-xl"
-                  />
+                  {mode === "rentals" ? (
+                    <Input
+                      placeholder={selectedCategoryName ? `Search ${selectedCategoryName}…` : "Search jet skis, ATVs, campers…"}
+                      value={search}
+                      onChange={e => setSearch(e.target.value)}
+                      className="pl-11 h-12 text-base bg-white text-gray-900 border-0 shadow-xl rounded-xl"
+                    />
+                  ) : (
+                    <Input
+                      placeholder="Search guided tours, lessons, adventures…"
+                      value={expSearch}
+                      onChange={e => setExpSearch(e.target.value)}
+                      className="pl-11 h-12 text-base bg-white text-gray-900 border-0 shadow-xl rounded-xl"
+                    />
+                  )}
                 </div>
 
-                {/* Filter toggle */}
-                <Button
-                  size="lg"
-                  variant="outline"
-                  className={`h-12 px-4 rounded-xl border-0 shadow-xl transition-all ${
-                    showFilters
-                      ? "bg-white text-primary"
-                      : "bg-white/10 border-white/20 text-white hover:bg-white/20"
-                  }`}
-                  onClick={() => setShowFilters(v => !v)}
-                  title="Filters"
-                >
-                  <SlidersHorizontal className="h-5 w-5" />
-                </Button>
+                {/* Filter toggle — only for rentals */}
+                {mode === "rentals" && (
+                  <Button
+                    size="lg"
+                    variant="outline"
+                    className={`h-12 px-4 rounded-xl border-0 shadow-xl transition-all ${
+                      showFilters
+                        ? "bg-white text-primary"
+                        : "bg-white/10 border-white/20 text-white hover:bg-white/20"
+                    }`}
+                    onClick={() => setShowFilters(v => !v)}
+                    title="Filters"
+                  >
+                    <SlidersHorizontal className="h-5 w-5" />
+                  </Button>
+                )}
               </div>
 
               {/* Combined filter panel — dates + price */}
@@ -541,7 +619,7 @@ export function HomePage({ onAuthOpen }: { onAuthOpen: () => void }) {
             )}
 
             {/* ── CATEGORY CIRCLES ─────────────────────────────── */}
-            {activeCats.length > 0 && (
+            {mode === "rentals" && activeCats.length > 0 && (
               <div className="flex flex-wrap justify-center gap-4 pb-6">
                 {/* All */}
                 <button
@@ -586,6 +664,43 @@ export function HomePage({ onAuthOpen }: { onAuthOpen: () => void }) {
                 })}
               </div>
             )}
+
+            {/* ── EXPERIENCE CATEGORY CIRCLES ───────────────────── */}
+            {mode === "experiences" && expCategories.length > 0 && (
+              <div className="flex flex-wrap justify-center gap-4 pb-6">
+                <button
+                  onClick={() => setExpCategory(null)}
+                  className="flex flex-col items-center gap-1.5 transition-all"
+                >
+                  <div className={`w-14 h-14 rounded-full flex items-center justify-center transition-all duration-200 ${
+                    !expCategory
+                      ? "bg-white/25 ring-2 ring-white shadow-lg shadow-black/20 scale-110"
+                      : "bg-black/40 backdrop-blur border border-white/15 hover:bg-black/55 hover:scale-105"
+                  }`}>
+                    <Compass className="w-6 h-6 text-white" />
+                  </div>
+                  <span className="text-white text-xs font-semibold drop-shadow-sm">All</span>
+                </button>
+                {expCategories.map(cat => (
+                  <button
+                    key={cat}
+                    onClick={() => setExpCategory(expCategory === cat ? null : cat)}
+                    className="flex flex-col items-center gap-1.5 transition-all"
+                  >
+                    <div className={`w-14 h-14 rounded-full flex items-center justify-center transition-all duration-200 text-2xl ${
+                      expCategory === cat
+                        ? "bg-white/25 ring-2 ring-white shadow-lg shadow-black/20 scale-110"
+                        : "bg-black/40 backdrop-blur border border-white/15 hover:bg-black/55 hover:scale-105"
+                    }`}>
+                      {ACTIVITY_CATEGORY_EMOJIS[cat] ?? "🌿"}
+                    </div>
+                    <span className="text-white text-xs font-semibold drop-shadow-sm whitespace-nowrap">
+                      {ACTIVITY_CATEGORY_LABELS[cat] ?? cat}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -625,86 +740,180 @@ export function HomePage({ onAuthOpen }: { onAuthOpen: () => void }) {
       {/* ── MAIN CONTENT ─────────────────────────────────────── */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
 
-        {/* Results header + Grid/Map toggle */}
-        <div className="flex items-center justify-between mb-5">
-          <p className="text-sm text-gray-500">
-            {isLoading ? "Loading…" : `${listings?.length ?? 0} ${(listings?.length ?? 0) === 1 ? "listing" : "listings"}`}
-            {hasFilters && " matching your filters"}
-          </p>
-          <div className="flex items-center bg-white border border-gray-200 rounded-lg p-0.5 shadow-sm">
-            <button
-              onClick={() => setViewMode("grid")}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition-all ${
-                viewMode === "grid" ? "bg-primary text-white shadow-sm" : "text-gray-500 hover:text-gray-700"
-              }`}
-            >
-              <LayoutGrid className="h-4 w-4" />
-              Grid
-            </button>
-            <button
-              onClick={() => setViewMode("map")}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition-all ${
-                viewMode === "map" ? "bg-primary text-white shadow-sm" : "text-gray-500 hover:text-gray-700"
-              }`}
-            >
-              <Map className="h-4 w-4" />
-              Map
-            </button>
-          </div>
-        </div>
+        {mode === "rentals" ? (
+          <>
+            {/* Results header + Grid/Map toggle */}
+            <div className="flex items-center justify-between mb-5">
+              <p className="text-sm text-gray-500">
+                {isLoading ? "Loading…" : `${listings?.length ?? 0} ${(listings?.length ?? 0) === 1 ? "listing" : "listings"}`}
+                {hasFilters && " matching your filters"}
+              </p>
+              <div className="flex items-center bg-white border border-gray-200 rounded-lg p-0.5 shadow-sm">
+                <button
+                  onClick={() => setViewMode("grid")}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition-all ${
+                    viewMode === "grid" ? "bg-primary text-white shadow-sm" : "text-gray-500 hover:text-gray-700"
+                  }`}
+                >
+                  <LayoutGrid className="h-4 w-4" />
+                  Grid
+                </button>
+                <button
+                  onClick={() => setViewMode("map")}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition-all ${
+                    viewMode === "map" ? "bg-primary text-white shadow-sm" : "text-gray-500 hover:text-gray-700"
+                  }`}
+                >
+                  <Map className="h-4 w-4" />
+                  Map
+                </button>
+              </div>
+            </div>
 
-        {/* Map view */}
-        {viewMode === "map" && !isLoading && listings && (
-          <MapView listings={listings as any} />
-        )}
+            {/* Map view */}
+            {viewMode === "map" && !isLoading && listings && (
+              <MapView listings={listings as any} />
+            )}
 
-        {/* Grid view */}
-        {viewMode === "grid" && (
-          isLoading ? (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
-              {Array.from({ length: 8 }).map((_, i) => (
-                <div key={i} className="bg-white rounded-2xl border border-gray-200 overflow-hidden animate-pulse">
-                  <div className="h-48 bg-gray-200" />
-                  <div className="p-4 space-y-2">
-                    <div className="h-4 bg-gray-200 rounded w-3/4" />
-                    <div className="h-3 bg-gray-200 rounded w-1/2" />
-                    <div className="h-6 bg-gray-200 rounded w-1/3 mt-3" />
-                  </div>
+            {/* Grid view */}
+            {viewMode === "grid" && (
+              isLoading ? (
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
+                  {Array.from({ length: 8 }).map((_, i) => (
+                    <div key={i} className="bg-white rounded-2xl border border-gray-200 overflow-hidden animate-pulse">
+                      <div className="h-48 bg-gray-200" />
+                      <div className="p-4 space-y-2">
+                        <div className="h-4 bg-gray-200 rounded w-3/4" />
+                        <div className="h-3 bg-gray-200 rounded w-1/2" />
+                        <div className="h-6 bg-gray-200 rounded w-1/3 mt-3" />
+                      </div>
+                    </div>
+                  ))}
                 </div>
-              ))}
-            </div>
-          ) : listings && listings.length > 0 ? (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
-              {listings.map(listing => (
-                <ListingCard key={listing.id} listing={listing} />
-              ))}
-            </div>
-          ) : (
-            <div className="text-center py-20">
-              {hasDateFilter ? (
-                <>
-                  <CalendarDays className="h-12 w-12 text-gray-200 mx-auto mb-4" />
-                  <h3 className="text-lg font-semibold text-gray-700 mb-2">No listings available for those dates</h3>
-                  <p className="text-gray-400 mb-4">Try different dates or browse without a date filter.</p>
-                  <Button variant="outline" onClick={clearDates}>Clear dates</Button>
-                </>
+              ) : listings && listings.length > 0 ? (
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
+                  {listings.map(listing => (
+                    <ListingCard key={listing.id} listing={listing} />
+                  ))}
+                </div>
               ) : (
-                <>
-                  <div className="text-5xl mb-4">🔍</div>
-                  <h3 className="text-lg font-semibold text-gray-700 mb-2">No listings found</h3>
-                  <p className="text-gray-400 mb-4">Try a different category or clear your filters</p>
-                  {hasFilters && (
-                    <Button variant="outline" onClick={clearFilters}>Clear filters</Button>
+                <div className="text-center py-20">
+                  {hasDateFilter ? (
+                    <>
+                      <CalendarDays className="h-12 w-12 text-gray-200 mx-auto mb-4" />
+                      <h3 className="text-lg font-semibold text-gray-700 mb-2">No listings available for those dates</h3>
+                      <p className="text-gray-400 mb-4">Try different dates or browse without a date filter.</p>
+                      <Button variant="outline" onClick={clearDates}>Clear dates</Button>
+                    </>
+                  ) : (
+                    <>
+                      <div className="text-5xl mb-4">🔍</div>
+                      <h3 className="text-lg font-semibold text-gray-700 mb-2">No listings found</h3>
+                      <p className="text-gray-400 mb-4">Try a different category or clear your filters</p>
+                      {hasFilters && (
+                        <Button variant="outline" onClick={clearFilters}>Clear filters</Button>
+                      )}
+                    </>
                   )}
-                </>
+                </div>
+              )
+            )}
+          </>
+        ) : (
+          /* ── EXPERIENCES MODE ──────────────────────────────── */
+          <>
+            <div className="flex items-center justify-between mb-5">
+              <p className="text-sm text-gray-500">
+                {`${filteredActivities.length} experience${filteredActivities.length !== 1 ? "s" : ""} available`}
+              </p>
+              {(expSearch || expCategory) && (
+                <button
+                  onClick={() => { setExpSearch(""); setExpCategory(null); }}
+                  className="flex items-center gap-1 text-sm text-gray-500 hover:text-red-500 transition-colors"
+                >
+                  <X className="h-3.5 w-3.5" /> Clear filters
+                </button>
               )}
             </div>
-          )
-        )}
 
-        {/* ── EXPERIENCES SECTION ───────────────────────────────── */}
-        {activities && activities.length > 0 && (
-          <ExperiencesSection activities={activities} />
+            {filteredActivities.length === 0 ? (
+              <div className="text-center py-20">
+                <Compass className="h-12 w-12 text-gray-200 mx-auto mb-4" />
+                <h3 className="text-lg font-semibold text-gray-700 mb-2">No experiences found</h3>
+                <p className="text-gray-400 mb-4">
+                  {expSearch || expCategory
+                    ? "Try adjusting your search or category."
+                    : "No experiences are available yet. Check back soon!"}
+                </p>
+                {(expSearch || expCategory) && (
+                  <Button variant="outline" onClick={() => { setExpSearch(""); setExpCategory(null); }}>
+                    Clear filters
+                  </Button>
+                )}
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
+                {filteredActivities.map(act => (
+                  <a
+                    key={act.id}
+                    href={`/${act.tenantSlug}`}
+                    className="group bg-white rounded-2xl border border-gray-200 overflow-hidden shadow-sm hover:shadow-lg transition-all duration-200 flex flex-col"
+                  >
+                    {act.imageUrls?.[0] ? (
+                      <div className="h-48 overflow-hidden">
+                        <img
+                          src={act.imageUrls[0]}
+                          alt={act.title}
+                          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                        />
+                      </div>
+                    ) : (
+                      <div
+                        className="h-48 flex items-center justify-center text-5xl"
+                        style={{ background: "linear-gradient(135deg, hsl(127,55%,92%) 0%, hsl(197,78%,92%) 100%)" }}
+                      >
+                        {ACTIVITY_CATEGORY_EMOJIS[act.category] ?? "🌿"}
+                      </div>
+                    )}
+                    <div className="p-4 flex flex-col flex-1 gap-2">
+                      <span className="text-[10px] font-semibold uppercase tracking-wide text-primary">
+                        {ACTIVITY_CATEGORY_LABELS[act.category] ?? act.category}
+                      </span>
+                      <h3 className="font-semibold text-gray-900 leading-tight group-hover:text-primary transition-colors line-clamp-2">
+                        {act.title}
+                      </h3>
+                      <p className="text-xs text-gray-500">{act.tenantName}</p>
+                      <div className="flex flex-wrap items-center gap-3 text-xs text-gray-500 mt-auto pt-2 border-t border-gray-100">
+                        <span className="flex items-center gap-1">
+                          <Clock className="w-3 h-3" />
+                          {fmtDuration(act.durationMinutes)}
+                        </span>
+                        <span className="flex items-center gap-1">
+                          <Users className="w-3 h-3" />
+                          Up to {act.maxCapacity}
+                        </span>
+                        {act.location && (
+                          <span className="flex items-center gap-1 truncate">
+                            <MapPin className="w-3 h-3 shrink-0" />
+                            <span className="truncate">{act.location}</span>
+                          </span>
+                        )}
+                      </div>
+                      <div className="flex items-center justify-between mt-2">
+                        <div>
+                          <span className="font-bold text-gray-900">${act.pricePerPerson}</span>
+                          <span className="text-xs text-gray-400"> / person</span>
+                        </div>
+                        <span className="flex items-center gap-1 text-xs font-semibold text-primary group-hover:gap-2 transition-all">
+                          Book now <ArrowRight className="w-3.5 h-3.5" />
+                        </span>
+                      </div>
+                    </div>
+                  </a>
+                ))}
+              </div>
+            )}
+          </>
         )}
 
         {/* CTA */}
