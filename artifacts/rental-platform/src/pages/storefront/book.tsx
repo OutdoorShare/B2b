@@ -629,6 +629,7 @@ export default function StorefrontBook() {
   // Payment
   const [clientSecret, setClientSecret] = useState<string | null>(null);
   const [paymentIntentId, setPaymentIntentId] = useState<string | null>(null);
+  const [customerSessionClientSecret, setCustomerSessionClientSecret] = useState<string | null>(null);
   const [paymentConfirmed, setPaymentConfirmed] = useState(false);
   const [isTestMode, setIsTestMode] = useState(false);
   const [isInstantBooking, setIsInstantBooking] = useState(false);
@@ -1417,6 +1418,7 @@ export default function StorefrontBook() {
       const data = await res.json();
       setClientSecret(data.clientSecret);
       setPaymentIntentId(data.paymentIntentId);
+      setCustomerSessionClientSecret(data.customerSessionClientSecret ?? null);
       setIsTestMode(!!data.testMode);
       setIsInstantBooking(!!data.instantBooking);
     } catch {
@@ -2880,7 +2882,14 @@ export default function StorefrontBook() {
                                   </h3>
                                   <CardScanHelper />
                                 </div>
-                                <Elements stripe={isTestMode ? testStripePromise : liveStripePromise} options={{ clientSecret, appearance: { theme: "stripe" } }}>
+                                <Elements
+                                  stripe={isTestMode ? testStripePromise : liveStripePromise}
+                                  options={{
+                                    clientSecret,
+                                    ...(customerSessionClientSecret ? { customerSessionClientSecret } : {}),
+                                    appearance: { theme: "stripe" },
+                                  }}
+                                >
                                   <StripePaymentForm
                                     onSuccess={() => setPaymentConfirmed(true)}
                                     customerEmail={email}

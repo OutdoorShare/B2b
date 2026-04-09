@@ -428,9 +428,34 @@ router.post("/stripe/payment-intent", async (req, res) => {
       }
     }
 
+    // Create a Customer Session so the PaymentElement can display the customer's saved cards.
+    // Non-fatal — if this fails the payment still works, just without the saved-card UI.
+    let customerSessionClientSecret: string | null = null;
+    if (stripeCustomerId) {
+      try {
+        const cs = await stripeClient.customerSessions.create({
+          customer: stripeCustomerId,
+          components: {
+            payment_element: {
+              enabled: true,
+              features: {
+                payment_method_redisplay: "enabled",
+                payment_method_save: "enabled",
+                payment_method_remove: "enabled",
+              },
+            },
+          },
+        });
+        customerSessionClientSecret = cs.client_secret;
+      } catch {
+        // Non-fatal — continue without saved-card display
+      }
+    }
+
     res.json({
       clientSecret: intent.client_secret,
       paymentIntentId: intent.id,
+      customerSessionClientSecret,
       platformFee: (platformFeeAmount / 100).toFixed(2),
       heldOnPlatform: !tenantConnected,
       testMode: isTestMode,
