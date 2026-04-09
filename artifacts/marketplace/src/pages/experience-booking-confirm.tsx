@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { useRoute, useLocation } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
@@ -5,6 +6,7 @@ import {
   CheckCircle2, Calendar, Clock, Users, Mail, ArrowRight, Home,
 } from "lucide-react";
 import { format, parseISO } from "date-fns";
+import confetti from "canvas-confetti";
 
 const API_BASE = "/api";
 const BASE_URL = import.meta.env.BASE_URL.replace(/\/$/, "");
@@ -20,6 +22,28 @@ const STATUS_CONFIG: Record<string, { label: string; color: string; bg: string }
 function fmtTime(t: string) {
   const [h, m] = t.split(":").map(Number);
   return `${h % 12 || 12}:${String(m).padStart(2, "0")} ${h >= 12 ? "PM" : "AM"}`;
+}
+
+function fireConfetti() {
+  const count = 180;
+  const duration = 1800;
+  const start = Date.now();
+  const defaults = { startVelocity: 30, spread: 360, ticks: 80, zIndex: 9999 };
+
+  function randomInRange(min: number, max: number) {
+    return Math.random() * (max - min) + min;
+  }
+
+  const interval = setInterval(() => {
+    const elapsed = Date.now() - start;
+    if (elapsed >= duration) {
+      clearInterval(interval);
+      return;
+    }
+    const particleCount = Math.floor(count * (1 - elapsed / duration));
+    confetti({ ...defaults, particleCount, colors: ["#3ab549", "#22c55e", "#86efac", "#ffffff", "#60a5fa"], origin: { x: randomInRange(0.1, 0.3), y: Math.random() - 0.2 } });
+    confetti({ ...defaults, particleCount, colors: ["#3ab549", "#22c55e", "#86efac", "#ffffff", "#60a5fa"], origin: { x: randomInRange(0.7, 0.9), y: Math.random() - 0.2 } });
+  }, 220);
 }
 
 export function ExperienceBookingConfirmPage() {
@@ -47,6 +71,13 @@ export function ExperienceBookingConfirmPage() {
     },
     enabled: !!bookingId,
   });
+
+  useEffect(() => {
+    if (booking) {
+      const timer = setTimeout(fireConfetti, 300);
+      return () => clearTimeout(timer);
+    }
+  }, [!!booking]);
 
   if (isLoading) {
     return (
