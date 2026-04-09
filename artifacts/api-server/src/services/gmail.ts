@@ -2293,3 +2293,51 @@ export async function sendSuperAdminInviteEmail(opts: {
     },
   });
 }
+
+// ── Superadmin → signup invite ─────────────────────────────────────────────────
+export async function sendSignupInviteEmail(opts: {
+  toEmail: string;
+  signupUrl: string;
+  personalNote?: string;
+}): Promise<void> {
+  const { toEmail, signupUrl, personalNote } = opts;
+
+  const body = `
+    <p style="margin:0 0 8px;font-size:18px;font-weight:700;color:${BRAND_DARK};">You're invited to launch your rental business — free.</p>
+    <p style="margin:0 0 20px;font-size:15px;color:#374151;line-height:1.6;">
+      OutdoorShare is a rental management platform built for outdoor equipment companies — ATVs, jet skis, e-bikes, snowmobiles, and more.
+      You've been invited to get started on the <strong>Half Throttle</strong> plan at no cost.
+    </p>
+
+    ${personalNote ? `
+    <div style="background:#f0fdf4;border-left:4px solid ${BRAND_GREEN};border-radius:6px;padding:14px 18px;margin-bottom:20px;">
+      <p style="margin:0;font-size:14px;color:#374151;line-height:1.6;font-style:italic;">"${esc(personalNote)}"</p>
+    </div>
+    ` : ""}
+
+    ${infoTable([
+      { label: "Plan", value: "Half Throttle — Free forever" },
+      { label: "What's included", value: "Booking platform · Branded storefront · Marketplace listing · Automated payments" },
+      { label: "Platform fee", value: "15% per booking — no monthly fee" },
+    ])}
+
+    ${ctaButton("Start Your Free Account", signupUrl)}
+
+    <p style="margin:16px 0 0;font-size:13px;color:#9ca3af;text-align:center;">
+      No credit card required. You can upgrade or cancel anytime.
+    </p>
+  `;
+
+  const html = emailShell({
+    preheader: "You've been invited to launch your outdoor rental business on OutdoorShare — free.",
+    badgeLabel: "You're Invited",
+    badgeColor: BRAND_GREEN,
+    body,
+  });
+
+  const gmail = await getUncachableGmailClient();
+  await gmail.users.messages.send({
+    userId: "me",
+    requestBody: { raw: makeRawEmail(toEmail, "You're invited to start your rental business on OutdoorShare — free", html) },
+  });
+}

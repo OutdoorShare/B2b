@@ -4,7 +4,7 @@ import { tenantsTable, listingsTable, bookingsTable, superadminUsersTable, busin
 import { eq, sql, desc, and, ne } from "drizzle-orm";
 import { scrypt, randomBytes, timingSafeEqual } from "crypto";
 import { promisify } from "util";
-import { sendWelcomeEmail, sendAccountUpdatedEmail, sendClaimChargeEmail, sendClaimSettlementEmail, sendSuperAdminInviteEmail } from "../services/gmail";
+import { sendWelcomeEmail, sendAccountUpdatedEmail, sendClaimChargeEmail, sendClaimSettlementEmail, sendSuperAdminInviteEmail, sendSignupInviteEmail } from "../services/gmail";
 import { stripe } from "../services/stripe";
 import { provisionGHLIfNeeded } from "./billing";
 
@@ -1538,6 +1538,38 @@ router.get("/platform/agreement", async (req, res) => {
     res.json({ value: row?.value ?? "", updatedAt: row?.updatedAt?.toISOString() ?? null, isCustom: false });
   } catch {
     res.status(500).json({ error: "Failed to fetch agreement" });
+  }
+});
+
+// ── POST /superadmin/invite-signup ─────────────────────────────────────────────
+// Sends a branded invite email to any address with a direct link to sign up
+// for the free Half Throttle plan.
+router.post("/superadmin/invite-signup", requireSuperAdmin, async (req, res) => {
+  try {
+    const { email, personalNote } = req.body;
+    if (!email?.trim()) {
+      res.status(400).json({ error: "Email address is required" });
+      return;
+    }
+    const toEmail = email.trim().toLowerCase();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(toEmail)) {
+      res.status(400).json({ error: "Invalid email address" });
+      return;
+    }
+
+    const appUrl = process.env.APP_URL || "https://myoutdoorshare.com";
+    const signupUrl = `${appUrl}/signup?plan=starter&email=${encodeURIComponent(toEmail)}`;
+
+    await sendSignupInviteEmail({
+      toEmail,
+      signupUrl,
+      personalNote: personalNote?.trim() || undefined,
+    });
+
+    res.json({ ok: true, sentTo: toEmail });
+  } catch (err: any) {
+    console.error("[superadmin/invite-signup]", err.message);
+    res.status(500).json({ error: "Failed to send invite email" });
   }
 });
 

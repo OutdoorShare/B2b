@@ -3,7 +3,7 @@ import { useLocation } from "wouter";
 import {
   Building2, Plus, Search, RefreshCcw, ExternalLink,
   Package, CalendarDays, ChevronRight, AlertTriangle,
-  CheckCircle2, XCircle, Filter, Eye, EyeOff
+  CheckCircle2, XCircle, Filter, Eye, EyeOff, Mail, Send
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -90,6 +90,39 @@ export default function SuperAdminTenants() {
   const [showPw, setShowPw]           = useState(false);
   const [form, setForm]               = useState(DEFAULT_FORM);
   const [formError, setFormError]     = useState("");
+
+  const [showInvite, setShowInvite]       = useState(false);
+  const [inviteEmail, setInviteEmail]     = useState("");
+  const [inviteNote, setInviteNote]       = useState("");
+  const [inviteSending, setInviteSending] = useState(false);
+  const [inviteError, setInviteError]     = useState("");
+  const [inviteSent, setInviteSent]       = useState(false);
+
+  const openInvite = () => {
+    setInviteEmail("");
+    setInviteNote("");
+    setInviteError("");
+    setInviteSent(false);
+    setShowInvite(true);
+  };
+
+  const handleSendInvite = async () => {
+    if (!inviteEmail.trim()) { setInviteError("Email address is required."); return; }
+    setInviteSending(true);
+    setInviteError("");
+    try {
+      await apiFetch("/superadmin/invite-signup", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: inviteEmail.trim(), personalNote: inviteNote.trim() || undefined }),
+      });
+      setInviteSent(true);
+    } catch (err: any) {
+      setInviteError(err.message ?? "Failed to send invite. Please try again.");
+    } finally {
+      setInviteSending(false);
+    }
+  };
 
   const load = useCallback(async () => {
     const token = getToken();
@@ -181,6 +214,14 @@ export default function SuperAdminTenants() {
             className="text-slate-400 hover:text-white hover:bg-slate-800"
           >
             <RefreshCcw className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} />
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            className="gap-2 text-sm font-semibold border-slate-700 text-slate-300 hover:bg-slate-800 hover:text-white"
+            onClick={openInvite}
+          >
+            <Mail className="w-4 h-4" /> Send Invite
           </Button>
           <Button
             size="sm"
@@ -474,6 +515,97 @@ export default function SuperAdminTenants() {
               {creating ? "Creating…" : "Create Company"}
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Send Signup Invite Dialog */}
+      <Dialog open={showInvite} onOpenChange={open => { if (!inviteSending) setShowInvite(open); }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Mail className="w-5 h-5" style={{ color: OS_GREEN }} />
+              Invite to Free Tier
+            </DialogTitle>
+            <DialogDescription>
+              Send a branded invitation email with a direct link to sign up for the Half Throttle (free) plan.
+            </DialogDescription>
+          </DialogHeader>
+
+          {inviteSent ? (
+            <div className="py-6 flex flex-col items-center gap-3 text-center">
+              <CheckCircle2 className="w-12 h-12" style={{ color: OS_GREEN }} />
+              <p className="text-base font-semibold text-slate-800">Invite sent!</p>
+              <p className="text-sm text-slate-500">
+                An invitation email was sent to <strong>{inviteEmail}</strong> with a link to create their free account.
+              </p>
+              <Button
+                className="mt-2"
+                style={{ background: OS_GREEN }}
+                onClick={() => {
+                  setInviteSent(false);
+                  setInviteEmail("");
+                  setInviteNote("");
+                }}
+              >
+                Send Another
+              </Button>
+            </div>
+          ) : (
+            <>
+              <div className="space-y-4 py-2">
+                <div className="space-y-1.5">
+                  <Label htmlFor="invite-email">Email address <span className="text-red-500">*</span></Label>
+                  <Input
+                    id="invite-email"
+                    type="email"
+                    placeholder="owner@example.com"
+                    value={inviteEmail}
+                    onChange={e => { setInviteEmail(e.target.value); setInviteError(""); }}
+                    disabled={inviteSending}
+                    onKeyDown={e => { if (e.key === "Enter") handleSendInvite(); }}
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="invite-note">Personal note <span className="text-slate-400 font-normal">(optional)</span></Label>
+                  <textarea
+                    id="invite-note"
+                    rows={3}
+                    placeholder="Add a short personal message that will appear in the email…"
+                    value={inviteNote}
+                    onChange={e => setInviteNote(e.target.value)}
+                    disabled={inviteSending}
+                    className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring disabled:opacity-50 resize-none"
+                  />
+                </div>
+                {inviteError && (
+                  <p className="text-sm text-red-600 flex items-center gap-1.5">
+                    <AlertTriangle className="w-4 h-4 shrink-0" /> {inviteError}
+                  </p>
+                )}
+                <div className="rounded-lg bg-slate-50 border border-slate-200 p-3 text-xs text-slate-600 space-y-0.5">
+                  <p className="font-semibold text-slate-700 mb-1">Half Throttle — Free forever</p>
+                  <p>· Booking platform with custom branding</p>
+                  <p>· OutdoorShare Marketplace listing</p>
+                  <p>· Automated bookings & payments</p>
+                  <p>· 15% platform fee per booking — no monthly charge</p>
+                </div>
+              </div>
+              <DialogFooter className="gap-2">
+                <Button variant="ghost" onClick={() => setShowInvite(false)} disabled={inviteSending}>
+                  Cancel
+                </Button>
+                <Button
+                  onClick={handleSendInvite}
+                  disabled={inviteSending || !inviteEmail.trim()}
+                  className="gap-2"
+                  style={{ background: OS_GREEN }}
+                >
+                  <Send className="w-4 h-4" />
+                  {inviteSending ? "Sending…" : "Send Invite"}
+                </Button>
+              </DialogFooter>
+            </>
+          )}
         </DialogContent>
       </Dialog>
     </div>

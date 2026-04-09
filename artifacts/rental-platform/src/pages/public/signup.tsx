@@ -31,13 +31,18 @@ export default function SignupPage() {
   const [error, setError] = useState("");
   const [created, setCreated] = useState<CreatedAccount | null>(null);
 
+  // Read invite params from URL (?plan=starter&email=someone@example.com)
+  const params = new URLSearchParams(typeof window !== "undefined" ? window.location.search : "");
+  const inviteEmail = params.get("email") ?? "";
+  const invitePlan = params.get("plan") === "starter" ? "half_throttle" : "";
+
   const [form, setForm] = useState({
     companyName: "",
     contactName: "",
-    email: "",
+    email: inviteEmail,
     password: "",
     phone: "",
-    plan: "professional",
+    plan: invitePlan || "professional",
   });
 
   const [logoFile, setLogoFile] = useState<File | null>(null);
