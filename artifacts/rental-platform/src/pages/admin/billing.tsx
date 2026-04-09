@@ -23,7 +23,7 @@ interface BillingStatus {
 }
 
 const PLAN_DISPLAY: Record<string, { label: string; price: string; icon: typeof Zap; color: string }> = {
-  starter: { label: "Half Throttle", price: "Free — 10% flat fee per booking", icon: Zap, color: "#3ab549" },
+  starter: { label: "Half Throttle", price: "Free — 15% flat fee per booking", icon: Zap, color: "#3ab549" },
   professional: { label: "Full Throttle", price: "$895 / year", icon: Star, color: "#29b4d4" },
   enterprise: { label: "Growth & Scale", price: "$500 / month or $3,400 / year", icon: Building2, color: "#f59e0b" },
 };

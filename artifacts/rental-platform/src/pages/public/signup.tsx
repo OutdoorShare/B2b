@@ -10,9 +10,9 @@ const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 const OS_GREEN = "#3ab549";
 
 const PLANS = [
-  { id: "half_throttle", name: "Half Throttle", price: 25, priceSuffix: "/mo", features: ["Protection plan on every booking", "Priority OutdoorShare listings", "Tiered revenue share — as low as 7%", "Booking software with custom garage"] },
-  { id: "full_throttle", name: "Full Throttle", price: 895, priceSuffix: "/year", features: ["Everything in Half Throttle", "White-labeled OutdoorShare website", "AI assistants included", "In-person setup support"], popular: true },
-  { id: "growth_scale", name: "Growth & Scale", price: null, priceSuffix: "", features: ["Everything in Full Throttle", "Marketing partnership included", "Social media post management", "Ad management"] },
+  { id: "half_throttle", name: "Half Throttle", price: 0, priceLabel: "Free", priceSuffix: "", sub: "15% platform fee per booking", features: ["Booking platform with custom branding", "Protection plan on every rental", "OutdoorShare Marketplace listing", "Automated booking & payments"] },
+  { id: "full_throttle", name: "Full Throttle", price: 895, priceLabel: "$895", priceSuffix: "/year", sub: "Tiered fee — as low as 7%", features: ["Everything in Half Throttle", "White-labeled OutdoorShare website", "AI answering agent included", "In-person setup support"], popular: true },
+  { id: "growth_scale", name: "Growth & Scale", price: null, priceLabel: "Custom", priceSuffix: "", sub: "$500/mo or $3,400/yr", features: ["Everything in Full Throttle", "No OutdoorShare branding", "Active marketing management", "Ad spend management"] },
 ];
 
 type Step = "info" | "plan" | "payment" | "done";
@@ -469,7 +469,7 @@ export default function SignupPage() {
             <div className="space-y-5">
               <div className="mb-2">
                 <h1 className="text-2xl font-black text-white">Choose your plan</h1>
-                <p className="text-white/50 text-sm mt-1">All plans include a 14-day free trial. No card charged until trial ends.</p>
+                <p className="text-white/50 text-sm mt-1">Start free or upgrade anytime. Full Throttle includes a 14-day free trial.</p>
               </div>
 
               <div className="space-y-3">
@@ -492,10 +492,15 @@ export default function SignupPage() {
                         <span className="font-bold text-white">{plan.name}</span>
                         {plan.popular && <Badge className="text-white text-xs px-2" style={{ backgroundColor: OS_GREEN }}>Popular</Badge>}
                       </div>
-                      <span className="font-black text-white">
-                        {plan.price ? `$${plan.price}` : "Custom"}
-                        <span className="text-xs font-normal text-white/40">{(plan as any).priceSuffix}</span>
-                      </span>
+                      <div className="text-right">
+                        <span className="font-black text-white">
+                          {(plan as any).priceLabel}
+                          <span className="text-xs font-normal text-white/40">{(plan as any).priceSuffix}</span>
+                        </span>
+                        {(plan as any).sub && (
+                          <p className="text-[10px] text-white/35 mt-0.5">{(plan as any).sub}</p>
+                        )}
+                      </div>
                     </div>
                     <ul className="grid grid-cols-2 gap-1 pl-7">
                       {plan.features.map(f => (
@@ -556,7 +561,8 @@ export default function SignupPage() {
                 <div>
                   <h1 className="text-2xl font-black text-white">Account created!</h1>
                   <p className="text-white/50 mt-1 text-sm">
-                    <strong className="text-white/80">{created.tenant.name}</strong> is set up. Complete payment to fully activate.
+                    <strong className="text-white/80">{created.tenant.name}</strong> is set up.{" "}
+                    {selectedPlan?.id === "half_throttle" ? "You're ready to go — no payment required." : "Complete payment to fully activate."}
                   </p>
                 </div>
                 <div className="rounded-lg p-4 text-sm space-y-2 text-left" style={{ background: "rgba(255,255,255,0.04)" }}>
@@ -577,20 +583,41 @@ export default function SignupPage() {
 
               {/* Payment CTA */}
               <div className="rounded-xl p-6 space-y-4" style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.08)" }}>
-                <div>
-                  <h3 className="font-bold text-white">Add a payment method</h3>
-                  <p className="text-sm text-white/40 mt-1">
-                    Your 14-day free trial is running. No charge until your trial ends.
-                  </p>
-                </div>
-                {selectedPlan?.id === "growth_scale" ? (
-                  <a href="mailto:contact.us@myoutdoorshare.com" className="block">
-                    <button className="w-full h-12 rounded-xl font-bold text-white flex items-center justify-center gap-2 hover:opacity-90 transition-all" style={{ background: `linear-gradient(135deg, ${OS_GREEN}, #2e9a3d)` }}>
-                      Contact Us to Set Up Billing
-                    </button>
-                  </a>
+                {selectedPlan?.id === "half_throttle" ? (
+                  <>
+                    <div>
+                      <h3 className="font-bold text-white">You're all set — no payment needed</h3>
+                      <p className="text-sm text-white/40 mt-1">
+                        Half Throttle is free forever. You only pay a 15% platform fee when a booking is made.
+                      </p>
+                    </div>
+                    <Link href={`/${created.siteSlug}/admin`}>
+                      <button className="w-full h-12 rounded-xl font-bold text-white flex items-center justify-center gap-2 hover:opacity-90 transition-all" style={{ background: `linear-gradient(135deg, ${OS_GREEN}, #2e9a3d)`, boxShadow: `0 4px 24px rgba(58,181,73,0.35)` }}>
+                        <ArrowRight className="w-4 h-4" />
+                        Go to Admin Dashboard
+                      </button>
+                    </Link>
+                  </>
+                ) : selectedPlan?.id === "growth_scale" ? (
+                  <>
+                    <div>
+                      <h3 className="font-bold text-white">Custom pricing — let's talk</h3>
+                      <p className="text-sm text-white/40 mt-1">Growth & Scale is custom-quoted. Reach out and we'll get you set up.</p>
+                    </div>
+                    <a href="mailto:contact.us@myoutdoorshare.com" className="block">
+                      <button className="w-full h-12 rounded-xl font-bold text-white flex items-center justify-center gap-2 hover:opacity-90 transition-all" style={{ background: `linear-gradient(135deg, ${OS_GREEN}, #2e9a3d)` }}>
+                        Contact Us to Set Up Billing
+                      </button>
+                    </a>
+                  </>
                 ) : (
                   <>
+                    <div>
+                      <h3 className="font-bold text-white">Add a payment method</h3>
+                      <p className="text-sm text-white/40 mt-1">
+                        Your 14-day free trial is running. No charge until your trial ends.
+                      </p>
+                    </div>
                     {checkoutError && (
                       <div className="rounded-lg px-4 py-2.5 text-sm font-medium" style={{ background: "rgba(239,68,68,0.12)", color: "#f87171", border: "1px solid rgba(239,68,68,0.25)" }}>
                         {checkoutError}
@@ -615,7 +642,7 @@ export default function SignupPage() {
               {/* Quick launch */}
               <div className="rounded-xl p-6 space-y-4" style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.08)" }}>
                 <h3 className="font-bold text-white">Ready to set up your site?</h3>
-                <p className="text-sm text-white/40">Start configuring your rental site now while your trial is active.</p>
+                <p className="text-sm text-white/40">{selectedPlan?.id === "half_throttle" ? "Your account is active — start setting it up now." : "Start configuring your rental site now while your trial is active."}</p>
                 <div className="grid grid-cols-2 gap-3">
                   <Link href={`/${created.siteSlug}/admin`}>
                     <button className="w-full h-11 rounded-xl font-semibold text-white/60 border border-white/10 hover:border-white/20 hover:text-white/80 transition-all" style={{ background: "rgba(255,255,255,0.03)" }}>
