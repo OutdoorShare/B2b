@@ -60,13 +60,15 @@ export function CompaniesPage() {
                 >
                   <div className="flex items-start gap-3 mb-4">
                     {company.logoUrl ? (
-                      <img
-                        src={resolveImage(company.logoUrl)}
-                        alt={company.businessName ?? company.slug}
-                        className="h-12 w-12 rounded-full object-cover border border-gray-100 flex-shrink-0"
-                      />
+                      <div className="h-14 w-14 rounded-xl border border-gray-100 bg-white flex items-center justify-center overflow-hidden flex-shrink-0">
+                        <img
+                          src={resolveImage(company.logoUrl)}
+                          alt={company.businessName ?? company.slug}
+                          className="max-h-12 max-w-12 object-contain"
+                        />
+                      </div>
                     ) : (
-                      <div className="h-12 w-12 rounded-full flex items-center justify-center text-primary-foreground font-bold text-lg flex-shrink-0 bg-primary">
+                      <div className="h-14 w-14 rounded-xl flex items-center justify-center text-primary-foreground font-bold text-lg flex-shrink-0 bg-primary">
                         {(company.businessName ?? company.slug)[0]?.toUpperCase()}
                       </div>
                     )}

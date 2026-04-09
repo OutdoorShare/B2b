@@ -784,10 +784,12 @@ export function ExperienceDetailPage() {
               {/* Hosted by */}
               <div className="flex items-center gap-4 bg-white rounded-2xl border border-gray-200 p-4">
                 {activity.businessLogoUrl ? (
-                  <img src={resolveImage(activity.businessLogoUrl)} alt={activity.tenantName}
-                    className="h-14 w-14 rounded-full object-cover border border-gray-100 flex-shrink-0" />
+                  <div className="h-14 w-14 rounded-xl border border-gray-100 bg-white flex items-center justify-center overflow-hidden flex-shrink-0">
+                    <img src={resolveImage(activity.businessLogoUrl)} alt={activity.tenantName}
+                      className="max-h-12 max-w-12 object-contain" />
+                  </div>
                 ) : (
-                  <div className="h-14 w-14 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
+                  <div className="h-14 w-14 rounded-xl bg-primary/10 border border-primary/10 flex items-center justify-center flex-shrink-0">
                     <Building2 className="h-6 w-6 text-primary" />
                   </div>
                 )}

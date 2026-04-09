@@ -708,13 +708,15 @@ export function ListingDetailPage() {
                   <p className="text-xs font-medium text-gray-400 uppercase tracking-wider mb-3">Listed by</p>
                   <div className="flex items-center gap-3 mb-3">
                     {listing.business.logoUrl ? (
-                      <img
-                        src={resolveImage(listing.business.logoUrl)}
-                        alt={listing.business.name}
-                        className="h-10 w-10 rounded-full object-cover border border-gray-100"
-                      />
+                      <div className="h-12 w-12 rounded-xl border border-gray-100 bg-white flex items-center justify-center overflow-hidden flex-shrink-0">
+                        <img
+                          src={resolveImage(listing.business.logoUrl)}
+                          alt={listing.business.name}
+                          className="max-h-10 max-w-10 object-contain"
+                        />
+                      </div>
                     ) : (
-                      <div className="h-10 w-10 rounded-full flex items-center justify-center text-primary-foreground font-bold text-sm bg-primary">
+                      <div className="h-12 w-12 rounded-xl flex items-center justify-center text-primary-foreground font-bold text-sm bg-primary flex-shrink-0">
                         {listing.business.name[0]}
                       </div>
                     )}
