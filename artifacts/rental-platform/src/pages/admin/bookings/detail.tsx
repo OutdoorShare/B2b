@@ -1,15 +1,8 @@
 import { adminPath, getAdminSession } from "@/lib/admin-nav";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { fireConfetti } from "@/hooks/use-confetti";
 import { AdminBookingTimeline } from "@/components/RentalCountdown";
 import { useParams } from "wouter";
-import { 
-  useGetBooking, 
-  useUpdateBooking,
-  getGetBookingQueryKey,
-  getGetBookingsQueryKey
-} from "@workspace/api-client-react";
-import { useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -44,11 +37,37 @@ export default function AdminBookingDetail() {
   const id = params?.id ? parseInt(params.id) : 0;
   const { toast } = useToast();
   const [, setLocation] = useLocation();
-  const queryClient = useQueryClient();
 
-  const { data: booking, isLoading } = useGetBooking(id, {
-    query: { enabled: !!id, queryKey: getGetBookingQueryKey(id) }
-  });
+  const [booking, setBooking] = useState<any | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+
+  const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
+
+  const adminHeaders = useCallback((): Record<string, string> => {
+    const session = getAdminSession();
+    const h: Record<string, string> = { "Content-Type": "application/json" };
+    if (session?.token) h["x-admin-token"] = session.token;
+    return h;
+  }, []);
+
+  const fetchBooking = useCallback(async () => {
+    if (!id) return;
+    setIsLoading(true);
+    try {
+      const res = await fetch(`${BASE}/api/bookings/${id}`, { headers: adminHeaders() });
+      if (res.ok) {
+        setBooking(await res.json());
+      } else {
+        setBooking(null);
+      }
+    } catch {
+      setBooking(null);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [id, BASE, adminHeaders]);
+
+  useEffect(() => { fetchBooking(); }, [fetchBooking]);
 
   // Mark booking as seen by admin when it loads
   useEffect(() => {
@@ -63,7 +82,6 @@ export default function AdminBookingDetail() {
     }).catch(() => {});
   }, [id, (booking as any)?.id]);
 
-  const updateBooking = useUpdateBooking();
   const [adminNotes, setAdminNotes] = useState("");
   const [agreementExpanded, setAgreementExpanded] = useState(false);
   const [sendingPickupLink, setSendingPickupLink] = useState(false);
@@ -109,8 +127,6 @@ export default function AdminBookingDetail() {
       setDepositAutoAttemptedAt((booking as any).depositAutoAttemptedAt);
     }
   }, [booking]);
-
-  const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
   useEffect(() => {
     if (!booking?.customerEmail) return;
@@ -312,30 +328,35 @@ export default function AdminBookingDetail() {
     }
   };
 
-  const handleStatusChange = (newStatus: any) => {
-    updateBooking.mutate(
-      { id, data: { status: newStatus } },
-      {
-        onSuccess: (data) => {
-          queryClient.setQueryData(getGetBookingQueryKey(id), data);
-          queryClient.invalidateQueries({ queryKey: getGetBookingsQueryKey() });
-          toast({ title: `Booking marked as ${newStatus}` });
-          if (newStatus === 'confirmed') fireConfetti();
-        }
+  const handleStatusChange = async (newStatus: any) => {
+    try {
+      const res = await fetch(`${BASE}/api/bookings/${id}`, {
+        method: "PUT",
+        headers: adminHeaders(),
+        body: JSON.stringify({ status: newStatus }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setBooking(data);
+        toast({ title: `Booking marked as ${newStatus}` });
+        if (newStatus === "confirmed") fireConfetti();
       }
-    );
+    } catch {}
   };
 
-  const saveNotes = () => {
-    updateBooking.mutate(
-      { id, data: { adminNotes } },
-      {
-        onSuccess: (data) => {
-          queryClient.setQueryData(getGetBookingQueryKey(id), data);
-          toast({ title: "Notes saved successfully" });
-        }
+  const saveNotes = async () => {
+    try {
+      const res = await fetch(`${BASE}/api/bookings/${id}`, {
+        method: "PUT",
+        headers: adminHeaders(),
+        body: JSON.stringify({ adminNotes }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setBooking(data);
+        toast({ title: "Notes saved successfully" });
       }
-    );
+    } catch {}
   };
 
   const getStatusBadge = (status: string) => {
@@ -1671,7 +1692,7 @@ export default function AdminBookingDetail() {
                           const d = await r.json();
                           if (!r.ok) { alert(d.error || "Charge failed."); return; }
                           toast({ title: "Remaining balance charged!", description: `$${parseFloat(String((booking as any).splitRemainingAmount ?? 0)).toFixed(2)} successfully charged.` });
-                          queryClient.invalidateQueries({ queryKey: getGetBookingQueryKey(id) });
+                          fetchBooking();
                         } catch { alert("Connection error. Please try again."); }
                       }}
                     >
