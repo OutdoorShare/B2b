@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
-import { activitiesTable, tenantsTable, businessProfileTable, listingsTable } from "@workspace/db/schema";
+import { activitiesTable, activityBookingsTable, tenantsTable, businessProfileTable, listingsTable } from "@workspace/db/schema";
 import { eq, desc, and } from "drizzle-orm";
 
 const router: IRouter = Router();
@@ -135,6 +135,65 @@ router.get("/activities", async (req, res) => {
   }
 });
 
+// ── Admin: list activity bookings for tenant ──────────────────────────────────
+// IMPORTANT: Must be registered BEFORE /activities/:id to avoid route conflict
+router.get("/activities/bookings", async (req, res) => {
+  if (!req.tenantId) { res.status(401).json({ error: "Unauthorized" }); return; }
+  try {
+    const rows = await db
+      .select()
+      .from(activityBookingsTable)
+      .where(eq(activityBookingsTable.tenantId, req.tenantId))
+      .orderBy(desc(activityBookingsTable.createdAt));
+    res.json(rows.map(fmtBooking));
+  } catch (e: any) {
+    res.status(500).json({ error: "Failed to load bookings" });
+  }
+});
+
+// ── Admin: get single activity booking ────────────────────────────────────────
+// IMPORTANT: Must be registered BEFORE /activities/:id to avoid route conflict
+router.get("/activities/bookings/:id", async (req, res) => {
+  if (!req.tenantId) { res.status(401).json({ error: "Unauthorized" }); return; }
+  try {
+    const id = parseInt(req.params.id);
+    const [booking] = await db
+      .select()
+      .from(activityBookingsTable)
+      .where(and(eq(activityBookingsTable.id, id), eq(activityBookingsTable.tenantId, req.tenantId)))
+      .limit(1);
+    if (!booking) { res.status(404).json({ error: "Not found" }); return; }
+    await db.update(activityBookingsTable)
+      .set({ seenByAdmin: true })
+      .where(eq(activityBookingsTable.id, id));
+    res.json(fmtBooking(booking));
+  } catch (e: any) {
+    res.status(500).json({ error: "Failed to load booking" });
+  }
+});
+
+// ── Admin: update activity booking ────────────────────────────────────────────
+// IMPORTANT: Must be registered BEFORE /activities/:id to avoid route conflict
+router.patch("/activities/bookings/:id", async (req, res) => {
+  if (!req.tenantId) { res.status(401).json({ error: "Unauthorized" }); return; }
+  try {
+    const id = parseInt(req.params.id);
+    const { status, adminNotes } = req.body;
+    const updates: Record<string, any> = { updatedAt: new Date() };
+    if (status) updates.status = status;
+    if (adminNotes !== undefined) updates.adminNotes = adminNotes;
+    const [updated] = await db
+      .update(activityBookingsTable)
+      .set(updates)
+      .where(and(eq(activityBookingsTable.id, id), eq(activityBookingsTable.tenantId, req.tenantId)))
+      .returning();
+    if (!updated) { res.status(404).json({ error: "Not found" }); return; }
+    res.json(fmtBooking(updated));
+  } catch (e: any) {
+    res.status(500).json({ error: "Failed to update booking" });
+  }
+});
+
 // ── Admin: get single activity ────────────────────────────────────────────────
 router.get("/activities/:id", async (req, res) => {
   if (!req.tenantId) { res.status(401).json({ error: "Unauthorized" }); return; }
@@ -237,6 +296,85 @@ router.delete("/activities/:id", async (req, res) => {
     res.status(500).json({ error: "Failed to delete activity" });
   }
 });
+
+// ── Public: create activity booking ───────────────────────────────────────────
+router.post("/activity-bookings", async (req, res) => {
+  try {
+    const {
+      activityId, customerName, customerEmail, customerPhone,
+      selectedDate, selectedTime, guestCount, notes,
+    } = req.body;
+    if (!activityId || !customerName || !customerEmail || !guestCount) {
+      res.status(400).json({ error: "activityId, customerName, customerEmail, and guestCount are required" });
+      return;
+    }
+    const [activity] = await db
+      .select()
+      .from(activitiesTable)
+      .where(eq(activitiesTable.id, parseInt(activityId)))
+      .limit(1);
+    if (!activity) { res.status(404).json({ error: "Activity not found" }); return; }
+    const pricePerPerson = parseFloat(activity.pricePerPerson) || 0;
+    const totalAmount = (pricePerPerson * parseInt(guestCount)).toFixed(2);
+    const [booking] = await db.insert(activityBookingsTable).values({
+      tenantId: activity.tenantId,
+      activityId: activity.id,
+      activityTitle: activity.title,
+      activityPricePerPerson: pricePerPerson.toString(),
+      customerName,
+      customerEmail,
+      customerPhone: customerPhone ?? null,
+      selectedDate: selectedDate ?? null,
+      selectedTime: selectedTime ?? null,
+      guestCount: parseInt(guestCount),
+      totalAmount,
+      notes: notes ?? null,
+      status: "pending",
+    }).returning();
+    res.status(201).json({ id: booking.id, status: booking.status });
+  } catch (e: any) {
+    console.error("[activity-bookings] create error:", e.message);
+    res.status(500).json({ error: "Failed to create booking" });
+  }
+});
+
+// ── Public: get activity booking by ID (for confirmation page) ─────────────
+router.get("/activity-bookings/:id/public", async (req, res) => {
+  try {
+    const id = parseInt(req.params.id);
+    const [booking] = await db
+      .select()
+      .from(activityBookingsTable)
+      .where(eq(activityBookingsTable.id, id))
+      .limit(1);
+    if (!booking) { res.status(404).json({ error: "Not found" }); return; }
+    res.json({
+      id: booking.id,
+      activityTitle: booking.activityTitle,
+      selectedDate: booking.selectedDate,
+      selectedTime: booking.selectedTime,
+      guestCount: booking.guestCount,
+      totalAmount: parseFloat(booking.totalAmount),
+      status: booking.status,
+      customerName: booking.customerName,
+      customerEmail: booking.customerEmail,
+      createdAt: booking.createdAt.toISOString(),
+    });
+  } catch (e: any) {
+    res.status(500).json({ error: "Failed to load booking" });
+  }
+});
+
+
+function fmtBooking(b: typeof activityBookingsTable.$inferSelect) {
+  return {
+    ...b,
+    totalAmount: parseFloat(b.totalAmount),
+    activityPricePerPerson: parseFloat(b.activityPricePerPerson),
+    createdAt: b.createdAt.toISOString(),
+    updatedAt: b.updatedAt.toISOString(),
+  };
+}
 
 function fmt(a: typeof activitiesTable.$inferSelect) {
   return {

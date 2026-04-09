@@ -288,6 +288,7 @@ function BookingSidebar({
   onContact: (msg?: string) => void;
   onOpenChat: () => void;
 }) {
+  const [, navigate] = useLocation();
   const today = startOfDay(new Date());
   const [month, setMonth] = useState(startOfMonth(today));
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
@@ -337,14 +338,11 @@ function BookingSidebar({
   const total = pricePerPerson * guests;
 
   function handleBook() {
-    if (scheduleMode === "open") {
-      onOpenChat();
-      return;
-    }
-    const datePart = selectedDate ? format(parseISO(selectedDate), "EEEE, MMMM d, yyyy") : "";
-    const timePart = selectedTime ? ` at ${selectedTime}` : "";
-    const msg = `Hi! I'd like to book "${activity.title}" on ${datePart}${timePart} for ${guests} guest${guests !== 1 ? "s" : ""}. Total: $${total.toFixed(2)}. Please let me know how to confirm!`;
-    onContact(msg);
+    const params = new URLSearchParams();
+    if (selectedDate) params.set("date", selectedDate);
+    if (selectedTime) params.set("time", selectedTime);
+    params.set("guests", String(guests));
+    navigate(`/experiences/${activity.id}/book?${params.toString()}`);
   }
 
   const canBook = scheduleMode === "open" || (selectedDate !== null && (timesForSelected.length === 0 || selectedTime !== null));

@@ -54,6 +54,7 @@ const NAV_GROUPS: NavGroup[] = [
       { name: "Bookings", path: "/bookings", icon: CalendarDays },
       { name: "Listings", path: "/listings", icon: Package },
       { name: "Activities", path: "/activities", icon: Mountain },
+      { name: "Experience Bookings", path: "/activity-bookings", icon: CalendarDays },
       { name: "Inventory", path: "/inventory", icon: Warehouse },
       { name: "Quotes", path: "/quotes", icon: FileText },
       { name: "Claims", path: "/claims", icon: ShieldAlert },

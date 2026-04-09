@@ -80,6 +80,8 @@ import AdminInventoryDetail from "@/pages/admin/inventory/detail";
 import AdminInventoryImport from "@/pages/admin/inventory/import";
 import AdminActivities from "@/pages/admin/activities/index";
 import AdminActivityForm from "@/pages/admin/activities/form";
+import AdminActivityBookings from "@/pages/admin/activity-bookings/index";
+import AdminActivityBookingDetail from "@/pages/admin/activity-bookings/detail";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -375,6 +377,12 @@ function Router() {
       </Route>
       <Route path="/:slug/admin/activities">
         <AdminGuard><AdminLayout><AdminActivities /></AdminLayout></AdminGuard>
+      </Route>
+      <Route path="/:slug/admin/activity-bookings/:id">
+        <AdminGuard><AdminLayout><AdminActivityBookingDetail /></AdminLayout></AdminGuard>
+      </Route>
+      <Route path="/:slug/admin/activity-bookings">
+        <AdminGuard><AdminLayout><AdminActivityBookings /></AdminLayout></AdminGuard>
       </Route>
       <Route path="/:slug/admin/team">
         <AdminGuard><AdminLayout><AdminTeam /></AdminLayout></AdminGuard>
