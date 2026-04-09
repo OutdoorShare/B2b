@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import {
   ArrowLeft, Calendar, Package, User, Phone, Mail,
-  Clock, CheckCircle2, XCircle, AlertCircle, FileSignature, FileText, ExternalLink,
+  Clock, CheckCircle2, XCircle, AlertCircle, FileSignature, FileText, ExternalLink, Download,
   StickyNote, ShieldCheck, MessageSquare, CreditCard,
   MapPin, Monitor, Smartphone, Phone as PhoneIcon, Users,
   Receipt, Tag, Camera, ImagePlus, Upload, X as XIcon, Loader2, RotateCcw,
@@ -522,6 +522,17 @@ export default function MyBookingDetail() {
                     <p className={`text-sm font-semibold ${agreementSigned ? "text-green-800" : "text-amber-800"}`}>Rental Agreement</p>
                     <p className="text-xs text-muted-foreground">{agreementSigned ? "Signed ✓" : "Not yet signed"}</p>
                   </div>
+                  {agreementSigned && (booking as any).agreementPdfPath && (
+                    <a
+                      href={`${BASE}/api/bookings/${booking.id}/agreement-pdf`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="shrink-0 inline-flex items-center gap-1 text-xs font-medium text-green-700 hover:text-green-900 bg-white border border-green-200 rounded-lg px-2.5 py-1.5 transition-colors hover:bg-green-50"
+                    >
+                      <FileText className="w-3 h-3" />
+                      View
+                    </a>
+                  )}
                 </div>
 
                 {/* Step 2: Before Photos */}
@@ -1105,42 +1116,24 @@ export default function MyBookingDetail() {
 
       {/* Signed Agreement */}
       {booking.agreementSignerName && (
-        <div className="rounded-2xl border border-green-200 bg-green-50 p-5 space-y-3">
-          <div className="flex items-center justify-between gap-2">
-            <h2 className="font-semibold flex items-center gap-2 text-sm text-green-700">
-              <FileSignature className="w-4 h-4" />
-              Rental Agreement Signed
-            </h2>
-            {(booking as any).agreementPdfPath && (
-              <div className="flex items-center gap-1.5">
-                <a
-                  href={`${BASE}/api/bookings/${booking.id}/agreement-pdf`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center gap-1 text-xs font-medium text-green-700 hover:text-green-900 bg-white border border-green-200 rounded-md px-2.5 py-1.5 transition-colors hover:bg-green-50"
-                >
-                  <FileText className="w-3.5 h-3.5" />
-                  View PDF
-                  <ExternalLink className="w-3 h-3 ml-0.5 opacity-60" />
-                </a>
-                <a
-                  href={`${BASE}/api/bookings/${booking.id}/agreement-pdf?download=1`}
-                  download={`rental-agreement-${booking.id}.pdf`}
-                  className="inline-flex items-center gap-1 text-xs font-medium text-green-600/70 hover:text-green-800 transition-colors px-1"
-                  title="Download PDF"
-                >
-                  ↓
-                </a>
-              </div>
-            )}
+        <div className="rounded-2xl border border-green-200 bg-green-50 p-5 space-y-4">
+          <div className="flex items-center gap-2">
+            <div className="w-8 h-8 rounded-full bg-green-500 flex items-center justify-center shrink-0">
+              <FileSignature className="w-4 h-4 text-white" />
+            </div>
+            <div>
+              <h2 className="font-semibold text-sm text-green-800">Rental Agreement Signed</h2>
+              <p className="text-xs text-green-600/80">Your signed copy is available below</p>
+            </div>
           </div>
+
           <div className="grid grid-cols-2 gap-3 text-sm">
             <div>
               <div className="text-green-600/70 text-xs mb-0.5">Signed by</div>
               <div className="font-medium text-green-800">{booking.agreementSignerName}</div>
             </div>
             <div>
-              <div className="text-green-600/70 text-xs mb-0.5">Date</div>
+              <div className="text-green-600/70 text-xs mb-0.5">Date signed</div>
               <div className="font-medium text-green-800">
                 {booking.agreementSignedAt
                   ? format(new Date(booking.agreementSignedAt), "MMM d, yyyy h:mm a")
@@ -1148,6 +1141,7 @@ export default function MyBookingDetail() {
               </div>
             </div>
           </div>
+
           {booking.agreementSignature && (
             <div>
               <div className="text-green-600/70 text-xs mb-1.5">Your signature</div>
@@ -1160,6 +1154,35 @@ export default function MyBookingDetail() {
               </div>
             </div>
           )}
+
+          {(booking as any).agreementPdfPath ? (
+            <div className="flex gap-2 pt-1">
+              <a
+                href={`${BASE}/api/bookings/${booking.id}/agreement-pdf`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex-1 inline-flex items-center justify-center gap-2 text-sm font-semibold text-green-700 hover:text-green-900 bg-white border border-green-300 rounded-xl px-4 py-2.5 transition-colors hover:bg-green-50 shadow-sm"
+              >
+                <FileText className="w-4 h-4" />
+                View Agreement PDF
+                <ExternalLink className="w-3.5 h-3.5 opacity-60" />
+              </a>
+              <a
+                href={`${BASE}/api/bookings/${booking.id}/agreement-pdf?download=1`}
+                download={`rental-agreement-${booking.id}.pdf`}
+                className="inline-flex items-center justify-center gap-1.5 text-sm font-medium text-green-600 hover:text-green-800 bg-white border border-green-200 rounded-xl px-3.5 py-2.5 transition-colors hover:bg-green-50 shadow-sm"
+                title="Download PDF"
+              >
+                <Download className="w-4 h-4" />
+              </a>
+            </div>
+          ) : (
+            <div className="flex items-center gap-1.5 text-xs text-green-600/70 bg-white/60 rounded-lg px-3 py-2 border border-green-100">
+              <FileText className="w-3.5 h-3.5 shrink-0" />
+              <span>PDF copy is being processed and will be available shortly.</span>
+            </div>
+          )}
+
           <div className="flex items-start gap-1.5 text-xs text-green-600/80">
             <ShieldCheck className="w-3.5 h-3.5 mt-0.5 shrink-0" />
             <span>You have agreed to the rental terms &amp; conditions for this booking.</span>
