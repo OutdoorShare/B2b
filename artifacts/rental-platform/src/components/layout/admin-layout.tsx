@@ -245,6 +245,8 @@ export function AdminLayout({ children }: { children: React.ReactNode }) {
   });
   const companyLogoUrl = (profile as any)?.logoUrl as string | undefined;
   const companyName = (profile as any)?.name as string | undefined;
+  const plan = (profile as any)?.plan as string | undefined;
+  const isPaid = plan && plan !== "starter";
 
   useEffect(() => {
     const setFavicon = (href: string) => {
@@ -482,12 +484,14 @@ export function AdminLayout({ children }: { children: React.ReactNode }) {
           </div>
         </div>
       </main>
-      <AIAssistant
-        role="admin"
-        tenantSlug={slug}
-        companyName={companyName}
-        adminToken={getAdminSession()?.token}
-      />
+      {isPaid && (
+        <AIAssistant
+          role="admin"
+          tenantSlug={slug}
+          companyName={companyName}
+          adminToken={getAdminSession()?.token}
+        />
+      )}
     </div>
   );
 }

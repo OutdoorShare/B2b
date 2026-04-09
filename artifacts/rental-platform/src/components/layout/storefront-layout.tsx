@@ -608,8 +608,8 @@ export function StorefrontLayout({ children }: { children: React.ReactNode }) {
         </div>
       </footer>
 
-      {/* Fixed corner badge — only shown during trial */}
-      {trialActive && <PoweredByBadge variant="fixed" />}
+      {/* Fixed corner badge — shown for Half Throttle (free plan) and during trial */}
+      {(!isPaid || trialActive) && <PoweredByBadge variant="fixed" />}
 
       {/* Renter Chat Widget — available to all visitors, guests included */}
       {slug && (
@@ -623,8 +623,8 @@ export function StorefrontLayout({ children }: { children: React.ReactNode }) {
         />
       )}
 
-      {/* AI Renter Assistant */}
-      {slug && (
+      {/* AI Renter Assistant — Full Throttle and above only */}
+      {slug && isPaid && (
         <AIAssistant
           role="renter"
           tenantSlug={(profile as any)?.siteSlug ?? slug}
