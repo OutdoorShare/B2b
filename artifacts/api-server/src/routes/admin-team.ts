@@ -4,6 +4,7 @@ import { adminUsersTable, tenantsTable } from "@workspace/db/schema";
 import { eq, and } from "drizzle-orm";
 import { scrypt, randomBytes, timingSafeEqual } from "crypto";
 import { promisify } from "util";
+import { requireAdminToken } from "../middleware/admin-auth";
 
 const scryptAsync = promisify(scrypt);
 const SALT = "rental_admin_salt_2024";
@@ -150,19 +151,20 @@ router.post("/admin/auth/logout", async (req, res) => {
   }
 });
 
-// GET /admin/team — scoped to tenant
-router.get("/admin/team", async (req, res) => {
+// GET /admin/team — scoped to tenant (requires valid auth token)
+router.get("/admin/team", requireAdminToken as any, async (req, res) => {
   try {
-    const where = req.tenantId ? eq(adminUsersTable.tenantId, req.tenantId) : undefined;
-    const users = await db.select().from(adminUsersTable).where(where).orderBy(adminUsersTable.createdAt);
+    const users = await db.select().from(adminUsersTable)
+      .where(eq(adminUsersTable.tenantId, req.tenantId!))
+      .orderBy(adminUsersTable.createdAt);
     res.json(users.map(safeUser));
   } catch {
     res.status(500).json({ error: "Failed to fetch team members" });
   }
 });
 
-// POST /admin/team — scoped to tenant
-router.post("/admin/team", async (req, res) => {
+// POST /admin/team — scoped to tenant (requires valid auth token)
+router.post("/admin/team", requireAdminToken as any, async (req, res) => {
   try {
     const { name, email, password, role, notes } = req.body;
     if (!name || !email || !password) { res.status(400).json({ error: "name, email and password are required" }); return; }
@@ -183,8 +185,8 @@ router.post("/admin/team", async (req, res) => {
   }
 });
 
-// PUT /admin/team/:id — scoped to tenant
-router.put("/admin/team/:id", async (req, res) => {
+// PUT /admin/team/:id — scoped to tenant (requires valid auth token)
+router.put("/admin/team/:id", requireAdminToken as any, async (req, res) => {
   try {
     const id = parseInt(req.params.id);
     const { name, email, password, role, status, notes } = req.body;
@@ -200,11 +202,9 @@ router.put("/admin/team/:id", async (req, res) => {
     if (status) updates.status = status;
     if (notes !== undefined) updates.notes = notes || null;
 
-    const whereClause = req.tenantId
-      ? and(eq(adminUsersTable.id, id), eq(adminUsersTable.tenantId, req.tenantId))
-      : eq(adminUsersTable.id, id);
-
-    const [updated] = await db.update(adminUsersTable).set(updates).where(whereClause).returning();
+    const [updated] = await db.update(adminUsersTable).set(updates)
+      .where(and(eq(adminUsersTable.id, id), eq(adminUsersTable.tenantId, req.tenantId!)))
+      .returning();
     if (!updated) { res.status(404).json({ error: "Team member not found" }); return; }
     res.json(safeUser(updated));
   } catch (err: any) {
@@ -213,15 +213,13 @@ router.put("/admin/team/:id", async (req, res) => {
   }
 });
 
-// DELETE /admin/team/:id — scoped to tenant
-router.delete("/admin/team/:id", async (req, res) => {
+// DELETE /admin/team/:id — scoped to tenant (requires valid auth token)
+router.delete("/admin/team/:id", requireAdminToken as any, async (req, res) => {
   try {
     const id = parseInt(req.params.id);
-    const whereClause = req.tenantId
-      ? and(eq(adminUsersTable.id, id), eq(adminUsersTable.tenantId, req.tenantId))
-      : eq(adminUsersTable.id, id);
-
-    const [deleted] = await db.delete(adminUsersTable).where(whereClause).returning();
+    const [deleted] = await db.delete(adminUsersTable)
+      .where(and(eq(adminUsersTable.id, id), eq(adminUsersTable.tenantId, req.tenantId!)))
+      .returning();
     if (!deleted) { res.status(404).json({ error: "Team member not found" }); return; }
     res.json({ ok: true });
   } catch {

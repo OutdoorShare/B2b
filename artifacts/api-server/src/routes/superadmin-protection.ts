@@ -1,9 +1,18 @@
-import { Router } from "express";
+import { Router, type Request, type Response, type NextFunction } from "express";
 import { db } from "@workspace/db";
-import { platformProtectionPlansTable } from "@workspace/db/schema";
+import { platformProtectionPlansTable, superadminUsersTable } from "@workspace/db/schema";
 import { eq } from "drizzle-orm";
 
 const router = Router();
+
+async function requireSuperAdmin(req: Request, res: Response, next: NextFunction) {
+  const token = req.headers["x-superadmin-token"] as string | undefined;
+  if (!token) { res.status(401).json({ error: "Unauthorized" }); return; }
+  const [user] = await db.select().from(superadminUsersTable)
+    .where(eq(superadminUsersTable.token, token)).limit(1);
+  if (!user || user.status !== "active") { res.status(401).json({ error: "Unauthorized" }); return; }
+  next();
+}
 
 const KNOWN_CATEGORIES = [
   { slug: "atv", name: "ATV" },
@@ -36,7 +45,7 @@ async function seedIfNeeded() {
 }
 
 // GET /superadmin/protection-plans
-router.get("/superadmin/protection-plans", async (req, res) => {
+router.get("/superadmin/protection-plans", requireSuperAdmin, async (req, res) => {
   try {
     await seedIfNeeded();
     const rows = await db.select().from(platformProtectionPlansTable)
@@ -48,7 +57,7 @@ router.get("/superadmin/protection-plans", async (req, res) => {
 });
 
 // PUT /superadmin/protection-plans/:slug
-router.put("/superadmin/protection-plans/:slug", async (req, res) => {
+router.put("/superadmin/protection-plans/:slug", requireSuperAdmin, async (req, res) => {
   try {
     const { slug } = req.params;
     const { enabled, feeAmount } = req.body;

@@ -113,9 +113,6 @@ export default function SuperAdminLogin() {
               {loading ? "Signing in…" : "Sign In to Platform"}
             </Button>
 
-            <p className="text-[11px] text-slate-500 text-center leading-relaxed">
-              Default: <code className="font-mono text-slate-400">owner@platform.com</code> / <code className="font-mono text-slate-400">superadmin123</code>
-            </p>
           </form>
         </div>
       </div>

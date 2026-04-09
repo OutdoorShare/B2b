@@ -1,5 +1,6 @@
 import express, { type Express } from "express";
 import cors from "cors";
+import { rateLimit } from "express-rate-limit";
 import pinoHttp from "pino-http";
 import path from "path";
 import router from "./routes";
@@ -19,6 +20,22 @@ import activitiesRouter from "./routes/activities";
 import { logger } from "./lib/logger";
 import { resolveTenant } from "./middleware/admin-auth";
 import { errorLoggerMiddleware, captureUnhandledErrors } from "./middleware/error-logger";
+
+const authRateLimit = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 20,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: "Too many login attempts. Please try again later." },
+});
+
+const aiRateLimit = rateLimit({
+  windowMs: 60 * 1000,
+  limit: 30,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: "Too many requests. Please slow down." },
+});
 
 const app: Express = express();
 
@@ -55,6 +72,12 @@ app.use("/uploads", express.static(uploadsDir));
 app.use("/api/uploads", express.static(uploadsDir));
 
 captureUnhandledErrors();
+
+app.use("/api/admin/auth", authRateLimit);
+app.use("/api/customers/login", authRateLimit);
+app.use("/api/customers/register", authRateLimit);
+app.use("/api/superadmin/auth", authRateLimit);
+app.use("/api/ai/chat", aiRateLimit);
 
 app.use("/api", resolveTenant as any);
 app.use("/api", errorLoggerMiddleware);

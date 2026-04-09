@@ -8,6 +8,7 @@ declare global {
     interface Request {
       tenantId?: number;
       adminUser?: { id: number; role: string; tenantId: number | null };
+      isTokenAuthenticated?: boolean;
     }
   }
 }
@@ -27,6 +28,7 @@ export async function resolveTenant(req: Request, _res: Response, next: NextFunc
 
       if (user) {
         req.adminUser = { id: user.id, role: user.role, tenantId: user.tenantId };
+        req.isTokenAuthenticated = true;
         // When a tenant slug is also provided (from the URL), use it for tenant resolution.
         // This allows the correct tenant context when an admin accesses a panel via slug URL.
         if (tenantSlug) {
@@ -54,6 +56,7 @@ export async function resolveTenant(req: Request, _res: Response, next: NextFunc
         .limit(1);
 
       if (tenant) {
+        req.isTokenAuthenticated = true;
         // When a tenant slug is also provided, use it for tenant resolution.
         if (tenantSlug) {
           const [slugTenant] = await db
@@ -92,6 +95,15 @@ export async function resolveTenant(req: Request, _res: Response, next: NextFunc
 
 export function requireTenant(req: Request, res: Response, next: NextFunction) {
   if (!req.tenantId) {
+    res.status(401).json({ error: "Unauthorized" });
+    return;
+  }
+  next();
+}
+
+/** Stronger guard: requires a valid admin token (not just a slug header). */
+export function requireAdminToken(req: Request, res: Response, next: NextFunction) {
+  if (!req.tenantId || !req.isTokenAuthenticated) {
     res.status(401).json({ error: "Unauthorized" });
     return;
   }

@@ -2,12 +2,12 @@ import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
 import { contactCardsTable, listingsTable } from "@workspace/db";
 import { eq, and } from "drizzle-orm";
+import { requireAdminToken } from "../middleware/admin-auth";
 
 const router: IRouter = Router();
 
 // GET /api/contact-cards
-router.get("/contact-cards", async (req, res) => {
-  if (!req.tenantId) { res.status(401).json({ error: "Unauthorized" }); return; }
+router.get("/contact-cards", requireAdminToken as any, async (req, res) => {
   try {
     const cards = await db
       .select()
@@ -22,8 +22,7 @@ router.get("/contact-cards", async (req, res) => {
 });
 
 // GET /api/contact-cards/:id
-router.get("/contact-cards/:id", async (req, res) => {
-  if (!req.tenantId) { res.status(401).json({ error: "Unauthorized" }); return; }
+router.get("/contact-cards/:id", requireAdminToken as any, async (req, res) => {
   try {
     const [card] = await db
       .select()
@@ -38,8 +37,7 @@ router.get("/contact-cards/:id", async (req, res) => {
 });
 
 // POST /api/contact-cards
-router.post("/contact-cards", async (req, res) => {
-  if (!req.tenantId) { res.status(401).json({ error: "Unauthorized" }); return; }
+router.post("/contact-cards", requireAdminToken as any, async (req, res) => {
   try {
     const { name, address, phone, email, specialInstructions, prepWhatToWear, prepWhatToBring, prepVehicleTowRating, prepAdditionalTips } = req.body;
     if (!name?.trim()) { res.status(400).json({ error: "Name is required" }); return; }
@@ -66,8 +64,7 @@ router.post("/contact-cards", async (req, res) => {
 });
 
 // PUT /api/contact-cards/:id
-router.put("/contact-cards/:id", async (req, res) => {
-  if (!req.tenantId) { res.status(401).json({ error: "Unauthorized" }); return; }
+router.put("/contact-cards/:id", requireAdminToken as any, async (req, res) => {
   try {
     const { name, address, phone, email, specialInstructions, prepWhatToWear, prepWhatToBring, prepVehicleTowRating, prepAdditionalTips } = req.body;
     if (!name?.trim()) { res.status(400).json({ error: "Name is required" }); return; }
@@ -96,8 +93,7 @@ router.put("/contact-cards/:id", async (req, res) => {
 });
 
 // DELETE /api/contact-cards/:id
-router.delete("/contact-cards/:id", async (req, res) => {
-  if (!req.tenantId) { res.status(401).json({ error: "Unauthorized" }); return; }
+router.delete("/contact-cards/:id", requireAdminToken as any, async (req, res) => {
   try {
     const cardId = Number(req.params.id);
     // Unlink from listings first
