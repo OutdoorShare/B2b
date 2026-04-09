@@ -107,11 +107,21 @@ export default function SuperAdminAcceptInvite() {
                 <AlertCircle className="w-7 h-7 text-red-400" />
               </div>
               <div>
-                <h2 className="text-lg font-bold text-white">Invalid Invitation</h2>
+                <h2 className="text-lg font-bold text-white">Link Not Found</h2>
                 <p className="text-sm text-slate-400 mt-2">
-                  {errorMsg || "This invitation link is invalid. Please ask an admin to send you a new invite."}
+                  {errorMsg || "This invitation link is no longer valid — it may have already been used or has expired."}
+                </p>
+                <p className="text-sm text-slate-500 mt-3">
+                  If you already set your password, you can log in directly below. Otherwise, ask a super admin to send you a fresh invite.
                 </p>
               </div>
+              <Button
+                onClick={() => navigate("/superadmin")}
+                className="mt-1 text-white w-full"
+                style={{ backgroundColor: "#3ab549" }}
+              >
+                Go to Login
+              </Button>
             </div>
           )}
 
