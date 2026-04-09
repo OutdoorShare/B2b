@@ -9,7 +9,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { ArrowLeft, Plus, X, Upload, Loader2 } from "lucide-react";
+import { ArrowLeft, Plus, X, Upload, Loader2, Package, Search, CheckCircle2 } from "lucide-react";
 import { Link } from "wouter";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/+$/, "");
@@ -53,6 +53,16 @@ type FormState = {
   whatToBring: string;
   minAge: string;
   isActive: boolean;
+  listingId: number | null;
+  requiresRental: boolean;
+};
+
+type ListingOption = {
+  id: number;
+  title: string;
+  pricePerDay: number;
+  imageUrls: string[];
+  description: string;
 };
 
 const DEFAULTS: FormState = {
@@ -68,6 +78,8 @@ const DEFAULTS: FormState = {
   whatToBring: "",
   minAge: "",
   isActive: true,
+  listingId: null,
+  requiresRental: false,
 };
 
 export default function ActivityForm() {
@@ -81,8 +93,18 @@ export default function ActivityForm() {
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [newHighlight, setNewHighlight] = useState("");
+  const [listings, setListings] = useState<ListingOption[]>([]);
+  const [listingSearch, setListingSearch] = useState("");
+  const [showListingPicker, setShowListingPicker] = useState(false);
 
   const set = (k: keyof FormState, v: any) => setForm(f => ({ ...f, [k]: v }));
+
+  useEffect(() => {
+    adminFetch("/listings?limit=200")
+      .then(r => r.ok ? r.json() : [])
+      .then(d => setListings(Array.isArray(d) ? d.filter((l: any) => l.status === "active") : []))
+      .catch(() => {});
+  }, []);
 
   useEffect(() => {
     if (!isEdit) return;
@@ -102,6 +124,8 @@ export default function ActivityForm() {
           whatToBring: d.whatToBring ?? "",
           minAge: d.minAge?.toString() ?? "",
           isActive: d.isActive ?? true,
+          listingId: d.listingId ?? null,
+          requiresRental: d.requiresRental ?? false,
         });
       })
       .finally(() => setLoading(false));
@@ -365,6 +389,140 @@ export default function ActivityForm() {
             <input type="file" accept="image/*" className="hidden" onChange={handleImageUpload} />
           </label>
         </CardContent>
+      </Card>
+
+      {/* Linked Rental */}
+      <Card>
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle className="text-base">Linked Rental</CardTitle>
+              <p className="text-sm text-muted-foreground mt-0.5">
+                Attach a rental listing so customers book equipment and the activity together.
+              </p>
+            </div>
+            <Switch
+              checked={!!form.listingId || showListingPicker}
+              onCheckedChange={v => {
+                if (!v) { set("listingId", null); set("requiresRental", false); setShowListingPicker(false); setListingSearch(""); }
+                else setShowListingPicker(true);
+              }}
+              className="data-[state=checked]:bg-green-600"
+            />
+          </div>
+        </CardHeader>
+
+        {(form.listingId || showListingPicker) && (
+          <CardContent className="space-y-4">
+            {/* Selected listing preview */}
+            {form.listingId && (() => {
+              const sel = listings.find(l => l.id === form.listingId);
+              if (!sel) return null;
+              return (
+                <div className="flex items-center gap-3 p-3 rounded-lg border bg-green-50/50 border-green-100">
+                  {sel.imageUrls?.[0] ? (
+                    <img src={sel.imageUrls[0]} alt={sel.title} className="w-14 h-14 rounded-md object-cover shrink-0 border" />
+                  ) : (
+                    <div className="w-14 h-14 rounded-md bg-gray-100 flex items-center justify-center shrink-0">
+                      <Package className="w-6 h-6 text-gray-400" />
+                    </div>
+                  )}
+                  <div className="flex-1 min-w-0">
+                    <p className="font-semibold text-sm truncate">{sel.title}</p>
+                    <p className="text-xs text-muted-foreground">${sel.pricePerDay}/day rental</p>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <CheckCircle2 className="w-4 h-4 text-green-600" />
+                    <button
+                      type="button"
+                      onClick={() => { set("listingId", null); setListingSearch(""); }}
+                      className="text-muted-foreground hover:text-red-500 transition-colors ml-1"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+              );
+            })()}
+
+            {/* Listing search picker */}
+            {!form.listingId && (
+              <div className="space-y-2">
+                <div className="relative">
+                  <Search className="absolute left-2.5 top-2.5 w-4 h-4 text-muted-foreground" />
+                  <Input
+                    className="pl-9"
+                    placeholder="Search your listings…"
+                    value={listingSearch}
+                    onChange={e => setListingSearch(e.target.value)}
+                  />
+                </div>
+                <div className="rounded-lg border divide-y max-h-52 overflow-y-auto">
+                  {listings
+                    .filter(l => l.title.toLowerCase().includes(listingSearch.toLowerCase()))
+                    .slice(0, 20)
+                    .map(l => (
+                      <button
+                        key={l.id}
+                        type="button"
+                        onClick={() => { set("listingId", l.id); setShowListingPicker(false); }}
+                        className="flex items-center gap-3 w-full px-3 py-2.5 hover:bg-gray-50 transition-colors text-left"
+                      >
+                        {l.imageUrls?.[0] ? (
+                          <img src={l.imageUrls[0]} alt={l.title} className="w-10 h-10 rounded object-cover shrink-0 border" />
+                        ) : (
+                          <div className="w-10 h-10 rounded bg-gray-100 flex items-center justify-center shrink-0">
+                            <Package className="w-4 h-4 text-gray-400" />
+                          </div>
+                        )}
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium truncate">{l.title}</p>
+                          <p className="text-xs text-muted-foreground">${l.pricePerDay}/day</p>
+                        </div>
+                      </button>
+                    ))}
+                  {listings.filter(l => l.title.toLowerCase().includes(listingSearch.toLowerCase())).length === 0 && (
+                    <p className="text-sm text-muted-foreground p-4 text-center">No active listings found</p>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Requires rental toggle */}
+            {form.listingId && (
+              <div className="flex items-center justify-between p-3 rounded-lg bg-gray-50 border">
+                <div>
+                  <p className="text-sm font-medium">Rental is required</p>
+                  <p className="text-xs text-muted-foreground">If off, customers can book the activity without renting this equipment.</p>
+                </div>
+                <Switch
+                  checked={form.requiresRental}
+                  onCheckedChange={v => set("requiresRental", v)}
+                  className="data-[state=checked]:bg-primary"
+                />
+              </div>
+            )}
+
+            {form.listingId && (() => {
+              const sel = listings.find(l => l.id === form.listingId);
+              const actPrice = parseFloat(form.pricePerPerson) || 0;
+              const rentalPrice = sel?.pricePerDay || 0;
+              if (!sel) return null;
+              return (
+                <div className="rounded-lg border border-blue-100 bg-blue-50/60 p-3">
+                  <p className="text-xs font-semibold text-blue-800 mb-1.5">Combined pricing</p>
+                  <div className="flex items-center gap-2 text-sm text-blue-700">
+                    <span>${actPrice.toFixed(2)} activity fee</span>
+                    <span className="text-blue-400">+</span>
+                    <span>${rentalPrice.toFixed(2)}/day rental</span>
+                    <span className="text-blue-400">=</span>
+                    <span className="font-bold">${(actPrice + rentalPrice).toFixed(2)} total</span>
+                  </div>
+                </div>
+              );
+            })()}
+          </CardContent>
+        )}
       </Card>
 
       {/* Actions */}

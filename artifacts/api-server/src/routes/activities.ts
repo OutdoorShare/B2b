@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
-import { activitiesTable, tenantsTable, businessProfileTable } from "@workspace/db/schema";
+import { activitiesTable, tenantsTable, businessProfileTable, listingsTable } from "@workspace/db/schema";
 import { eq, desc, and } from "drizzle-orm";
 
 const router: IRouter = Router();
@@ -16,10 +16,18 @@ router.get("/public/activities", async (req, res) => {
         bizName: businessProfileTable.name,
         bizCity: businessProfileTable.city,
         bizState: businessProfileTable.state,
+        listing: {
+          id: listingsTable.id,
+          title: listingsTable.title,
+          pricePerDay: listingsTable.pricePerDay,
+          imageUrls: listingsTable.imageUrls,
+          description: listingsTable.description,
+        },
       })
       .from(activitiesTable)
       .innerJoin(tenantsTable, eq(activitiesTable.tenantId, tenantsTable.id))
       .leftJoin(businessProfileTable, eq(businessProfileTable.tenantId, tenantsTable.id))
+      .leftJoin(listingsTable, eq(activitiesTable.listingId, listingsTable.id))
       .where(and(eq(activitiesTable.isActive, true), eq(tenantsTable.status, "active")))
       .orderBy(desc(activitiesTable.createdAt));
 
@@ -29,6 +37,10 @@ router.get("/public/activities", async (req, res) => {
       tenantName: r.bizName || r.tenantName,
       tenantSlug: r.tenantSlug,
       location: r.activity.location || `${r.bizCity || ""}${r.bizCity && r.bizState ? ", " : ""}${r.bizState || ""}` || r.tenantName,
+      linkedListing: r.listing?.id ? {
+        ...r.listing,
+        pricePerDay: r.listing.pricePerDay ? parseFloat(r.listing.pricePerDay) : 0,
+      } : null,
     })));
   } catch (e: any) {
     console.error("[activities] public list error:", e.message);
@@ -36,16 +48,30 @@ router.get("/public/activities", async (req, res) => {
   }
 });
 
+const LISTING_COLS = {
+  id: listingsTable.id,
+  title: listingsTable.title,
+  pricePerDay: listingsTable.pricePerDay,
+  imageUrls: listingsTable.imageUrls,
+  description: listingsTable.description,
+};
+
+function fmtListing(l: { id: number; title: string; pricePerDay: string; imageUrls: string[]; description: string } | null) {
+  if (!l?.id) return null;
+  return { ...l, pricePerDay: parseFloat(l.pricePerDay) || 0 };
+}
+
 // ── Admin: list tenant activities ─────────────────────────────────────────────
 router.get("/activities", async (req, res) => {
   if (!req.tenantId) { res.status(401).json({ error: "Unauthorized" }); return; }
   try {
     const rows = await db
-      .select()
+      .select({ activity: activitiesTable, listing: LISTING_COLS })
       .from(activitiesTable)
+      .leftJoin(listingsTable, eq(activitiesTable.listingId, listingsTable.id))
       .where(eq(activitiesTable.tenantId, req.tenantId))
       .orderBy(desc(activitiesTable.createdAt));
-    res.json(rows.map(fmt));
+    res.json(rows.map(r => ({ ...fmt(r.activity), linkedListing: fmtListing(r.listing as any) })));
   } catch (e: any) {
     res.status(500).json({ error: "Failed to load activities" });
   }
@@ -57,11 +83,12 @@ router.get("/activities/:id", async (req, res) => {
   try {
     const id = parseInt(req.params.id);
     const [row] = await db
-      .select()
+      .select({ activity: activitiesTable, listing: LISTING_COLS })
       .from(activitiesTable)
+      .leftJoin(listingsTable, eq(activitiesTable.listingId, listingsTable.id))
       .where(and(eq(activitiesTable.id, id), eq(activitiesTable.tenantId, req.tenantId)));
     if (!row) { res.status(404).json({ error: "Activity not found" }); return; }
-    res.json(fmt(row));
+    res.json({ ...fmt(row.activity), linkedListing: fmtListing(row.listing as any) });
   } catch (e: any) {
     res.status(500).json({ error: "Failed to load activity" });
   }
@@ -71,7 +98,7 @@ router.get("/activities/:id", async (req, res) => {
 router.post("/activities", async (req, res) => {
   if (!req.tenantId) { res.status(401).json({ error: "Unauthorized" }); return; }
   try {
-    const { title, description, category, pricePerPerson, durationMinutes, maxCapacity, location, imageUrls, highlights, whatToBring, minAge, isActive } = req.body;
+    const { title, description, category, pricePerPerson, durationMinutes, maxCapacity, location, imageUrls, highlights, whatToBring, minAge, isActive, listingId, requiresRental } = req.body;
     if (!title) { res.status(400).json({ error: "Title is required" }); return; }
     const [row] = await db.insert(activitiesTable).values({
       tenantId: req.tenantId,
@@ -87,6 +114,8 @@ router.post("/activities", async (req, res) => {
       whatToBring: whatToBring ?? "",
       minAge: minAge ?? null,
       isActive: isActive ?? true,
+      listingId: listingId ? parseInt(listingId) : null,
+      requiresRental: requiresRental ?? false,
     }).returning();
     res.status(201).json(fmt(row));
   } catch (e: any) {
@@ -99,7 +128,7 @@ router.put("/activities/:id", async (req, res) => {
   if (!req.tenantId) { res.status(401).json({ error: "Unauthorized" }); return; }
   try {
     const id = parseInt(req.params.id);
-    const { title, description, category, pricePerPerson, durationMinutes, maxCapacity, location, imageUrls, highlights, whatToBring, minAge, isActive } = req.body;
+    const { title, description, category, pricePerPerson, durationMinutes, maxCapacity, location, imageUrls, highlights, whatToBring, minAge, isActive, listingId, requiresRental } = req.body;
     const [row] = await db
       .update(activitiesTable)
       .set({
@@ -108,6 +137,8 @@ router.put("/activities/:id", async (req, res) => {
         durationMinutes, maxCapacity, location,
         imageUrls, highlights, whatToBring, minAge,
         isActive,
+        listingId: listingId ? parseInt(listingId) : null,
+        requiresRental: requiresRental ?? false,
         updatedAt: new Date(),
       })
       .where(and(eq(activitiesTable.id, id), eq(activitiesTable.tenantId, req.tenantId)))

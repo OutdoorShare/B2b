@@ -5,7 +5,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
-import { Mountain, Plus, Clock, Users, DollarSign, Pencil, Trash2, ToggleLeft, ToggleRight } from "lucide-react";
+import { Mountain, Plus, Clock, Users, DollarSign, Pencil, Trash2, ToggleLeft, ToggleRight, Package } from "lucide-react";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/+$/, "");
 
@@ -53,6 +53,9 @@ type Activity = {
   location: string;
   imageUrls: string[];
   isActive: boolean;
+  listingId: number | null;
+  requiresRental: boolean;
+  linkedListing: { id: number; title: string; pricePerDay: number; imageUrls: string[] } | null;
 };
 
 export default function AdminActivities() {
@@ -144,9 +147,17 @@ export default function AdminActivities() {
                 <div className="flex items-start justify-between gap-2">
                   <div>
                     <h3 className="font-semibold leading-tight">{act.title}</h3>
-                    <Badge variant="outline" className="mt-1 text-xs">
-                      {CATEGORY_LABELS[act.category] ?? act.category}
-                    </Badge>
+                    <div className="flex items-center gap-1.5 mt-1 flex-wrap">
+                      <Badge variant="outline" className="text-xs">
+                        {CATEGORY_LABELS[act.category] ?? act.category}
+                      </Badge>
+                      {act.linkedListing && (
+                        <Badge variant="outline" className="text-xs border-blue-200 text-blue-700 bg-blue-50 flex items-center gap-1">
+                          <Package className="w-2.5 h-2.5" />
+                          {act.requiresRental ? "Rental required" : "Rental included"}
+                        </Badge>
+                      )}
+                    </div>
                   </div>
                   <Badge variant={act.isActive ? "default" : "secondary"} className={act.isActive ? "bg-green-600 hover:bg-green-700 shrink-0" : "shrink-0"}>
                     {act.isActive ? "Active" : "Hidden"}
@@ -174,6 +185,22 @@ export default function AdminActivities() {
 
                 {act.location && (
                   <p className="text-xs text-muted-foreground truncate">{act.location}</p>
+                )}
+
+                {act.linkedListing && (
+                  <div className="flex items-center gap-2.5 p-2.5 rounded-md border border-blue-100 bg-blue-50/60">
+                    {act.linkedListing.imageUrls?.[0] ? (
+                      <img src={act.linkedListing.imageUrls[0]} alt={act.linkedListing.title} className="w-9 h-9 rounded object-cover shrink-0 border border-blue-100" />
+                    ) : (
+                      <div className="w-9 h-9 rounded bg-blue-100 flex items-center justify-center shrink-0">
+                        <Package className="w-4 h-4 text-blue-400" />
+                      </div>
+                    )}
+                    <div className="min-w-0">
+                      <p className="text-xs font-medium text-blue-900 truncate">{act.linkedListing.title}</p>
+                      <p className="text-[10px] text-blue-600">${act.linkedListing.pricePerDay}/day · {act.requiresRental ? "Required" : "Optional"}</p>
+                    </div>
+                  </div>
                 )}
 
                 <div className="flex items-center gap-2 pt-1">

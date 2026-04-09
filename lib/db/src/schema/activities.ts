@@ -15,6 +15,8 @@ export const activitiesTable = pgTable("activities", {
   whatToBring: text("what_to_bring").notNull().default(""),
   minAge: integer("min_age"),
   isActive: boolean("is_active").notNull().default(true),
+  listingId: integer("listing_id"),
+  requiresRental: boolean("requires_rental").notNull().default(false),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
