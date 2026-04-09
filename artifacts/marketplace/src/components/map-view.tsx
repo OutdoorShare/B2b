@@ -139,7 +139,8 @@ export function MapView({ listings }: MapViewProps) {
 
         const location = [first.businessCity, first.businessState].filter(Boolean).join(", ");
 
-        const listingRows = group.slice(0, 3).map(l => `
+        // Build rows for a given subset of the group
+        const buildRows = (items: Listing[]) => items.map(l => `
           <div
             data-id="${l.id}"
             data-slug="${l.tenantSlug}"
@@ -147,8 +148,7 @@ export function MapView({ listings }: MapViewProps) {
             style="
               display:flex;align-items:center;gap:8px;
               cursor:pointer;padding:7px 9px;border-radius:8px;
-              background:#f7faf8;
-              border:1.5px solid #d4e9df;
+              background:#f7faf8;border:1.5px solid #d4e9df;
               transition:border-color 0.15s;
             "
           >
@@ -166,49 +166,54 @@ export function MapView({ listings }: MapViewProps) {
           </div>
         `).join("");
 
-        const moreRow = count > 3
-          ? `<div style="font-size:11px;color:${OS_GREEN};text-align:center;font-weight:600;padding-top:2px;">+${count - 3} more listings</div>`
-          : "";
-
-        const popupContent = `
-          <div style="min-width:210px;max-width:270px;font-family:system-ui,sans-serif;">
-            <!-- Header -->
-            <div style="
-              margin:-12px -12px 10px -12px;
-              padding:10px 12px 8px;
-              background:linear-gradient(135deg, ${OS_GREEN} 0%, ${OS_GREEN_MID} 100%);
-              border-radius:8px 8px 0 0;
-            ">
-              <div style="font-weight:700;font-size:13px;color:white;margin-bottom:2px;">
-                📍 ${location || first.businessName}
-              </div>
-              <div style="font-size:11px;color:rgba(255,255,255,0.75);">
-                ${count} listing${count !== 1 ? "s" : ""} available
-                <!-- Blue wave underline echoing logo -->
-              </div>
+        // Build complete popup HTML; showAll controls whether all or only 3 rows are shown
+        const buildPopup = (showAll: boolean) => {
+          const items = showAll ? group : group.slice(0, 3);
+          const moreBtn = !showAll && count > 3
+            ? `<button
+                class="map-show-more"
+                style="
+                  width:100%;margin-top:2px;padding:6px 0;
+                  font-size:11px;font-weight:700;color:${OS_GREEN};
+                  background:transparent;border:1.5px dashed hsl(127,55%,70%);
+                  border-radius:8px;cursor:pointer;
+                  transition:background 0.15s,color 0.15s;
+                "
+              >+ Show ${count - 3} more listing${count - 3 !== 1 ? "s" : ""}</button>`
+            : "";
+          return `
+            <div style="min-width:210px;max-width:270px;font-family:system-ui,sans-serif;">
               <div style="
-                margin-top:6px;height:2px;
-                background:linear-gradient(90deg, ${OS_BLUE} 0%, transparent 100%);
-                border-radius:1px;opacity:0.8;
-              "></div>
+                margin:-12px -12px 10px -12px;padding:10px 12px 8px;
+                background:linear-gradient(135deg, ${OS_GREEN} 0%, ${OS_GREEN_MID} 100%);
+                border-radius:8px 8px 0 0;
+              ">
+                <div style="font-weight:700;font-size:13px;color:white;margin-bottom:2px;">
+                  📍 ${location || first.businessName}
+                </div>
+                <div style="font-size:11px;color:rgba(255,255,255,0.75);">
+                  ${count} listing${count !== 1 ? "s" : ""} available
+                </div>
+                <div style="margin-top:6px;height:2px;background:linear-gradient(90deg, ${OS_BLUE} 0%, transparent 100%);border-radius:1px;opacity:0.8;"></div>
+              </div>
+              <div style="display:flex;flex-direction:column;gap:6px;max-height:320px;overflow-y:auto;">
+                ${buildRows(items)}
+                ${moreBtn}
+              </div>
             </div>
-            <!-- Listings -->
-            <div style="display:flex;flex-direction:column;gap:6px;">
-              ${listingRows}
-              ${moreRow}
-            </div>
-          </div>
-        `;
+          `;
+        };
 
         const popup = L.popup({
           maxWidth: 290,
           closeButton: true,
           className: "os-popup",
-        }).setContent(popupContent);
+        }).setContent(buildPopup(false));
 
         marker.bindPopup(popup);
 
-        marker.on("popupopen", () => {
+        // Re-attach interactive handlers every time the popup opens (or re-renders)
+        const attachHandlers = () => {
           setTimeout(() => {
             document.querySelectorAll(".map-listing-item").forEach(el => {
               (el as HTMLElement).onmouseenter = () => {
@@ -224,8 +229,27 @@ export function MapView({ listings }: MapViewProps) {
                 if (id) navigate(`/marketplace/listings/${id}`);
               });
             });
+
+            const showMoreBtn = document.querySelector<HTMLElement>(".map-show-more");
+            if (showMoreBtn) {
+              showMoreBtn.onmouseenter = () => {
+                showMoreBtn.style.background = "hsl(127,55%,95%)";
+                showMoreBtn.style.color = OS_GREEN_MID;
+              };
+              showMoreBtn.onmouseleave = () => {
+                showMoreBtn.style.background = "transparent";
+                showMoreBtn.style.color = OS_GREEN;
+              };
+              showMoreBtn.addEventListener("click", () => {
+                popup.setContent(buildPopup(true));
+                popup.update();
+                attachHandlers();
+              });
+            }
           }, 80);
-        });
+        };
+
+        marker.on("popupopen", attachHandlers);
 
         markersRef.current.push(marker);
       });

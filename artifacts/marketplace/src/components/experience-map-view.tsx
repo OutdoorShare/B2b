@@ -107,7 +107,7 @@ export function ExperienceMapView({ activities }: ExperienceMapViewProps) {
 
         const location = [first.businessCity, first.businessState].filter(Boolean).join(", ");
 
-        const actRows = group.slice(0, 3).map(a => `
+        const buildRows = (items: MarketplaceActivity[]) => items.map(a => `
           <a
             href="/${a.tenantSlug}"
             class="exp-map-item"
@@ -132,41 +132,52 @@ export function ExperienceMapView({ activities }: ExperienceMapViewProps) {
           </a>
         `).join("");
 
-        const moreRow = count > 3
-          ? `<div style="font-size:11px;color:${OS_GREEN};text-align:center;font-weight:600;padding-top:2px;">+${count - 3} more experiences</div>`
-          : "";
-
-        const popupContent = `
-          <div style="min-width:210px;max-width:270px;font-family:system-ui,sans-serif;">
-            <div style="
-              margin:-12px -12px 10px -12px;padding:10px 12px 8px;
-              background:linear-gradient(135deg, ${OS_GREEN} 0%, ${OS_GREEN_MID} 100%);
-              border-radius:8px 8px 0 0;
-            ">
-              <div style="font-weight:700;font-size:13px;color:white;margin-bottom:2px;">
-                📍 ${location || first.tenantName}
+        const buildPopup = (showAll: boolean) => {
+          const items = showAll ? group : group.slice(0, 3);
+          const moreBtn = !showAll && count > 3
+            ? `<button
+                class="exp-show-more"
+                style="
+                  width:100%;margin-top:2px;padding:6px 0;
+                  font-size:11px;font-weight:700;color:${OS_GREEN};
+                  background:transparent;border:1.5px dashed hsl(127,55%,70%);
+                  border-radius:8px;cursor:pointer;
+                  transition:background 0.15s,color 0.15s;
+                "
+              >+ Show ${count - 3} more experience${count - 3 !== 1 ? "s" : ""}</button>`
+            : "";
+          return `
+            <div style="min-width:210px;max-width:270px;font-family:system-ui,sans-serif;">
+              <div style="
+                margin:-12px -12px 10px -12px;padding:10px 12px 8px;
+                background:linear-gradient(135deg, ${OS_GREEN} 0%, ${OS_GREEN_MID} 100%);
+                border-radius:8px 8px 0 0;
+              ">
+                <div style="font-weight:700;font-size:13px;color:white;margin-bottom:2px;">
+                  📍 ${location || first.tenantName}
+                </div>
+                <div style="font-size:11px;color:rgba(255,255,255,0.75);">
+                  ${count} experience${count !== 1 ? "s" : ""} available
+                </div>
+                <div style="margin-top:6px;height:2px;background:linear-gradient(90deg, ${OS_BLUE} 0%, transparent 100%);border-radius:1px;opacity:0.8;"></div>
               </div>
-              <div style="font-size:11px;color:rgba(255,255,255,0.75);">
-                ${count} experience${count !== 1 ? "s" : ""} available
+              <div style="display:flex;flex-direction:column;gap:6px;max-height:320px;overflow-y:auto;">
+                ${buildRows(items)}
+                ${moreBtn}
               </div>
-              <div style="margin-top:6px;height:2px;background:linear-gradient(90deg, ${OS_BLUE} 0%, transparent 100%);border-radius:1px;opacity:0.8;"></div>
             </div>
-            <div style="display:flex;flex-direction:column;gap:6px;">
-              ${actRows}
-              ${moreRow}
-            </div>
-          </div>
-        `;
+          `;
+        };
 
         const popup = L.popup({
           maxWidth: 290,
           closeButton: true,
           className: "os-popup",
-        }).setContent(popupContent);
+        }).setContent(buildPopup(false));
 
         marker.bindPopup(popup);
 
-        marker.on("popupopen", () => {
+        const attachHandlers = () => {
           setTimeout(() => {
             document.querySelectorAll<HTMLElement>(".exp-map-item").forEach(el => {
               el.onmouseenter = () => {
@@ -178,8 +189,27 @@ export function ExperienceMapView({ activities }: ExperienceMapViewProps) {
                 el.style.background = "#f7faf8";
               };
             });
+
+            const showMoreBtn = document.querySelector<HTMLElement>(".exp-show-more");
+            if (showMoreBtn) {
+              showMoreBtn.onmouseenter = () => {
+                showMoreBtn.style.background = "hsl(127,55%,95%)";
+                showMoreBtn.style.color = OS_GREEN_MID;
+              };
+              showMoreBtn.onmouseleave = () => {
+                showMoreBtn.style.background = "transparent";
+                showMoreBtn.style.color = OS_GREEN;
+              };
+              showMoreBtn.addEventListener("click", () => {
+                popup.setContent(buildPopup(true));
+                popup.update();
+                attachHandlers();
+              });
+            }
           }, 80);
-        });
+        };
+
+        marker.on("popupopen", attachHandlers);
 
         markersRef.current.push(marker);
       });
