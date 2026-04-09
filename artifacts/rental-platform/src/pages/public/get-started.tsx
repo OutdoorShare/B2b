@@ -280,8 +280,8 @@ const FAQ_ITEMS = [
     a: "Both options are available. You can enable instant booking for automatic confirmation, or require manual approval for each reservation — it's your choice per listing.",
   },
   {
-    q: "How does the in-person setup work for businesses?",
-    a: "Full Throttle and Growth & Scale plans include in-person setup support. We'll walk you through getting your listings live, configuring your storefront, and launching your first bookings.",
+    q: "What does hands-on in-person onboarding include?",
+    a: "Full Throttle and Growth & Scale plans include hands-on in-person onboarding. We'll come to you and walk through getting your listings live, configuring your storefront, and launching your first bookings — so you're set up for success from day one. Growth & Scale clients also get a dedicated onboarding specialist for ongoing support.",
   },
   {
     q: "I run an outdoor rental business. How is this different from FareHarbor or Peek Pro?",
@@ -551,7 +551,7 @@ export default function GetStartedPage() {
                   "CRM tools",
                   "AI answering agent",
                   "Custom branding",
-                  "In-person setup support",
+                  "Hands-on in-person onboarding",
                 ].map(f => (
                   <li key={f} className="flex items-start gap-2.5 text-sm text-gray-200">
                     <CheckCircle2 className="w-4 h-4 mt-0.5 shrink-0" style={{ color: OS_GREEN }} />
@@ -583,6 +583,7 @@ export default function GetStartedPage() {
                   "Everything in Full Throttle",
                   "Protection plan on every rental",
                   "No OutdoorShare branding",
+                  "Dedicated onboarding specialist",
                   "Tiered commissions — minimum 7% fee",
                   "Active marketing management",
                   "Social media post management",
