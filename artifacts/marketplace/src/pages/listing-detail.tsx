@@ -412,7 +412,7 @@ export function ListingDetailPage() {
   const protectionFee = protectionEnabled ? parseFloat(protection!.feeAmount) : 0;
 
   const handleBook = () => {
-    const bookUrl = `/${listing.tenantSlug}/book?listingId=${listing.id}`;
+    const bookUrl = `/${listing.tenantSlug}/book?listingId=${listing.id}&from=marketplace`;
     window.location.href = bookUrl;
   };
 

@@ -554,6 +554,7 @@ export default function StorefrontBook() {
   const urlStart = searchParams.get("startDate");
   const urlEnd = searchParams.get("endDate");
   const isKiosk = searchParams.get("kiosk") === "1";
+  const fromMarketplace = searchParams.get("from") === "marketplace";
 
   // Scroll to top on initial mount so navigating from the listing page doesn't
   // carry over the previous scroll position.
@@ -1825,13 +1826,14 @@ export default function StorefrontBook() {
           <Button variant="ghost" className="mb-6 pl-0 hover:bg-transparent text-muted-foreground" onClick={() => {
             if (step === "book") {
               if (isKiosk) { setLocation(`${sfBase}/admin/kiosk`); }
+              else if (fromMarketplace) { window.location.href = "/marketplace/"; }
               else { setLocation(`${sfBase}/listings/${listingId}`); }
             } else {
               setStep("book"); window.scrollTo({ top: 0, behavior: "smooth" });
             }
           }}>
             <ArrowLeft className="w-4 h-4 mr-2" />
-            {step === "book" ? (isKiosk ? "Back to Listings" : "Back to listing") : "Back"}
+            {step === "book" ? (isKiosk ? "Back to Listings" : fromMarketplace ? "Back to Marketplace" : "Back to listing") : "Back"}
           </Button>
         )}
 
