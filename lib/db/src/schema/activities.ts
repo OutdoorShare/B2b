@@ -17,6 +17,9 @@ export const activitiesTable = pgTable("activities", {
   isActive: boolean("is_active").notNull().default(true),
   listingId: integer("listing_id"),
   requiresRental: boolean("requires_rental").notNull().default(false),
+  scheduleMode: text("schedule_mode").notNull().default("open"),
+  recurringSlots: json("recurring_slots").$type<Array<{ dayOfWeek: number; times: string[] }>>().notNull().default([]),
+  specificSlots: json("specific_slots").$type<Array<{ date: string; times: string[] }>>().notNull().default([]),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });

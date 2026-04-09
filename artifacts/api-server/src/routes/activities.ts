@@ -33,21 +33,7 @@ router.get("/public/activities", async (req, res) => {
       .where(and(eq(activitiesTable.isActive, true), eq(tenantsTable.status, "active")))
       .orderBy(desc(activitiesTable.createdAt));
 
-    res.json(rows.map(r => ({
-      ...r.activity,
-      pricePerPerson: r.activity.pricePerPerson ? parseFloat(r.activity.pricePerPerson) : 0,
-      tenantName: r.bizName || r.tenantName,
-      tenantSlug: r.tenantSlug,
-      location: r.activity.location || `${r.bizCity || ""}${r.bizCity && r.bizState ? ", " : ""}${r.bizState || ""}` || r.tenantName,
-      businessCity: r.bizCity ?? null,
-      businessState: r.bizState ?? null,
-      businessLat: r.bizLat ? parseFloat(r.bizLat) : null,
-      businessLng: r.bizLng ? parseFloat(r.bizLng) : null,
-      linkedListing: r.listing?.id ? {
-        ...r.listing,
-        pricePerDay: r.listing.pricePerDay ? parseFloat(r.listing.pricePerDay) : 0,
-      } : null,
-    })));
+    res.json(rows.map(r => fmtPublic(r.activity, r, r.listing)));
   } catch (e: any) {
     console.error("[activities] public list error:", e.message);
     res.status(500).json({ error: "Failed to load activities" });
@@ -65,6 +51,30 @@ const LISTING_COLS = {
 function fmtListing(l: { id: number; title: string; pricePerDay: string; imageUrls: string[]; description: string } | null) {
   if (!l?.id) return null;
   return { ...l, pricePerDay: parseFloat(l.pricePerDay) || 0 };
+}
+
+function fmtPublic(
+  activity: typeof activitiesTable.$inferSelect,
+  biz: { tenantName: string; tenantSlug: string; bizName?: string | null; bizCity?: string | null; bizState?: string | null; bizLat?: string | null; bizLng?: string | null; bizLogoUrl?: string | null; bizTagline?: string | null },
+  listing: { id: number; title: string; pricePerDay: string; imageUrls: string[]; description: string } | null
+) {
+  return {
+    ...activity,
+    pricePerPerson: activity.pricePerPerson ? parseFloat(activity.pricePerPerson) : 0,
+    tenantName: biz.bizName || biz.tenantName,
+    tenantSlug: biz.tenantSlug,
+    location: activity.location || `${biz.bizCity || ""}${biz.bizCity && biz.bizState ? ", " : ""}${biz.bizState || ""}` || biz.tenantName,
+    businessCity: biz.bizCity ?? null,
+    businessState: biz.bizState ?? null,
+    businessLat: biz.bizLat ? parseFloat(biz.bizLat) : null,
+    businessLng: biz.bizLng ? parseFloat(biz.bizLng) : null,
+    businessLogoUrl: (biz as any).bizLogoUrl ?? null,
+    businessTagline: (biz as any).bizTagline ?? null,
+    scheduleMode: activity.scheduleMode ?? "open",
+    recurringSlots: activity.recurringSlots ?? [],
+    specificSlots: activity.specificSlots ?? [],
+    linkedListing: listing?.id ? { ...listing, pricePerDay: parseFloat(listing.pricePerDay) || 0 } : null,
+  };
 }
 
 // ── Public: single activity detail ────────────────────────────────────────────
@@ -102,23 +112,7 @@ router.get("/public/activities/:id", async (req, res) => {
 
     if (!row) { res.status(404).json({ error: "Not found" }); return; }
 
-    res.json({
-      ...row.activity,
-      pricePerPerson: row.activity.pricePerPerson ? parseFloat(row.activity.pricePerPerson) : 0,
-      tenantName: row.bizName || row.tenantName,
-      tenantSlug: row.tenantSlug,
-      location: row.activity.location || `${row.bizCity || ""}${row.bizCity && row.bizState ? ", " : ""}${row.bizState || ""}` || row.tenantName,
-      businessCity: row.bizCity ?? null,
-      businessState: row.bizState ?? null,
-      businessLat: row.bizLat ? parseFloat(row.bizLat) : null,
-      businessLng: row.bizLng ? parseFloat(row.bizLng) : null,
-      businessLogoUrl: row.bizLogoUrl ?? null,
-      businessTagline: row.bizTagline ?? null,
-      linkedListing: row.listing?.id ? {
-        ...row.listing,
-        pricePerDay: row.listing.pricePerDay ? parseFloat(row.listing.pricePerDay) : 0,
-      } : null,
-    });
+    res.json(fmtPublic(row.activity, row as any, row.listing as any));
   } catch (e: any) {
     console.error("[activities] public detail error:", e.message);
     res.status(500).json({ error: "Failed to load activity" });
@@ -162,7 +156,11 @@ router.get("/activities/:id", async (req, res) => {
 router.post("/activities", async (req, res) => {
   if (!req.tenantId) { res.status(401).json({ error: "Unauthorized" }); return; }
   try {
-    const { title, description, category, pricePerPerson, durationMinutes, maxCapacity, location, imageUrls, highlights, whatToBring, minAge, isActive, listingId, requiresRental } = req.body;
+    const {
+      title, description, category, pricePerPerson, durationMinutes, maxCapacity,
+      location, imageUrls, highlights, whatToBring, minAge, isActive,
+      listingId, requiresRental, scheduleMode, recurringSlots, specificSlots,
+    } = req.body;
     if (!title) { res.status(400).json({ error: "Title is required" }); return; }
     const [row] = await db.insert(activitiesTable).values({
       tenantId: req.tenantId,
@@ -180,6 +178,9 @@ router.post("/activities", async (req, res) => {
       isActive: isActive ?? true,
       listingId: listingId ? parseInt(listingId) : null,
       requiresRental: requiresRental ?? false,
+      scheduleMode: scheduleMode ?? "open",
+      recurringSlots: recurringSlots ?? [],
+      specificSlots: specificSlots ?? [],
     }).returning();
     res.status(201).json(fmt(row));
   } catch (e: any) {
@@ -192,7 +193,11 @@ router.put("/activities/:id", async (req, res) => {
   if (!req.tenantId) { res.status(401).json({ error: "Unauthorized" }); return; }
   try {
     const id = parseInt(req.params.id);
-    const { title, description, category, pricePerPerson, durationMinutes, maxCapacity, location, imageUrls, highlights, whatToBring, minAge, isActive, listingId, requiresRental } = req.body;
+    const {
+      title, description, category, pricePerPerson, durationMinutes, maxCapacity,
+      location, imageUrls, highlights, whatToBring, minAge, isActive,
+      listingId, requiresRental, scheduleMode, recurringSlots, specificSlots,
+    } = req.body;
     const [row] = await db
       .update(activitiesTable)
       .set({
@@ -203,6 +208,9 @@ router.put("/activities/:id", async (req, res) => {
         isActive,
         listingId: listingId ? parseInt(listingId) : null,
         requiresRental: requiresRental ?? false,
+        scheduleMode: scheduleMode ?? "open",
+        recurringSlots: recurringSlots ?? [],
+        specificSlots: specificSlots ?? [],
         updatedAt: new Date(),
       })
       .where(and(eq(activitiesTable.id, id), eq(activitiesTable.tenantId, req.tenantId)))
@@ -234,6 +242,9 @@ function fmt(a: typeof activitiesTable.$inferSelect) {
   return {
     ...a,
     pricePerPerson: a.pricePerPerson ? parseFloat(a.pricePerPerson) : 0,
+    scheduleMode: a.scheduleMode ?? "open",
+    recurringSlots: a.recurringSlots ?? [],
+    specificSlots: a.specificSlots ?? [],
     createdAt: a.createdAt.toISOString(),
     updatedAt: a.updatedAt.toISOString(),
   };

@@ -9,8 +9,15 @@ import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { ArrowLeft, Plus, X, Upload, Loader2, Package, Search, CheckCircle2 } from "lucide-react";
+import {
+  ArrowLeft, Plus, X, Upload, Loader2, Package, Search, CheckCircle2,
+  Calendar, RefreshCw, Clock, ChevronLeft, ChevronRight,
+} from "lucide-react";
 import { Link } from "wouter";
+import {
+  format, addMonths, subMonths, startOfMonth, endOfMonth, startOfWeek, endOfWeek,
+  eachDayOfInterval, isSameMonth, isSameDay, parseISO, isBefore, startOfDay,
+} from "date-fns";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/+$/, "");
 
@@ -40,6 +47,19 @@ const CATEGORIES = [
   { value: "other", label: "Other" },
 ];
 
+const WEEKDAYS = [
+  { label: "Sun", short: "S", value: 0 },
+  { label: "Mon", short: "M", value: 1 },
+  { label: "Tue", short: "T", value: 2 },
+  { label: "Wed", short: "W", value: 3 },
+  { label: "Thu", short: "T", value: 4 },
+  { label: "Fri", short: "F", value: 5 },
+  { label: "Sat", short: "S", value: 6 },
+];
+
+type RecurringSlot = { dayOfWeek: number; times: string[] };
+type SpecificSlot = { date: string; times: string[] };
+
 type FormState = {
   title: string;
   description: string;
@@ -55,6 +75,9 @@ type FormState = {
   isActive: boolean;
   listingId: number | null;
   requiresRental: boolean;
+  scheduleMode: "open" | "recurring" | "specific";
+  recurringSlots: RecurringSlot[];
+  specificSlots: SpecificSlot[];
 };
 
 type ListingOption = {
@@ -80,7 +103,240 @@ const DEFAULTS: FormState = {
   isActive: true,
   listingId: null,
   requiresRental: false,
+  scheduleMode: "open",
+  recurringSlots: [],
+  specificSlots: [],
 };
+
+function SpecificDatePicker({
+  slots,
+  onChange,
+}: {
+  slots: SpecificSlot[];
+  onChange: (v: SpecificSlot[]) => void;
+}) {
+  const today = startOfDay(new Date());
+  const [month, setMonth] = useState(startOfMonth(today));
+  const [newTime, setNewTime] = useState<Record<string, string>>({});
+
+  const gridStart = startOfWeek(startOfMonth(month));
+  const gridEnd = endOfWeek(endOfMonth(month));
+  const days = eachDayOfInterval({ start: gridStart, end: gridEnd });
+
+  const dateStrings = new Set(slots.map(s => s.date));
+
+  function toggleDate(day: Date) {
+    if (isBefore(day, today)) return;
+    const ds = format(day, "yyyy-MM-dd");
+    if (dateStrings.has(ds)) {
+      onChange(slots.filter(s => s.date !== ds));
+    } else {
+      onChange([...slots, { date: ds, times: [] }].sort((a, b) => a.date.localeCompare(b.date)));
+    }
+  }
+
+  function addTime(dateStr: string) {
+    const t = (newTime[dateStr] ?? "").trim();
+    if (!t) return;
+    onChange(slots.map(s => s.date === dateStr && !s.times.includes(t)
+      ? { ...s, times: [...s.times, t].sort() }
+      : s
+    ));
+    setNewTime(p => ({ ...p, [dateStr]: "" }));
+  }
+
+  function removeTime(dateStr: string, time: string) {
+    onChange(slots.map(s => s.date === dateStr ? { ...s, times: s.times.filter(t => t !== time) } : s));
+  }
+
+  function removeDate(dateStr: string) {
+    onChange(slots.filter(s => s.date !== dateStr));
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="rounded-xl border bg-gray-50 p-4">
+        <div className="flex items-center justify-between mb-3">
+          <button onClick={() => setMonth(subMonths(month, 1))} className="p-1.5 rounded-lg hover:bg-white border border-transparent hover:border-gray-200 transition-colors">
+            <ChevronLeft className="w-4 h-4" />
+          </button>
+          <span className="font-semibold text-sm">{format(month, "MMMM yyyy")}</span>
+          <button onClick={() => setMonth(addMonths(month, 1))} className="p-1.5 rounded-lg hover:bg-white border border-transparent hover:border-gray-200 transition-colors">
+            <ChevronRight className="w-4 h-4" />
+          </button>
+        </div>
+        <div className="grid grid-cols-7 gap-0.5 mb-1">
+          {["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"].map(d => (
+            <div key={d} className="text-center text-xs text-muted-foreground py-1 font-medium">{d}</div>
+          ))}
+        </div>
+        <div className="grid grid-cols-7 gap-0.5">
+          {days.map(day => {
+            const ds = format(day, "yyyy-MM-dd");
+            const inMonth = isSameMonth(day, month);
+            const isPast = isBefore(day, today);
+            const selected = dateStrings.has(ds);
+            return (
+              <button
+                key={ds}
+                onClick={() => toggleDate(day)}
+                disabled={!inMonth || isPast}
+                className={[
+                  "rounded-lg text-sm py-1.5 font-medium transition-all",
+                  !inMonth || isPast ? "text-gray-300 cursor-default" : "cursor-pointer",
+                  selected ? "bg-green-600 text-white shadow-sm" : inMonth && !isPast ? "hover:bg-green-50 text-gray-700" : "",
+                ].join(" ")}
+              >
+                {format(day, "d")}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {slots.length === 0 ? (
+        <p className="text-sm text-muted-foreground text-center py-2">Click dates above to add them to your schedule.</p>
+      ) : (
+        <div className="space-y-3">
+          {slots.map(slot => (
+            <div key={slot.date} className="rounded-xl border bg-white p-3">
+              <div className="flex items-center justify-between mb-2">
+                <span className="font-semibold text-sm">{format(parseISO(slot.date), "EEE, MMM d, yyyy")}</span>
+                <button onClick={() => removeDate(slot.date)} className="text-muted-foreground hover:text-red-500 transition-colors">
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              </div>
+              <div className="flex flex-wrap gap-1.5 mb-2">
+                {slot.times.map(t => (
+                  <span key={t} className="inline-flex items-center gap-1 bg-green-50 text-green-800 border border-green-200 rounded-full px-2.5 py-0.5 text-xs font-medium">
+                    {t}
+                    <button onClick={() => removeTime(slot.date, t)} className="hover:text-red-600 transition-colors ml-0.5">
+                      <X className="w-2.5 h-2.5" />
+                    </button>
+                  </span>
+                ))}
+                {slot.times.length === 0 && <span className="text-xs text-muted-foreground">No times added — add at least one</span>}
+              </div>
+              <div className="flex gap-2">
+                <Input
+                  type="time"
+                  value={newTime[slot.date] ?? ""}
+                  onChange={e => setNewTime(p => ({ ...p, [slot.date]: e.target.value }))}
+                  className="h-7 text-xs w-32"
+                  onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); addTime(slot.date); } }}
+                />
+                <Button type="button" size="sm" variant="outline" className="h-7 px-2 text-xs" onClick={() => addTime(slot.date)}>
+                  <Plus className="w-3 h-3 mr-1" /> Add time
+                </Button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function RecurringScheduler({
+  slots,
+  onChange,
+}: {
+  slots: RecurringSlot[];
+  onChange: (v: RecurringSlot[]) => void;
+}) {
+  const [newTime, setNewTime] = useState<Record<number, string>>({});
+
+  const activeDays = new Set(slots.map(s => s.dayOfWeek));
+
+  function toggleDay(day: number) {
+    if (activeDays.has(day)) {
+      onChange(slots.filter(s => s.dayOfWeek !== day));
+    } else {
+      onChange([...slots, { dayOfWeek: day, times: [] }].sort((a, b) => a.dayOfWeek - b.dayOfWeek));
+    }
+  }
+
+  function addTime(day: number) {
+    const t = (newTime[day] ?? "").trim();
+    if (!t) return;
+    onChange(slots.map(s => s.dayOfWeek === day && !s.times.includes(t)
+      ? { ...s, times: [...s.times, t].sort() }
+      : s
+    ));
+    setNewTime(p => ({ ...p, [day]: "" }));
+  }
+
+  function removeTime(day: number, time: string) {
+    onChange(slots.map(s => s.dayOfWeek === day ? { ...s, times: s.times.filter(t => t !== time) } : s));
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="space-y-1.5">
+        <Label className="text-xs text-muted-foreground">Select which days this experience runs</Label>
+        <div className="flex gap-2 flex-wrap">
+          {WEEKDAYS.map(wd => {
+            const active = activeDays.has(wd.value);
+            return (
+              <button
+                key={wd.value}
+                type="button"
+                onClick={() => toggleDay(wd.value)}
+                className={[
+                  "w-12 h-12 rounded-xl text-sm font-semibold border-2 transition-all",
+                  active
+                    ? "bg-green-600 border-green-600 text-white shadow-sm"
+                    : "bg-white border-gray-200 text-gray-600 hover:border-green-300 hover:text-green-700",
+                ].join(" ")}
+              >
+                {wd.label}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {slots.length === 0 ? (
+        <p className="text-sm text-muted-foreground">Select at least one day, then add time slots below.</p>
+      ) : (
+        <div className="space-y-3">
+          {slots.map(slot => {
+            const wd = WEEKDAYS.find(w => w.value === slot.dayOfWeek)!;
+            return (
+              <div key={slot.dayOfWeek} className="rounded-xl border bg-white p-3">
+                <p className="font-semibold text-sm mb-2 text-green-700">{wd.label}</p>
+                <div className="flex flex-wrap gap-1.5 mb-2">
+                  {slot.times.map(t => (
+                    <span key={t} className="inline-flex items-center gap-1 bg-green-50 text-green-800 border border-green-200 rounded-full px-2.5 py-0.5 text-xs font-medium">
+                      <Clock className="w-2.5 h-2.5" />
+                      {t}
+                      <button onClick={() => removeTime(slot.dayOfWeek, t)} className="hover:text-red-600 transition-colors ml-0.5">
+                        <X className="w-2.5 h-2.5" />
+                      </button>
+                    </span>
+                  ))}
+                  {slot.times.length === 0 && <span className="text-xs text-muted-foreground">No times yet</span>}
+                </div>
+                <div className="flex gap-2">
+                  <Input
+                    type="time"
+                    value={newTime[slot.dayOfWeek] ?? ""}
+                    onChange={e => setNewTime(p => ({ ...p, [slot.dayOfWeek]: e.target.value }))}
+                    className="h-7 text-xs w-32"
+                    onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); addTime(slot.dayOfWeek); } }}
+                  />
+                  <Button type="button" size="sm" variant="outline" className="h-7 px-2 text-xs" onClick={() => addTime(slot.dayOfWeek)}>
+                    <Plus className="w-3 h-3 mr-1" /> Add time
+                  </Button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
 
 export default function ActivityForm() {
   const { id } = useParams<{ id?: string }>();
@@ -126,6 +382,9 @@ export default function ActivityForm() {
           isActive: d.isActive ?? true,
           listingId: d.listingId ?? null,
           requiresRental: d.requiresRental ?? false,
+          scheduleMode: d.scheduleMode ?? "open",
+          recurringSlots: d.recurringSlots ?? [],
+          specificSlots: d.specificSlots ?? [],
         });
       })
       .finally(() => setLoading(false));
@@ -317,6 +576,85 @@ export default function ActivityForm() {
         </CardContent>
       </Card>
 
+      {/* Schedule */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Availability Schedule</CardTitle>
+          <p className="text-sm text-muted-foreground">How do customers pick their date and time?</p>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid grid-cols-3 gap-3">
+            {([
+              {
+                key: "open",
+                icon: <Calendar className="w-5 h-5" />,
+                title: "Open Request",
+                desc: "Customers request any date, you confirm",
+              },
+              {
+                key: "recurring",
+                icon: <RefreshCw className="w-5 h-5" />,
+                title: "Recurring Schedule",
+                desc: "Set weekly days & times that repeat",
+              },
+              {
+                key: "specific",
+                icon: <Clock className="w-5 h-5" />,
+                title: "Specific Dates",
+                desc: "Pick exact dates & time slots",
+              },
+            ] as const).map(opt => (
+              <button
+                key={opt.key}
+                type="button"
+                onClick={() => set("scheduleMode", opt.key)}
+                className={[
+                  "flex flex-col items-start gap-2 rounded-xl border-2 p-3 text-left transition-all",
+                  form.scheduleMode === opt.key
+                    ? "border-green-600 bg-green-50"
+                    : "border-gray-200 hover:border-green-300 bg-white",
+                ].join(" ")}
+              >
+                <div className={form.scheduleMode === opt.key ? "text-green-600" : "text-gray-400"}>
+                  {opt.icon}
+                </div>
+                <div>
+                  <p className={`text-sm font-semibold ${form.scheduleMode === opt.key ? "text-green-800" : "text-gray-700"}`}>
+                    {opt.title}
+                  </p>
+                  <p className="text-xs text-muted-foreground mt-0.5">{opt.desc}</p>
+                </div>
+              </button>
+            ))}
+          </div>
+
+          {form.scheduleMode === "recurring" && (
+            <div className="pt-2">
+              <RecurringScheduler
+                slots={form.recurringSlots}
+                onChange={v => set("recurringSlots", v)}
+              />
+            </div>
+          )}
+
+          {form.scheduleMode === "specific" && (
+            <div className="pt-2">
+              <SpecificDatePicker
+                slots={form.specificSlots}
+                onChange={v => set("specificSlots", v)}
+              />
+            </div>
+          )}
+
+          {form.scheduleMode === "open" && (
+            <div className="rounded-xl bg-gray-50 border p-4 text-sm text-muted-foreground flex items-start gap-3">
+              <Calendar className="w-4 h-4 mt-0.5 text-gray-400 shrink-0" />
+              <p>Customers submit a date request. You'll receive their preferred date/time in the inquiry and can confirm or suggest alternatives.</p>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
       {/* Highlights */}
       <Card>
         <CardHeader><CardTitle className="text-base">Highlights</CardTitle></CardHeader>
@@ -414,7 +752,6 @@ export default function ActivityForm() {
 
         {(form.listingId || showListingPicker) && (
           <CardContent className="space-y-4">
-            {/* Selected listing preview */}
             {form.listingId && (() => {
               const sel = listings.find(l => l.id === form.listingId);
               if (!sel) return null;
@@ -445,7 +782,6 @@ export default function ActivityForm() {
               );
             })()}
 
-            {/* Listing search picker */}
             {!form.listingId && (
               <div className="space-y-2">
                 <div className="relative">
@@ -488,7 +824,6 @@ export default function ActivityForm() {
               </div>
             )}
 
-            {/* Requires rental toggle */}
             {form.listingId && (
               <div className="flex items-center justify-between p-3 rounded-lg bg-gray-50 border">
                 <div>

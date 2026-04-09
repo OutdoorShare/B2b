@@ -59,6 +59,8 @@ The platform is built as a monorepo using `pnpm workspaces`, Node.js 24, and Typ
 - **Email Verification:** Implements a token-based email verification flow for new company sign-ups, including resend functionality and status banners.
 - **URL Routing:** Comprehensive routing handles marketing pages, self-registration, demo environment, super admin functions, and tenant-specific customer storefronts (`/:slug`).
 - **Social Sharing Meta Tags:** A Vite dev-server plugin intercepts social media bot requests to serve minimal HTML pages pre-populated with `og:*` and `twitter:*` meta tags for improved sharing.
+- **Activities / Experiences System:** Tenants create guided experiences and tours (admin: "Activities"; marketplace: "Experiences"). Each activity has category, pricing, capacity, location, highlights, images, optional linked rental listing, and an Airbnb-style **Availability Schedule**. Schedule modes: `open` (date-request flow), `recurring` (weekly day+time slots that repeat), `specific` (exact date+time slots from a calendar picker). Schema fields: `scheduleMode`, `recurringSlots` (JSON), `specificSlots` (JSON) in `activitiesTable`.
+- **Experience Detail Booking Sidebar:** The marketplace experience detail page (`/marketplace/experiences/:id`) has a two-card sidebar: (1) quick stats (duration, group size, location, min age), (2) booking widget. For `open` mode: guest stepper + "Request to Book". For `recurring`/`specific` modes: mini month calendar with available dates highlighted → time slot pills → guest count stepper → live price total → "Request to Book". Booking opens the chat panel with a pre-filled booking request message.
 
 ## External Dependencies
 

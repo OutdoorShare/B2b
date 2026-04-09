@@ -2,14 +2,20 @@ import { useState } from "react";
 import { useRoute, useLocation } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "@/lib/api";
+import type { MarketplaceActivity } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
   ArrowLeft, MapPin, Clock, Users, ChevronLeft, ChevronRight,
   CheckCircle2, Package, Star, Building2, ExternalLink,
-  MessageCircle, X, Send, Loader2, Lock, AlertCircle,
+  MessageCircle, X, Send, Loader2, Lock, AlertCircle, Minus, Plus,
 } from "lucide-react";
 import { useAuth } from "@/context/auth";
+import {
+  format, addMonths, subMonths, startOfMonth, endOfMonth,
+  startOfWeek, endOfWeek, eachDayOfInterval, isSameMonth,
+  isBefore, startOfDay, parseISO,
+} from "date-fns";
 
 const API_BASE = "/api";
 const API_UPLOAD_BASE = "/api/uploads/";
@@ -76,8 +82,8 @@ function formatDay(d: string) {
 }
 
 function ChatPanel({
-  tenantSlug, contactName, logoUrl, onClose,
-}: { tenantSlug: string; contactName: string; logoUrl?: string | null; onClose: () => void }) {
+  tenantSlug, contactName, logoUrl, onClose, initialMessage,
+}: { tenantSlug: string; contactName: string; logoUrl?: string | null; onClose: () => void; initialMessage?: string }) {
   const { customer } = useAuth();
   type Phase = "guest_form" | "loading" | "chatting";
   const [phase, setPhase] = useState<Phase>("loading");
@@ -85,7 +91,7 @@ function ChatPanel({
   const [gEmail, setGEmail] = useState("");
   const [gErr, setGErr] = useState("");
   const [messages, setMessages] = useState<ChatMessage[]>([]);
-  const [input, setInput] = useState("");
+  const [input, setInput] = useState(initialMessage ?? "");
   const [sending, setSending] = useState(false);
   const threadIdRef = { current: null as number | null };
   const identityRef = { current: null as GuestInfo | null };
@@ -271,11 +277,288 @@ function ChatPanel({
   );
 }
 
+// ── Booking Sidebar ────────────────────────────────────────────────────────────
+
+function BookingSidebar({
+  activity,
+  onContact,
+  onOpenChat,
+}: {
+  activity: MarketplaceActivity;
+  onContact: (msg?: string) => void;
+  onOpenChat: () => void;
+}) {
+  const today = startOfDay(new Date());
+  const [month, setMonth] = useState(startOfMonth(today));
+  const [selectedDate, setSelectedDate] = useState<string | null>(null);
+  const [selectedTime, setSelectedTime] = useState<string | null>(null);
+  const [guests, setGuests] = useState(1);
+
+  const { scheduleMode, recurringSlots, specificSlots, pricePerPerson, maxCapacity, tenantName } = activity;
+
+  // Compute set of available date strings
+  function isDateAvailable(day: Date): boolean {
+    if (isBefore(day, today)) return false;
+    if (scheduleMode === "open") return true;
+    if (scheduleMode === "recurring") {
+      const dow = day.getDay();
+      return recurringSlots.some(s => s.dayOfWeek === dow && s.times.length > 0);
+    }
+    if (scheduleMode === "specific") {
+      const ds = format(day, "yyyy-MM-dd");
+      return specificSlots.some(s => s.date === ds && s.times.length > 0);
+    }
+    return false;
+  }
+
+  function getTimesForDate(ds: string): string[] {
+    if (scheduleMode === "recurring") {
+      const dow = parseISO(ds).getDay();
+      return recurringSlots.find(s => s.dayOfWeek === dow)?.times ?? [];
+    }
+    if (scheduleMode === "specific") {
+      return specificSlots.find(s => s.date === ds)?.times ?? [];
+    }
+    return [];
+  }
+
+  const gridStart = startOfWeek(startOfMonth(month));
+  const gridEnd = endOfWeek(endOfMonth(month));
+  const days = eachDayOfInterval({ start: gridStart, end: gridEnd });
+
+  function handleSelectDate(day: Date) {
+    if (!isDateAvailable(day)) return;
+    const ds = format(day, "yyyy-MM-dd");
+    setSelectedDate(ds);
+    setSelectedTime(null);
+  }
+
+  const timesForSelected = selectedDate ? getTimesForDate(selectedDate) : [];
+  const total = pricePerPerson * guests;
+
+  function handleBook() {
+    if (scheduleMode === "open") {
+      onOpenChat();
+      return;
+    }
+    const datePart = selectedDate ? format(parseISO(selectedDate), "EEEE, MMMM d, yyyy") : "";
+    const timePart = selectedTime ? ` at ${selectedTime}` : "";
+    const msg = `Hi! I'd like to book "${activity.title}" on ${datePart}${timePart} for ${guests} guest${guests !== 1 ? "s" : ""}. Total: $${total.toFixed(2)}. Please let me know how to confirm!`;
+    onContact(msg);
+  }
+
+  const canBook = scheduleMode === "open" || (selectedDate !== null && (timesForSelected.length === 0 || selectedTime !== null));
+
+  // ── Open request mode — simple ──────────────────────────────────────────────
+  if (scheduleMode === "open") {
+    return (
+      <div className="space-y-5">
+        <div className="flex items-end gap-2">
+          <span className="text-3xl font-bold text-gray-900">${pricePerPerson.toFixed(0)}</span>
+          <span className="text-gray-500 mb-0.5">/ person</span>
+        </div>
+        <div className="rounded-xl bg-amber-50 border border-amber-200 p-3 text-sm text-amber-800">
+          This experience accepts date requests. Reach out to check availability and confirm your booking.
+        </div>
+        <div className="space-y-3">
+          <div className="flex items-center justify-between bg-gray-50 rounded-xl p-3">
+            <span className="text-sm font-medium text-gray-700">Guests</span>
+            <div className="flex items-center gap-3">
+              <button
+                onClick={() => setGuests(g => Math.max(1, g - 1))}
+                className="h-7 w-7 rounded-full border border-gray-300 flex items-center justify-center hover:border-primary hover:text-primary transition-colors disabled:opacity-30"
+                disabled={guests <= 1}
+              >
+                <Minus className="h-3 w-3" />
+              </button>
+              <span className="font-semibold text-gray-900 w-5 text-center">{guests}</span>
+              <button
+                onClick={() => setGuests(g => Math.min(maxCapacity, g + 1))}
+                className="h-7 w-7 rounded-full border border-gray-300 flex items-center justify-center hover:border-primary hover:text-primary transition-colors disabled:opacity-30"
+                disabled={guests >= maxCapacity}
+              >
+                <Plus className="h-3 w-3" />
+              </button>
+            </div>
+          </div>
+          {guests > 1 && (
+            <div className="flex justify-between text-sm px-1">
+              <span className="text-gray-500">${pricePerPerson.toFixed(0)} × {guests} guests</span>
+              <span className="font-semibold">${total.toFixed(0)}</span>
+            </div>
+          )}
+        </div>
+        <Button
+          className="w-full bg-primary hover:bg-primary/90 text-primary-foreground h-12 text-base font-semibold"
+          onClick={handleBook}
+        >
+          Request to Book
+        </Button>
+        <Button variant="outline" className="w-full h-11 gap-2" onClick={onOpenChat}>
+          <MessageCircle className="h-4 w-4" /> Ask a Question
+        </Button>
+        <p className="text-xs text-gray-400 text-center">Booking is handled directly with {tenantName}</p>
+      </div>
+    );
+  }
+
+  // ── Calendar-based modes ─────────────────────────────────────────────────────
+  return (
+    <div className="space-y-5">
+      <div className="flex items-end gap-2">
+        <span className="text-3xl font-bold text-gray-900">${pricePerPerson.toFixed(0)}</span>
+        <span className="text-gray-500 mb-0.5">/ person</span>
+      </div>
+
+      {/* Mini Calendar */}
+      <div className="rounded-xl border border-gray-200 bg-gray-50 p-3">
+        <div className="flex items-center justify-between mb-2">
+          <button
+            onClick={() => setMonth(m => { const prev = subMonths(m, 1); return isBefore(prev, startOfMonth(today)) ? m : prev; })}
+            className="p-1.5 rounded-lg hover:bg-white border border-transparent hover:border-gray-200 transition-colors disabled:opacity-30"
+          >
+            <ChevronLeft className="h-4 w-4" />
+          </button>
+          <span className="font-semibold text-sm text-gray-700">{format(month, "MMMM yyyy")}</span>
+          <button
+            onClick={() => setMonth(m => addMonths(m, 1))}
+            className="p-1.5 rounded-lg hover:bg-white border border-transparent hover:border-gray-200 transition-colors"
+          >
+            <ChevronRight className="h-4 w-4" />
+          </button>
+        </div>
+        <div className="grid grid-cols-7 gap-0.5 mb-1">
+          {["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"].map(d => (
+            <div key={d} className="text-center text-[10px] text-gray-400 py-0.5 font-medium">{d}</div>
+          ))}
+        </div>
+        <div className="grid grid-cols-7 gap-0.5">
+          {days.map(day => {
+            const ds = format(day, "yyyy-MM-dd");
+            const inMonth = isSameMonth(day, month);
+            const available = inMonth && isDateAvailable(day);
+            const isSelected = selectedDate === ds;
+            const isPast = isBefore(day, today);
+            return (
+              <button
+                key={ds}
+                onClick={() => available && handleSelectDate(day)}
+                disabled={!available}
+                className={[
+                  "rounded-lg text-xs py-1.5 font-medium transition-all relative",
+                  !inMonth || isPast ? "text-gray-200 cursor-default" : "",
+                  isSelected ? "bg-primary text-white shadow-sm" : "",
+                  available && !isSelected ? "hover:bg-primary/10 text-gray-800 cursor-pointer" : "",
+                  !available && inMonth && !isPast ? "text-gray-300 cursor-not-allowed" : "",
+                ].join(" ")}
+              >
+                {format(day, "d")}
+                {available && !isSelected && (
+                  <span className="absolute bottom-0.5 left-1/2 -translate-x-1/2 w-1 h-1 rounded-full bg-primary/60" />
+                )}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Time slots */}
+      {selectedDate && timesForSelected.length > 0 && (
+        <div>
+          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">
+            Available times — {format(parseISO(selectedDate), "MMM d")}
+          </p>
+          <div className="grid grid-cols-3 gap-2">
+            {timesForSelected.map(t => {
+              const [h, m] = t.split(":").map(Number);
+              const suffix = h >= 12 ? "PM" : "AM";
+              const label = `${h % 12 || 12}:${String(m).padStart(2, "0")} ${suffix}`;
+              return (
+                <button
+                  key={t}
+                  onClick={() => setSelectedTime(selectedTime === t ? null : t)}
+                  className={[
+                    "border-2 rounded-xl py-2 text-sm font-semibold transition-all",
+                    selectedTime === t
+                      ? "border-primary bg-primary/5 text-primary"
+                      : "border-gray-200 hover:border-primary/50 text-gray-700 bg-white",
+                  ].join(" ")}
+                >
+                  {label}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* Prompt if no date selected */}
+      {!selectedDate && (
+        <p className="text-sm text-gray-400 text-center py-1">Select a date to see available times</p>
+      )}
+
+      {/* Guests */}
+      {(selectedDate) && (
+        <div className="flex items-center justify-between bg-gray-50 rounded-xl p-3">
+          <span className="text-sm font-medium text-gray-700">Guests</span>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => setGuests(g => Math.max(1, g - 1))}
+              className="h-7 w-7 rounded-full border border-gray-300 flex items-center justify-center hover:border-primary hover:text-primary transition-colors"
+              disabled={guests <= 1}
+            >
+              <Minus className="h-3 w-3" />
+            </button>
+            <span className="font-semibold text-gray-900 w-5 text-center">{guests}</span>
+            <button
+              onClick={() => setGuests(g => Math.min(maxCapacity, g + 1))}
+              className="h-7 w-7 rounded-full border border-gray-300 flex items-center justify-center hover:border-primary hover:text-primary transition-colors"
+              disabled={guests >= maxCapacity}
+            >
+              <Plus className="h-3 w-3" />
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Price summary */}
+      {selectedDate && (
+        <div className="border-t border-gray-100 pt-3 space-y-1.5">
+          <div className="flex justify-between text-sm text-gray-600">
+            <span>${pricePerPerson.toFixed(0)} × {guests} guest{guests !== 1 ? "s" : ""}</span>
+            <span>${total.toFixed(0)}</span>
+          </div>
+          <div className="flex justify-between text-sm font-bold text-gray-900 border-t border-gray-100 pt-1.5">
+            <span>Total</span>
+            <span>${total.toFixed(0)}</span>
+          </div>
+        </div>
+      )}
+
+      {/* CTA */}
+      <div className="space-y-2.5">
+        <Button
+          className="w-full bg-primary hover:bg-primary/90 text-primary-foreground h-12 text-base font-semibold"
+          onClick={handleBook}
+          disabled={!canBook}
+        >
+          {selectedDate ? "Request to Book" : "Choose a Date"}
+        </Button>
+        <Button variant="outline" className="w-full h-11 gap-2" onClick={onOpenChat}>
+          <MessageCircle className="h-4 w-4" /> Ask a Question
+        </Button>
+      </div>
+      <p className="text-xs text-gray-400 text-center">Booking is handled directly with {tenantName}</p>
+    </div>
+  );
+}
+
 export function ExperienceDetailPage() {
   const [, params] = useRoute("/experiences/:id");
   const [, setLocation] = useLocation();
   const [imgIndex, setImgIndex] = useState(0);
   const [contactOpen, setContactOpen] = useState(false);
+  const [chatInitMsg, setChatInitMsg] = useState<string | undefined>(undefined);
   const id = parseInt(params?.id ?? "0");
 
   const { data: activity, isLoading, isError } = useQuery({
@@ -314,10 +597,6 @@ export function ExperienceDetailPage() {
   const categoryEmoji = CATEGORY_ICONS[activity.category] ?? "🌿";
   const categoryLabel = CATEGORY_LABELS[activity.category] ?? activity.category;
 
-  const handleBook = () => {
-    window.location.href = `/${activity.tenantSlug}`;
-  };
-
   return (
     <>
       {contactOpen && (
@@ -325,7 +604,8 @@ export function ExperienceDetailPage() {
           tenantSlug={activity.tenantSlug}
           contactName={activity.tenantName}
           logoUrl={activity.businessLogoUrl}
-          onClose={() => setContactOpen(false)}
+          onClose={() => { setContactOpen(false); setChatInitMsg(undefined); }}
+          initialMessage={chatInitMsg}
         />
       )}
 
@@ -530,16 +810,10 @@ export function ExperienceDetailPage() {
 
             {/* ── Right column — sticky booking card ── */}
             <div className="lg:col-span-2">
-              <div className="sticky top-6 bg-white rounded-2xl border border-gray-200 shadow-lg p-6 space-y-5">
-
-                {/* Price */}
-                <div className="flex items-end gap-2">
-                  <span className="text-3xl font-bold text-gray-900">${activity.pricePerPerson.toFixed(0)}</span>
-                  <span className="text-gray-500 mb-0.5">/ person</span>
-                </div>
+              <div className="sticky top-6 space-y-4">
 
                 {/* Quick stats */}
-                <div className="grid grid-cols-2 gap-3">
+                <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-4 grid grid-cols-2 gap-3">
                   <div className="bg-gray-50 rounded-xl p-3">
                     <div className="flex items-center gap-1.5 text-gray-400 mb-0.5">
                       <Clock className="h-3.5 w-3.5" />
@@ -563,7 +837,7 @@ export function ExperienceDetailPage() {
                       <p className="font-semibold text-gray-800 text-sm">{activity.location}</p>
                     </div>
                   )}
-                  {activity.minAge && activity.minAge > 0 && (
+                  {activity.minAge != null && activity.minAge > 0 && (
                     <div className="bg-gray-50 rounded-xl p-3 col-span-2">
                       <div className="flex items-center gap-1.5 text-gray-400 mb-0.5">
                         <AlertCircle className="h-3.5 w-3.5" />
@@ -574,27 +848,18 @@ export function ExperienceDetailPage() {
                   )}
                 </div>
 
-                {/* CTA buttons */}
-                <div className="space-y-3 pt-1">
-                  <Button
-                    className="w-full bg-primary hover:bg-primary/90 text-primary-foreground h-12 text-base font-semibold"
-                    onClick={handleBook}
-                  >
-                    Book Now
-                  </Button>
-                  <Button
-                    variant="outline"
-                    className="w-full h-11 gap-2"
-                    onClick={() => setContactOpen(true)}
-                  >
-                    <MessageCircle className="h-4 w-4" />
-                    Ask a Question
-                  </Button>
+                {/* Booking card */}
+                <div className="bg-white rounded-2xl border border-gray-200 shadow-lg p-6">
+                  <BookingSidebar
+                    activity={activity}
+                    onContact={(msg) => {
+                      setChatInitMsg(msg);
+                      setContactOpen(true);
+                    }}
+                    onOpenChat={() => setContactOpen(true)}
+                  />
                 </div>
 
-                <p className="text-xs text-gray-400 text-center">
-                  Booking is handled directly with {activity.tenantName}
-                </p>
               </div>
             </div>
 

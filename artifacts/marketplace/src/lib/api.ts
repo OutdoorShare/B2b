@@ -23,6 +23,9 @@ export interface MarketplaceActivity {
   whatToBring: string;
   minAge: number | null;
   isActive: boolean;
+  scheduleMode: 'open' | 'recurring' | 'specific';
+  recurringSlots: Array<{ dayOfWeek: number; times: string[] }>;
+  specificSlots: Array<{ date: string; times: string[] }>;
   linkedListing: {
     id: number;
     title: string;
