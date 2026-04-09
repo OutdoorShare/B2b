@@ -15,6 +15,7 @@ import developerRouter from "./routes/superadmin-developer";
 import marketplaceRouter from "./routes/marketplace";
 import hostRouter from "./routes/host";
 import memoriesRouter from "./routes/memories";
+import activitiesRouter from "./routes/activities";
 import { logger } from "./lib/logger";
 import { resolveTenant } from "./middleware/admin-auth";
 import { errorLoggerMiddleware, captureUnhandledErrors } from "./middleware/error-logger";
@@ -69,6 +70,7 @@ app.use("/api", docsRouter);
 app.use("/api", marketplaceRouter);
 app.use("/api", hostRouter);
 app.use("/api", memoriesRouter);
+app.use("/api", activitiesRouter);
 app.use("/api", router);
 
 export default app;

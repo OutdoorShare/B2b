@@ -109,7 +109,7 @@ export function ExperienceMapView({ activities }: ExperienceMapViewProps) {
 
         const buildRows = (items: MarketplaceActivity[]) => items.map(a => `
           <a
-            href="/${a.tenantSlug}"
+            href="/marketplace/experiences/${a.id}"
             class="exp-map-item"
             style="
               display:flex;align-items:center;gap:8px;

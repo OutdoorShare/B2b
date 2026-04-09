@@ -25,6 +25,7 @@ import { HostBundlesPage } from "@/pages/host/bundles";
 import { MemoriesPage } from "@/pages/memories";
 import { MemoriesSharePage } from "@/pages/memories-share";
 import { ExperiencesPage } from "@/pages/experiences";
+import { ExperienceDetailPage } from "@/pages/experience-detail";
 import { OutdoorBot } from "@/components/OutdoorBot";
 
 const queryClient = new QueryClient({
@@ -90,6 +91,7 @@ function AppContent() {
         <Route path="/profile" component={() => <ProfilePage onAuthOpen={() => setAuthOpen(true)} />} />
         <Route path="/companies" component={() => { window.location.replace(import.meta.env.BASE_URL.replace(/\/$/, "") || "/"); return null; }} />
         <Route path="/experiences" component={() => <ExperiencesPage onAuthOpen={() => setAuthOpen(true)} />} />
+        <Route path="/experiences/:id" component={ExperienceDetailPage} />
         <Route path="/memories" component={() => <MemoriesPage onAuthOpen={() => setAuthOpen(true)} />} />
         <Route path="/memories/share/:customerId" component={MemoriesSharePage} />
         <Route path="/become-host" component={() => <BecomeHostPage onAuthOpen={() => setAuthOpen(true)} />} />

@@ -67,6 +67,64 @@ function fmtListing(l: { id: number; title: string; pricePerDay: string; imageUr
   return { ...l, pricePerDay: parseFloat(l.pricePerDay) || 0 };
 }
 
+// ── Public: single activity detail ────────────────────────────────────────────
+router.get("/public/activities/:id", async (req, res) => {
+  try {
+    const id = parseInt(req.params.id);
+    if (!id) { res.status(400).json({ error: "Invalid id" }); return; }
+
+    const [row] = await db
+      .select({
+        activity: activitiesTable,
+        tenantName: tenantsTable.name,
+        tenantSlug: tenantsTable.slug,
+        bizName: businessProfileTable.name,
+        bizCity: businessProfileTable.city,
+        bizState: businessProfileTable.state,
+        bizLat: businessProfileTable.lat,
+        bizLng: businessProfileTable.lng,
+        bizLogoUrl: businessProfileTable.logoUrl,
+        bizTagline: businessProfileTable.tagline,
+        listing: {
+          id: listingsTable.id,
+          title: listingsTable.title,
+          pricePerDay: listingsTable.pricePerDay,
+          imageUrls: listingsTable.imageUrls,
+          description: listingsTable.description,
+        },
+      })
+      .from(activitiesTable)
+      .innerJoin(tenantsTable, eq(activitiesTable.tenantId, tenantsTable.id))
+      .leftJoin(businessProfileTable, eq(businessProfileTable.tenantId, tenantsTable.id))
+      .leftJoin(listingsTable, eq(activitiesTable.listingId, listingsTable.id))
+      .where(eq(activitiesTable.id, id))
+      .limit(1);
+
+    if (!row) { res.status(404).json({ error: "Not found" }); return; }
+
+    res.json({
+      ...row.activity,
+      pricePerPerson: row.activity.pricePerPerson ? parseFloat(row.activity.pricePerPerson) : 0,
+      tenantName: row.bizName || row.tenantName,
+      tenantSlug: row.tenantSlug,
+      location: row.activity.location || `${row.bizCity || ""}${row.bizCity && row.bizState ? ", " : ""}${row.bizState || ""}` || row.tenantName,
+      businessCity: row.bizCity ?? null,
+      businessState: row.bizState ?? null,
+      businessLat: row.bizLat ? parseFloat(row.bizLat) : null,
+      businessLng: row.bizLng ? parseFloat(row.bizLng) : null,
+      businessLogoUrl: row.bizLogoUrl ?? null,
+      businessTagline: row.bizTagline ?? null,
+      linkedListing: row.listing?.id ? {
+        ...row.listing,
+        pricePerDay: row.listing.pricePerDay ? parseFloat(row.listing.pricePerDay) : 0,
+      } : null,
+    });
+  } catch (e: any) {
+    console.error("[activities] public detail error:", e.message);
+    res.status(500).json({ error: "Failed to load activity" });
+  }
+});
+
 // ── Admin: list tenant activities ─────────────────────────────────────────────
 router.get("/activities", async (req, res) => {
   if (!req.tenantId) { res.status(401).json({ error: "Unauthorized" }); return; }

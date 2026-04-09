@@ -16,11 +16,20 @@ export interface MarketplaceActivity {
   businessState: string | null;
   businessLat: number | null;
   businessLng: number | null;
+  businessLogoUrl: string | null;
+  businessTagline: string | null;
   imageUrls: string[];
   highlights: string[];
   whatToBring: string;
   minAge: number | null;
   isActive: boolean;
+  linkedListing: {
+    id: number;
+    title: string;
+    pricePerDay: number;
+    imageUrls: string[];
+    description: string;
+  } | null;
 }
 
 function previewParam(): Record<string, string> {
@@ -361,6 +370,8 @@ export const api = {
       get<RenterBooking[]>(`/marketplace/renter/bookings?customerId=${customerId}`),
     activities: () =>
       get<MarketplaceActivity[]>("/public/activities"),
+    activity: (id: number) =>
+      get<MarketplaceActivity>(`/public/activities/${id}`),
   },
   customers: {
     login: (email: string, password: string) =>
