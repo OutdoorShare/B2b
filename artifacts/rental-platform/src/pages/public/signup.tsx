@@ -10,9 +10,31 @@ const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 const OS_GREEN = "#3ab549";
 
 const PLANS = [
-  { id: "half_throttle", name: "Half Throttle", price: 0, priceLabel: "Free", priceSuffix: "", sub: "15% platform fee per booking", features: ["Booking platform with custom branding", "Protection plan on every rental", "OutdoorShare Marketplace listing", "Automated booking & payments"] },
-  { id: "full_throttle", name: "Full Throttle", price: 895, priceLabel: "$895", priceSuffix: "/year", sub: "Tiered fee — as low as 7%", features: ["Protection plan on every rental", "White-labeled OutdoorShare website", "AI answering agent included", "Hands-on in-person onboarding"], popular: true },
-  { id: "growth_scale", name: "Growth & Scale", price: null, priceLabel: "Custom", priceSuffix: "", sub: "$500/mo or $3,400/yr", features: ["Protection plan on every rental", "No OutdoorShare branding", "Dedicated onboarding specialist", "Active marketing management"] },
+  {
+    id: "half_throttle",
+    name: "Half Throttle",
+    features: ["Booking platform with custom branding", "Protection plan on every rental", "OutdoorShare Marketplace listing", "Automated booking & payments"],
+    billing: null,
+  },
+  {
+    id: "full_throttle",
+    name: "Full Throttle",
+    features: ["Protection plan on every rental", "White-labeled OutdoorShare website", "AI answering agent included", "Hands-on in-person onboarding"],
+    popular: true,
+    billing: {
+      monthly: { priceLabel: "$298", priceSuffix: "/mo", sub: "3 monthly payments · then renews annually" },
+      annually: { priceLabel: "$895", priceSuffix: "/year", sub: "Tiered fee — as low as 7%" },
+    },
+  },
+  {
+    id: "growth_scale",
+    name: "Growth & Scale",
+    features: ["Protection plan on every rental", "No OutdoorShare branding", "Dedicated onboarding specialist", "Active marketing management"],
+    billing: {
+      monthly: { priceLabel: "$500", priceSuffix: "/mo", sub: "Billed monthly · cancel anytime" },
+      annually: { priceLabel: "$3,400", priceSuffix: "/year", sub: "Save $1,600/year vs. monthly" },
+    },
+  },
 ];
 
 type Step = "info" | "plan" | "payment" | "done";
@@ -35,6 +57,8 @@ export default function SignupPage() {
   const params = new URLSearchParams(typeof window !== "undefined" ? window.location.search : "");
   const inviteEmail = params.get("email") ?? "";
   const invitePlan = params.get("plan") === "starter" ? "half_throttle" : "";
+
+  const [billingInterval, setBillingInterval] = useState<"monthly" | "annually">("annually");
 
   const [form, setForm] = useState({
     companyName: "",
@@ -477,45 +501,79 @@ export default function SignupPage() {
                 <p className="text-white/50 text-sm mt-1">Start free on Half Throttle or upgrade anytime.</p>
               </div>
 
-              <div className="space-y-3">
-                {PLANS.map(plan => (
-                  <button
-                    key={plan.id}
-                    onClick={() => set("plan", plan.id)}
-                    className="w-full text-left p-4 rounded-xl border-2 transition-all"
-                    style={
-                      form.plan === plan.id
-                        ? { borderColor: OS_GREEN, background: "rgba(58,181,73,0.08)" }
-                        : { borderColor: "rgba(255,255,255,0.08)", background: "rgba(255,255,255,0.02)" }
-                    }
-                  >
-                    <div className="flex items-center justify-between mb-2">
-                      <div className="flex items-center gap-3">
-                        <div className="w-4 h-4 rounded-full border-2 flex items-center justify-center" style={{ borderColor: form.plan === plan.id ? OS_GREEN : "#374151" }}>
-                          {form.plan === plan.id && <div className="w-2 h-2 rounded-full" style={{ backgroundColor: OS_GREEN }} />}
-                        </div>
-                        <span className="font-bold text-white">{plan.name}</span>
-                        {plan.popular && <Badge className="text-white text-xs px-2" style={{ backgroundColor: OS_GREEN }}>Popular</Badge>}
-                      </div>
-                      <div className="text-right">
-                        <span className="font-black text-white">
-                          {(plan as any).priceLabel}
-                          <span className="text-xs font-normal text-white/40">{(plan as any).priceSuffix}</span>
+              {/* Billing interval toggle */}
+              <div className="flex items-center justify-center">
+                <div className="flex rounded-lg p-0.5" style={{ background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.10)" }}>
+                  {(["monthly", "annually"] as const).map(interval => (
+                    <button
+                      key={interval}
+                      onClick={() => setBillingInterval(interval)}
+                      className="px-4 py-1.5 rounded-md text-sm font-semibold transition-all capitalize"
+                      style={
+                        billingInterval === interval
+                          ? { background: OS_GREEN, color: "#fff", boxShadow: "0 2px 8px rgba(58,181,73,0.4)" }
+                          : { color: "rgba(255,255,255,0.45)" }
+                      }
+                    >
+                      {interval}
+                      {interval === "annually" && (
+                        <span className="ml-1.5 text-[10px] font-bold px-1.5 py-0.5 rounded-full" style={{ background: "rgba(58,181,73,0.25)", color: "#6ee47a" }}>
+                          Save
                         </span>
-                        {(plan as any).sub && (
-                          <p className="text-[10px] text-white/35 mt-0.5">{(plan as any).sub}</p>
-                        )}
+                      )}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="space-y-3">
+                {PLANS.map(plan => {
+                  const pricing = plan.billing
+                    ? plan.billing[billingInterval]
+                    : null;
+                  return (
+                    <button
+                      key={plan.id}
+                      onClick={() => set("plan", plan.id)}
+                      className="w-full text-left p-4 rounded-xl border-2 transition-all"
+                      style={
+                        form.plan === plan.id
+                          ? { borderColor: OS_GREEN, background: "rgba(58,181,73,0.08)" }
+                          : { borderColor: "rgba(255,255,255,0.08)", background: "rgba(255,255,255,0.02)" }
+                      }
+                    >
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="flex items-center gap-3">
+                          <div className="w-4 h-4 rounded-full border-2 flex items-center justify-center" style={{ borderColor: form.plan === plan.id ? OS_GREEN : "#374151" }}>
+                            {form.plan === plan.id && <div className="w-2 h-2 rounded-full" style={{ backgroundColor: OS_GREEN }} />}
+                          </div>
+                          <span className="font-bold text-white">{plan.name}</span>
+                          {(plan as any).popular && <Badge className="text-white text-xs px-2" style={{ backgroundColor: OS_GREEN }}>Popular</Badge>}
+                        </div>
+                        <div className="text-right">
+                          {pricing ? (
+                            <>
+                              <span className="font-black text-white">
+                                {pricing.priceLabel}
+                                <span className="text-xs font-normal text-white/40">{pricing.priceSuffix}</span>
+                              </span>
+                              <p className="text-[10px] text-white/35 mt-0.5">{pricing.sub}</p>
+                            </>
+                          ) : (
+                            <span className="font-black text-white">Free</span>
+                          )}
+                        </div>
                       </div>
-                    </div>
-                    <ul className="grid grid-cols-2 gap-1 pl-7">
-                      {plan.features.map(f => (
-                        <li key={f} className="text-xs text-white/50 flex items-center gap-1.5">
-                          <CheckCircle2 className="w-3 h-3 shrink-0" style={{ color: OS_GREEN }} /> {f}
-                        </li>
-                      ))}
-                    </ul>
-                  </button>
-                ))}
+                      <ul className="grid grid-cols-2 gap-1 pl-7">
+                        {plan.features.map(f => (
+                          <li key={f} className="text-xs text-white/50 flex items-center gap-1.5">
+                            <CheckCircle2 className="w-3 h-3 shrink-0" style={{ color: OS_GREEN }} /> {f}
+                          </li>
+                        ))}
+                      </ul>
+                    </button>
+                  );
+                })}
               </div>
 
               {error && (
