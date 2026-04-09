@@ -24,7 +24,6 @@ import { HostSettingsPage } from "@/pages/host/settings";
 import { HostBundlesPage } from "@/pages/host/bundles";
 import { MemoriesPage } from "@/pages/memories";
 import { MemoriesSharePage } from "@/pages/memories-share";
-import { ExperiencesPage } from "@/pages/experiences";
 import { ExperienceDetailPage } from "@/pages/experience-detail";
 import { ExperienceCheckoutPage } from "@/pages/experience-checkout";
 import { ExperienceBookingConfirmPage } from "@/pages/experience-booking-confirm";
@@ -92,7 +91,7 @@ function AppContent() {
         <Route path="/listings/:id" component={ListingDetailPage} />
         <Route path="/profile" component={() => <ProfilePage onAuthOpen={() => setAuthOpen(true)} />} />
         <Route path="/companies" component={() => { window.location.replace(import.meta.env.BASE_URL.replace(/\/$/, "") || "/"); return null; }} />
-        <Route path="/experiences" component={() => <ExperiencesPage onAuthOpen={() => setAuthOpen(true)} />} />
+        <Route path="/experiences" component={() => { window.location.replace(`${import.meta.env.BASE_URL.replace(/\/$/, "")}/?experiences=1`); return null; }} />
         <Route path="/experiences/booking/:id" component={ExperienceBookingConfirmPage} />
         <Route path="/experiences/:id/book" component={ExperienceCheckoutPage} />
         <Route path="/experiences/:id" component={ExperienceDetailPage} />

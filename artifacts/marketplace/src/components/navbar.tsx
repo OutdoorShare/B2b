@@ -87,7 +87,7 @@ export function Navbar({
               Browse
             </button>
             <button
-              onClick={() => setLocation("/experiences")}
+              onClick={() => setLocation("/?experiences=1")}
               className={`${linkClass} flex items-center gap-1`}
             >
               <Compass className={`h-3.5 w-3.5 ${transparent ? "text-white/70" : "text-brand-blue"}`} />
@@ -243,7 +243,7 @@ export function Navbar({
               Browse
             </button>
             <button
-              onClick={() => { setLocation("/experiences"); setMobileOpen(false); }}
+              onClick={() => { setLocation("/?experiences=1"); setMobileOpen(false); }}
               className={`block w-full text-left px-2 py-2 text-sm rounded-md ${
                 transparent ? "text-white/90 hover:bg-white/10" : "text-gray-700 hover:bg-gray-50"
               }`}

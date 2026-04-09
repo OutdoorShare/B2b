@@ -93,7 +93,7 @@ export function ExperienceBookingConfirmPage() {
         <div className="text-center space-y-4">
           <div className="text-4xl">😕</div>
           <h2 className="text-xl font-semibold">Booking not found</h2>
-          <Button variant="outline" onClick={() => navigate(`${BASE_URL}/experiences`)}>
+          <Button variant="outline" onClick={() => navigate(`${BASE_URL}/?experiences=1`)}>
             Browse Experiences
           </Button>
         </div>
@@ -191,13 +191,13 @@ export function ExperienceBookingConfirmPage() {
           <Button
             variant="outline"
             className="flex-1 gap-2"
-            onClick={() => navigate(`/experiences`)}
+            onClick={() => navigate(`/?experiences=1`)}
           >
             <Home className="h-4 w-4" /> Browse More
           </Button>
           <Button
             className="flex-1 gap-2 bg-primary hover:bg-primary/90 text-primary-foreground"
-            onClick={() => navigate(`/experiences`)}
+            onClick={() => navigate(`/?experiences=1`)}
           >
             Explore Experiences <ArrowRight className="h-4 w-4" />
           </Button>

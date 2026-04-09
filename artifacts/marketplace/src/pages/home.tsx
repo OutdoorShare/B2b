@@ -320,7 +320,11 @@ function ExperiencesSection({ activities }: { activities: MarketplaceActivity[] 
 }
 
 export function HomePage({ onAuthOpen }: { onAuthOpen: () => void }) {
-  const [mode, setMode] = useState<"rentals" | "experiences">("rentals");
+  const [mode, setMode] = useState<"rentals" | "experiences">(() =>
+    new URLSearchParams(window.location.search).get("experiences") === "1"
+      ? "experiences"
+      : "rentals"
+  );
   const [search, setSearch] = useState("");
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [selectedCategoryName, setSelectedCategoryName] = useState<string | null>(null);

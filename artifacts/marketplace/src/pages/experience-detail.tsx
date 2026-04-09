@@ -583,7 +583,7 @@ export function ExperienceDetailPage() {
         <div className="text-center">
           <div className="text-4xl mb-3">😕</div>
           <h2 className="text-xl font-semibold text-gray-800 mb-2">Experience not found</h2>
-          <Button variant="outline" onClick={() => setLocation("/experiences")} className="gap-2">
+          <Button variant="outline" onClick={() => setLocation("/?experiences=1")} className="gap-2">
             <ArrowLeft className="h-4 w-4" /> Back to Experiences
           </Button>
         </div>
@@ -613,7 +613,7 @@ export function ExperienceDetailPage() {
         <div className="bg-white border-b border-gray-100">
           <div className="max-w-6xl mx-auto px-4 sm:px-6 py-3">
             <button
-              onClick={() => setLocation("/experiences")}
+              onClick={() => setLocation("/?experiences=1")}
               className="flex items-center gap-2 text-sm text-gray-500 hover:text-gray-900 transition-colors"
             >
               <ArrowLeft className="h-4 w-4" />

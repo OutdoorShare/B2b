@@ -112,7 +112,7 @@ export function ExperienceCheckoutPage() {
         <div className="text-center">
           <div className="text-4xl mb-3">😕</div>
           <h2 className="text-xl font-semibold mb-4">Experience not found</h2>
-          <Button variant="outline" onClick={() => navigate(`/experiences`)}>
+          <Button variant="outline" onClick={() => navigate(`/?experiences=1`)}>
             Browse Experiences
           </Button>
         </div>
