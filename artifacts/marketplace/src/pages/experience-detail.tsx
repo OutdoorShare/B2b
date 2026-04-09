@@ -13,6 +13,7 @@ import { useAuth } from "@/context/auth";
 
 const API_BASE = "/api";
 const API_UPLOAD_BASE = "/api/uploads/";
+const BASE_URL = import.meta.env.BASE_URL.replace(/\/$/, "");
 
 function resolveImage(url: string) {
   if (!url) return "";
@@ -472,7 +473,7 @@ export function ExperienceDetailPage() {
                     <Star className="h-4 w-4 text-primary" /> Recommended Rental Equipment
                   </h3>
                   <a
-                    href={`/marketplace/listings/${activity.linkedListing.id}`}
+                    href={`${BASE_URL}/listings/${activity.linkedListing.id}`}
                     className="group flex gap-4 bg-white rounded-2xl border border-gray-200 p-4 hover:shadow-md hover:border-primary/30 transition-all"
                   >
                     {activity.linkedListing.imageUrls?.[0] ? (

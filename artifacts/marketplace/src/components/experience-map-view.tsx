@@ -2,6 +2,8 @@ import { useEffect, useRef } from "react";
 import "leaflet/dist/leaflet.css";
 import type { MarketplaceActivity } from "@/lib/api";
 
+const BASE_URL = import.meta.env.BASE_URL.replace(/\/$/, "");
+
 function stableOffset(seed: number): number {
   let s = (Math.abs(Math.round(seed * 1e5)) | 0) + 1;
   s = Math.imul(s ^ (s >>> 16), 0x45d9f3b);
@@ -109,7 +111,7 @@ export function ExperienceMapView({ activities }: ExperienceMapViewProps) {
 
         const buildRows = (items: MarketplaceActivity[]) => items.map(a => `
           <a
-            href="/marketplace/experiences/${a.id}"
+            href="${BASE_URL}/experiences/${a.id}"
             class="exp-map-item"
             style="
               display:flex;align-items:center;gap:8px;

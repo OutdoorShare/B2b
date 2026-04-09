@@ -192,6 +192,7 @@ function getCategoryIcon(slug: string): React.ElementType {
 
 // Today's date as yyyy-MM-dd for the min attribute on date inputs
 const todayStr = format(new Date(), "yyyy-MM-dd");
+const BASE_URL = import.meta.env.BASE_URL.replace(/\/$/, "");
 
 // ── Duration helper ───────────────────────────────────────────────────────────
 function fmtDuration(minutes: number) {
@@ -895,7 +896,7 @@ export function HomePage({ onAuthOpen }: { onAuthOpen: () => void }) {
                 {filteredActivities.map(act => (
                   <a
                     key={act.id}
-                    href={`/experiences/${act.id}`}
+                    href={`${BASE_URL}/experiences/${act.id}`}
                     className="group bg-white rounded-2xl border border-gray-200 overflow-hidden shadow-sm hover:shadow-lg transition-all duration-200 flex flex-col"
                   >
                     {act.imageUrls?.[0] ? (

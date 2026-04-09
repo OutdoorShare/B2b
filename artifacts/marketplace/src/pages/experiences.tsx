@@ -44,10 +44,12 @@ const CATEGORY_ICONS: Record<string, string> = {
   other: "🌿",
 };
 
+const BASE_URL = import.meta.env.BASE_URL.replace(/\/$/, "");
+
 function ActivityCard({ act }: { act: MarketplaceActivity }) {
   return (
     <a
-      href={`/experiences/${act.id}`}
+      href={`${BASE_URL}/experiences/${act.id}`}
       className="group bg-white rounded-2xl border border-gray-200 overflow-hidden shadow-sm hover:shadow-lg transition-all duration-200 flex flex-col"
     >
       {act.imageUrls?.[0] ? (
