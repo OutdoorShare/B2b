@@ -31,6 +31,7 @@ import {
   ExternalLink,
   Sun,
   Moon,
+  Mountain,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useGetBusinessProfile } from "@workspace/api-client-react";
@@ -52,6 +53,7 @@ const NAV_GROUPS: NavGroup[] = [
     items: [
       { name: "Bookings", path: "/bookings", icon: CalendarDays },
       { name: "Listings", path: "/listings", icon: Package },
+      { name: "Activities", path: "/activities", icon: Mountain },
       { name: "Inventory", path: "/inventory", icon: Warehouse },
       { name: "Quotes", path: "/quotes", icon: FileText },
       { name: "Claims", path: "/claims", icon: ShieldAlert },

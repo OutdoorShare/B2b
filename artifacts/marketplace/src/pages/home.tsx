@@ -16,7 +16,9 @@ import {
   Waves, Bus, Truck, Car, Anchor, Bike, Zap,
   Package, Snowflake, CarFront, Gauge, Mountain,
   CalendarDays, ChevronLeft, ChevronRight,
+  Clock, Users, MapPin, ArrowRight,
 } from "lucide-react";
+import type { MarketplaceActivity } from "@/lib/api";
 
 // ── Inline range-selection calendar ──────────────────────────────────────────
 const WEEKDAYS = ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"];
@@ -190,6 +192,117 @@ function getCategoryIcon(slug: string): React.ElementType {
 // Today's date as yyyy-MM-dd for the min attribute on date inputs
 const todayStr = format(new Date(), "yyyy-MM-dd");
 
+// ── Duration helper ───────────────────────────────────────────────────────────
+function fmtDuration(minutes: number) {
+  if (minutes < 60) return `${minutes} min`;
+  const h = Math.floor(minutes / 60);
+  const m = minutes % 60;
+  return m > 0 ? `${h}h ${m}m` : `${h}h`;
+}
+
+const ACTIVITY_CATEGORY_LABELS: Record<string, string> = {
+  adventure: "Adventure",
+  "water-sport": "Water Sport",
+  "guided-tour": "Guided Tour",
+  lesson: "Lesson",
+  "wildlife-tour": "Wildlife Tour",
+  "off-road": "Off-Road",
+  camping: "Camping",
+  climbing: "Climbing",
+  "snow-sport": "Snow Sport",
+  fishing: "Fishing",
+  other: "Other",
+};
+
+// ── Experiences Section ───────────────────────────────────────────────────────
+function ExperiencesSection({ activities }: { activities: MarketplaceActivity[] }) {
+  return (
+    <section className="mt-16">
+      <div className="flex items-end justify-between mb-6">
+        <div>
+          <h2 className="text-2xl font-bold text-gray-900">Experiences</h2>
+          <p className="text-gray-500 mt-1 text-sm">
+            Guided tours, lessons, and adventures hosted by local companies
+          </p>
+        </div>
+        <span className="text-sm text-gray-400">{activities.length} available</span>
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
+        {activities.map(act => (
+          <a
+            key={act.id}
+            href={`/${act.tenantSlug}`}
+            className="group bg-white rounded-2xl border border-gray-200 overflow-hidden shadow-sm hover:shadow-md transition-all duration-200 flex flex-col"
+          >
+            {/* Image */}
+            {act.imageUrls?.[0] ? (
+              <div className="h-44 overflow-hidden">
+                <img
+                  src={act.imageUrls[0]}
+                  alt={act.title}
+                  className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                />
+              </div>
+            ) : (
+              <div
+                className="h-44 flex items-center justify-center"
+                style={{ background: "linear-gradient(135deg, hsl(127,55%,92%) 0%, hsl(197,78%,92%) 100%)" }}
+              >
+                <Mountain className="w-12 h-12 text-primary/30" />
+              </div>
+            )}
+
+            <div className="p-4 flex flex-col flex-1 gap-2">
+              {/* Category badge */}
+              <span className="text-[10px] font-semibold uppercase tracking-wide text-primary">
+                {ACTIVITY_CATEGORY_LABELS[act.category] ?? act.category}
+              </span>
+
+              {/* Title */}
+              <h3 className="font-semibold text-gray-900 leading-tight group-hover:text-primary transition-colors line-clamp-2">
+                {act.title}
+              </h3>
+
+              {/* Company */}
+              <p className="text-xs text-gray-500">{act.tenantName}</p>
+
+              {/* Stats row */}
+              <div className="flex items-center gap-3 text-xs text-gray-500 mt-auto pt-2 border-t border-gray-100">
+                <span className="flex items-center gap-1">
+                  <Clock className="w-3 h-3" />
+                  {fmtDuration(act.durationMinutes)}
+                </span>
+                <span className="flex items-center gap-1">
+                  <Users className="w-3 h-3" />
+                  Up to {act.maxCapacity}
+                </span>
+                {act.location && (
+                  <span className="flex items-center gap-1 truncate">
+                    <MapPin className="w-3 h-3 shrink-0" />
+                    <span className="truncate">{act.location}</span>
+                  </span>
+                )}
+              </div>
+
+              {/* Price + CTA */}
+              <div className="flex items-center justify-between mt-2">
+                <div>
+                  <span className="font-bold text-gray-900">${act.pricePerPerson}</span>
+                  <span className="text-xs text-gray-400"> / person</span>
+                </div>
+                <span className="flex items-center gap-1 text-xs font-semibold text-primary group-hover:gap-2 transition-all">
+                  Book now <ArrowRight className="w-3.5 h-3.5" />
+                </span>
+              </div>
+            </div>
+          </a>
+        ))}
+      </div>
+    </section>
+  );
+}
+
 export function HomePage({ onAuthOpen }: { onAuthOpen: () => void }) {
   const [search, setSearch] = useState("");
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
@@ -235,6 +348,12 @@ export function HomePage({ onAuthOpen }: { onAuthOpen: () => void }) {
   const { data: stats } = useQuery({
     queryKey: ["marketplace-stats"],
     queryFn: api.marketplace.stats,
+    staleTime: 60_000,
+  });
+
+  const { data: activities } = useQuery({
+    queryKey: ["marketplace-activities"],
+    queryFn: api.marketplace.activities,
     staleTime: 60_000,
   });
 
@@ -581,6 +700,11 @@ export function HomePage({ onAuthOpen }: { onAuthOpen: () => void }) {
               )}
             </div>
           )
+        )}
+
+        {/* ── EXPERIENCES SECTION ───────────────────────────────── */}
+        {activities && activities.length > 0 && (
+          <ExperiencesSection activities={activities} />
         )}
 
         {/* CTA */}

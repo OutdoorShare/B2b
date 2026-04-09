@@ -78,6 +78,8 @@ import AdminInventory from "@/pages/admin/inventory/index";
 import AdminInventoryForm from "@/pages/admin/inventory/form";
 import AdminInventoryDetail from "@/pages/admin/inventory/detail";
 import AdminInventoryImport from "@/pages/admin/inventory/import";
+import AdminActivities from "@/pages/admin/activities/index";
+import AdminActivityForm from "@/pages/admin/activities/form";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -364,6 +366,15 @@ function Router() {
       </Route>
       <Route path="/:slug/admin/claims">
         <AdminGuard><AdminLayout><AdminClaims /></AdminLayout></AdminGuard>
+      </Route>
+      <Route path="/:slug/admin/activities/new">
+        <AdminGuard><AdminLayout><AdminActivityForm /></AdminLayout></AdminGuard>
+      </Route>
+      <Route path="/:slug/admin/activities/:id/edit">
+        <AdminGuard><AdminLayout><AdminActivityForm /></AdminLayout></AdminGuard>
+      </Route>
+      <Route path="/:slug/admin/activities">
+        <AdminGuard><AdminLayout><AdminActivities /></AdminLayout></AdminGuard>
       </Route>
       <Route path="/:slug/admin/team">
         <AdminGuard><AdminLayout><AdminTeam /></AdminLayout></AdminGuard>

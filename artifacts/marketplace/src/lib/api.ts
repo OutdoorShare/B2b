@@ -1,5 +1,24 @@
 const API_BASE = "/api";
 
+export interface MarketplaceActivity {
+  id: number;
+  tenantId: number;
+  tenantName: string;
+  tenantSlug: string;
+  title: string;
+  description: string;
+  category: string;
+  pricePerPerson: number;
+  durationMinutes: number;
+  maxCapacity: number;
+  location: string;
+  imageUrls: string[];
+  highlights: string[];
+  whatToBring: string;
+  minAge: number | null;
+  isActive: boolean;
+}
+
 function previewParam(): Record<string, string> {
   try {
     return sessionStorage.getItem("os_marketplace_preview") === "true" ? { preview: "true" } : {};
@@ -336,6 +355,8 @@ export const api = {
     },
     renterBookings: (customerId: number) =>
       get<RenterBooking[]>(`/marketplace/renter/bookings?customerId=${customerId}`),
+    activities: () =>
+      get<MarketplaceActivity[]>("/public/activities"),
   },
   customers: {
     login: (email: string, password: string) =>
