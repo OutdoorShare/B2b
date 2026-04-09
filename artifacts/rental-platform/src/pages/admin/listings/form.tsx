@@ -16,7 +16,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { ArrowLeft, Upload, X, CheckCircle2, AlertCircle, CircleDashed, ImagePlus, Loader2, IdCard, Sparkles, ChevronDown, ChevronUp, RefreshCw, Info, Plus, Trash2, Clock, Search, Package, Link2, Unlink } from "lucide-react";
+import { ArrowLeft, Upload, X, CheckCircle2, AlertCircle, CircleDashed, ImagePlus, Loader2, IdCard, Sparkles, ChevronDown, ChevronUp, RefreshCw, Info, Plus, Trash2, Clock, Search, Package, Link2, Unlink, Wand2 } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Checkbox } from "@/components/ui/checkbox";
 import { AddonManager } from "@/components/addon-manager";
@@ -25,6 +25,7 @@ import { getAdminSession } from "@/lib/admin-nav";
 import { ContactCardDialog } from "@/components/contact-card-dialog";
 import type { ContactCard } from "@/components/contact-card-dialog";
 import { ImageCropDialog } from "@/components/image-crop-dialog";
+import { BackgroundStudioDialog } from "@/components/background-studio-dialog";
 
 interface Category { id: number; name: string; slug: string; icon?: string | null; }
 type TimeSlotDef = { label: string; startTime: string; endTime: string; rate: "full_day" | "half_day" };
@@ -431,6 +432,18 @@ export default function AdminListingsForm() {
   const [cropQueue, setCropQueue] = useState<File[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  const [bgStudioOpen, setBgStudioOpen] = useState(false);
+  const [bgStudioIdx, setBgStudioIdx] = useState<number | null>(null);
+
+  const handleBgStudioApply = useCallback((newUrl: string) => {
+    if (bgStudioIdx === null) return;
+    setFormData(prev => {
+      const updated = [...prev.imageUrls];
+      updated[bgStudioIdx] = newUrl;
+      return { ...prev, imageUrls: updated };
+    });
+  }, [bgStudioIdx]);
+
   const uploadBlob = useCallback(async (blob: Blob, filename: string): Promise<string> => {
     setUploading(true);
     try {
@@ -557,6 +570,16 @@ export default function AdminListingsForm() {
             }
           }}
           onCancel={() => setCropQueue([])}
+        />
+      )}
+
+      {/* Background Studio dialog */}
+      {bgStudioOpen && bgStudioIdx !== null && (
+        <BackgroundStudioDialog
+          open={bgStudioOpen}
+          imageUrl={formData.imageUrls[bgStudioIdx]}
+          onApply={handleBgStudioApply}
+          onClose={() => { setBgStudioOpen(false); setBgStudioIdx(null); }}
         />
       )}
 
@@ -839,6 +862,14 @@ export default function AdminListingsForm() {
                           className="absolute top-1.5 right-1.5 w-7 h-7 bg-black/60 hover:bg-black/80 text-white rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
                         >
                           <X className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          type="button"
+                          title="Background Studio"
+                          onClick={() => { setBgStudioIdx(idx); setBgStudioOpen(true); }}
+                          className="absolute top-1.5 left-1.5 w-7 h-7 bg-primary/80 hover:bg-primary text-white rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                        >
+                          <Wand2 className="w-3.5 h-3.5" />
                         </button>
                         {idx === 0 && (
                           <span className="absolute bottom-1.5 left-1.5 text-[10px] font-bold bg-black/60 text-white px-1.5 py-0.5 rounded">
