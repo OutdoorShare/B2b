@@ -35,7 +35,7 @@ async function sa(path: string, opts?: RequestInit) {
 }
 
 // ─── Types ───────────────────────────────────────────────────────────────────
-type Tenant = { id: number; name: string; slug: string; email: string; plan: string; status: string; maxListings: number; contactName?: string; phone?: string; notes?: string; createdAt: string; listingCount: number; bookingCount: number; platformFeePercent?: string | null; testMode?: boolean; trialEndsAt?: string | null };
+type Tenant = { id: number; name: string; slug: string; email: string; plan: string; status: string; maxListings: number; contactName?: string; phone?: string; notes?: string; createdAt: string; listingCount: number; bookingCount: number; platformFeePercent?: string | null; testMode?: boolean; trialEndsAt?: string | null; ghlLocationId?: string | null };
 type BizProfile = { name: string; tagline: string; description: string; logoUrl?: string; primaryColor: string; accentColor: string; email: string; phone: string; website?: string; location: string; address?: string; city?: string; state?: string; zipCode?: string; socialInstagram?: string; socialFacebook?: string; depositRequired: boolean; depositPercent: number; cancellationPolicy: string; rentalTerms?: string };
 type Listing = { id: number; title: string; description: string; pricePerDay: number; pricePerWeek?: number | null; quantity: number; status: string; brand?: string; model?: string; condition?: string; location?: string; requirements?: string; depositAmount?: number | null; createdAt: string };
 type Booking = { id: number; customerName: string; customerEmail: string; startDate: string; endDate: string; quantity: number; totalPrice: number; status: string; source: string; adminNotes?: string; createdAt: string; listingId: number };
@@ -192,9 +192,62 @@ function AccountTab({ tenant, tenantId, onSaved }: { tenant: Tenant; tenantId: n
           <Textarea value={form.notes} onChange={e => set("notes", e.target.value)} rows={2} className="bg-slate-800 border-slate-600 text-white resize-none" />
         </div>
       </div>
+
+      {/* GHL Sub-Account Status */}
+      <GHLProvisionPanel tenant={tenant} tenantId={tenantId} onSaved={onSaved} />
+
       <Button onClick={save} disabled={saving} className="text-white gap-1.5" style={{ backgroundColor: "#3ab549" }} >
         <Save className="w-4 h-4" />{saving ? "Saving…" : "Save Account"}
       </Button>
+    </div>
+  );
+}
+
+// ─── GHL Provision Panel ─────────────────────────────────────────────────────
+function GHLProvisionPanel({ tenant, tenantId, onSaved }: { tenant: Tenant; tenantId: number; onSaved: () => void }) {
+  const { toast } = useToast();
+  const [provisioning, setProvisioning] = useState(false);
+  const isPaidPlan = tenant.plan === "professional" || tenant.plan === "enterprise";
+
+  const provision = async () => {
+    setProvisioning(true);
+    try {
+      const res = await sa(`/superadmin/tenants/${tenantId}/provision-ghl`, { method: "POST" });
+      const data = await res.json();
+      if (!res.ok) {
+        toast({ title: data.error ?? "GHL provisioning failed", variant: "destructive" });
+      } else {
+        toast({ title: "GHL sub-account created!", description: `Location ID: ${data.locationId}` });
+        onSaved();
+      }
+    } finally { setProvisioning(false); }
+  };
+
+  return (
+    <div className={`rounded-lg px-4 py-3 border ${tenant.ghlLocationId ? "bg-emerald-950/30 border-emerald-700/40" : isPaidPlan ? "bg-slate-800/50 border-slate-600/50" : "bg-slate-900/50 border-slate-700/30"}`}>
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <p className="text-sm font-semibold text-slate-200 mb-0.5">GoHighLevel Sub-Account</p>
+          {tenant.ghlLocationId ? (
+            <p className="text-xs text-emerald-400 font-mono">{tenant.ghlLocationId}</p>
+          ) : isPaidPlan ? (
+            <p className="text-xs text-slate-400">No sub-account yet — click to provision one in GHL</p>
+          ) : (
+            <p className="text-xs text-slate-500">Upgrade to Full Throttle or Growth &amp; Scale to enable GHL</p>
+          )}
+        </div>
+        {isPaidPlan && (
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={provision}
+            disabled={provisioning}
+            className={tenant.ghlLocationId ? "border-slate-600 text-slate-300 hover:bg-slate-700 text-xs" : "border-emerald-600 text-emerald-300 hover:bg-emerald-900/40 text-xs"}
+          >
+            {provisioning ? "Provisioning…" : tenant.ghlLocationId ? "Re-Provision" : "Provision GHL"}
+          </Button>
+        )}
+      </div>
     </div>
   );
 }

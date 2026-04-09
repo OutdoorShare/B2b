@@ -6,6 +6,7 @@ import { scrypt, randomBytes, timingSafeEqual } from "crypto";
 import { promisify } from "util";
 import { sendWelcomeEmail, sendAccountUpdatedEmail, sendClaimChargeEmail, sendClaimSettlementEmail } from "../services/gmail";
 import { stripe } from "../services/stripe";
+import { provisionGHLIfNeeded } from "./billing";
 
 const scryptAsync = promisify(scrypt);
 
@@ -328,9 +329,45 @@ router.put("/superadmin/tenants/:id", requireSuperAdmin, async (req, res) => {
       newPassword: password || undefined,
     }).catch((err) => console.error("[email] Failed to send update email:", err?.message));
 
+    // Provision GHL sub-account if plan was upgraded to a paid tier (non-blocking)
+    if (plan !== undefined) {
+      provisionGHLIfNeeded(updated.id).catch(e => console.error("[GHL] superadmin provision error:", e.message));
+    }
+
     res.json(safeTenant(updated));
   } catch (e) {
     res.status(500).json({ error: "Failed to update tenant" });
+  }
+});
+
+// ── POST /superadmin/tenants/:id/provision-ghl ────────────────────────────────
+router.post("/superadmin/tenants/:id/provision-ghl", requireSuperAdmin, async (req, res) => {
+  try {
+    const id = parseInt(req.params.id);
+    const [tenant] = await db.select().from(tenantsTable).where(eq(tenantsTable.id, id)).limit(1);
+    if (!tenant) { res.status(404).json({ error: "Tenant not found" }); return; }
+
+    const { createGHLSubAccount } = await import("../services/ghl");
+    const result = await createGHLSubAccount({
+      companyName: tenant.name,
+      email: tenant.email,
+      phone: tenant.phone,
+      slug: tenant.slug,
+    });
+
+    if (!result.success) {
+      res.status(502).json({ error: result.error });
+      return;
+    }
+
+    await db.update(tenantsTable)
+      .set({ ghlLocationId: result.locationId, updatedAt: new Date() })
+      .where(eq(tenantsTable.id, id));
+
+    res.json({ ok: true, locationId: result.locationId });
+  } catch (e: any) {
+    console.error("[GHL] manual provision error:", e.message);
+    res.status(500).json({ error: "Failed to provision GHL sub-account" });
   }
 });
 

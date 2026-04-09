@@ -3,6 +3,9 @@ import { db } from "@workspace/db";
 import { tenantsTable } from "@workspace/db/schema";
 import { eq } from "drizzle-orm";
 import { stripe } from "../services/stripe";
+import { createGHLSubAccount } from "../services/ghl";
+
+const PAID_PLANS = new Set(["professional", "enterprise"]);
 
 const router: IRouter = Router();
 
@@ -163,6 +166,8 @@ router.post("/billing/webhook", async (req, res) => {
             status: "active",
             updatedAt: new Date(),
           }).where(eq(tenantsTable.id, tenantId));
+          // Provision GHL sub-account for paid plan (non-blocking)
+          provisionGHLIfNeeded(tenantId).catch(e => console.error("[GHL] background provision error:", e.message));
         }
         break;
       }
@@ -178,6 +183,9 @@ router.post("/billing/webhook", async (req, res) => {
             status: ["active", "trialing"].includes(sub.status) ? "active" : "suspended",
             updatedAt: new Date(),
           }).where(eq(tenantsTable.id, tenantId));
+          if (["active", "trialing"].includes(sub.status)) {
+            provisionGHLIfNeeded(tenantId).catch(e => console.error("[GHL] background provision error:", e.message));
+          }
         }
         break;
       }
@@ -230,4 +238,37 @@ async function getTenantByCustomer(customerId: string): Promise<number | null> {
   return tenant?.id ?? null;
 }
 
+/**
+ * Provision a GHL sub-account for a tenant on a paid plan, if one doesn't exist yet.
+ * Fetches the tenant's business profile to get contact details.
+ */
+async function provisionGHLIfNeeded(tenantId: number): Promise<void> {
+  const [tenant] = await db.select().from(tenantsTable).where(eq(tenantsTable.id, tenantId)).limit(1);
+  if (!tenant) return;
+
+  // Only provision for paid plans
+  if (!PAID_PLANS.has(tenant.plan)) return;
+
+  // Already has a GHL location
+  if (tenant.ghlLocationId) {
+    console.log(`[GHL] Tenant ${tenant.slug} already has location ${tenant.ghlLocationId} — skipping`);
+    return;
+  }
+
+  const result = await createGHLSubAccount({
+    companyName: tenant.name,
+    email: tenant.email,
+    phone: tenant.phone,
+    slug: tenant.slug,
+  });
+
+  if (result.success) {
+    await db.update(tenantsTable)
+      .set({ ghlLocationId: result.locationId, updatedAt: new Date() })
+      .where(eq(tenantsTable.id, tenantId));
+    console.log(`[GHL] Location ID ${result.locationId} saved for tenant ${tenant.slug}`);
+  }
+}
+
+export { provisionGHLIfNeeded };
 export default router;
