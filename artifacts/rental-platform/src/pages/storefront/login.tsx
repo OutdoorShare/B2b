@@ -58,7 +58,7 @@ export default function LoginPage() {
     if (tab === "register") {
       if (!name) { setError("Please enter your full name."); return; }
       if (!phone) { setError("Please enter your phone number."); return; }
-      if (password.length < 6) { setError("Password must be at least 6 characters."); return; }
+      if (password.length < 8) { setError("Password must be at least 8 characters."); return; }
       if (password !== confirmPassword) { setError("Passwords don't match."); return; }
     }
 
@@ -183,7 +183,7 @@ export default function LoginPage() {
                   value={password}
                   onChange={e => setPassword(e.target.value)}
                   type={showPassword ? "text" : "password"}
-                  placeholder={tab === "register" ? "Min. 6 characters" : "Your password"}
+                  placeholder={tab === "register" ? "Min. 8 characters" : "Your password"}
                   className="h-11 pr-10"
                 />
                 <button

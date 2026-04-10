@@ -75,8 +75,8 @@ router.post("/customers/set-password", async (req, res) => {
       res.status(400).json({ error: "email, password and tenantSlug are required" });
       return;
     }
-    if (password.length < 6) {
-      res.status(400).json({ error: "Password must be at least 6 characters" });
+    if (password.length < 8) {
+      res.status(400).json({ error: "Password must be at least 8 characters" });
       return;
     }
 
@@ -270,8 +270,8 @@ router.post("/customers/:id/change-password", async (req, res) => {
       res.status(400).json({ error: "currentPassword and newPassword are required" });
       return;
     }
-    if (newPassword.length < 6) {
-      res.status(400).json({ error: "New password must be at least 6 characters" });
+    if (newPassword.length < 8) {
+      res.status(400).json({ error: "New password must be at least 8 characters" });
       return;
     }
     const [customer] = await db

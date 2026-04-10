@@ -191,7 +191,7 @@ router.post("/admin/team", requireAdminToken as any, async (req, res) => {
   try {
     const { name, email, password, role, notes } = req.body;
     if (!name || !email || !password) { res.status(400).json({ error: "name, email and password are required" }); return; }
-    if (password.length < 6) { res.status(400).json({ error: "Password must be at least 6 characters" }); return; }
+    if (password.length < 8) { res.status(400).json({ error: "Password must be at least 8 characters" }); return; }
     const passwordHash = await hashPassword(password);
     const [user] = await db.insert(adminUsersTable).values({
       name: name.trim(),
@@ -217,7 +217,7 @@ router.put("/admin/team/:id", requireAdminToken as any, async (req, res) => {
     if (name) updates.name = name.trim();
     if (email) updates.email = email.toLowerCase().trim();
     if (password) {
-      if (password.length < 6) { res.status(400).json({ error: "Password must be at least 6 characters" }); return; }
+      if (password.length < 8) { res.status(400).json({ error: "Password must be at least 8 characters" }); return; }
       updates.passwordHash = await hashPassword(password);
       updates.token = null;
     }

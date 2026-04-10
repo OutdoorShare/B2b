@@ -87,7 +87,7 @@ export default function AdminTeam() {
     setError("");
     if (!form.name.trim() || !form.email.trim()) { setError("Name and email are required."); return; }
     if (!editingUser && !form.password) { setError("Password is required for new team members."); return; }
-    if (form.password && form.password.length < 6) { setError("Password must be at least 6 characters."); return; }
+    if (form.password && form.password.length < 8) { setError("Password must be at least 8 characters."); return; }
     if (form.password && form.password !== form.confirmPassword) { setError("Passwords don't match."); return; }
 
     setSaving(true);
@@ -258,7 +258,7 @@ export default function AdminTeam() {
                   type={showPassword ? "text" : "password"}
                   value={form.password}
                   onChange={e => setForm(f => ({ ...f, password: e.target.value }))}
-                  placeholder={editingUser ? "Leave blank to keep current" : "Min. 6 characters"}
+                  placeholder={editingUser ? "Leave blank to keep current" : "Min. 8 characters"}
                   className="pr-10"
                 />
                 <button type="button" onClick={() => setShowPassword(v => !v)} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">

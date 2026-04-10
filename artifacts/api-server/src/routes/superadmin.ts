@@ -562,7 +562,7 @@ router.put("/superadmin/team/:id", requireSuperAdmin, async (req, res) => {
     if (name) updates.name = name.trim();
     if (email) updates.email = email.toLowerCase().trim();
     if (password) {
-      if (password.length < 6) { res.status(400).json({ error: "Password must be at least 6 characters" }); return; }
+      if (password.length < 8) { res.status(400).json({ error: "Password must be at least 8 characters" }); return; }
       updates.passwordHash = await hashSAPassword(password);
       updates.token = null;
     }
