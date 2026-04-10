@@ -184,9 +184,23 @@ function makeRawEmail(to: string, subject: string, htmlBody: string, from?: stri
     .replace(/=+$/, "");
 }
 
-const APP_URL =
-  process.env.APP_URL ||
-  (process.env.REPLIT_DEV_DOMAIN ? `https://${process.env.REPLIT_DEV_DOMAIN}` : "https://myoutdoorshare.com");
+// Lazy URL resolver — reads from env at call time so deployed apps always get the right domain.
+// Priority: APP_URL env var → Replit deployment domains → Replit dev domain → fallback
+function getAppUrl(): string {
+  if (process.env.APP_URL && process.env.APP_URL.trim()) {
+    return process.env.APP_URL.trim().replace(/\/$/, "");
+  }
+  // REPLIT_DOMAINS is set in deployed (production) Replit environments
+  if (process.env.REPLIT_DOMAINS) {
+    const primary = process.env.REPLIT_DOMAINS.split(",")[0].trim();
+    if (primary) return `https://${primary}`;
+  }
+  // REPLIT_DEV_DOMAIN is set in the development workspace
+  if (process.env.REPLIT_DEV_DOMAIN) {
+    return `https://${process.env.REPLIT_DEV_DOMAIN}`;
+  }
+  return "https://myoutdoorshare.com";
+}
 
 // ── HTML-escape helper (prevents XSS in email templates) ─────────────────────
 function esc(value: unknown): string {
@@ -201,7 +215,7 @@ function esc(value: unknown): string {
 // ── Brand constants (platform defaults) ───────────────────────────────────────
 const BRAND_GREEN = "#3ab549";
 const BRAND_DARK  = "#1a2332";
-const PLATFORM_LOGO_URL = `${APP_URL}/outdoorshare-logo.png`;
+const PLATFORM_LOGO_URL = `${getAppUrl()}/outdoorshare-logo.png`;
 
 // ── Shared HTML wrapper ────────────────────────────────────────────────────────
 function emailShell(opts: {
@@ -220,7 +234,7 @@ function emailShell(opts: {
   // Make relative paths absolute — email clients cannot fetch relative URLs
   const rawLogoUrl = brand?.logoUrl || (brand ? null : PLATFORM_LOGO_URL);
   const logoSrc = rawLogoUrl
-    ? (rawLogoUrl.startsWith("http") ? rawLogoUrl : `${APP_URL}${rawLogoUrl}`)
+    ? (rawLogoUrl.startsWith("http") ? rawLogoUrl : `${getAppUrl()}${rawLogoUrl}`)
     : null;
   const headerHtml = logoSrc
     ? `<img src="${logoSrc}" alt="${esc(companyName)}" width="180" style="display:inline-block;max-width:180px;max-height:80px;height:auto;object-fit:contain;" />`
@@ -362,8 +376,8 @@ export async function sendWelcomeEmail(opts: {
   password: string;
 }): Promise<void> {
   const { toEmail, companyName, slug, password } = opts;
-  const loginUrl = `${APP_URL}/${slug}/admin`;
-  const storefrontUrl = `${APP_URL}/${slug}`;
+  const loginUrl = `${getAppUrl()}/${slug}/admin`;
+  const storefrontUrl = `${getAppUrl()}/${slug}`;
 
   const body = `
     <p style="margin:0 0 8px;font-size:18px;font-weight:700;color:${BRAND_DARK};">Welcome aboard, ${companyName}! 🎉</p>
@@ -443,8 +457,8 @@ export async function sendAccountUpdatedEmail(opts: {
   newPassword?: string;
 }): Promise<void> {
   const { toEmail, companyName, slug, passwordChanged, newPassword } = opts;
-  const loginUrl = `${APP_URL}/${slug}/admin`;
-  const storefrontUrl = `${APP_URL}/${slug}`;
+  const loginUrl = `${getAppUrl()}/${slug}/admin`;
+  const storefrontUrl = `${getAppUrl()}/${slug}`;
 
   const tableRows: { label: string; value: string; mono?: boolean; rawHtml?: boolean }[] = [
     { label: "Email", value: toEmail },
@@ -622,7 +636,7 @@ export async function sendCredentialsEmail(opts: {
   adminEmail?: string;
 }): Promise<void> {
   const { customerName, customerEmail, tenantSlug, password, companyName, adminEmail } = opts;
-  const loginUrl = `${APP_URL}/${tenantSlug}/login`;
+  const loginUrl = `${getAppUrl()}/${tenantSlug}/login`;
   const fromHeader = companyName
     ? `${companyName} <samhos@myoutdoorshare.com>`
     : PLATFORM_FROM;
@@ -673,7 +687,7 @@ export async function sendKioskAccountSetupEmail(opts: {
 }): Promise<void> {
   const { customerName, customerEmail, bookingId, tenantSlug, companyName, adminEmail, startDate, endDate, listingTitle } = opts;
   const fromHeader = `${companyName} <samhos@myoutdoorshare.com>`;
-  const registerUrl = `${APP_URL}/${tenantSlug}/set-password?email=${encodeURIComponent(customerEmail)}`;
+  const registerUrl = `${getAppUrl()}/${tenantSlug}/set-password?email=${encodeURIComponent(customerEmail)}`;
 
   const body = `
     <p style="margin:0 0 8px;font-size:18px;font-weight:700;color:${BRAND_DARK};">Your booking is confirmed, ${esc(customerName)}!</p>
@@ -731,7 +745,7 @@ export async function sendClaimAlertEmail(opts: {
   const profile = await gmail.users.getProfile({ userId: "me" });
   const toEmail = profile.data.emailAddress!;
 
-  const claimsUrl = `${APP_URL}/superadmin/claims`;
+  const claimsUrl = `${getAppUrl()}/superadmin/claims`;
   const typeLabel = type.charAt(0).toUpperCase() + type.slice(1);
   const descPreview = description.length > 140 ? description.substring(0, 140) + "…" : description;
 
@@ -789,7 +803,7 @@ export async function sendClaimStatusAlertEmail(opts: {
   const profile = await gmail.users.getProfile({ userId: "me" });
   const toEmail = profile.data.emailAddress!;
 
-  const claimsUrl = `${APP_URL}/superadmin/claims`;
+  const claimsUrl = `${getAppUrl()}/superadmin/claims`;
   const typeLabel = type.charAt(0).toUpperCase() + type.slice(1);
   const capitalize = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 
@@ -927,7 +941,7 @@ export async function sendBookingPickupReminderEmail(opts: {
 }): Promise<void> {
   const { customerName, customerEmail, bookingId, listingTitle, startDate, endDate, companyName, tenantSlug, adminEmail } = opts;
   const fromHeader = `${companyName} <samhos@myoutdoorshare.com>`;
-  const bookingUrl = tenantSlug ? `${APP_URL}/${tenantSlug}/my-bookings/${bookingId}` : null;
+  const bookingUrl = tenantSlug ? `${getAppUrl()}/${tenantSlug}/my-bookings/${bookingId}` : null;
 
   const body = `
     <p style="margin:0 0 8px;font-size:18px;font-weight:700;color:${BRAND_DARK};">Your booking is confirmed, ${esc(customerName)}!</p>
@@ -998,7 +1012,7 @@ export async function sendAdminPickupReminderEmail(opts: {
   tenantSlug: string;
 }): Promise<void> {
   const { adminEmail, customerName, customerEmail, bookingId, listingTitle, startDate, endDate, companyName, tenantSlug } = opts;
-  const adminBookingsUrl = `${APP_URL}/${tenantSlug}/admin/bookings`;
+  const adminBookingsUrl = `${getAppUrl()}/${tenantSlug}/admin/bookings`;
 
   const body = `
     <p style="margin:0 0 8px;font-size:18px;font-weight:700;color:${BRAND_DARK};">New rental booking received</p>
@@ -1113,7 +1127,7 @@ export async function sendPickupPhotosAdminAlertEmail(opts: {
   depositHoldStatus?: string | null;
 }): Promise<void> {
   const { adminEmail, customerName, customerEmail, bookingId, listingTitle, startDate, endDate, companyName, tenantSlug, depositAmount, depositHoldStatus } = opts;
-  const bookingUrl = `${APP_URL}/${tenantSlug}/admin/bookings/${bookingId}`;
+  const bookingUrl = `${getAppUrl()}/${tenantSlug}/admin/bookings/${bookingId}`;
 
   const depositNote = depositAmount && depositAmount > 0
     ? (depositHoldStatus === "authorized"
@@ -1223,7 +1237,7 @@ export async function sendAuditRequestEmail(opts: {
       In the meantime, feel free to explore the platform or start your free trial — no credit card required.
     </p>
     <div style="text-align:center;margin:0 0 24px;">
-      <a href="${APP_URL}/signup" style="display:inline-block;background:${BRAND_GREEN};color:#ffffff;font-weight:700;font-size:15px;padding:14px 32px;border-radius:999px;text-decoration:none;">
+      <a href="${getAppUrl()}/signup" style="display:inline-block;background:${BRAND_GREEN};color:#ffffff;font-weight:700;font-size:15px;padding:14px 32px;border-radius:999px;text-decoration:none;">
         Start Free Trial
       </a>
     </div>
@@ -1365,7 +1379,7 @@ export async function sendAdminBookingContactEmail(opts: {
   rows.push({ label: "Pickup Date", value: startDate });
   rows.push({ label: "Return Date", value: endDate });
 
-  const bookingUrl = `${APP_URL}/${slug}/admin/bookings/${bookingId}`;
+  const bookingUrl = `${getAppUrl()}/${slug}/admin/bookings/${bookingId}`;
 
   const body = `
     <p style="margin:0 0 8px;font-size:18px;font-weight:700;color:${BRAND_DARK};">New booking confirmed</p>
@@ -1416,7 +1430,7 @@ export async function sendPrePickupReminderRenterEmail(opts: {
 }): Promise<void> {
   const { customerName, customerEmail, bookingId, listingTitle, startDate, endDate, pickupTime, pickupAddress, companyName, tenantSlug, adminEmail, contactPhone } = opts;
   const fromHeader = `${companyName} <samhos@myoutdoorshare.com>`;
-  const bookingUrl = tenantSlug ? `${APP_URL}/${tenantSlug}/my-bookings/${bookingId}` : null;
+  const bookingUrl = tenantSlug ? `${getAppUrl()}/${tenantSlug}/my-bookings/${bookingId}` : null;
 
   const body = `
     <p style="margin:0 0 8px;font-size:18px;font-weight:700;color:${BRAND_DARK};">Your rental starts soon, ${esc(customerName)}!</p>
@@ -1478,7 +1492,7 @@ export async function sendPrePickupReminderAdminEmail(opts: {
   tenantSlug: string;
 }): Promise<void> {
   const { adminEmail, customerName, customerEmail, customerPhone, bookingId, listingTitle, startDate, endDate, pickupTime, companyName, tenantSlug } = opts;
-  const adminBookingUrl = `${APP_URL}/${tenantSlug}/admin/bookings/${bookingId}`;
+  const adminBookingUrl = `${getAppUrl()}/${tenantSlug}/admin/bookings/${bookingId}`;
 
   const body = `
     <p style="margin:0 0 8px;font-size:18px;font-weight:700;color:${BRAND_DARK};">Pickup arriving soon — action needed</p>
@@ -1539,7 +1553,7 @@ export async function sendReturnReminderRenterEmail(opts: {
 }): Promise<void> {
   const { customerName, customerEmail, bookingId, listingTitle, startDate, endDate, companyName, tenantSlug, adminEmail, depositNote } = opts;
   const fromHeader = `${companyName} <samhos@myoutdoorshare.com>`;
-  const bookingUrl = tenantSlug ? `${APP_URL}/${tenantSlug}/my-bookings/${bookingId}` : null;
+  const bookingUrl = tenantSlug ? `${getAppUrl()}/${tenantSlug}/my-bookings/${bookingId}` : null;
 
   const body = `
     <p style="margin:0 0 8px;font-size:18px;font-weight:700;color:${BRAND_DARK};">Return reminder — due tomorrow, ${esc(customerName)}</p>
@@ -1599,7 +1613,7 @@ export async function sendChatMessageToAdminEmail(opts: {
   slug: string;
 }): Promise<void> {
   const { adminEmail, companyName, customerName, customerEmail, messageBody, threadId, slug } = opts;
-  const chatUrl = `${APP_URL}/${slug}/admin/messages?thread=${threadId}`;
+  const chatUrl = `${getAppUrl()}/${slug}/admin/messages?thread=${threadId}`;
 
   const body = `
     <p style="margin:0 0 8px;font-size:18px;font-weight:700;color:${BRAND_DARK};">New message from ${esc(customerName)}</p>
@@ -1642,7 +1656,7 @@ export async function sendChatReplyToRenterEmail(opts: {
   const { renterEmail, renterName, companyName, companyEmail, messageBody, threadId, slug } = opts;
   const fromHeader = `${companyName} <samhos@myoutdoorshare.com>`;
   const replyToEmail = companyEmail || undefined;
-  const chatUrl = `${APP_URL}/${slug}`;
+  const chatUrl = `${getAppUrl()}/${slug}`;
 
   const body = `
     <p style="margin:0 0 8px;font-size:18px;font-weight:700;color:${BRAND_DARK};">You have a reply, ${renterName}!</p>
@@ -1748,7 +1762,7 @@ export async function sendStripeRestrictedAlertEmail(opts: {
 }): Promise<void> {
   const { adminEmail, companyName, tenantSlug, disabledReason, isReminder } = opts;
 
-  const settingsUrl = `${APP_URL}/${tenantSlug}/admin/settings`;
+  const settingsUrl = `${getAppUrl()}/${tenantSlug}/admin/settings`;
 
   const reasonMap: Record<string, string> = {
     fields_needed: "Stripe requires updated business or identity information before payments can resume.",
@@ -2005,7 +2019,7 @@ export async function sendIncompleteStepsAdminEmail(opts: {
   isOverdue?: boolean;
 }): Promise<void> {
   const { adminEmail, customerName, customerEmail, bookingId, listingTitle, startDate, companyName, tenantSlug, missingSteps, isOverdue } = opts;
-  const bookingUrl = `${APP_URL}/${tenantSlug}/admin/bookings/${bookingId}`;
+  const bookingUrl = `${getAppUrl()}/${tenantSlug}/admin/bookings/${bookingId}`;
 
   const subject = isOverdue
     ? `[${companyName}] ⚠️ Overdue: Booking #${bookingId} has incomplete required steps`
@@ -2193,7 +2207,7 @@ export async function sendPendingBookingReminderEmail(opts: {
 }): Promise<void> {
   const { toEmail, companyName, customerName, customerEmail, customerPhone, listingTitle, startDate, endDate, bookingId, slug } = opts;
 
-  const bookingUrl = `${APP_URL}/${slug}/admin/bookings/${bookingId}`;
+  const bookingUrl = `${getAppUrl()}/${slug}/admin/bookings/${bookingId}`;
 
   const rows: { label: string; value: string; rawHtml?: boolean }[] = [
     { label: "Guest",        value: customerName },

@@ -28,6 +28,19 @@ import { openai } from "@workspace/integrations-openai-ai-server";
 import { getStripeForTenant } from "../services/stripe";
 import { createNotification } from "../services/notifications";
 
+// ── App base URL helper — reads env at call time so deployed apps use the right domain ──
+function getBaseUrl(): string {
+  if (process.env.APP_URL && process.env.APP_URL.trim()) {
+    return process.env.APP_URL.trim().replace(/\/$/, "");
+  }
+  if (process.env.REPLIT_DOMAINS) {
+    const primary = process.env.REPLIT_DOMAINS.split(",")[0].trim();
+    if (primary) return `https://${primary}`;
+  }
+  if (process.env.REPLIT_DEV_DOMAIN) return `https://${process.env.REPLIT_DEV_DOMAIN}`;
+  return "https://myoutdoorshare.com";
+}
+
 // ── Auto-trigger deposit at pickup ─────────────────────────────────────────────
 // Called on both pickup endpoints when isFirstCompletion is true.
 // Silently skips if: no deposit configured, no saved payment method, or
@@ -827,7 +840,7 @@ router.put("/bookings/:id", async (req, res) => {
                   .set({ pickupToken: pickupToken, updatedAt: new Date() })
                   .where(eq(bookingsTable.id, updated.id));
               }
-              const BASE = process.env.APP_URL || `https://${process.env.REPLIT_DEV_DOMAIN}`;
+              const BASE = getBaseUrl();
               const pickupUrl = `${BASE}/${tenantRow?.slug ?? ""}/pickup/${pickupToken}`;
               withBrand(brand, () => withSmtpCreds(smtpCreds, () => sendPickupLinkEmail({
                 toEmail: updated.customerEmail,
@@ -904,7 +917,7 @@ router.put("/bookings/:id", async (req, res) => {
                 .set({ returnToken: returnToken, updatedAt: new Date() })
                 .where(eq(bookingsTable.id, updated.id));
             }
-            const BASE = process.env.APP_URL || `https://${process.env.REPLIT_DEV_DOMAIN}`;
+            const BASE = getBaseUrl();
             const returnUrl = `${BASE}/${tenantRow?.slug ?? ""}/return/${returnToken}`;
 
             const memoriesUrl = `${BASE}/${tenantRow?.slug ?? ""}/my-bookings`;
@@ -967,7 +980,7 @@ router.get("/bookings/:id/pickup-link", async (req, res) => {
       await db.update(bookingsTable).set({ pickupToken: token, updatedAt: new Date() }).where(eq(bookingsTable.id, bookingId));
     }
 
-    const BASE = process.env.APP_URL || `https://${process.env.REPLIT_DEV_DOMAIN}`;
+    const BASE = getBaseUrl();
     const slug = req.headers["x-tenant-slug"] as string ?? "";
     const pickupUrl = `${BASE}/${slug}/pickup/${token}`;
     res.json({ ok: true, token, pickupUrl, linkSent: !!booking.pickupToken });
@@ -1002,7 +1015,7 @@ router.post("/bookings/:id/send-pickup-link", async (req, res) => {
       if (tenant?.email) companyEmail = tenant.email;
     }
 
-    const BASE = process.env.APP_URL || `https://${process.env.REPLIT_DEV_DOMAIN}`;
+    const BASE = getBaseUrl();
     const slug = req.headers["x-tenant-slug"] as string ?? "";
     const pickupUrl = `${BASE}/${slug}/pickup/${token}`;
 
@@ -1052,7 +1065,7 @@ router.post("/bookings/:id/send-agreement-link", async (req, res) => {
       if (tenant?.email) companyEmail = tenant.email;
     }
 
-    const BASE = process.env.APP_URL || `https://${process.env.REPLIT_DEV_DOMAIN}`;
+    const BASE = getBaseUrl();
     const slug = req.headers["x-tenant-slug"] as string ?? "";
     const agreementUrl = `${BASE}/${slug}/pickup/${token}`;
 
@@ -1133,7 +1146,7 @@ router.post("/bookings/:id/send-identity-link", async (req, res) => {
     // Look up customer to link session
     const [customer] = await db.select().from(customersTable).where(eq(customersTable.email, booking.customerEmail.toLowerCase()));
 
-    const BASE = process.env.APP_URL || `https://${process.env.REPLIT_DEV_DOMAIN}`;
+    const BASE = getBaseUrl();
     const returnUrl = `${BASE}/${slug}`;
 
     let session: any;
@@ -1478,7 +1491,7 @@ router.get("/bookings/:id/return-link", async (req, res) => {
       await db.update(bookingsTable).set({ returnToken: token, updatedAt: new Date() }).where(eq(bookingsTable.id, bookingId));
     }
 
-    const BASE = process.env.APP_URL || `https://${process.env.REPLIT_DEV_DOMAIN}`;
+    const BASE = getBaseUrl();
     const slug = req.headers["x-tenant-slug"] as string ?? "";
     const returnUrl = `${BASE}/${slug}/return/${token}`;
     res.json({ ok: true, token, returnUrl });
@@ -1509,7 +1522,7 @@ router.post("/bookings/:id/send-return-link", async (req, res) => {
       if (tenant?.email) companyEmail = tenant.email;
     }
 
-    const BASE = process.env.APP_URL || `https://${process.env.REPLIT_DEV_DOMAIN}`;
+    const BASE = getBaseUrl();
     const slug = req.headers["x-tenant-slug"] as string ?? "";
     const returnUrl = `${BASE}/${slug}/return/${token}`;
 
