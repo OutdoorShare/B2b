@@ -653,6 +653,7 @@ export default function AdminBookingForm() {
                 onChangeName={v => handleChange("customerName", v)}
                 onChangeEmail={v => handleChange("customerEmail", v)}
                 onChangePhone={v => handleChange("customerPhone", v)}
+                onSelectRenter={r => setForm(f => ({ ...f, customerName: r.name, customerEmail: r.email, customerPhone: r.phone }))}
                 autoFocusEmail={!isEditing}
                 emailHint="Used for booking confirmation, pickup & return photo links, and all automated notifications."
               />

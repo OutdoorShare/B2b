@@ -20,6 +20,8 @@ interface CustomerAutocompleteProps {
   onChangeName: (v: string) => void;
   onChangeEmail: (v: string) => void;
   onChangePhone: (v: string) => void;
+  /** Called when the user picks an existing contact — receives all three fields at once, avoiding stale-closure bugs in the parent. */
+  onSelectRenter?: (renter: { name: string; email: string; phone: string }) => void;
   autoFocusEmail?: boolean;
   emailHint?: React.ReactNode;
 }
@@ -31,6 +33,7 @@ export function CustomerAutocomplete({
   onChangeName,
   onChangeEmail,
   onChangePhone,
+  onSelectRenter,
   autoFocusEmail,
   emailHint,
 }: CustomerAutocompleteProps) {
@@ -68,9 +71,15 @@ export function CustomerAutocomplete({
 
   const handleSelect = (renter: Renter) => {
     setJustSelected(true);
-    onChangeName(renter.name);
-    onChangeEmail(renter.email);
-    onChangePhone(renter.phone ?? "");
+    const phone = renter.phone ?? "";
+    if (onSelectRenter) {
+      // Single atomic update — avoids stale-closure races in parent state
+      onSelectRenter({ name: renter.name, email: renter.email, phone });
+    } else {
+      onChangeName(renter.name);
+      onChangeEmail(renter.email);
+      onChangePhone(phone);
+    }
     setSuggestions([]);
     setActiveField(null);
     setTimeout(() => setJustSelected(false), 200);

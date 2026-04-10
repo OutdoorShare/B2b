@@ -150,9 +150,10 @@ export default function AdminQuotesNew() {
                   name={formData.customerName}
                   email={formData.customerEmail}
                   phone={formData.customerPhone}
-                  onChangeName={v => setFormData({...formData, customerName: v})}
-                  onChangeEmail={v => setFormData({...formData, customerEmail: v})}
-                  onChangePhone={v => setFormData({...formData, customerPhone: v})}
+                  onChangeName={v => setFormData(d => ({...d, customerName: v}))}
+                  onChangeEmail={v => setFormData(d => ({...d, customerEmail: v}))}
+                  onChangePhone={v => setFormData(d => ({...d, customerPhone: v}))}
+                  onSelectRenter={r => setFormData(d => ({...d, customerName: r.name, customerEmail: r.email, customerPhone: r.phone}))}
                 />
                 
                 <div className="grid grid-cols-2 gap-4 pt-4 border-t">
