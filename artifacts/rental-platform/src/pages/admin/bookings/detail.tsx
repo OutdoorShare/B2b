@@ -13,6 +13,8 @@ import { useToast } from "@/hooks/use-toast";
 import { Link, useLocation } from "wouter";
 import { ArrowLeft, User, Phone, Mail, Calendar, Package, StickyNote, ShieldAlert, Pencil, FileSignature, FileText, ChevronDown, ChevronUp, Download, Camera, CheckCircle2, Loader2, ExternalLink, ImageIcon, Clock, ShieldCheck, ShieldX, Shield, AlertCircle, Copy, Send, UserCheck, Lock, LockOpen, DollarSign, PackageCheck, ScanSearch, MailCheck, Link2, MailX, RefreshCw, CreditCard } from "lucide-react";
 import { Input } from "@/components/ui/input";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
+import { QRCodeSVG } from "qrcode.react";
 import { format, differenceInDays, startOfDay } from "date-fns";
 
 const SOURCE_CONFIG: Record<string, { label: string; className: string }> = {
@@ -107,6 +109,9 @@ export default function AdminBookingDetail() {
   const [identitySent, setIdentitySent] = useState(false);
   const [markingIdentity, setMarkingIdentity] = useState(false);
   const [identityMarkedVerified, setIdentityMarkedVerified] = useState(false);
+  const [showPickupWarning, setShowPickupWarning] = useState(false);
+  const [pickupWarningInPersonUrl, setPickupWarningInPersonUrl] = useState<string | null>(null);
+  const [pickupWarningFetchingUrl, setPickupWarningFetchingUrl] = useState(false);
 
   type VerifData = {
     found: boolean;
@@ -344,6 +349,37 @@ export default function AdminBookingDetail() {
     } catch {}
   };
 
+  // Intercepts "Mark as Picked Up" — shows a warning if before-photos haven't been submitted
+  const handleMarkPickedUp = () => {
+    const photos = (booking as any)?.pickupPhotos ?? [];
+    if (photos.length > 0) {
+      handleStatusChange('active');
+    } else {
+      setPickupWarningInPersonUrl(null);
+      setShowPickupWarning(true);
+    }
+  };
+
+  const fetchPickupWarningInPersonUrl = async () => {
+    if (pickupWarningInPersonUrl) return; // already fetched
+    setPickupWarningFetchingUrl(true);
+    try {
+      const r = await fetch(`${BASE}/api/bookings/${id}/pickup-link`, {
+        headers: getAdminSession()?.token ? { "x-admin-token": getAdminSession()!.token } : {},
+      });
+      const data = await r.json();
+      if (data.pickupUrl) {
+        setPickupWarningInPersonUrl(data.pickupUrl);
+        setPickupUrl(data.pickupUrl);
+        setRevealedPickupUrl(data.pickupUrl);
+      } else {
+        toast({ title: "Could not get link", description: data.error ?? "Try refreshing the page.", variant: "destructive" });
+      }
+    } finally {
+      setPickupWarningFetchingUrl(false);
+    }
+  };
+
   const saveNotes = async () => {
     try {
       const res = await fetch(`${BASE}/api/bookings/${id}`, {
@@ -373,6 +409,7 @@ export default function AdminBookingDetail() {
   const days = differenceInDays(new Date(booking.endDate), new Date(booking.startDate)) || 1;
 
   return (
+    <>
     <div className="space-y-8 max-w-5xl mx-auto pb-12">
       <div className="flex items-center gap-4">
         <Button variant="ghost" size="icon" onClick={() => window.history.back()}>
@@ -405,7 +442,7 @@ export default function AdminBookingDetail() {
         {booking.status === 'confirmed' && (
           <Button
             className="gap-2 bg-green-600 hover:bg-green-700 text-white text-base px-5 py-2.5 h-auto"
-            onClick={() => handleStatusChange('active')}
+            onClick={handleMarkPickedUp}
           >
             <CheckCircle2 className="w-5 h-5" /> Mark as Picked Up
           </Button>
@@ -483,7 +520,7 @@ export default function AdminBookingDetail() {
               <Button
                 size="sm"
                 className="bg-green-600 hover:bg-green-700 text-white shrink-0 gap-1.5"
-                onClick={() => handleStatusChange('active')}
+                onClick={handleMarkPickedUp}
               >
                 <CheckCircle2 className="w-4 h-4" /> Mark Picked Up
               </Button>
@@ -1097,7 +1134,7 @@ export default function AdminBookingDetail() {
                       )}
 
                       {/* Mark as Picked Up */}
-                      <Button className="w-full gap-2 bg-green-600 hover:bg-green-700 text-white mt-1" onClick={() => handleStatusChange('active')}>
+                      <Button className="w-full gap-2 bg-green-600 hover:bg-green-700 text-white mt-1" onClick={handleMarkPickedUp}>
                         <CheckCircle2 className="w-4 h-4" />
                         Mark as Picked Up
                       </Button>
@@ -1719,5 +1756,89 @@ export default function AdminBookingDetail() {
         </div>
       </div>
     </div>
+
+      {/* ── Pickup Warning Dialog — before-photos missing ──────────────────── */}
+      <Dialog open={showPickupWarning} onOpenChange={open => { if (!open) setShowPickupWarning(false); }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-amber-700">
+              <Camera className="w-5 h-5 shrink-0" />
+              Before-photos not yet submitted
+            </DialogTitle>
+            <DialogDescription className="text-sm text-muted-foreground pt-1">
+              The renter hasn't uploaded before-photos yet. These protect you if a damage dispute arises later. How would you like to proceed?
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-2 py-1">
+            {/* Option 1 — Send reminder email */}
+            <button
+              className="w-full flex items-start gap-3 rounded-lg border border-border hover:border-primary hover:bg-primary/5 transition-colors p-3 text-left group"
+              onClick={async () => {
+                setShowPickupWarning(false);
+                await sendPickupLink(false);
+              }}
+              disabled={sendingPickupLink}
+            >
+              <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center shrink-0 mt-0.5">
+                <Send className="w-4 h-4 text-blue-600" />
+              </div>
+              <div>
+                <p className="text-sm font-semibold text-foreground group-hover:text-primary">Send photo reminder</p>
+                <p className="text-xs text-muted-foreground mt-0.5">Email the renter a link to upload before-photos from their phone.</p>
+              </div>
+            </button>
+
+            {/* Option 2 — In-person QR */}
+            <button
+              className="w-full flex items-start gap-3 rounded-lg border border-border hover:border-primary hover:bg-primary/5 transition-colors p-3 text-left group"
+              onClick={fetchPickupWarningInPersonUrl}
+              disabled={pickupWarningFetchingUrl}
+            >
+              <div className="w-8 h-8 rounded-full bg-green-100 flex items-center justify-center shrink-0 mt-0.5">
+                {pickupWarningFetchingUrl ? <Loader2 className="w-4 h-4 text-green-600 animate-spin" /> : <Camera className="w-4 h-4 text-green-600" />}
+              </div>
+              <div>
+                <p className="text-sm font-semibold text-foreground group-hover:text-primary">Open in-person camera form</p>
+                <p className="text-xs text-muted-foreground mt-0.5">Show the renter a QR code to complete photos right here using their own phone.</p>
+              </div>
+            </button>
+
+            {/* QR code section (appears after URL is fetched) */}
+            {pickupWarningInPersonUrl && (
+              <div className="rounded-lg border border-green-200 bg-green-50 p-4 flex flex-col items-center gap-3">
+                <p className="text-xs font-semibold text-green-800">Have the renter scan this QR code</p>
+                <QRCodeSVG value={pickupWarningInPersonUrl} size={180} level="M" includeMargin={false} className="rounded" />
+                <div className="w-full flex gap-2">
+                  <Input readOnly value={pickupWarningInPersonUrl} className="font-mono text-xs h-8 bg-white" onFocus={e => e.target.select()} />
+                  <button
+                    className="shrink-0 px-3 h-8 rounded-md bg-primary text-primary-foreground text-xs font-semibold hover:bg-primary/90 transition-colors"
+                    onClick={async () => { try { await navigator.clipboard.writeText(pickupWarningInPersonUrl); toast({ title: "Copied!" }); } catch {} }}
+                  >Copy</button>
+                </div>
+              </div>
+            )}
+
+            {/* Option 3 — Mark anyway */}
+            <button
+              className="w-full flex items-start gap-3 rounded-lg border border-border hover:border-amber-400 hover:bg-amber-50 transition-colors p-3 text-left group"
+              onClick={() => { setShowPickupWarning(false); handleStatusChange('active'); }}
+            >
+              <div className="w-8 h-8 rounded-full bg-amber-100 flex items-center justify-center shrink-0 mt-0.5">
+                <CheckCircle2 className="w-4 h-4 text-amber-600" />
+              </div>
+              <div>
+                <p className="text-sm font-semibold text-foreground group-hover:text-amber-700">Mark as picked up anyway</p>
+                <p className="text-xs text-muted-foreground mt-0.5">Skip before-photos and mark the booking as active. You won't have photo proof of pre-rental condition.</p>
+              </div>
+            </button>
+          </div>
+
+          <DialogFooter>
+            <Button variant="ghost" size="sm" onClick={() => setShowPickupWarning(false)}>Cancel</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }
