@@ -1008,9 +1008,16 @@ export default function StorefrontBook() {
     }
   }, [selectedTimeSlot]);
 
-  // Reset slot selection when listing changes
+  // Reset slot selection when listing changes; auto-select if only one slot exists
   useEffect(() => {
-    setSelectedTimeSlot(null);
+    if (!listing) return;
+    const raw = (listing as any).timeSlots;
+    const slots: TimeSlotDef[] = Array.isArray(raw) ? raw : [];
+    if (slots.length === 1) {
+      setSelectedTimeSlot(slots[0]);
+    } else {
+      setSelectedTimeSlot(null);
+    }
   }, [listing?.id]);
 
   const selectedOption = subDayOptions.find(o => o.type === selectedPricingType) ?? null;
@@ -2486,6 +2493,64 @@ export default function StorefrontBook() {
                 )}
 
                 <Separator />
+
+                {/* ── Time Slot Selection (prominent, top of form) ── */}
+                {hasTimeSlots && listingTimeSlots.length > 1 && (
+                  <div className={`rounded-2xl border-2 p-4 space-y-3 transition-colors ${
+                    !selectedTimeSlot
+                      ? "border-orange-400 bg-orange-50 dark:bg-orange-950/20 dark:border-orange-500"
+                      : "border-primary/40 bg-primary/5"
+                  }`}>
+                    <div className="flex items-center gap-2.5">
+                      <div className={`w-7 h-7 rounded-full flex items-center justify-center shrink-0 ${
+                        !selectedTimeSlot ? "bg-orange-500" : "bg-primary"
+                      }`}>
+                        <Clock className="w-3.5 h-3.5 text-white" />
+                      </div>
+                      <h2 className="text-base font-semibold">Pickup Time Slot</h2>
+                      {!selectedTimeSlot ? (
+                        <span className="text-[10px] font-bold uppercase tracking-wide bg-red-100 text-red-600 border border-red-200 px-1.5 py-0.5 rounded-full">Required</span>
+                      ) : (
+                        <span className="text-[10px] font-bold uppercase tracking-wide bg-green-100 text-green-700 border border-green-200 px-1.5 py-0.5 rounded-full">Selected</span>
+                      )}
+                    </div>
+                    {!selectedTimeSlot && (
+                      <p className="text-xs text-orange-700 dark:text-orange-400 font-medium">
+                        This rental requires a specific pickup window. Please choose one below before continuing.
+                      </p>
+                    )}
+                    <div className="space-y-2">
+                      {listingTimeSlots.map((slot, idx) => (
+                        <button
+                          key={idx}
+                          type="button"
+                          onClick={() => setSelectedTimeSlot(slot)}
+                          className={`w-full flex items-center gap-3 rounded-xl border px-4 py-3 text-left transition-colors ${
+                            selectedTimeSlot?.label === slot.label
+                              ? "border-primary bg-primary/10 ring-1 ring-primary"
+                              : "bg-background hover:bg-muted/50 border-border"
+                          }`}
+                        >
+                          <Clock className="w-4 h-4 text-muted-foreground shrink-0" />
+                          <div className="flex-1">
+                            <p className="text-sm font-semibold">{slot.label}</p>
+                            <p className="text-xs text-muted-foreground">{slot.startTime} – {slot.endTime}</p>
+                          </div>
+                          <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${
+                            slot.rate === "half_day"
+                              ? "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300"
+                              : "bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300"
+                          }`}>
+                            {slot.rate === "half_day" ? "Half Day" : "Full Day"}
+                          </span>
+                          {selectedTimeSlot?.label === slot.label && (
+                            <CheckCircle2 className="w-4 h-4 text-primary shrink-0" />
+                          )}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
 
                 {/* ── Step 1: Contact Details ── */}
                 <div id="contact-details">
