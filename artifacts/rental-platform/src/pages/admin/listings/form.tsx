@@ -16,7 +16,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { ArrowLeft, Upload, X, CheckCircle2, AlertCircle, CircleDashed, ImagePlus, Loader2, IdCard, Sparkles, ChevronDown, ChevronUp, RefreshCw, Info, Plus, Trash2, Clock, Search, Package, Link2, Unlink, Wand2 } from "lucide-react";
+import { ArrowLeft, Upload, X, CheckCircle2, AlertCircle, CircleDashed, ImagePlus, Loader2, IdCard, Sparkles, ChevronDown, ChevronUp, RefreshCw, Info, Plus, Trash2, Clock, Search, Package, Link2, Unlink, Wand2, Lock } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Checkbox } from "@/components/ui/checkbox";
 import { AddonManager } from "@/components/addon-manager";
@@ -177,7 +177,7 @@ export default function AdminListingsForm() {
         if (alreadySet) return prev;
         const type = guessIdentifierType(sn);
         const withoutEmpties = prev.filter(u => u.identifier.trim());
-        return [...withoutEmpties, { identifier: sn, label: '', type }];
+        return [...withoutEmpties, { identifier: sn, label: '', type, fromProduct: true }];
       });
     }
   };
@@ -187,7 +187,7 @@ export default function AdminListingsForm() {
     setInventorySearch('');
   };
 
-  type InlineUnit = { identifier: string; label: string; type: 'serial' | 'vin' | 'hin' };
+  type InlineUnit = { identifier: string; label: string; type: 'serial' | 'vin' | 'hin'; fromProduct?: boolean };
   const [inlineUnits, setInlineUnits] = useState<InlineUnit[]>([
     { identifier: '', label: '', type: 'serial' },
   ]);
@@ -1032,22 +1032,36 @@ export default function AdminListingsForm() {
                         {inlineUnits.map((unit, i) => (
                           <div key={i} className="flex items-center gap-2">
                             <span className="text-xs text-muted-foreground w-12 shrink-0 text-right">Unit {i + 1}</span>
-                            <Select value={unit.type} onValueChange={v => updateInlineUnit(i, 'type', v as InlineUnit['type'])}>
-                              <SelectTrigger className="w-28 h-8 text-xs">
-                                <SelectValue />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="serial">Serial #</SelectItem>
-                                <SelectItem value="vin">VIN</SelectItem>
-                                <SelectItem value="hin">HIN</SelectItem>
-                              </SelectContent>
-                            </Select>
-                            <Input
-                              className="h-8 text-xs font-mono flex-1"
-                              placeholder={unit.type === 'vin' ? '1HGBH41JXMN109186' : unit.type === 'hin' ? 'ABC12345D202' : 'SN-00001'}
-                              value={unit.identifier}
-                              onChange={e => updateInlineUnit(i, 'identifier', e.target.value)}
-                            />
+                            {unit.fromProduct ? (
+                              <>
+                                <div className="w-28 h-8 rounded-md border bg-muted/50 flex items-center px-2 gap-1.5 text-xs text-muted-foreground shrink-0">
+                                  <Lock className="w-3 h-3 shrink-0" />
+                                  <span>{unit.type === 'vin' ? 'VIN' : unit.type === 'hin' ? 'HIN' : 'Serial #'}</span>
+                                </div>
+                                <div className="h-8 rounded-md border bg-muted/50 flex items-center px-2 flex-1 text-xs font-mono text-foreground">
+                                  {unit.identifier}
+                                </div>
+                              </>
+                            ) : (
+                              <>
+                                <Select value={unit.type} onValueChange={v => updateInlineUnit(i, 'type', v as InlineUnit['type'])}>
+                                  <SelectTrigger className="w-28 h-8 text-xs">
+                                    <SelectValue />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    <SelectItem value="serial">Serial #</SelectItem>
+                                    <SelectItem value="vin">VIN</SelectItem>
+                                    <SelectItem value="hin">HIN</SelectItem>
+                                  </SelectContent>
+                                </Select>
+                                <Input
+                                  className="h-8 text-xs font-mono flex-1"
+                                  placeholder={unit.type === 'vin' ? '1HGBH41JXMN109186' : unit.type === 'hin' ? 'ABC12345D202' : 'SN-00001'}
+                                  value={unit.identifier}
+                                  onChange={e => updateInlineUnit(i, 'identifier', e.target.value)}
+                                />
+                              </>
+                            )}
                             <Input
                               className="h-8 text-xs w-36"
                               placeholder="Nickname (optional)"
