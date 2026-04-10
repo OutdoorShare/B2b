@@ -19,29 +19,12 @@ import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
   Search, MapPin, ArrowRight, Car,
-  Waves, Bus, Truck, Anchor, Bike, Zap,
-  Package, Snowflake, CarFront, Gauge, SlidersHorizontal, ShieldCheck,
+  Gauge, SlidersHorizontal, ShieldCheck,
   Phone, Mail, ChevronDown, ChevronUp,
   CheckCircle2, Umbrella, Users, AlertTriangle,
   Clock, Star, Layers, Gift, CalendarIcon, X,
 } from "lucide-react";
-
-const CATEGORY_ICONS: Record<string, React.ElementType> = {
-  "jet-ski": Waves,
-  "rv": Bus,
-  "atv": Truck,
-  "utv": Car,
-  "boat": Anchor,
-  "dirt-bike": Bike,
-  "ebike": Zap,
-  "utility-trailer": Package,
-  "snowmobile": Snowflake,
-  "towing-vehicle": CarFront,
-};
-
-function getCategoryIcon(slug: string): React.ElementType {
-  return CATEGORY_ICONS[slug] || Gauge;
-}
+import { getCategoryIcon } from "@/lib/category-icons";
 
 // ── Renter session helper ──────────────────────────────────────────────────────
 type RSession = { id: number; email: string; name?: string };

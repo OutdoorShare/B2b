@@ -3,6 +3,7 @@ import type { MarketplaceListing } from "@/lib/api";
 import { MapPin, Building2, Heart } from "lucide-react";
 import { useFavorites } from "@/context/favorites";
 import { cn } from "@/lib/utils";
+import { getCategoryIcon } from "@/lib/category-icons";
 
 const API_UPLOAD_BASE = "/api/uploads/";
 
@@ -34,13 +35,13 @@ export function ListingCard({ listing }: ListingCardProps) {
         {image ? (
           <img src={image} alt={listing.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
         ) : (
-          <div className="w-full h-full flex items-center justify-center text-5xl">
-            {listing.categoryIcon || "🏕️"}
+          <div className="w-full h-full flex items-center justify-center bg-muted">
+            {(() => { const Icon = getCategoryIcon(listing.categorySlug ?? ""); return <Icon size={56} className="text-muted-foreground opacity-40" />; })()}
           </div>
         )}
         {listing.categoryName && (
-          <span className="absolute top-3 left-3 bg-white/90 backdrop-blur-sm text-xs font-medium px-2 py-1 rounded-full text-gray-700">
-            {listing.categoryIcon && <span className="mr-1">{listing.categoryIcon}</span>}
+          <span className="absolute top-3 left-3 bg-white/90 backdrop-blur-sm text-xs font-medium px-2 py-1 rounded-full text-gray-700 flex items-center gap-1">
+            {(() => { const Icon = getCategoryIcon(listing.categorySlug ?? ""); return <Icon size={14} className="text-gray-600 shrink-0" />; })()}
             {listing.categoryName}
           </span>
         )}

@@ -3,6 +3,7 @@ import {
   Shield, ShieldCheck, ShieldOff, Save, Loader2,
   DollarSign, AlertTriangle, Info
 } from "lucide-react";
+import { getCategoryIcon } from "@/lib/category-icons";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
@@ -27,11 +28,6 @@ type Plan = {
   updatedAt: string;
 };
 
-const CATEGORY_ICONS: Record<string, string> = {
-  atv: "🏎️", boat: "⛵", camper: "🏕️", "dirt-bike": "🏍️",
-  ebike: "🚲", "jet-ski": "🚤", rv: "🚌", snowmobile: "🛷",
-  "towing-vehicle": "🚛", utv: "🏁", "utility-trailer": "📦",
-};
 
 export default function ProtectionPlansPage() {
   const { toast } = useToast();
@@ -166,7 +162,7 @@ export default function ProtectionPlansPage() {
                 {/* Card header */}
                 <div className="flex items-center justify-between p-4 pb-3">
                   <div className="flex items-center gap-3">
-                    <span className="text-2xl">{CATEGORY_ICONS[slug] ?? "📦"}</span>
+                    {(() => { const Icon = getCategoryIcon(slug); return <Icon size={28} className={isEnabled ? "text-green-400" : "text-slate-400"} />; })()}
                     <div>
                       <p className="font-semibold text-white leading-tight">{plan.categoryName}</p>
                       {isEnabled ? (

@@ -14,11 +14,11 @@ import {
 } from "date-fns";
 import {
   Search, SlidersHorizontal, X, LayoutGrid, Map,
-  Waves, Bus, Truck, Car, Anchor, Bike, Zap,
-  Package, Snowflake, CarFront, Gauge, Mountain,
+  Gauge, Mountain,
   CalendarDays, ChevronLeft, ChevronRight,
   Clock, Users, MapPin, ArrowRight, Compass,
 } from "lucide-react";
+import { getCategoryIcon } from "@/lib/category-icons";
 import type { MarketplaceActivity } from "@/lib/api";
 
 // ── Inline range-selection calendar ──────────────────────────────────────────
@@ -171,24 +171,7 @@ function InlineRangePicker({
   );
 }
 
-// Matches category slugs exactly as stored in the DB — same map as the storefront
-const CATEGORY_ICONS: Record<string, React.ElementType> = {
-  "jet-ski": Waves,
-  "rv": Bus,
-  "camper": Mountain,
-  "atv": Truck,
-  "utv": Car,
-  "boat": Anchor,
-  "dirt-bike": Bike,
-  "ebike": Zap,
-  "utility-trailer": Package,
-  "snowmobile": Snowflake,
-  "towing-vehicle": CarFront,
-};
-
-function getCategoryIcon(slug: string): React.ElementType {
-  return CATEGORY_ICONS[slug] || Gauge;
-}
+// getCategoryIcon is imported from @/lib/category-icons
 
 // Today's date as yyyy-MM-dd for the min attribute on date inputs
 const todayStr = format(new Date(), "yyyy-MM-dd");
