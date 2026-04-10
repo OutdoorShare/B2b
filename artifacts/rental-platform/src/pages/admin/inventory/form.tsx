@@ -7,7 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { ArrowLeft, Save, Loader2, Upload, X, Package, ImageIcon, GripVertical } from "lucide-react";
+import { ArrowLeft, Save, Loader2, Upload, X, Package, ImageIcon, GripVertical, DollarSign } from "lucide-react";
 import { Link } from "wouter";
 import { ImageCropDialog } from "@/components/image-crop-dialog";
 
@@ -50,6 +50,7 @@ export default function AdminInventoryForm() {
     specs: "",
     notes: "",
     nextMaintenanceDate: "",
+    estimatedValue: "",
   });
 
   const adminHeaders = (): Record<string, string> => {
@@ -83,6 +84,7 @@ export default function AdminInventoryForm() {
               specs: data.specs ?? "",
               notes: data.notes ?? "",
               nextMaintenanceDate: data.nextMaintenanceDate ?? "",
+              estimatedValue: data.estimatedValue != null ? String(data.estimatedValue) : "",
             });
           }
         })
@@ -148,6 +150,7 @@ export default function AdminInventoryForm() {
         specs: form.specs.trim() || null,
         notes: form.notes.trim() || null,
         nextMaintenanceDate: form.nextMaintenanceDate || null,
+        estimatedValue: form.estimatedValue ? parseFloat(form.estimatedValue) || null : null,
       };
       const url = isEdit ? `${BASE}/api/products/${id}` : `${BASE}/api/products`;
       const method = isEdit ? "PUT" : "POST";
@@ -459,6 +462,34 @@ export default function AdminInventoryForm() {
                 value={form.quantity}
                 onChange={e => handleChange("quantity", Number(e.target.value))}
               />
+            </div>
+          </div>
+        </div>
+
+        {/* Valuation */}
+        <div className="bg-background rounded-2xl border p-5 space-y-4">
+          <h3 className="font-semibold flex items-center gap-2 text-sm">
+            <DollarSign className="w-4 h-4 text-primary" /> Valuation
+          </h3>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="space-y-1.5">
+              <Label htmlFor="estimatedValue">Estimated Value</Label>
+              <div className="relative">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm">$</span>
+                <Input
+                  id="estimatedValue"
+                  type="number"
+                  min={0}
+                  step="0.01"
+                  value={form.estimatedValue}
+                  onChange={e => handleChange("estimatedValue", e.target.value)}
+                  placeholder="0.00"
+                  className="pl-7"
+                />
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Replacement or appraised value — appears on the rental agreement.
+              </p>
             </div>
           </div>
         </div>

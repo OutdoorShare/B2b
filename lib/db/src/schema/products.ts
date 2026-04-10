@@ -22,6 +22,7 @@ export const productsTable = pgTable("products", {
   notes: text("notes"),
   nextMaintenanceDate: text("next_maintenance_date"),
   serviceUntil: text("service_until"),
+  estimatedValue: decimal("estimated_value", { precision: 10, scale: 2 }),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });

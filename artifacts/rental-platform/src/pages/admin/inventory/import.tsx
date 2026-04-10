@@ -86,6 +86,15 @@ const COLUMN_MAP: Record<string, string> = {
   "maintenance date": "nextMaintenanceDate",
   "next service": "nextMaintenanceDate",
   "service date": "nextMaintenanceDate",
+  "estimated value": "estimatedValue",
+  "est value": "estimatedValue",
+  "estimated price": "estimatedValue",
+  "appraised value": "estimatedValue",
+  "replacement value": "estimatedValue",
+  "insured value": "estimatedValue",
+  "replacement cost": "estimatedValue",
+  msrp: "estimatedValue",
+  value: "estimatedValue",
 };
 
 /** Strip all non-alphanumeric characters and collapse whitespace. */
@@ -150,6 +159,7 @@ const FIELD_LABELS: Record<string, string> = {
   specs: "Specs",
   notes: "Notes",
   nextMaintenanceDate: "Next Maintenance",
+  estimatedValue: "Estimated Value",
 };
 
 interface ParsedRow {
@@ -169,6 +179,7 @@ interface ParsedRow {
   specs?: string;
   notes?: string;
   nextMaintenanceDate?: string;
+  estimatedValue?: string;
   [key: string]: any;
 }
 
@@ -353,6 +364,7 @@ export default function AdminInventoryImport() {
         specs: r.specs || null,
         notes: r.notes || null,
         nextMaintenanceDate: r.nextMaintenanceDate?.trim() || null,
+        estimatedValue: r.estimatedValue?.trim().replace(/[$,]/g, "") || null,
       }));
 
       const res = await fetch(`${BASE}/api/products/bulk`, {

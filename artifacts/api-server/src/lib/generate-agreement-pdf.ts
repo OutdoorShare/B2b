@@ -27,6 +27,8 @@ export interface AgreementPdfOptions {
   signedAt: Date;
   signatureDataUrl: string;
   ruleInitials?: RuleInitialEntry[];
+  serialNumber?: string | null;
+  estimatedValue?: string | number | null;
 }
 
 export async function generateAgreementPdf(opts: AgreementPdfOptions): Promise<string> {
@@ -57,7 +59,10 @@ export async function generateAgreementPdf(opts: AgreementPdfOptions): Promise<s
 
     // ── Booking Info box ─────────────────────────────────────────────────────
     const infoTop = 92;
-    doc.rect(60, infoTop, PAGE_WIDTH, 90).fill(LIGHT_GRAY).stroke("#e0e0e0");
+    const hasSerial = !!opts.serialNumber;
+    const hasValue  = opts.estimatedValue != null && opts.estimatedValue !== "";
+    const infoHeight = 90 + (hasSerial || hasValue ? 36 : 0);
+    doc.rect(60, infoTop, PAGE_WIDTH, infoHeight).fill(LIGHT_GRAY).stroke("#e0e0e0");
 
     doc.fillColor(MID_GRAY).font("Helvetica").fontSize(8.5);
     const col1x = 75;
@@ -80,9 +85,33 @@ export async function generateAgreementPdf(opts: AgreementPdfOptions): Promise<s
     doc.fillColor(DARK).font("Helvetica-Bold").fontSize(10)
       .text(String(opts.bookingId), col1x, infoTop + 70);
 
+    if (hasSerial) {
+      doc.fillColor(MID_GRAY).font("Helvetica").fontSize(8.5)
+        .text("VIN / HIN / SERIAL #", col2x, infoTop + 58);
+      doc.fillColor(DARK).font("Helvetica-Bold").fontSize(10)
+        .text(opts.serialNumber!, col2x, infoTop + 70);
+    }
+
+    if (hasValue) {
+      const valueDisplay = `$${parseFloat(String(opts.estimatedValue)).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+      if (hasSerial) {
+        // Serial # occupies col2x row 2 — put value below in col1x row 3
+        doc.fillColor(MID_GRAY).font("Helvetica").fontSize(8.5)
+          .text("ESTIMATED VALUE", col1x, infoTop + 82);
+        doc.fillColor(DARK).font("Helvetica-Bold").fontSize(10)
+          .text(valueDisplay, col1x, infoTop + 94);
+      } else {
+        // No serial — put value alongside BOOKING # in col2x
+        doc.fillColor(MID_GRAY).font("Helvetica").fontSize(8.5)
+          .text("ESTIMATED VALUE", col2x, infoTop + 58);
+        doc.fillColor(DARK).font("Helvetica-Bold").fontSize(10)
+          .text(valueDisplay, col2x, infoTop + 70);
+      }
+    }
+
     // ── Agreement Title ──────────────────────────────────────────────────────
     doc.moveDown(0.5);
-    doc.y = infoTop + 110;
+    doc.y = infoTop + infoHeight + 20;
     doc.fillColor(PRIMARY).font("Helvetica-Bold").fontSize(13)
       .text("Terms & Conditions", 60);
     doc.moveDown(0.3);

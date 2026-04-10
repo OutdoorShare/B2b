@@ -4,7 +4,7 @@ import path from "path";
 import multer from "multer";
 import { randomBytes } from "crypto";
 import { db } from "@workspace/db";
-import { bookingsTable, listingsTable, businessProfileTable, tenantsTable, contactCardsTable, customersTable } from "@workspace/db/schema";
+import { bookingsTable, listingsTable, businessProfileTable, tenantsTable, contactCardsTable, customersTable, productsTable } from "@workspace/db/schema";
 import { eq, and, gte, lte, isNull, or, sql } from "drizzle-orm";
 import { generateAgreementPdf } from "../lib/generate-agreement-pdf";
 import {
@@ -356,6 +356,20 @@ router.post("/bookings", async (req, res) => {
         const parsedRuleInitials = ruleInitialsJson
           ? (() => { try { return JSON.parse(ruleInitialsJson); } catch { return []; } })()
           : [];
+        // Fetch product for serial number + estimated value
+        let productSerial: string | null = null;
+        let productEstimatedValue: string | null = null;
+        if (listing.productId) {
+          const [prod] = await db
+            .select({ serialNumber: productsTable.serialNumber, estimatedValue: productsTable.estimatedValue })
+            .from(productsTable)
+            .where(eq(productsTable.id, listing.productId))
+            .limit(1);
+          if (prod) {
+            productSerial = prod.serialNumber ?? null;
+            productEstimatedValue = prod.estimatedValue ?? null;
+          }
+        }
         const pdfFilename = await generateAgreementPdf({
           bookingId: created.id,
           companyName,
@@ -369,6 +383,8 @@ router.post("/bookings", async (req, res) => {
           signedAt: signedAtDate,
           signatureDataUrl: agreementSignatureDataUrl,
           ruleInitials: parsedRuleInitials,
+          serialNumber: productSerial,
+          estimatedValue: productEstimatedValue,
         });
         await db.update(bookingsTable)
           .set({ agreementPdfPath: pdfFilename })

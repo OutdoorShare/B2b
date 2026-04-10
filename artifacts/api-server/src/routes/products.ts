@@ -60,7 +60,7 @@ router.post("/products", requireTenant as any, async (req, res) => {
   try {
     const {
       name, sku, serialNumber, year, categoryId, description, status, quantity,
-      imageUrls, brand, model, specs, notes, nextMaintenanceDate,
+      imageUrls, brand, model, specs, notes, nextMaintenanceDate, estimatedValue,
     } = req.body;
     const [product] = await db
       .insert(productsTable)
@@ -80,6 +80,7 @@ router.post("/products", requireTenant as any, async (req, res) => {
         specs: specs || null,
         notes: notes || null,
         nextMaintenanceDate: nextMaintenanceDate || null,
+        estimatedValue: estimatedValue != null ? String(parseFloat(estimatedValue)) : null,
         updatedAt: new Date(),
       })
       .returning();
@@ -104,7 +105,7 @@ router.put("/products/:id", requireTenant as any, async (req, res) => {
     }
     const {
       name, sku, serialNumber, year, categoryId, description, status, quantity,
-      imageUrls, brand, model, specs, notes, nextMaintenanceDate,
+      imageUrls, brand, model, specs, notes, nextMaintenanceDate, estimatedValue,
       serviceUntil, deactivateListings,
     } = req.body;
 
@@ -130,6 +131,7 @@ router.put("/products/:id", requireTenant as any, async (req, res) => {
         ...(specs !== undefined && { specs }),
         ...(notes !== undefined && { notes }),
         ...(nextMaintenanceDate !== undefined && { nextMaintenanceDate }),
+        ...(estimatedValue !== undefined && { estimatedValue: estimatedValue != null ? String(parseFloat(estimatedValue)) : null }),
         ...(resolvedServiceUntil !== undefined && { serviceUntil: resolvedServiceUntil }),
         updatedAt: new Date(),
       })
@@ -300,6 +302,8 @@ router.post("/products/bulk", requireTenant as any, async (req, res) => {
       const quantity = row.quantity != null ? parseInt(row.quantity) || 1 : 1;
       const year = row.year ? parseInt(row.year) || null : null;
       const nextMaintenanceDate = row.nextMaintenanceDate?.trim() || null;
+      const estimatedValueRaw = row.estimatedValue?.trim().replace(/[$,]/g, "") || null;
+      const estimatedValue = estimatedValueRaw ? (parseFloat(estimatedValueRaw) || null) : null;
 
       try {
         const [newProduct] = await db
@@ -320,6 +324,7 @@ router.post("/products/bulk", requireTenant as any, async (req, res) => {
             specs: row.specs?.trim() || null,
             notes: row.notes?.trim() || null,
             nextMaintenanceDate,
+            estimatedValue: estimatedValue != null ? String(estimatedValue) : null,
             updatedAt: new Date(),
           })
           .returning();
