@@ -37,6 +37,8 @@ export default function ContactCards() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingCard, setEditingCard] = useState<ContactCard | null>(null);
   const [businessAddress, setBusinessAddress] = useState<string | null>(null);
+  const [businessPhone, setBusinessPhone] = useState<string | null>(null);
+  const [businessEmail, setBusinessEmail] = useState<string | null>(null);
 
   useEffect(() => {
     const s = getAdminSession();
@@ -44,7 +46,11 @@ export default function ContactCards() {
     if (s?.token) headers["x-admin-token"] = s.token;
     fetch(`${BASE}/api/business`, { headers })
       .then(r => r.ok ? r.json() : null)
-      .then(data => { if (data?.address) setBusinessAddress(data.address); })
+      .then(data => {
+        if (data?.address) setBusinessAddress(data.address);
+        if (data?.phone)   setBusinessPhone(data.phone);
+        if (data?.email)   setBusinessEmail(data.email);
+      })
       .catch(() => {});
   }, []);
 
@@ -226,6 +232,8 @@ export default function ContactCards() {
         editingCard={editingCard}
         onSaved={handleSaved}
         businessAddress={businessAddress}
+        businessPhone={businessPhone}
+        businessEmail={businessEmail}
       />
     </div>
   );

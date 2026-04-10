@@ -56,24 +56,29 @@ interface ContactCardDialogProps {
   editingCard?: ContactCard | null;
   onSaved: (card: ContactCard) => void;
   businessAddress?: string | null;
+  businessPhone?: string | null;
+  businessEmail?: string | null;
 }
 
-export function ContactCardDialog({ open, onOpenChange, editingCard, onSaved, businessAddress }: ContactCardDialogProps) {
+export function ContactCardDialog({ open, onOpenChange, editingCard, onSaved, businessAddress, businessPhone, businessEmail }: ContactCardDialogProps) {
   const { toast } = useToast();
   const [form, setForm] = useState<CardFormData>(emptyForm);
   const [saving, setSaving] = useState(false);
   const [prepExpanded, setPrepExpanded] = useState(false);
   const [useBusinessAddr, setUseBusinessAddr] = useState(false);
+  const [useBusinessContact, setUseBusinessContact] = useState(false);
 
   useEffect(() => {
     if (!open) return;
     if (editingCard) {
       const addr = editingCard.address ?? "";
+      const cardPhone = editingCard.phone ?? "";
+      const cardEmail = editingCard.email ?? "";
       setForm({
         name: editingCard.name,
         address: addr,
-        phone: editingCard.phone ?? "",
-        email: editingCard.email ?? "",
+        phone: cardPhone,
+        email: cardEmail,
         specialInstructions: editingCard.specialInstructions ?? "",
         prepWhatToWear: editingCard.prepWhatToWear ?? "",
         prepWhatToBring: editingCard.prepWhatToBring ?? "",
@@ -82,12 +87,18 @@ export function ContactCardDialog({ open, onOpenChange, editingCard, onSaved, bu
       });
       setPrepExpanded(!!(editingCard.prepWhatToWear || editingCard.prepWhatToBring || editingCard.prepVehicleTowRating || editingCard.prepAdditionalTips));
       setUseBusinessAddr(!!(businessAddress && addr.trim() === businessAddress.trim()));
+      const contactMatches = !!(
+        (businessPhone && cardPhone.trim() === businessPhone.trim()) ||
+        (businessEmail && cardEmail.trim() === businessEmail.trim())
+      );
+      setUseBusinessContact(contactMatches);
     } else {
       setForm(emptyForm);
       setPrepExpanded(false);
       setUseBusinessAddr(false);
+      setUseBusinessContact(false);
     }
-  }, [open, editingCard, businessAddress]);
+  }, [open, editingCard, businessAddress, businessPhone, businessEmail]);
 
   const f = (key: keyof CardFormData) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
     setForm(p => ({ ...p, [key]: e.target.value }));
@@ -175,18 +186,42 @@ export function ContactCardDialog({ open, onOpenChange, editingCard, onSaved, bu
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-3">
+            {(businessPhone || businessEmail) && (
+              <label className="flex items-start gap-2.5 cursor-pointer group">
+                <input
+                  type="checkbox"
+                  className="mt-0.5 h-4 w-4 accent-primary cursor-pointer"
+                  checked={useBusinessContact}
+                  onChange={e => {
+                    const checked = e.target.checked;
+                    setUseBusinessContact(checked);
+                    setForm(p => ({
+                      ...p,
+                      phone: checked ? (businessPhone ?? p.phone) : "",
+                      email: checked ? (businessEmail ?? p.email) : "",
+                    }));
+                  }}
+                />
+                <span className="text-sm leading-snug group-hover:text-foreground transition-colors">
+                  Use business contact info
+                  <span className="block text-xs text-muted-foreground mt-0.5">
+                    {[businessPhone, businessEmail].filter(Boolean).join("  ·  ")}
+                  </span>
+                </span>
+              </label>
+            )}
+            <div className={`grid grid-cols-2 gap-3${useBusinessContact ? " opacity-50 pointer-events-none" : ""}`}>
               <div className="space-y-1.5">
                 <Label className="flex items-center gap-1.5">
                   <Phone className="w-3.5 h-3.5 text-primary" /> Phone
                 </Label>
-                <Input type="tel" placeholder="(555) 123-4567" value={form.phone} onChange={f("phone")} />
+                <Input type="tel" placeholder="(555) 123-4567" value={form.phone} onChange={f("phone")} readOnly={useBusinessContact} />
               </div>
               <div className="space-y-1.5">
                 <Label className="flex items-center gap-1.5">
                   <Mail className="w-3.5 h-3.5 text-primary" /> Email
                 </Label>
-                <Input type="email" placeholder="info@yourcompany.com" value={form.email} onChange={f("email")} />
+                <Input type="email" placeholder="info@yourcompany.com" value={form.email} onChange={f("email")} readOnly={useBusinessContact} />
               </div>
             </div>
 
