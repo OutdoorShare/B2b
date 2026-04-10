@@ -1,10 +1,46 @@
 import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
-import { contactCardsTable, listingsTable } from "@workspace/db";
+import { contactCardsTable, listingsTable, tenantsTable, businessProfileTable } from "@workspace/db";
 import { eq, and } from "drizzle-orm";
 import { requireAdminToken } from "../middleware/admin-auth";
 
 const router: IRouter = Router();
+
+// GET /api/public/contact-cards/:id — publicly accessible (no auth required)
+router.get("/public/contact-cards/:id", async (req, res) => {
+  try {
+    const [card] = await db
+      .select()
+      .from(contactCardsTable)
+      .where(eq(contactCardsTable.id, Number(req.params.id)))
+      .limit(1);
+    if (!card) { res.status(404).json({ error: "Not found" }); return; }
+
+    // Fetch tenant branding for the public view
+    const [tenant] = await db
+      .select({ slug: tenantsTable.slug })
+      .from(tenantsTable)
+      .where(eq(tenantsTable.id, card.tenantId))
+      .limit(1);
+
+    const [biz] = await db
+      .select({ name: businessProfileTable.name, logoUrl: businessProfileTable.logoUrl, primaryColor: businessProfileTable.primaryColor })
+      .from(businessProfileTable)
+      .where(eq(businessProfileTable.tenantId, card.tenantId))
+      .limit(1);
+
+    res.json({
+      ...card,
+      tenantSlug: tenant?.slug ?? null,
+      businessName: biz?.name ?? null,
+      businessLogoUrl: biz?.logoUrl ?? null,
+      businessPrimaryColor: biz?.primaryColor ?? null,
+    });
+  } catch (err) {
+    req.log.error(err);
+    res.status(500).json({ error: "Failed to fetch contact card" });
+  }
+});
 
 // GET /api/contact-cards
 router.get("/contact-cards", requireAdminToken as any, async (req, res) => {

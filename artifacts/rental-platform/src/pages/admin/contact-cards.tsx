@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
@@ -8,11 +8,13 @@ import {
 } from "@/components/ui/alert-dialog";
 import { useToast } from "@/hooks/use-toast";
 import {
-  Plus, MapPin, Phone, Mail, FileText, Pencil, Trash2, IdCard, Info, Lightbulb
+  Plus, MapPin, Phone, Mail, FileText, Pencil, Trash2, IdCard, Info, Lightbulb,
+  Link2, QrCode, Copy, Check, X, ExternalLink
 } from "lucide-react";
 import { getAdminSession } from "@/lib/admin-nav";
 import { ContactCardDialog } from "@/components/contact-card-dialog";
 import type { ContactCard } from "@/components/contact-card-dialog";
+import QRCode from "react-qr-code";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
@@ -30,6 +32,84 @@ function hasPrepGuide(card: ContactCard) {
   return !!(card.prepWhatToWear || card.prepWhatToBring || card.prepVehicleTowRating || card.prepAdditionalTips);
 }
 
+function getCardUrl(slug: string, cardId: number): string {
+  return `${window.location.origin}${BASE}/${slug}/contact-card/${cardId}`;
+}
+
+function QrPanel({ url, onClose }: { url: string; onClose: () => void }) {
+  const [copied, setCopied] = useState(false);
+  const svgRef = useRef<HTMLDivElement>(null);
+
+  const copyLink = () => {
+    navigator.clipboard.writeText(url).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    });
+  };
+
+  const downloadQr = () => {
+    const svg = svgRef.current?.querySelector("svg");
+    if (!svg) return;
+    const svgData = new XMLSerializer().serializeToString(svg);
+    const blob = new Blob([svgData], { type: "image/svg+xml" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = "contact-card-qr.svg";
+    a.click();
+  };
+
+  return (
+    <div className="absolute inset-0 z-10 bg-white rounded-xl flex flex-col p-4 shadow-lg border border-gray-200">
+      <div className="flex items-center justify-between mb-3">
+        <span className="text-sm font-bold text-gray-800 flex items-center gap-1.5">
+          <QrCode className="w-4 h-4 text-primary" /> Share Contact Card
+        </span>
+        <button onClick={onClose} className="p-1 rounded hover:bg-gray-100 text-muted-foreground">
+          <X className="w-4 h-4" />
+        </button>
+      </div>
+
+      {/* QR code */}
+      <div ref={svgRef} className="flex justify-center mb-3 p-3 bg-gray-50 rounded-xl border border-gray-100">
+        <QRCode value={url} size={140} bgColor="#f9fafb" fgColor="#1a2332" />
+      </div>
+
+      {/* Link */}
+      <div className="flex items-center gap-1.5 bg-gray-50 border border-gray-200 rounded-lg px-2.5 py-1.5 mb-3">
+        <Link2 className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+        <span className="text-[11px] text-gray-600 truncate flex-1">{url}</span>
+      </div>
+
+      {/* Actions */}
+      <div className="grid grid-cols-3 gap-1.5">
+        <button
+          onClick={copyLink}
+          className="flex flex-col items-center gap-1 p-2 rounded-xl bg-gray-50 hover:bg-green-50 hover:border-green-200 border border-gray-100 transition-all text-xs font-semibold text-gray-600 hover:text-green-700"
+        >
+          {copied ? <Check className="w-4 h-4 text-green-600" /> : <Copy className="w-4 h-4" />}
+          {copied ? "Copied!" : "Copy"}
+        </button>
+        <a
+          href={url}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="flex flex-col items-center gap-1 p-2 rounded-xl bg-gray-50 hover:bg-blue-50 hover:border-blue-200 border border-gray-100 transition-all text-xs font-semibold text-gray-600 hover:text-blue-700"
+        >
+          <ExternalLink className="w-4 h-4" />
+          Open
+        </a>
+        <button
+          onClick={downloadQr}
+          className="flex flex-col items-center gap-1 p-2 rounded-xl bg-gray-50 hover:bg-purple-50 hover:border-purple-200 border border-gray-100 transition-all text-xs font-semibold text-gray-600 hover:text-purple-700"
+        >
+          <QrCode className="w-4 h-4" />
+          Save QR
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export default function ContactCards() {
   const { toast } = useToast();
   const [cards, setCards] = useState<ContactCard[]>([]);
@@ -39,6 +119,9 @@ export default function ContactCards() {
   const [businessAddress, setBusinessAddress] = useState<string | null>(null);
   const [businessPhone, setBusinessPhone] = useState<string | null>(null);
   const [businessEmail, setBusinessEmail] = useState<string | null>(null);
+  const [qrOpenId, setQrOpenId] = useState<number | null>(null);
+
+  const tenantSlug = getAdminSession()?.tenantSlug ?? "";
 
   useEffect(() => {
     const s = getAdminSession();
@@ -127,7 +210,9 @@ export default function ContactCards() {
             When a booking is confirmed online, the renter sees the contact card on the confirmation screen — including your pickup address, phone, email, special instructions, and a rental preparation guide (what to wear, what to bring, tow requirements, and more).
             You'll also receive a notification with the renter's contact details for coordination.
           </p>
-          <p className="text-xs text-blue-600 dark:text-blue-400">Assign a card to a listing by editing the listing and selecting a contact card at the bottom of the form.</p>
+          <p className="text-xs text-blue-600 dark:text-blue-400">
+            Each card has a shareable link and QR code you can print or text to renters. Assign a card to a listing by editing the listing and selecting a contact card at the bottom of the form.
+          </p>
         </div>
       </div>
 
@@ -158,6 +243,15 @@ export default function ContactCards() {
                     <CardDescription className="text-xs mt-0.5">Contact Card #{card.id}</CardDescription>
                   </div>
                   <div className="flex items-center gap-1.5 shrink-0">
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      className="h-8 w-8"
+                      title="Share / QR Code"
+                      onClick={() => setQrOpenId(qrOpenId === card.id ? null : card.id)}
+                    >
+                      <QrCode className="w-3.5 h-3.5" />
+                    </Button>
                     <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => openEdit(card)}>
                       <Pencil className="w-3.5 h-3.5" />
                     </Button>
@@ -186,7 +280,7 @@ export default function ContactCards() {
                 </div>
               </CardHeader>
               <Separator />
-              <CardContent className="pt-4 space-y-2.5 text-sm">
+              <CardContent className="pt-4 space-y-2.5 text-sm relative">
                 {card.address && (
                   <div className="flex items-start gap-2 text-muted-foreground">
                     <MapPin className="w-3.5 h-3.5 shrink-0 mt-0.5 text-primary" />
@@ -219,6 +313,14 @@ export default function ContactCards() {
                 )}
                 {!card.address && !card.phone && !card.email && !card.specialInstructions && !hasPrepGuide(card) && (
                   <p className="text-xs text-muted-foreground italic">No details added yet</p>
+                )}
+
+                {/* QR / Share overlay */}
+                {qrOpenId === card.id && tenantSlug && (
+                  <QrPanel
+                    url={getCardUrl(tenantSlug, card.id)}
+                    onClose={() => setQrOpenId(null)}
+                  />
                 )}
               </CardContent>
             </Card>

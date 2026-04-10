@@ -28,6 +28,7 @@ import GetStartedPage from "@/pages/public/get-started";
 import SignupPage from "@/pages/public/signup";
 import VerifyEmailPage from "@/pages/public/verify-email";
 import AuditPage from "@/pages/public/audit";
+import ContactCardView from "@/pages/public/contact-card-view";
 import DemoPage from "@/pages/demo";
 import AdminOnboarding from "@/pages/admin/onboarding";
 import AdminLoginPage from "@/pages/admin/admin-login";
@@ -468,6 +469,9 @@ function Router() {
       </Route>
       <Route path="/:slug/profile">
         <SlugGuard><StorefrontLayout><StorefrontProfile /></StorefrontLayout></SlugGuard>
+      </Route>
+      <Route path="/:slug/contact-card/:id">
+        <ContactCardView />
       </Route>
 
       {/* Root → SaaS marketing landing */}
