@@ -236,6 +236,9 @@ importers:
       stripe:
         specifier: ^21.0.1
         version: 21.0.1(@types/node@25.3.5)
+      xlsx:
+        specifier: ^0.18.5
+        version: 0.18.5
     devDependencies:
       '@types/cookie-parser':
         specifier: ^1.4.10

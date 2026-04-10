@@ -75,6 +75,7 @@ import SuperAdminFeedback from "@/pages/superadmin/feedback";
 import SuperAdminDeveloper from "@/pages/superadmin/developer";
 import DocsAdminPage from "@/pages/superadmin/docs-admin";
 import SuperAdminAcceptInvite from "@/pages/superadmin/accept-invite";
+import SuperAdminExport from "@/pages/superadmin/export";
 import AdminFeedback from "@/pages/admin/feedback";
 import AdminMessages from "@/pages/admin/messages";
 import AdminContactCards from "@/pages/admin/contact-cards";
@@ -272,6 +273,9 @@ function Router() {
       </Route>
       <Route path="/superadmin/claims">
         <SuperAdminLayout><SuperAdminClaims /></SuperAdminLayout>
+      </Route>
+      <Route path="/superadmin/export">
+        <SuperAdminLayout><SuperAdminExport /></SuperAdminLayout>
       </Route>
       <Route path="/superadmin/demo">
         <SuperAdminLayout><DemoSitePage /></SuperAdminLayout>
