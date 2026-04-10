@@ -1,4 +1,4 @@
-import { adminPath } from "@/lib/admin-nav";
+import { adminPath, getAdminSession } from "@/lib/admin-nav";
 import { useState, useEffect } from "react";
 import { useLocation, useParams } from "wouter";
 import { Button } from "@/components/ui/button";
@@ -11,9 +11,10 @@ import { useToast } from "@/hooks/use-toast";
 import {
   ArrowLeft, ShieldAlert, User, CalendarDays,
   AlertTriangle, Clock, CheckCircle2, XCircle,
-  DollarSign, Image as ImageIcon, Trash2, Plus, Package
+  DollarSign, Image as ImageIcon, Trash2, Plus, Package, Link
 } from "lucide-react";
 import { format } from "date-fns";
+import { ImageUploadCrop } from "@/components/image-upload-crop";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
@@ -307,7 +308,7 @@ export default function AdminClaimDetail() {
             </div>
           </div>
 
-          {/* Evidence URLs */}
+          {/* Evidence Photos */}
           <div className="bg-background rounded-2xl border p-5 space-y-3">
             <h3 className="font-semibold flex items-center gap-2 text-sm">
               <ImageIcon className="w-4 h-4 text-primary" /> Evidence Photos
@@ -318,7 +319,12 @@ export default function AdminClaimDetail() {
               <div className="grid grid-cols-3 gap-2">
                 {evidenceUrls.map((url, i) => (
                   <div key={i} className="relative group">
-                    <img src={url} alt={`Evidence ${i + 1}`} className="w-full h-24 object-cover rounded-lg border" onError={e => (e.currentTarget.style.display = "none")} />
+                    <img
+                      src={url.startsWith("/api/") ? `${BASE}${url}` : url}
+                      alt={`Evidence ${i + 1}`}
+                      className="w-full h-24 object-cover rounded-lg border"
+                      onError={e => (e.currentTarget.style.display = "none")}
+                    />
                     <button
                       type="button"
                       onClick={() => setEvidenceUrls(prev => prev.filter((_, idx) => idx !== i))}
@@ -330,16 +336,29 @@ export default function AdminClaimDetail() {
                 ))}
               </div>
             )}
-            <div className="flex gap-2">
-              <Input
-                value={newEvidenceUrl}
-                onChange={e => setNewEvidenceUrl(e.target.value)}
-                placeholder="Paste image URL…"
-                onKeyDown={e => e.key === "Enter" && (e.preventDefault(), addEvidence())}
+
+            {/* Upload with crop */}
+            <div className="flex items-center gap-2 flex-wrap">
+              <ImageUploadCrop
+                token={getAdminSession()?.token ?? ""}
+                onUploaded={url => setEvidenceUrls(prev => [...prev, url])}
               />
-              <Button type="button" variant="outline" size="icon" onClick={addEvidence}>
-                <Plus className="w-4 h-4" />
-              </Button>
+              <span className="text-xs text-muted-foreground">or</span>
+              <div className="flex gap-2 flex-1 min-w-[200px]">
+                <div className="relative flex-1">
+                  <Link className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
+                  <Input
+                    value={newEvidenceUrl}
+                    onChange={e => setNewEvidenceUrl(e.target.value)}
+                    placeholder="Paste image URL…"
+                    className="pl-8 h-8 text-sm"
+                    onKeyDown={e => e.key === "Enter" && (e.preventDefault(), addEvidence())}
+                  />
+                </div>
+                <Button type="button" variant="outline" size="icon" className="h-8 w-8 shrink-0" onClick={addEvidence}>
+                  <Plus className="w-3.5 h-3.5" />
+                </Button>
+              </div>
             </div>
           </div>
         </div>

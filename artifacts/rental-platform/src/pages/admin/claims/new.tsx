@@ -13,8 +13,9 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { useToast } from "@/hooks/use-toast";
-import { ArrowLeft, ShieldAlert, AlertTriangle, Search, X, CalendarDays, User, Zap, BookOpen, DollarSign, Shield, CreditCard, Clock } from "lucide-react";
+import { ArrowLeft, ShieldAlert, AlertTriangle, Search, X, CalendarDays, User, Zap, BookOpen, DollarSign, Shield, CreditCard, Clock, Image as ImageIcon, Link, Plus, Trash2 } from "lucide-react";
 import { format, parseISO, addHours } from "date-fns";
+import { ImageUploadCrop } from "@/components/image-upload-crop";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
@@ -69,6 +70,10 @@ export default function AdminClaimsNew() {
 
   // Business profile for cancellation policy
   const [cancellationPolicy, setCancellationPolicy] = useState<string | null>(null);
+
+  // Evidence photos
+  const [evidenceUrls, setEvidenceUrls] = useState<string[]>([]);
+  const [newEvidenceUrl, setNewEvidenceUrl] = useState("");
 
   // Whether to charge card on file (policy violations only, within 48h window)
   const [chargeCard, setChargeCard] = useState(false);
@@ -260,6 +265,7 @@ export default function AdminClaimsNew() {
           description,
           claimedAmount: claimedAmount ? parseFloat(claimedAmount) : null,
           chargeCardOnFile: chargeCard && type === "policy_violation" && withinChargeWindow,
+          evidenceUrls: evidenceUrls.length > 0 ? evidenceUrls : null,
         }),
       });
       const data = await res.json();
@@ -713,6 +719,73 @@ export default function AdminClaimsNew() {
                 )}
               </div>
             )}
+          </CardContent>
+        </Card>
+
+        {/* Evidence Photos */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base flex items-center gap-2">
+              <ImageIcon className="w-4 h-4 text-primary" /> Evidence Photos
+            </CardTitle>
+            <CardDescription>Upload photos showing damage, theft, or policy violations. You can also paste image URLs.</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {evidenceUrls.length > 0 && (
+              <div className="grid grid-cols-3 gap-2">
+                {evidenceUrls.map((url, i) => (
+                  <div key={i} className="relative group">
+                    <img
+                      src={url.startsWith("/api/") ? `${BASE}${url}` : url}
+                      alt={`Evidence ${i + 1}`}
+                      className="w-full h-24 object-cover rounded-lg border"
+                      onError={e => (e.currentTarget.style.display = "none")}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setEvidenceUrls(prev => prev.filter((_, idx) => idx !== i))}
+                      className="absolute top-1 right-1 bg-destructive text-white rounded-full w-5 h-5 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                    >
+                      <Trash2 className="w-2.5 h-2.5" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+            {evidenceUrls.length === 0 && (
+              <p className="text-sm text-muted-foreground">No photos attached yet.</p>
+            )}
+            <div className="flex items-center gap-2 flex-wrap">
+              <ImageUploadCrop
+                token={getAdminSession()?.token ?? ""}
+                onUploaded={url => setEvidenceUrls(prev => [...prev, url])}
+              />
+              <span className="text-xs text-muted-foreground">or</span>
+              <div className="flex gap-2 flex-1 min-w-[200px]">
+                <div className="relative flex-1">
+                  <Link className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
+                  <Input
+                    value={newEvidenceUrl}
+                    onChange={e => setNewEvidenceUrl(e.target.value)}
+                    placeholder="Paste image URL…"
+                    className="pl-8 h-8 text-sm"
+                    onKeyDown={e => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        const url = newEvidenceUrl.trim();
+                        if (url) { setEvidenceUrls(prev => [...prev, url]); setNewEvidenceUrl(""); }
+                      }
+                    }}
+                  />
+                </div>
+                <Button
+                  type="button" variant="outline" size="icon" className="h-8 w-8 shrink-0"
+                  onClick={() => { const url = newEvidenceUrl.trim(); if (url) { setEvidenceUrls(prev => [...prev, url]); setNewEvidenceUrl(""); } }}
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                </Button>
+              </div>
+            </div>
           </CardContent>
         </Card>
 
