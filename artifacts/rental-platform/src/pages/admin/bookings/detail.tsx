@@ -931,8 +931,8 @@ export default function AdminBookingDetail() {
               const labelColor = opts.done ? "text-green-800" : opts.pending ? "text-amber-800" : "text-foreground";
               return (
                 <div className={`rounded-xl border ${rowBg}`}>
-                  <div className="flex items-center gap-3 p-3">
-                    <div className={`w-6 h-6 rounded-full flex items-center justify-center shrink-0 ${dotBg}`}>
+                  <div className="flex gap-3 p-3">
+                    <div className={`w-6 h-6 rounded-full flex items-center justify-center shrink-0 mt-0.5 ${dotBg}`}>
                       {opts.done
                         ? <CheckCircle2 className="w-4 h-4 text-white" />
                         : opts.pending
@@ -941,9 +941,11 @@ export default function AdminBookingDetail() {
                     </div>
                     <div className="flex-1 min-w-0">
                       <p className={`text-sm font-semibold ${labelColor}`}>{opts.label}</p>
-                      <p className="text-xs text-muted-foreground">{opts.sub}</p>
+                      <p className="text-xs text-muted-foreground leading-relaxed">{opts.sub}</p>
+                      {opts.actions && (
+                        <div className="mt-2">{opts.actions}</div>
+                      )}
                     </div>
-                    {opts.actions}
                   </div>
                   {opts.children}
                 </div>
