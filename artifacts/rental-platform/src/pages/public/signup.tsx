@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
+import { ImageCropDialog } from "@/components/image-crop-dialog";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 const OS_GREEN = "#3ab549";
@@ -73,7 +74,17 @@ export default function SignupPage() {
   const [logoPreview, setLogoPreview] = useState<string>("");
   const [logoUrl, setLogoUrl] = useState<string>("");
   const [logoUploading, setLogoUploading] = useState(false);
+  const [logoCropFiles, setLogoCropFiles] = useState<File[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const signupLogoUploadFn = async (blob: Blob, filename: string): Promise<string> => {
+    const fd = new FormData();
+    fd.append("file", new File([blob], filename, { type: blob.type }));
+    const res = await fetch(`${BASE}/api/upload/image`, { method: "POST", body: fd });
+    if (!res.ok) throw new Error("Upload failed");
+    const data = await res.json();
+    return data.url;
+  };
 
   const [slugPreview, setSlugPreview] = useState("");
 
@@ -92,9 +103,8 @@ export default function SignupPage() {
   const handleLogoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    setLogoFile(file);
-    setLogoPreview(URL.createObjectURL(file));
-    setLogoUrl("");
+    setLogoCropFiles([file]);
+    e.target.value = "";
   };
 
   const removeLogo = () => {
@@ -105,6 +115,7 @@ export default function SignupPage() {
   };
 
   const uploadLogo = async (): Promise<string> => {
+    if (logoUrl) return logoUrl;
     if (!logoFile) return "";
     setLogoUploading(true);
     try {
@@ -200,6 +211,24 @@ export default function SignupPage() {
   const stepIndex = steps.findIndex(s => s.key === step);
 
   return (
+    <>
+    {logoCropFiles.length > 0 && (
+      <ImageCropDialog
+        files={logoCropFiles}
+        aspect={1}
+        outputWidth={800}
+        uploadFn={signupLogoUploadFn}
+        onDone={([url]) => {
+          if (url) {
+            setLogoUrl(url);
+            setLogoPreview(url);
+            setLogoFile(null);
+          }
+          setLogoCropFiles([]);
+        }}
+        onCancel={() => setLogoCropFiles([])}
+      />
+    )}
     <div className="min-h-screen flex" style={{ background: "#0d1117" }}>
 
       {/* LEFT PANEL — hero image + branding */}
@@ -724,5 +753,6 @@ export default function SignupPage() {
         </div>
       </div>
     </div>
+    </>
   );
 }

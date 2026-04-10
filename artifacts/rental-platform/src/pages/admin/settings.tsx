@@ -15,6 +15,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
 import { Copy, CheckCircle2, Paintbrush, RefreshCw, Upload, Eye, EyeOff, ImageIcon, X, KeyRound, Mail, ChevronDown, ChevronUp, ExternalLink, Wand2, Plus, FileText, BookOpen, AlertCircle, Rocket } from "lucide-react";
 import { applyBrandColors, PRESET_THEMES, isLight } from "@/lib/theme";
+import { ImageCropDialog } from "@/components/image-crop-dialog";
 
 function slugifyPreview(name: string): string {
   return name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 40);
@@ -355,6 +356,16 @@ export default function AdminSettings() {
   const coverFileRef = useRef<HTMLInputElement>(null);
   const [logoUploading,  setLogoUploading]  = useState(false);
   const [coverUploading, setCoverUploading] = useState(false);
+  const [logoCropFiles, setLogoCropFiles] = useState<File[]>([]);
+
+  const logoUploadFn = async (blob: Blob, filename: string): Promise<string> => {
+    const fd = new FormData();
+    fd.append("file", new File([blob], filename, { type: blob.type }));
+    const res = await fetch(`${BASE}/api/upload/image`, { method: "POST", body: fd });
+    if (!res.ok) throw new Error("Upload failed");
+    const data = await res.json();
+    return data.url;
+  };
 
   const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
@@ -480,6 +491,40 @@ export default function AdminSettings() {
 
   return (
     <div className="space-y-8 max-w-4xl mx-auto">
+      {logoCropFiles.length > 0 && (
+        <ImageCropDialog
+          files={logoCropFiles}
+          aspect={1}
+          outputWidth={800}
+          uploadFn={logoUploadFn}
+          onDone={([url]) => {
+            if (url) {
+              setLogoUploading(true);
+              setFormData((prev: any) => {
+                const updated = { ...prev, logoUrl: url };
+                fetch(`${BASE}/api/business`, {
+                  method: "PUT",
+                  headers: { ...adminHeaders(), "Content-Type": "application/json" },
+                  body: JSON.stringify(updated),
+                })
+                  .then(r => r.ok ? r.json() : null)
+                  .then(saved => {
+                    if (saved) {
+                      queryClient.setQueryData(["/api/business", urlSlug], saved);
+                      queryClient.setQueryData(getGetBusinessProfileQueryKey(), saved);
+                      applyBrandColors(saved.primaryColor, saved.accentColor);
+                      toast({ title: "Logo saved" });
+                    }
+                  })
+                  .finally(() => setLogoUploading(false));
+                return updated;
+              });
+            }
+            setLogoCropFiles([]);
+          }}
+          onCancel={() => setLogoCropFiles([])}
+        />
+      )}
       <div>
         <h2 className="text-3xl font-bold tracking-tight">Settings</h2>
         <p className="text-muted-foreground mt-1">Manage your business profile and preferences</p>
@@ -906,9 +951,9 @@ export default function AdminSettings() {
                     <input
                       ref={logoFileRef}
                       type="file"
-                      accept="image/jpeg,image/png,image/webp,image/svg+xml,image/gif"
+                      accept="image/jpeg,image/png,image/webp,image/gif"
                       className="hidden"
-                      onChange={e => { const f = e.target.files?.[0]; if (f) uploadImageFile(f, setLogoUploading, "logoUrl"); }}
+                      onChange={e => { const f = e.target.files?.[0]; if (f) { setLogoCropFiles([f]); e.target.value = ""; } }}
                     />
                     <div className="flex gap-2">
                       <Button

@@ -6,11 +6,6 @@ import { ZoomIn, ZoomOut, RotateCcw, ChevronRight, X } from "lucide-react";
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 const DISPLAY_W = 480;  // crop frame display width (px)
-const ASPECT    = 4 / 3;
-const DISPLAY_H = Math.round(DISPLAY_W / ASPECT); // 360
-
-const OUTPUT_W  = 1200; // saved image width
-const OUTPUT_H  = Math.round(OUTPUT_W / ASPECT);  // 900
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 interface Props {
@@ -20,10 +15,18 @@ interface Props {
   /** Called with each blob to perform the actual upload — returns the URL */
   uploadFn: (blob: Blob, filename: string) => Promise<string>;
   onCancel?: () => void;
+  /** Crop aspect ratio width/height. Default 4/3. Use 1 for square logos. */
+  aspect?: number;
+  /** Output pixel width of the saved image. Default 1200. */
+  outputWidth?: number;
 }
 
 // ── Component ─────────────────────────────────────────────────────────────────
-export function ImageCropDialog({ files, onDone, uploadFn, onCancel }: Props) {
+export function ImageCropDialog({ files, onDone, uploadFn, onCancel, aspect = 4 / 3, outputWidth = 1200 }: Props) {
+  const ASPECT    = aspect;
+  const DISPLAY_H = Math.round(DISPLAY_W / ASPECT);
+  const OUTPUT_W  = outputWidth;
+  const OUTPUT_H  = Math.round(OUTPUT_W / ASPECT);
   const [queueIdx, setQueueIdx]     = useState(0);
   const [imgSrc, setImgSrc]         = useState<string>("");
   const [naturalW, setNaturalW]     = useState(0);
