@@ -1,4 +1,5 @@
 import express, { type Express } from "express";
+import helmet from "helmet";
 import cors from "cors";
 import { rateLimit } from "express-rate-limit";
 import pinoHttp from "pino-http";
@@ -39,6 +40,18 @@ const aiRateLimit = rateLimit({
 });
 
 const app: Express = express();
+
+// Security headers — must be first so every response is covered
+app.use(
+  helmet({
+    // CSP is not meaningful on a JSON API but harmless; disable to avoid
+    // interfering with any proxied HTML responses (e.g. Stripe redirect pages)
+    contentSecurityPolicy: false,
+    // Allow cross-origin resource loading — needed for the Replit proxy / iframe preview
+    crossOriginEmbedderPolicy: false,
+    // Keep nosniff, frameguard (DENY), HSTS, referrerPolicy, etc. at defaults
+  })
+);
 
 app.use(
   pinoHttp({
