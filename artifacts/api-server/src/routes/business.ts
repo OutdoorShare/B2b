@@ -60,7 +60,7 @@ router.get("/business", async (req, res) => {
     const [profileWhere, tenantInfo, tenantRow] = await Promise.all([
       db.select().from(businessProfileTable).where(eq(businessProfileTable.tenantId, req.tenantId)).limit(1),
       getTenantInfo(req.tenantId),
-      db.select({ platformFeePercent: tenantsTable.platformFeePercent }).from(tenantsTable).where(eq(tenantsTable.id, req.tenantId)).limit(1),
+      db.select({ platformFeePercent: tenantsTable.platformFeePercent, plan: tenantsTable.plan }).from(tenantsTable).where(eq(tenantsTable.id, req.tenantId)).limit(1),
     ]);
 
     let profiles = profileWhere;
@@ -75,9 +75,11 @@ router.get("/business", async (req, res) => {
     const p = profiles[0];
     const { senderPassword: _sp, ...pSafe } = p;
     // Expose the platform fee percent so the storefront can compute pass-through amounts.
+    // Starter (Half Throttle) defaults to 10%; paid plans default to 5% when not explicitly set.
+    const starterDefault = tenantRow[0]?.plan === "starter" ? 10 : PLATFORM_FEE_PERCENT * 100;
     const tenantFeePercent = tenantRow[0]?.platformFeePercent != null
       ? parseFloat(tenantRow[0].platformFeePercent)
-      : PLATFORM_FEE_PERCENT * 100;
+      : starterDefault;
     res.json({
       ...pSafe,
       senderPasswordSet: !!p.senderPassword,

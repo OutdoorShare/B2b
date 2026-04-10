@@ -1440,7 +1440,7 @@ export default function AdminSettings() {
                           Service Fee %
                         </Label>
                         <p className="text-xs text-muted-foreground">
-                          Defaults to the OutdoorShare platform rate ({formData.platformFeePercent ?? 5}%). Adjust only if you need to charge a different amount.
+                          Your OutdoorShare-assigned rate is <strong>{formData.platformFeePercent ?? 10}%</strong>. Leave blank to use that rate, or enter a custom amount to pass a different fee to customers.
                         </p>
                         <div className="flex items-center gap-2">
                           <Input
@@ -1451,7 +1451,7 @@ export default function AdminSettings() {
                             max={100}
                             step={0.5}
                             className="w-28"
-                            placeholder={String(formData.platformFeePercent ?? 5)}
+                            placeholder={String(formData.platformFeePercent ?? 10)}
                             value={formData.passPlatformFeePercent != null ? String(formData.passPlatformFeePercent) : ""}
                             onChange={handleChange}
                           />
@@ -1462,7 +1462,7 @@ export default function AdminSettings() {
                               className="text-xs text-muted-foreground underline underline-offset-2"
                               onClick={() => setFormData(prev => ({ ...prev, passPlatformFeePercent: null }))}
                             >
-                              Reset to default ({formData.platformFeePercent ?? 5}%)
+                              Reset to assigned rate ({formData.platformFeePercent ?? 10}%)
                             </button>
                           )}
                         </div>
@@ -1471,7 +1471,7 @@ export default function AdminSettings() {
                       {(() => {
                         const feePercent = formData.passPlatformFeePercent != null
                           ? parseFloat(String(formData.passPlatformFeePercent))
-                          : parseFloat(String(formData.platformFeePercent ?? "5"));
+                          : parseFloat(String(formData.platformFeePercent ?? "10"));
                         const fee = 300 * (feePercent / 100);
                         return (
                           <div className="rounded-lg bg-green-50 border border-green-200 p-3">
