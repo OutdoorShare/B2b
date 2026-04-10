@@ -186,7 +186,7 @@ function makeRawEmail(to: string, subject: string, htmlBody: string, from?: stri
 
 const APP_URL =
   process.env.APP_URL ||
-  (process.env.REPLIT_DEV_DOMAIN ? `https://${process.env.REPLIT_DEV_DOMAIN}` : "https://outdoorshare.app");
+  (process.env.REPLIT_DEV_DOMAIN ? `https://${process.env.REPLIT_DEV_DOMAIN}` : "https://myoutdoorshare.com");
 
 // ── HTML-escape helper (prevents XSS in email templates) ─────────────────────
 function esc(value: unknown): string {

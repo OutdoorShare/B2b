@@ -8,7 +8,7 @@ import { sendVerificationEmail } from "../services/gmail";
 
 const APP_URL =
   process.env.APP_URL ||
-  (process.env.REPLIT_DEV_DOMAIN ? `https://${process.env.REPLIT_DEV_DOMAIN}` : "https://outdoorshare.app");
+  (process.env.REPLIT_DEV_DOMAIN ? `https://${process.env.REPLIT_DEV_DOMAIN}` : "https://myoutdoorshare.com");
 
 const DEFAULT_CATEGORIES = [
   { name: "Jet Ski",         slug: "jet-ski",         icon: "🚤" },
