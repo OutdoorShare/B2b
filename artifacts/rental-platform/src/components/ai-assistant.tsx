@@ -219,7 +219,7 @@ export function AIAssistant({ role, tenantSlug, companyName, adminToken, saToken
       <button
         onClick={() => setOpen(v => !v)}
         className={cn(
-          "fixed bottom-5 right-5 z-50 w-13 h-13 rounded-full shadow-lg flex items-center justify-center transition-all hover:scale-105 active:scale-95",
+          "fixed xl:bottom-5 bottom-20 right-5 z-50 w-13 h-13 rounded-full shadow-lg flex items-center justify-center transition-all hover:scale-105 active:scale-95",
           open && "rotate-0"
         )}
         style={{ background: OS_GREEN, width: 52, height: 52 }}
@@ -235,7 +235,7 @@ export function AIAssistant({ role, tenantSlug, companyName, adminToken, saToken
       {open && (
         <div
           className={cn(
-            "fixed bottom-20 right-5 z-50 w-[360px] max-w-[calc(100vw-2.5rem)] rounded-2xl shadow-2xl border bg-background flex flex-col",
+            "fixed xl:bottom-20 bottom-36 right-5 z-50 w-[360px] max-w-[calc(100vw-2.5rem)] rounded-2xl shadow-2xl border bg-background flex flex-col",
             "animate-in slide-in-from-bottom-2 duration-200"
           )}
           style={{ height: 520, maxHeight: "calc(100dvh - 100px)" }}

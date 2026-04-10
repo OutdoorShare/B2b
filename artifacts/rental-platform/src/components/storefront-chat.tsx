@@ -233,7 +233,7 @@ export function StorefrontChat({
       {/* Floating button */}
       <button
         onClick={() => setOpen(v => !v)}
-        className="fixed bottom-5 right-20 z-40 rounded-full shadow-lg flex items-center justify-center transition-all hover:scale-105 active:scale-95"
+        className="fixed xl:bottom-5 bottom-20 right-20 z-40 rounded-full shadow-lg flex items-center justify-center transition-all hover:scale-105 active:scale-95"
         style={{ width: 52, height: 52, backgroundColor: primaryColor }}
         aria-label={`Chat with ${companyName}`}
         title={`Chat with ${companyName}`}
@@ -252,7 +252,7 @@ export function StorefrontChat({
       {/* Chat panel */}
       {open && (
         <div
-          className="fixed bottom-20 right-20 z-40 w-[340px] max-w-[calc(100vw-2.5rem)] rounded-2xl shadow-2xl border border-border bg-white flex flex-col animate-in slide-in-from-bottom-2 duration-200"
+          className="fixed xl:bottom-20 bottom-36 right-20 z-40 w-[340px] max-w-[calc(100vw-2.5rem)] rounded-2xl shadow-2xl border border-border bg-white flex flex-col animate-in slide-in-from-bottom-2 duration-200"
           style={{ height: 480 }}
         >
           {/* Header */}
