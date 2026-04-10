@@ -5,7 +5,7 @@ import {
   categoriesTable, superadminUsersTable,
 } from "@workspace/db/schema";
 import { eq, desc } from "drizzle-orm";
-import * as XLSX from "xlsx";
+import ExcelJS from "exceljs";
 import { google } from "googleapis";
 
 const router: IRouter = Router();
@@ -116,19 +116,22 @@ async function buildExcelBuffer(): Promise<Buffer> {
     "Created At":           l.createdAt ? new Date(l.createdAt).toLocaleDateString() : "",
   }));
 
-  const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(
-    wb,
-    XLSX.utils.json_to_sheet(inventoryRows.length ? inventoryRows : [{ Note: "No inventory items found" }]),
-    "Inventory"
-  );
-  XLSX.utils.book_append_sheet(
-    wb,
-    XLSX.utils.json_to_sheet(listingRows.length ? listingRows : [{ Note: "No listings found" }]),
-    "Listings"
-  );
+  const wb = new ExcelJS.Workbook();
 
-  return Buffer.from(XLSX.write(wb, { type: "buffer", bookType: "xlsx" }));
+  function addSheet(name: string, rows: Record<string, unknown>[]) {
+    const sheet = wb.addWorksheet(name);
+    if (rows.length === 0) {
+      sheet.addRow({ Note: `No ${name.toLowerCase()} found` });
+      return;
+    }
+    sheet.columns = Object.keys(rows[0]).map(key => ({ header: key, key }));
+    rows.forEach(r => sheet.addRow(r));
+  }
+
+  addSheet("Inventory", inventoryRows);
+  addSheet("Listings", listingRows);
+
+  return Buffer.from(await wb.xlsx.writeBuffer());
 }
 
 // ── Download route ────────────────────────────────────────────────────────────

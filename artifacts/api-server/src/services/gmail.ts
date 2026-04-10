@@ -256,7 +256,7 @@ function emailShell(opts: {
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>${companyName}</title>
+  <title>${esc(companyName)}</title>
 </head>
 <body style="margin:0;padding:0;background:#f0f2f0;font-family:'Helvetica Neue',Arial,sans-serif;">
   <span style="display:none;max-height:0;overflow:hidden;mso-hide:all;">${preheader}</span>
@@ -398,7 +398,7 @@ export async function sendWelcomeEmail(opts: {
   const storefrontUrl = `${getAppUrl()}/${slug}`;
 
   const body = `
-    <p style="margin:0 0 8px;font-size:18px;font-weight:700;color:${BRAND_DARK};">Welcome aboard, ${companyName}! 🎉</p>
+    <p style="margin:0 0 8px;font-size:18px;font-weight:700;color:${BRAND_DARK};">Welcome aboard, ${esc(companyName)}! 🎉</p>
     <p style="margin:0 0 20px;font-size:15px;color:#374151;line-height:1.6;">
       Your rental management account has been created and is ready to use. Below are your login credentials — keep them safe.
     </p>
@@ -441,7 +441,7 @@ export async function sendVerificationEmail(opts: {
   const body = `
     <p style="margin:0 0 8px;font-size:18px;font-weight:700;color:${BRAND_DARK};">Verify your email address</p>
     <p style="margin:0 0 20px;font-size:15px;color:#374151;line-height:1.6;">
-      Thanks for signing up, <strong>${companyName}</strong>! Click the button below to verify your email address
+      Thanks for signing up, <strong>${esc(companyName)}</strong>! Click the button below to verify your email address
       and activate your OutdoorShare account. This link expires in <strong>24 hours</strong>.
     </p>
 
@@ -489,7 +489,7 @@ export async function sendAccountUpdatedEmail(opts: {
   const body = `
     <p style="margin:0 0 8px;font-size:18px;font-weight:700;color:${BRAND_DARK};">Your account has been updated</p>
     <p style="margin:0 0 20px;font-size:15px;color:#374151;line-height:1.6;">
-      Your <strong>OutdoorShare</strong> account for <strong>${companyName}</strong> was updated by the platform administrator.
+      Your <strong>OutdoorShare</strong> account for <strong>${esc(companyName)}</strong> was updated by the platform administrator.
       ${passwordChanged && newPassword ? "Your password has been changed — please update it after logging in." : "Review the details below."}
     </p>
 
@@ -544,10 +544,10 @@ export async function sendPickupLinkEmail(opts: {
     : "Pre-Pickup Photo Check Required";
 
   const intro = hostPickup
-    ? `Hi <strong>${esc(customerName)}</strong>, your host at <strong>${companyName}</strong> has completed the equipment handoff for your rental.
+    ? `Hi <strong>${esc(customerName)}</strong>, your host at <strong>${esc(companyName)}</strong> has completed the equipment handoff for your rental.
        Please take a moment to photograph the equipment's current condition using the link below.
        These photos are your record and protect you against any future damage claims.`
-    : `Hi <strong>${esc(customerName)}</strong>, it's almost time to pick up your rental from <strong>${companyName}</strong>.
+    : `Hi <strong>${esc(customerName)}</strong>, it's almost time to pick up your rental from <strong>${esc(companyName)}</strong>.
        Before pickup, please document the condition of the equipment by uploading photos using the link below.
        These photos protect you in case of any future damage claims.`;
 
@@ -621,12 +621,12 @@ export async function sendClaimChargeEmail(opts: {
   const body = `
     <p style="margin:0 0 8px;font-size:18px;font-weight:700;color:${BRAND_DARK};">Damage Charge Notice</p>
     <p style="margin:0 0 20px;font-size:15px;color:#374151;line-height:1.6;">
-      Dear <strong>${esc(customerName)}</strong>, a damage charge of <strong>$${amount.toFixed(2)}</strong> has been issued by <strong>${tenantName}</strong> in connection with your recent rental. ${modeDesc}
+      Dear <strong>${esc(customerName)}</strong>, a damage charge of <strong>$${amount.toFixed(2)}</strong> has been issued by <strong>${esc(tenantName)}</strong> in connection with your recent rental. ${modeDesc}
     </p>
     ${infoTable(tableRows)}
     ${paymentUrl ? ctaButton(mode === "link" ? "Pay Now" : "View Invoice", paymentUrl, "#dc2626") : ""}
     <p style="margin:0;font-size:13px;color:#9ca3af;text-align:center;">
-      If you believe this charge is in error, please contact ${tenantName} directly or reply to this email.
+      If you believe this charge is in error, please contact ${esc(tenantName)} directly or reply to this email.
     </p>
   `;
 
@@ -710,7 +710,7 @@ export async function sendKioskAccountSetupEmail(opts: {
   const body = `
     <p style="margin:0 0 8px;font-size:18px;font-weight:700;color:${BRAND_DARK};">Your booking is confirmed, ${esc(customerName)}!</p>
     <p style="margin:0 0 20px;font-size:15px;color:#374151;line-height:1.6;">
-      Thank you for booking with <strong>${companyName}</strong>. Your rental has been reserved — see the details below.
+      Thank you for booking with <strong>${esc(companyName)}</strong>. Your rental has been reserved — see the details below.
     </p>
 
     ${infoTable([
@@ -781,7 +781,7 @@ export async function sendClaimAlertEmail(opts: {
   const body = `
     <p style="margin:0 0 8px;font-size:18px;font-weight:700;color:${BRAND_DARK};">New Claim Submitted</p>
     <p style="margin:0 0 20px;font-size:15px;color:#374151;line-height:1.6;">
-      A new <strong>${typeLabel}</strong> claim has been filed for <strong>${companyName}</strong> and requires your attention.
+      A new <strong>${esc(typeLabel)}</strong> claim has been filed for <strong>${esc(companyName)}</strong> and requires your attention.
     </p>
     ${infoTable(tableRows)}
     ${ctaButton("Review Claim in Console", claimsUrl, "#dc2626")}
@@ -843,7 +843,7 @@ export async function sendClaimStatusAlertEmail(opts: {
   const body = `
     <p style="margin:0 0 8px;font-size:18px;font-weight:700;color:${BRAND_DARK};">Claim Status Updated</p>
     <p style="margin:0 0 20px;font-size:15px;color:#374151;line-height:1.6;">
-      Claim <strong>#${claimId}</strong> for <strong>${companyName}</strong> has been updated to
+      Claim <strong>#${claimId}</strong> for <strong>${esc(companyName)}</strong> has been updated to
       <strong style="color:${badgeColor};">${capitalize(newStatus)}</strong>.
     </p>
     ${infoTable(tableRows)}
@@ -903,20 +903,20 @@ export async function sendClaimSettlementEmail(opts: {
 
   const refundColor = noRefund ? "#dc2626" : "#16a34a";
   const refundNote = noRefund
-    ? `After review, <strong>${companyName}</strong> has determined that no refund is applicable and has retained the full security deposit of <strong>$${chargedAmount.toFixed(2)}</strong>.`
-    : `After review, <strong>${companyName}</strong> has resolved this claim. A refund of <strong style="color:#16a34a;">$${refundAmount.toFixed(2)}</strong> will be returned to your original payment method within 5–10 business days.`;
+    ? `After review, <strong>${esc(companyName)}</strong> has determined that no refund is applicable and has retained the full security deposit of <strong>$${chargedAmount.toFixed(2)}</strong>.`
+    : `After review, <strong>${esc(companyName)}</strong> has resolved this claim. A refund of <strong style="color:#16a34a;">$${refundAmount.toFixed(2)}</strong> will be returned to your original payment method within 5–10 business days.`;
 
   const body = `
     <p style="margin:0 0 8px;font-size:18px;font-weight:700;color:${BRAND_DARK};">Your Claim Has Been Resolved</p>
     <p style="margin:0 0 20px;font-size:15px;color:#374151;line-height:1.6;">
-      Dear <strong>${esc(customerName)}</strong>, your ${typeLabel.toLowerCase()} claim (<strong>#${claimId}</strong>) with <strong>${companyName}</strong> has been fully resolved.
+      Dear <strong>${esc(customerName)}</strong>, your ${typeLabel.toLowerCase()} claim (<strong>#${claimId}</strong>) with <strong>${esc(companyName)}</strong> has been fully resolved.
     </p>
     ${infoTable(tableRows)}
     <div style="background:${noRefund ? "#fef2f2" : "#f0fdf4"};border:1px solid ${noRefund ? "#fecaca" : "#bbf7d0"};border-radius:8px;padding:16px;margin:24px 0;">
       <p style="margin:0;font-size:14px;color:${refundColor};line-height:1.6;">${refundNote}</p>
     </div>
     <p style="margin:0;font-size:13px;color:#9ca3af;text-align:center;">
-      Questions? Reply to this email or contact <strong>${companyName}</strong> directly.
+      Questions? Reply to this email or contact <strong>${esc(companyName)}</strong> directly.
     </p>
   `;
 
@@ -1067,7 +1067,7 @@ export async function sendBookingPickupReminderEmail(opts: {
   const body = `
     <p style="margin:0 0 8px;font-size:18px;font-weight:700;color:${BRAND_DARK};">Your booking is confirmed, ${esc(customerName)}!</p>
     <p style="margin:0 0 20px;font-size:15px;color:#374151;line-height:1.6;">
-      Thank you for booking with <strong>${companyName}</strong>. Your rental is all set — see the details below.
+      Thank you for booking with <strong>${esc(companyName)}</strong>. Your rental is all set — see the details below.
     </p>
 
     ${infoTable([
@@ -1102,7 +1102,7 @@ export async function sendBookingPickupReminderEmail(opts: {
     ` : ""}
 
     <p style="margin:0;font-size:13px;color:#9ca3af;text-align:center;">
-      Questions? Reply to this email and <strong>${companyName}</strong> will get back to you.
+      Questions? Reply to this email and <strong>${esc(companyName)}</strong> will get back to you.
     </p>
   `;
 
@@ -1215,7 +1215,7 @@ export async function sendReadyToAdventureEmail(opts: {
 
     <p style="margin:0;font-size:14px;color:#374151;line-height:1.6;text-align:center;">
       Please return your rental by <strong>${endDate}</strong>.<br />
-      Questions along the way? Reply to this email and <strong>${companyName}</strong> will be happy to help.
+      Questions along the way? Reply to this email and <strong>${esc(companyName)}</strong> will be happy to help.
     </p>
   `;
 
@@ -1440,7 +1440,7 @@ export async function sendContactCardEmail(opts: {
   const body = `
     <p style="margin:0 0 8px;font-size:18px;font-weight:700;color:${BRAND_DARK};">Your rental is confirmed! 🎉</p>
     <p style="margin:0 0 20px;font-size:15px;color:#374151;line-height:1.6;">
-      Hi ${esc(customerName)}, your booking with <strong>${companyName}</strong> has been approved. Here's everything you need to know to prepare for your rental.
+      Hi ${esc(customerName)}, your booking with <strong>${esc(companyName)}</strong> has been approved. Here's everything you need to know to prepare for your rental.
     </p>
 
     ${infoTable(rows)}
@@ -1448,7 +1448,7 @@ export async function sendContactCardEmail(opts: {
     ${instructionsBlock}
 
     <p style="margin:24px 0 0;font-size:13px;color:#6b7280;text-align:center;">
-      Questions? Reach out to ${companyName} directly using the contact details above.
+      Questions? Reach out to ${esc(companyName)} directly using the contact details above.
     </p>
   `;
 
@@ -1505,7 +1505,7 @@ export async function sendAdminBookingContactEmail(opts: {
   const body = `
     <p style="margin:0 0 8px;font-size:18px;font-weight:700;color:${BRAND_DARK};">New booking confirmed</p>
     <p style="margin:0 0 20px;font-size:15px;color:#374151;line-height:1.6;">
-      A booking has been confirmed for <strong>${companyName}</strong>. Here is the renter's contact information so you can coordinate the pickup.
+      A booking has been confirmed for <strong>${esc(companyName)}</strong>. Here is the renter's contact information so you can coordinate the pickup.
     </p>
 
     ${infoTable(rows)}
@@ -1556,7 +1556,7 @@ export async function sendPrePickupReminderRenterEmail(opts: {
   const body = `
     <p style="margin:0 0 8px;font-size:18px;font-weight:700;color:${BRAND_DARK};">Your rental starts soon, ${esc(customerName)}!</p>
     <p style="margin:0 0 20px;font-size:15px;color:#374151;line-height:1.6;">
-      This is a reminder that your <strong>${esc(listingTitle)}</strong> rental at <strong>${companyName}</strong> is coming up.
+      This is a reminder that your <strong>${esc(listingTitle)}</strong> rental at <strong>${esc(companyName)}</strong> is coming up.
     </p>
 
     ${infoTable([
@@ -1581,7 +1581,7 @@ export async function sendPrePickupReminderRenterEmail(opts: {
     </div>
 
     ${bookingUrl ? ctaButton("View Your Booking", bookingUrl, BRAND_DARK) : ""}
-    <p style="margin:0;font-size:13px;color:#9ca3af;text-align:center;">Questions? Reply to this email — <strong>${companyName}</strong> will get back to you.</p>
+    <p style="margin:0;font-size:13px;color:#9ca3af;text-align:center;">Questions? Reply to this email — <strong>${esc(companyName)}</strong> will get back to you.</p>
   `;
 
   const html = emailShell({
@@ -1679,7 +1679,7 @@ export async function sendReturnReminderRenterEmail(opts: {
   const body = `
     <p style="margin:0 0 8px;font-size:18px;font-weight:700;color:${BRAND_DARK};">Return reminder — due tomorrow, ${esc(customerName)}</p>
     <p style="margin:0 0 20px;font-size:15px;color:#374151;line-height:1.6;">
-      Your <strong>${esc(listingTitle)}</strong> rental is due back to <strong>${companyName}</strong> tomorrow (<strong>${endDate}</strong>).
+      Your <strong>${esc(listingTitle)}</strong> rental is due back to <strong>${esc(companyName)}</strong> tomorrow (<strong>${endDate}</strong>).
       Please plan your return in advance to avoid any late fees.
     </p>
 
@@ -1706,7 +1706,7 @@ export async function sendReturnReminderRenterEmail(opts: {
     </div>
 
     ${bookingUrl ? ctaButton("View Your Booking", bookingUrl, "#1d4ed8") : ""}
-    <p style="margin:0;font-size:13px;color:#9ca3af;text-align:center;">Questions about your return? Reply to this email — <strong>${companyName}</strong> will help.</p>
+    <p style="margin:0;font-size:13px;color:#9ca3af;text-align:center;">Questions about your return? Reply to this email — <strong>${esc(companyName)}</strong> will help.</p>
   `;
 
   const html = emailShell({
@@ -1782,7 +1782,7 @@ export async function sendChatReplyToRenterEmail(opts: {
   const body = `
     <p style="margin:0 0 8px;font-size:18px;font-weight:700;color:${BRAND_DARK};">You have a reply, ${renterName}!</p>
     <p style="margin:0 0 20px;font-size:15px;color:#374151;line-height:1.6;">
-      ${companyName} replied to your message.
+      ${esc(companyName)} replied to your message.
     </p>
 
     ${infoTable([
@@ -1835,7 +1835,7 @@ export async function sendReturnLinkEmail(opts: {
   const body = `
     <p style="margin:0 0 8px;font-size:18px;font-weight:700;color:${BRAND_DARK};">Return Photo Documentation</p>
     <p style="margin:0 0 20px;font-size:15px;color:#374151;line-height:1.6;">
-      Hi <strong>${esc(customerName)}</strong>, thank you for returning your rental to <strong>${companyName}</strong>.
+      Hi <strong>${esc(customerName)}</strong>, thank you for returning your rental to <strong>${esc(companyName)}</strong>.
       Please document the equipment's condition at return by uploading photos using the link below.
       These photos protect you against any after-the-fact damage claims.
     </p>
@@ -1907,7 +1907,7 @@ export async function sendStripeRestrictedAlertEmail(opts: {
       ${isReminder ? "Reminder: Stripe Payments Still Paused" : "Stripe Payments Have Been Paused"}
     </p>
     <p style="margin:0 0 20px;font-size:15px;color:#374151;line-height:1.6;">
-      Hi <strong>${companyName}</strong>,${isReminder ? " we wanted to follow up —" : ""} Stripe has <strong>temporarily paused payments</strong> on your account.
+      Hi <strong>${esc(companyName)}</strong>,${isReminder ? " we wanted to follow up —" : ""} Stripe has <strong>temporarily paused payments</strong> on your account.
       Renters will not be able to complete bookings until this is resolved.
     </p>
 
@@ -1981,7 +1981,7 @@ export async function sendAgreementLinkEmail(opts: {
   const body = `
     <p style="margin:0 0 8px;font-size:18px;font-weight:700;color:${BRAND_DARK};">Your rental agreement is ready to sign</p>
     <p style="margin:0 0 20px;font-size:15px;color:#374151;line-height:1.6;">
-      Hi <strong>${esc(customerName)}</strong>, your upcoming rental with <strong>${companyName}</strong> requires you to review and sign the rental agreement before pickup.
+      Hi <strong>${esc(customerName)}</strong>, your upcoming rental with <strong>${esc(companyName)}</strong> requires you to review and sign the rental agreement before pickup.
       Please click the button below to complete this step.
     </p>
     ${infoTable(tableRows)}
@@ -1992,7 +1992,7 @@ export async function sendAgreementLinkEmail(opts: {
     </div>
     ${ctaButton("Sign Rental Agreement →", agreementUrl, BRAND_GREEN)}
     <p style="margin:0;font-size:13px;color:#9ca3af;text-align:center;line-height:1.6;">
-      Questions? Contact <strong>${companyName}</strong> directly.
+      Questions? Contact <strong>${esc(companyName)}</strong> directly.
     </p>
   `;
 
@@ -2022,7 +2022,7 @@ export async function sendIdentityVerificationEmail(opts: {
   const body = `
     <p style="margin:0 0 8px;font-size:18px;font-weight:700;color:${BRAND_DARK};">Identity verification required</p>
     <p style="margin:0 0 20px;font-size:15px;color:#374151;line-height:1.6;">
-      Hi <strong>${esc(customerName)}</strong>, <strong>${companyName}</strong> requires identity verification before your rental of <strong>${esc(listingTitle)}</strong>.
+      Hi <strong>${esc(customerName)}</strong>, <strong>${esc(companyName)}</strong> requires identity verification before your rental of <strong>${esc(listingTitle)}</strong>.
       This is a quick, secure process powered by Stripe that takes under 2 minutes.
     </p>
     <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:14px 18px;margin:20px 0;">
@@ -2034,8 +2034,8 @@ export async function sendIdentityVerificationEmail(opts: {
     </div>
     ${ctaButton("Verify My Identity →", verificationUrl, BRAND_GREEN)}
     <p style="margin:0;font-size:13px;color:#9ca3af;text-align:center;line-height:1.6;">
-      Your information is encrypted and handled securely by Stripe. <strong>${companyName}</strong> does not store your ID.<br/>
-      Questions? Contact <strong>${companyName}</strong> directly.
+      Your information is encrypted and handled securely by Stripe. <strong>${esc(companyName)}</strong> does not store your ID.<br/>
+      Questions? Contact <strong>${esc(companyName)}</strong> directly.
     </p>
   `;
 
@@ -2081,7 +2081,7 @@ export async function sendIncompleteStepsRenterEmail(opts: {
         <p style="margin:0 0 6px;font-size:14px;font-weight:700;color:#dc2626;">🚫 Do not take the equipment yet</p>
         <p style="margin:0;font-size:13px;color:#7f1d1d;line-height:1.6;">
           Your pickup time has passed, but the required steps below are still incomplete.
-          Please complete them immediately and contact <strong>${companyName}</strong> before picking up any equipment.
+          Please complete them immediately and contact <strong>${esc(companyName)}</strong> before picking up any equipment.
         </p>
       </div>`
     : `<div style="background:#fffbeb;border:1px solid #fde68a;border-radius:8px;padding:14px 18px;margin:20px 0;">
@@ -2093,7 +2093,7 @@ export async function sendIncompleteStepsRenterEmail(opts: {
 
   const ctaSection = agreementUrl
     ? ctaButton("Sign Rental Agreement →", agreementUrl, isOverdue ? "#dc2626" : BRAND_GREEN)
-    : `<p style="margin:20px 0 0;font-size:13px;color:#374151;">Please contact <strong>${companyName}</strong> directly to complete these steps${adminEmail ? `: <a href="mailto:${esc(adminEmail)}" style="color:${BRAND_GREEN};">${esc(adminEmail)}</a>` : "."}</p>`;
+    : `<p style="margin:20px 0 0;font-size:13px;color:#374151;">Please contact <strong>${esc(companyName)}</strong> directly to complete these steps${adminEmail ? `: <a href="mailto:${esc(adminEmail)}" style="color:${BRAND_GREEN};">${esc(adminEmail)}</a>` : "."}</p>`;
 
   const body = `
     <p style="margin:0 0 8px;font-size:18px;font-weight:700;color:${BRAND_DARK};">
@@ -2108,7 +2108,7 @@ export async function sendIncompleteStepsRenterEmail(opts: {
     <ul style="margin:0 0 20px;padding-left:20px;">${stepsListHtml}</ul>
     ${ctaSection}
     <p style="margin:20px 0 0;font-size:13px;color:#9ca3af;text-align:center;line-height:1.6;">
-      Questions? Contact <strong>${companyName}</strong> directly.
+      Questions? Contact <strong>${esc(companyName)}</strong> directly.
     </p>
   `;
 
@@ -2237,7 +2237,7 @@ export async function sendPaymentRequestEmail(opts: {
   const body = `
     <p style="margin:0 0 8px;font-size:18px;font-weight:700;color:${BRAND_DARK};">Your rental is reserved — payment required</p>
     <p style="margin:0 0 20px;font-size:15px;color:#374151;line-height:1.6;">
-      Hi <strong>${esc(customerName)}</strong>, <strong>${companyName}</strong> has created a rental booking for you.
+      Hi <strong>${esc(customerName)}</strong>, <strong>${esc(companyName)}</strong> has created a rental booking for you.
       Complete your secure payment below to confirm the reservation. Your booking will remain pending until payment is received.
     </p>
     ${infoTable(tableRows)}
@@ -2249,7 +2249,7 @@ export async function sendPaymentRequestEmail(opts: {
     ${ctaButton("Complete Payment →", paymentUrl, BRAND_GREEN)}
     <p style="margin:0;font-size:13px;color:#9ca3af;text-align:center;line-height:1.6;">
       After payment you will receive a confirmation and instructions for your rental pickup.<br/>
-      Questions? Contact <strong>${companyName}</strong> directly.
+      Questions? Contact <strong>${esc(companyName)}</strong> directly.
     </p>
   `;
 

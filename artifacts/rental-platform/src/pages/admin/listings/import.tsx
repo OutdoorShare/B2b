@@ -3,7 +3,6 @@ import { useState, useRef, useCallback } from "react";
 import { useLocation } from "wouter";
 import { useQueryClient } from "@tanstack/react-query";
 import { getGetListingsQueryKey, useGetCategories } from "@workspace/api-client-react";
-import { read as xlsxRead, utils as xlsxUtils } from "xlsx";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -204,41 +203,40 @@ export default function AdminListingsImport() {
   const warnCount = parsedRows.filter(r => r._warnings.length > 0 && r._errors.length === 0).length;
   const validCount = parsedRows.filter(r => r._errors.length === 0).length;
 
-  const parseFile = useCallback((file: File) => {
+  const parseFile = useCallback(async (file: File) => {
     if (!file) return;
     setFileName(file.name);
-
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      try {
-        const data = e.target?.result;
-        const workbook = xlsxRead(data, { type: "binary" });
-        const sheetName = workbook.SheetNames[0];
-        const sheet = workbook.Sheets[sheetName];
-        const rawRows: any[][] = xlsxUtils.sheet_to_json(sheet, { header: 1, defval: "" });
-
-        if (rawRows.length < 2) {
-          toast({ title: "File appears empty", description: "The spreadsheet needs at least a header row and one data row.", variant: "destructive" });
-          return;
-        }
-
-        const headers: string[] = rawRows[0].map((h: any) => String(h ?? "").trim());
-        const dataRows = rawRows.slice(1).filter(row => row.some((cell: any) => cell !== "" && cell != null));
-
-        const initialMapping: Record<string, string> = {};
-        headers.forEach(h => {
-          initialMapping[h] = COLUMN_MAP[h.toLowerCase()] ?? "";
-        });
-
-        setRawHeaders(headers);
-        setRawDataRows(dataRows);
-        setColumnMapping(initialMapping);
-        setStep("map");
-      } catch (err) {
-        toast({ title: "Failed to parse file", description: "Make sure the file is a valid Excel (.xlsx, .xls) or CSV file.", variant: "destructive" });
+    try {
+      const form = new FormData();
+      form.append("file", file);
+      const res = await fetch(`${BASE}/api/upload/parse-spreadsheet`, { method: "POST", body: form });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        toast({ title: "Failed to parse file", description: err.error ?? "Make sure the file is a valid .xlsx or .csv file.", variant: "destructive" });
+        return;
       }
-    };
-    reader.readAsBinaryString(file);
+      const { rows }: { rows: string[][] } = await res.json();
+
+      if (rows.length < 2) {
+        toast({ title: "File appears empty", description: "The spreadsheet needs at least a header row and one data row.", variant: "destructive" });
+        return;
+      }
+
+      const headers: string[] = rows[0].map((h) => String(h ?? "").trim());
+      const dataRows = rows.slice(1).filter(row => row.some((cell) => cell !== "" && cell != null));
+
+      const initialMapping: Record<string, string> = {};
+      headers.forEach(h => {
+        initialMapping[h] = COLUMN_MAP[h.toLowerCase()] ?? "";
+      });
+
+      setRawHeaders(headers);
+      setRawDataRows(dataRows);
+      setColumnMapping(initialMapping);
+      setStep("map");
+    } catch {
+      toast({ title: "Failed to parse file", description: "Make sure the file is a valid .xlsx or .csv file.", variant: "destructive" });
+    }
   }, [toast]);
 
   const applyMapping = useCallback(() => {
@@ -339,8 +337,7 @@ export default function AdminListingsImport() {
     if (fileInputRef.current) fileInputRef.current.value = "";
   };
 
-  const downloadTemplate = async () => {
-    const { utils, writeFile } = await import("xlsx");
+  const downloadTemplate = () => {
     const headers = [
       "title", "description", "category", "price_per_day", "price_per_week",
       "price_per_hour", "deposit_amount", "quantity", "status", "brand",
@@ -356,11 +353,16 @@ export default function AdminListingsImport() {
       "Lake Powell Marina", "400 lbs", "122\" x 45\" x 42\"",
       "Valid driver license required", "18", "Life jacket, safety lanyard",
     ];
-    const ws = utils.aoa_to_sheet([headers, example]);
-    ws["!cols"] = headers.map(() => ({ wch: 20 }));
-    const wb = utils.book_new();
-    utils.book_append_sheet(wb, ws, "Listings");
-    writeFile(wb, "listings-import-template.xlsx");
+    const csvContent = [headers, example]
+      .map(row => row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(","))
+      .join("\n");
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "listings-import-template.csv";
+    a.click();
+    URL.revokeObjectURL(url);
   };
 
   return (
