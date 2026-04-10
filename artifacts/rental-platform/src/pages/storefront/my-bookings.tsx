@@ -106,6 +106,10 @@ type RenterBooking = {
   lastAdminReminderSentAt?: string | null;
   pickupPhotos?: string[];
   returnPhotos?: string[];
+  paymentPlanEnabled?: boolean | null;
+  splitRemainingAmount?: string | null;
+  splitRemainingStatus?: string | null;
+  splitRemainingDueDate?: string | null;
 };
 
 type CustomerProfile = {
@@ -182,6 +186,12 @@ export default function MyBookings() {
   const upcomingCount = bookings.filter(b =>
     b.status !== "cancelled" && startOfDay(parseISO(b.startDate)) >= startOfDay(new Date())
   ).length;
+  const unpaidBookings = bookings.filter(b =>
+    b.paymentPlanEnabled &&
+    b.splitRemainingStatus !== "charged" &&
+    b.splitRemainingStatus !== "waived" &&
+    b.status !== "cancelled"
+  );
 
   return (
     <div className="min-h-screen" style={{ background: "linear-gradient(160deg,#f0f4f0 0%,#f5f7fa 100%)" }}>
@@ -263,6 +273,44 @@ export default function MyBookings() {
               </div>
               <ArrowRight className="h-4 w-4 text-white/30 group-hover:text-white/70 group-hover:translate-x-1 transition-all flex-shrink-0" />
             </button>
+          )}
+
+          {/* Outstanding balance banner — shown for every unpaid split-payment booking */}
+          {unpaidBookings.length > 0 && (
+            <div className="mt-4 rounded-2xl border border-red-400/50 bg-red-500/20 overflow-hidden">
+              <div className="px-4 py-2.5 bg-red-500/30 flex items-center gap-2">
+                <AlertCircle className="h-4 w-4 text-red-300 shrink-0 animate-pulse" />
+                <p className="text-[11px] font-black uppercase tracking-widest text-red-200">
+                  {unpaidBookings.length === 1 ? "Balance Due" : `${unpaidBookings.length} Balances Due`}
+                </p>
+              </div>
+              <div className="divide-y divide-red-400/20">
+                {unpaidBookings.map(b => {
+                  const slug = b.tenantSlug ? `/${b.tenantSlug}` : base;
+                  const amt = parseFloat(String(b.splitRemainingAmount ?? "0"));
+                  const isFailed = b.splitRemainingStatus === "failed";
+                  return (
+                    <button
+                      key={b.id}
+                      onClick={() => setLocation(`${slug}/my-bookings/${b.id}`)}
+                      className="w-full group px-4 py-3 flex items-center gap-3 hover:bg-red-500/10 transition-colors text-left"
+                    >
+                      <div className="flex-1 min-w-0">
+                        <p className="text-white font-bold text-sm line-clamp-1">{b.listingTitle}</p>
+                        <p className="text-red-300 text-xs mt-0.5 font-medium">
+                          {isFailed ? "Payment failed — action required" : b.splitRemainingDueDate ? `Due ${b.splitRemainingDueDate}` : "Payment pending"}
+                        </p>
+                      </div>
+                      <div className="shrink-0 text-right">
+                        <p className="text-white font-black text-base">${amt.toFixed(2)}</p>
+                        <p className="text-red-300 text-[10px] font-semibold uppercase">owed</p>
+                      </div>
+                      <ArrowRight className="h-4 w-4 text-red-300/50 group-hover:text-red-200 group-hover:translate-x-1 transition-all shrink-0" />
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
           )}
         </div>
 

@@ -382,6 +382,45 @@ export default function MyBookingDetail() {
         </div>
       )}
 
+      {/* ── Outstanding balance alert — shown prominently when a split-payment balance is unpaid ── */}
+      {(booking as any).paymentPlanEnabled &&
+        (booking as any).splitRemainingStatus !== "charged" &&
+        (booking as any).splitRemainingStatus !== "waived" && (
+        <div className="rounded-2xl border-2 border-red-400 bg-red-50 overflow-hidden shadow-sm">
+          <div className="flex items-center gap-3 bg-red-500 px-5 py-3">
+            <AlertCircle className="w-5 h-5 text-white shrink-0 animate-pulse" />
+            <p className="font-black text-white text-sm uppercase tracking-wide">
+              {(booking as any).splitRemainingStatus === "failed" ? "Payment Failed — Action Required" : "Balance Due"}
+            </p>
+          </div>
+          <div className="px-5 py-4 space-y-3">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-red-900 font-semibold text-base">Remaining balance owed</p>
+                {(booking as any).splitRemainingStatus === "failed" ? (
+                  <p className="text-red-600 text-sm mt-0.5">Your payment could not be processed. Please contact us to resolve this balance before your rental can proceed.</p>
+                ) : (booking as any).splitRemainingDueDate ? (
+                  <p className="text-red-600 text-sm mt-0.5">Auto-charged on <strong>{(booking as any).splitRemainingDueDate}</strong></p>
+                ) : (
+                  <p className="text-red-600 text-sm mt-0.5">This amount will be charged when your rental is confirmed.</p>
+                )}
+              </div>
+              <p className="text-3xl font-black text-red-700 shrink-0 ml-4">
+                ${parseFloat(String((booking as any).splitRemainingAmount ?? 0)).toFixed(2)}
+              </p>
+            </div>
+            {(booking as any).splitRemainingStatus === "failed" && (
+              <a
+                href={`mailto:${booking.tenantSlug ? "" : "us"}`}
+                className="block w-full text-center rounded-xl bg-red-600 hover:bg-red-700 text-white font-bold py-2.5 text-sm transition-colors"
+              >
+                Contact Us to Resolve
+              </a>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* Title + Status */}
       <div className="flex items-start justify-between gap-3 flex-wrap">
         <div>

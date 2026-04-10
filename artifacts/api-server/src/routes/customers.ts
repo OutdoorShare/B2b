@@ -418,6 +418,11 @@ router.get("/admin/renters/:email/bookings", async (req, res) => {
         customerEmail: bookingsTable.customerEmail,
         customerPhone: bookingsTable.customerPhone,
         source: bookingsTable.source,
+        paymentPlanEnabled: bookingsTable.paymentPlanEnabled,
+        splitDepositAmount: bookingsTable.splitDepositAmount,
+        splitRemainingAmount: bookingsTable.splitRemainingAmount,
+        splitRemainingStatus: bookingsTable.splitRemainingStatus,
+        splitRemainingDueDate: bookingsTable.splitRemainingDueDate,
       })
       .from(bookingsTable)
       .where(and(

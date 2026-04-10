@@ -8,7 +8,7 @@ import {
   Search, Users, Trophy, Phone, Mail, CalendarDays,
   ChevronRight, X, ExternalLink, Star, TrendingUp,
   ShieldCheck, Clock, Package, CreditCard, Hash,
-  ArrowUpDown, SortAsc, Copy, Check,
+  ArrowUpDown, SortAsc, Copy, Check, AlertCircle,
 } from "lucide-react";
 import { getAdminSession, adminPath } from "@/lib/admin-nav";
 
@@ -39,6 +39,11 @@ interface RenterBooking {
   status: string;
   createdAt: string;
   source: string;
+  paymentPlanEnabled?: boolean | null;
+  splitDepositAmount?: string | null;
+  splitRemainingAmount?: string | null;
+  splitRemainingStatus?: string | null;
+  splitRemainingDueDate?: string | null;
 }
 
 function initials(name: string) {
@@ -211,6 +216,47 @@ function RenterPanel({
           <span>Last booking <strong className="text-foreground">{fmt(renter.lastBooking)}</strong></span>
         </div>
       </div>
+
+      {/* Outstanding balance alert */}
+      {(() => {
+        const unpaid = bookings.filter(b =>
+          b.paymentPlanEnabled &&
+          b.splitRemainingStatus !== "charged" &&
+          b.splitRemainingStatus !== "waived" &&
+          b.status !== "cancelled"
+        );
+        if (unpaid.length === 0) return null;
+        const totalOwed = unpaid.reduce((s, b) => s + parseFloat(String(b.splitRemainingAmount ?? "0")), 0);
+        return (
+          <div className="mx-4 mt-3 mb-1 rounded-xl border-2 border-red-300 bg-red-50 overflow-hidden">
+            <div className="flex items-center gap-2 bg-red-500 px-3 py-2">
+              <AlertCircle className="w-4 h-4 text-white shrink-0 animate-pulse" />
+              <p className="text-white font-black text-xs uppercase tracking-widest">
+                {unpaid.length === 1 ? "Outstanding Balance" : `${unpaid.length} Outstanding Balances`}
+              </p>
+              <p className="ml-auto text-white font-black text-sm">${totalOwed.toFixed(2)} total</p>
+            </div>
+            <ul className="divide-y divide-red-200">
+              {unpaid.map(b => (
+                <Link key={b.id} href={adminPath(`/bookings/${b.id}`)}>
+                  <div className="px-3 py-2.5 hover:bg-red-100 transition-colors cursor-pointer flex items-center justify-between gap-3 group">
+                    <div className="min-w-0">
+                      <p className="font-semibold text-sm text-red-900 truncate">{b.listingTitle}</p>
+                      <p className="text-xs text-red-600 mt-0.5">
+                        {b.splitRemainingStatus === "failed" ? "⚠ Payment failed" : b.splitRemainingDueDate ? `Due ${b.splitRemainingDueDate}` : "Balance pending"}
+                      </p>
+                    </div>
+                    <div className="shrink-0 flex items-center gap-2">
+                      <p className="font-black text-red-700">${parseFloat(String(b.splitRemainingAmount ?? "0")).toFixed(2)}</p>
+                      <ChevronRight className="w-3.5 h-3.5 text-red-400 opacity-0 group-hover:opacity-100 transition-opacity" />
+                    </div>
+                  </div>
+                </Link>
+              ))}
+            </ul>
+          </div>
+        );
+      })()}
 
       {/* Booking history */}
       <div className="flex-1 overflow-y-auto">

@@ -19,7 +19,7 @@ import { useToast } from "@/hooks/use-toast";
 import { 
   ArrowLeft, ArrowRight, CheckCircle2, Calendar as CalendarIcon,
   Lock, User, CreditCard, FileText, Eye, EyeOff, ShieldCheck,
-  Zap, AlertTriangle, Umbrella, Star, Loader2, BadgeCheck,
+  Zap, AlertTriangle, AlertCircle, Umbrella, Star, Loader2, BadgeCheck,
   ScanFace, RefreshCw, XCircle, Clock, Tag, Monitor, QrCode, Smartphone,
   ScanLine, X, Copy, Check, Upload, ImagePlus, Car, Mountain, BookOpen, Building2, Package,
   Minus, Plus, LogIn, MapPin, Phone, Mail, IdCard, ExternalLink,
@@ -692,6 +692,7 @@ export default function StorefrontBook() {
 
   const [customerBookings, setCustomerBookings] = useState<any[]>([]);
   const [bookingsLoading, setBookingsLoading] = useState(false);
+  const [sessionOutstandingBookings, setSessionOutstandingBookings] = useState<any[]>([]);
 
   // Add-ons
   const [availableAddons, setAvailableAddons] = useState<Addon[]>([]);
@@ -896,6 +897,24 @@ export default function StorefrontBook() {
       .catch(() => {})
       .finally(() => setBookingsLoading(false));
   }, [completePhase, email]);
+
+  // When a session is established, check for any outstanding split-payment balances
+  useEffect(() => {
+    if (!session?.email) { setSessionOutstandingBookings([]); return; }
+    fetch(`${BASE}/api/bookings?customerEmail=${encodeURIComponent(session.email)}`)
+      .then(r => r.json())
+      .then(data => {
+        if (!Array.isArray(data)) return;
+        const unpaid = data.filter((b: any) =>
+          b.paymentPlanEnabled &&
+          b.splitRemainingStatus !== "charged" &&
+          b.splitRemainingStatus !== "waived" &&
+          b.status !== "cancelled"
+        );
+        setSessionOutstandingBookings(unpaid);
+      })
+      .catch(() => {});
+  }, [session?.email]);
 
   // Auto-launch effect is declared after handleStartVerification (below) to avoid TDZ
 
@@ -2762,6 +2781,42 @@ export default function StorefrontBook() {
                         <p className="text-xs text-muted-foreground">{session.email}</p>
                       </div>
                       <button onClick={() => { localStorage.removeItem("rental_customer"); setSession(null); setName(""); setEmail(""); setPhone(""); }} className="ml-auto text-xs text-muted-foreground hover:text-foreground underline">Log out</button>
+                    </div>
+                  )}
+
+                  {/* Outstanding balance warning — shown when the logged-in renter has unpaid balances */}
+                  {sessionOutstandingBookings.length > 0 && (
+                    <div className="mb-4 rounded-xl border-2 border-red-400 bg-red-50 overflow-hidden">
+                      <div className="flex items-center gap-2 bg-red-500 px-4 py-2.5">
+                        <AlertCircle className="w-4 h-4 text-white shrink-0 animate-pulse" />
+                        <p className="text-white font-black text-xs uppercase tracking-widest">
+                          You Have an Outstanding Balance
+                        </p>
+                      </div>
+                      <div className="px-4 py-3 space-y-2">
+                        <p className="text-red-800 text-sm font-medium">
+                          Please resolve the following unpaid balance{sessionOutstandingBookings.length !== 1 ? "s" : ""} before placing a new booking:
+                        </p>
+                        {sessionOutstandingBookings.map((b: any) => {
+                          const amt = parseFloat(String(b.splitRemainingAmount ?? "0"));
+                          const bSlug = b.tenantSlug ? `/${b.tenantSlug}` : `/${slug}`;
+                          return (
+                            <a
+                              key={b.id}
+                              href={`${BASE}${bSlug}/my-bookings/${b.id}`}
+                              className="flex items-center justify-between gap-3 rounded-lg border border-red-200 bg-white px-3 py-2 hover:bg-red-50 transition-colors group"
+                            >
+                              <div className="min-w-0">
+                                <p className="font-semibold text-sm text-red-900 truncate">{b.listingTitle}</p>
+                                <p className="text-xs text-red-500 mt-0.5">
+                                  {b.splitRemainingStatus === "failed" ? "Payment failed — contact us" : b.splitRemainingDueDate ? `Due ${b.splitRemainingDueDate}` : "Balance pending"}
+                                </p>
+                              </div>
+                              <p className="font-black text-red-700 shrink-0">${amt.toFixed(2)} owed</p>
+                            </a>
+                          );
+                        })}
+                      </div>
                     </div>
                   )}
 
