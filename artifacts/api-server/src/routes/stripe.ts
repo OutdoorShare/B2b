@@ -1,14 +1,15 @@
 import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
 import { tenantsTable, bookingsTable, customersTable, listingsTable, businessProfileTable } from "@workspace/db/schema";
-import { eq, desc, and, isNull, isNotNull } from "drizzle-orm";
+import { eq, desc, and } from "drizzle-orm";
 import { stripe, getStripeForTenant, PLATFORM_FEE_PERCENT } from "../services/stripe";
 import { sendStripeRestrictedAlertEmail, sendPaymentRequestEmail } from "../services/gmail";
+import { triggerAvailablePayout, sweepPendingPayouts } from "../services/payouts";
 import type { Request } from "express";
 
 const router: IRouter = Router();
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
+// ── Auth helper ───────────────────────────────────────────────────────────────
 function requireAdminAuth(req: Request, res: any, next: any) {
   if (!req.tenantId) {
     res.status(401).json({ error: "Not authenticated" });
@@ -36,29 +37,6 @@ async function setDailyPayoutSchedule(stripeClient: any, accountId: string): Pro
   } catch (e: any) {
     // Non-fatal — log but don't block the caller
     console.error(`[payout-schedule] Could not set schedule for ${accountId}: ${e.message}`);
-  }
-}
-
-/**
- * Trigger an immediate standard payout of the connected account's available balance.
- * Silently no-ops when the balance is zero, funds are still pending, or the account
- * doesn't have a bank account attached yet.
- */
-async function triggerAvailablePayout(stripeClient: any, accountId: string): Promise<void> {
-  try {
-    const balance = await stripeClient.balance.retrieve({ stripeAccount: accountId });
-    const avail = (balance.available ?? []).find((b: any) => b.currency === "usd");
-    const amount = avail?.amount ?? 0;
-    if (amount < 100) return; // nothing meaningful to payout (Stripe minimum is 50 cents)
-
-    await stripeClient.payouts.create(
-      { amount, currency: "usd", method: "standard" },
-      { stripeAccount: accountId },
-    );
-    console.log(`[payout] Triggered $${(amount / 100).toFixed(2)} standard payout for ${accountId}`);
-  } catch (e: any) {
-    // Expected errors: insufficient funds, no bank account, payouts blocked
-    console.log(`[payout] Could not trigger immediate payout for ${accountId}: ${e.message}`);
   }
 }
 
@@ -456,86 +434,6 @@ router.post("/stripe/payment-intent", async (req, res) => {
     res.status(500).json({ error: e.message });
   }
 });
-
-// ── Sweep pending payouts to a newly-connected tenant ─────────────────────────
-// Finds all paid bookings with funds held on platform and transfers owed amount.
-async function sweepPendingPayouts(tenantId: number): Promise<{ swept: number; totalCents: number }> {
-  const [tenant] = await db.select().from(tenantsTable).where(eq(tenantsTable.id, tenantId));
-  if (!tenant?.stripeAccountId || !tenant.stripeChargesEnabled) return { swept: 0, totalCents: 0 };
-  const sweepStripe = getStripeForTenant(!!tenant.testMode);
-
-  // Bookings paid to platform but not yet transferred to tenant
-  const pending = await db.select().from(bookingsTable).where(
-    and(
-      eq(bookingsTable.tenantId, tenantId),
-      eq(bookingsTable.stripePaymentStatus, "paid"),
-      isNotNull(bookingsTable.stripePaymentIntentId),
-      isNull(bookingsTable.stripeTransferId),
-    )
-  );
-
-  const feePercent = tenant.platformFeePercent != null
-    ? parseFloat(tenant.platformFeePercent) / 100
-    : PLATFORM_FEE_PERCENT;
-
-  let swept = 0;
-  let totalCents = 0;
-
-  for (const booking of pending) {
-    // Check if this PI originally had transfer_data (already routed to tenant) by checking metadata
-    try {
-      const pi = await sweepStripe.paymentIntents.retrieve(booking.stripePaymentIntentId!);
-      // If transfer_data was set on the original PI, funds already went to tenant — mark as transferred
-      if ((pi as any).transfer_data?.destination) {
-        await db.update(bookingsTable).set({
-          stripeTransferId: "via_destination",
-          stripeTransferredAt: new Date(),
-          updatedAt: new Date(),
-        }).where(eq(bookingsTable.id, booking.id));
-        continue;
-      }
-      // Funds are on platform — calculate and sweep
-      // Protection plan is kept 100% by platform; feePercent applies only to rental+bundle base.
-      const totalCentsForBooking = Math.round(parseFloat(booking.totalPrice) * 100);
-      const ppCentsForBooking = booking.protectionPlanFee ? Math.round(parseFloat(booking.protectionPlanFee) * 100) : 0;
-      const rentalBaseCents = totalCentsForBooking - ppCentsForBooking;
-      const platformFee = Math.round(rentalBaseCents * feePercent) + ppCentsForBooking;
-      const transferAmt = totalCentsForBooking - platformFee;
-      if (transferAmt < 50) continue; // Stripe minimum
-
-      const transfer = await sweepStripe.transfers.create({
-        amount: transferAmt,
-        currency: "usd",
-        destination: tenant.stripeAccountId,
-        source_transaction: (pi.latest_charge as string) || undefined,
-        metadata: {
-          booking_id: String(booking.id),
-          tenant_id: String(tenantId),
-          type: "platform_payout",
-        },
-        description: `Payout for booking #${booking.id} — ${tenant.name}`,
-      });
-
-      await db.update(bookingsTable).set({
-        stripeTransferId: transfer.id,
-        stripeTransferredAt: new Date(),
-        updatedAt: new Date(),
-      }).where(eq(bookingsTable.id, booking.id));
-
-      swept++;
-      totalCents += transferAmt;
-    } catch (err: any) {
-      console.error(`[sweep] booking ${booking.id} failed:`, err.message);
-    }
-  }
-
-  // After sweeping, try to push whatever is now in the available balance to the bank
-  if (swept > 0) {
-    triggerAvailablePayout(sweepStripe, tenant.stripeAccountId).catch(() => {});
-  }
-
-  return { swept, totalCents };
-}
 
 // POST /stripe/connect/sweep-pending — manually trigger payout sweep (admin)
 router.post("/stripe/connect/sweep-pending", requireAdminAuth, async (req, res) => {

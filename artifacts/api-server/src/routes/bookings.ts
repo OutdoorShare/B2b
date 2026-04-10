@@ -26,6 +26,7 @@ import {
 import { getTenantSmtpCreds, getTenantBrand } from "../services/smtp-helper";
 import { openai } from "@workspace/integrations-openai-ai-server";
 import { getStripeForTenant } from "../services/stripe";
+import { sweepPendingPayouts } from "../services/payouts";
 import { createNotification } from "../services/notifications";
 
 // ── App base URL helper — reads env at call time so deployed apps use the right domain ──
@@ -758,6 +759,17 @@ router.put("/bookings/:id", async (req, res) => {
             await db.update(bookingsTable).set({ stripePaymentStatus: "paid", updatedAt: new Date() })
               .where(eq(bookingsTable.id, updated.id));
             console.log(`[bookings] captured payment for booking #${updated.id}`);
+            // Trigger payout immediately after capture — don't wait for the Stripe webhook
+            if (updated.tenantId) {
+              sweepPendingPayouts(updated.tenantId).catch((e: any) =>
+                console.warn("[bookings] post-capture sweep failed (non-fatal):", e.message)
+              );
+            }
+          } else if (body.status === "confirmed" && pi.status === "succeeded" && updated.tenantId) {
+            // Instant booking — PI already captured; trigger sweep in case the webhook was missed
+            sweepPendingPayouts(updated.tenantId).catch((e: any) =>
+              console.warn("[bookings] post-confirm sweep failed (non-fatal):", e.message)
+            );
           } else if (body.status === "cancelled" && pi.status === "requires_capture") {
             await stripeClient.paymentIntents.cancel(updated.stripePaymentIntentId!);
             await db.update(bookingsTable).set({ stripePaymentStatus: "refunded", updatedAt: new Date() })
