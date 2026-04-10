@@ -1629,34 +1629,63 @@ export default function AdminBookingDetail() {
                       const platformTake = exactFee ?? estimatedPlatformTotal;
                       const yourEarnings = total - platformTake;
 
+                      const netRentalEarnings = rentalBase - estimatedServiceFee;
+                      const keepPercent = 100 - feePercent;
+
                       return (
-                        <div className="rounded-xl bg-emerald-50 border border-emerald-200 p-4 space-y-2.5 mt-1">
+                        <div className="rounded-xl bg-emerald-50 border border-emerald-200 p-4 space-y-3 mt-1">
                           <p className="text-xs font-semibold text-emerald-800 uppercase tracking-wide flex items-center gap-1.5">
                             <DollarSign className="w-3.5 h-3.5" /> Your Earnings
                           </p>
+
+                          {/* Line items */}
                           <div className="space-y-1.5 text-sm">
                             <div className="flex justify-between text-muted-foreground">
-                              <span>Gross booking total</span>
-                              <span className="font-medium text-foreground">${total.toFixed(2)}</span>
+                              <span>Rental fee</span>
+                              <span className="font-medium text-foreground">${rentalBase.toFixed(2)}</span>
                             </div>
-                            {ppFee > 0 && (
-                              <div className="flex justify-between text-muted-foreground">
-                                <span className="flex items-center gap-1">
-                                  <Shield className="w-3 h-3 text-emerald-500" />
-                                  Protection plan (platform)
-                                </span>
-                                <span className="font-medium text-red-500">−${ppFee.toFixed(2)}</span>
-                              </div>
-                            )}
-                            <div className="flex justify-between text-muted-foreground">
-                              <span>
-                                OutdoorShare service fee{exactFee == null ? ` (est. ${feePercent}%)` : ""}
-                              </span>
+                            <div className="flex justify-between text-muted-foreground pl-3 border-l-2 border-emerald-200">
+                              <span>OutdoorShare fee ({feePercent}%)</span>
                               <span className="font-medium text-red-500">
                                 −${exactFee != null ? (exactFee - ppFee).toFixed(2) : estimatedServiceFee.toFixed(2)}
                               </span>
                             </div>
+                            <div className="flex justify-between font-semibold text-emerald-800 pt-0.5">
+                              <span>Net rental earnings</span>
+                              <span>${exactFee != null ? (rentalBase - (exactFee - ppFee)).toFixed(2) : netRentalEarnings.toFixed(2)}</span>
+                            </div>
+
+                            {ppFee > 0 && (
+                              <>
+                                <Separator className="border-emerald-200 my-1" />
+                                <div className="flex justify-between text-muted-foreground">
+                                  <span className="flex items-center gap-1">
+                                    <Shield className="w-3 h-3 text-emerald-500" />
+                                    Protection plan fee
+                                  </span>
+                                  <span className="font-medium text-foreground">${ppFee.toFixed(2)}</span>
+                                </div>
+                                <div className="flex justify-between text-muted-foreground pl-3 border-l-2 border-emerald-200">
+                                  <span>Kept by OutdoorShare</span>
+                                  <span className="font-medium text-red-500">−${ppFee.toFixed(2)}</span>
+                                </div>
+                                <div className="flex justify-between font-semibold text-muted-foreground pt-0.5">
+                                  <span>Net protection earnings</span>
+                                  <span>$0.00</span>
+                                </div>
+                              </>
+                            )}
                           </div>
+
+                          {/* Formula pill */}
+                          <div className="bg-emerald-100 rounded-md px-3 py-1.5 text-xs text-emerald-800 flex items-center justify-between gap-2">
+                            <span className="text-emerald-600">How it's calculated</span>
+                            <span className="font-mono font-semibold">
+                              ${rentalBase.toFixed(2)} × {keepPercent}% = ${exactFee != null ? (rentalBase - (exactFee - ppFee)).toFixed(2) : netRentalEarnings.toFixed(2)}
+                              {ppFee > 0 ? ` rental` : ""}
+                            </span>
+                          </div>
+
                           <Separator className="border-emerald-200" />
                           <div className="flex justify-between items-center">
                             <span className="font-bold text-sm text-emerald-900">
