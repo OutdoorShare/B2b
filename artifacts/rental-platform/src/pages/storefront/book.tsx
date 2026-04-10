@@ -3089,8 +3089,8 @@ export default function StorefrontBook() {
                         </div>
                       ) : (
                         <>
-                          {/* ── Payment Plan Toggle ── */}
-                          {planEnabled && !paymentConfirmed && (
+                          {/* ── Payment Plan Toggle — hidden in kiosk mode ── */}
+                          {planEnabled && !paymentConfirmed && !isKiosk && (
                             <div className="rounded-xl border-2 border-blue-200 bg-blue-50 p-4 mb-4 space-y-3">
                               <div className="flex items-start gap-3">
                                 <div className="mt-0.5">
