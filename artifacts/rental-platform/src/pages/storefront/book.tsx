@@ -1109,10 +1109,10 @@ export default function StorefrontBook() {
     if (hasTimeSlots && selectedTimeSlot) {
       if (selectedTimeSlot.rate === "half_day") {
         const hr = listing?.halfDayRate ? parseFloat(String(listing.halfDayRate)) : null;
-        if (hr) { base = hr; }
-        else { base = fullDayPrice; }
+        if (hr) { base = hr * days; }
+        else { base = fullDayPrice * days; }
       } else {
-        base = fullDayPrice;
+        base = fullDayPrice * days;
       }
     } else if (!isOneDay || !selectedOption) {
       base = fullDayPrice * days;
