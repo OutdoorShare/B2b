@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
+import { getAdminSession } from "@/lib/admin-nav";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -50,10 +51,15 @@ export default function AdminTeam() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
+  const adminToken = () => {
+    const t = getAdminSession()?.token;
+    return t ? { "x-admin-token": t } : {};
+  };
+
   const fetchUsers = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch(`${BASE}/api/admin/team`);
+      const res = await fetch(`${BASE}/api/admin/team`, { headers: adminToken() });
       const data = await res.json();
       if (Array.isArray(data)) setUsers(data);
     } catch {
@@ -90,7 +96,7 @@ export default function AdminTeam() {
       const method = editingUser ? "PUT" : "POST";
       const body: any = { name: form.name, email: form.email, role: form.role, status: form.status, notes: form.notes || null };
       if (form.password) body.password = form.password;
-      const res = await fetch(url, { method, headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+      const res = await fetch(url, { method, headers: { "Content-Type": "application/json", ...adminToken() }, body: JSON.stringify(body) });
       const data = await res.json();
       if (!res.ok) { setError(data.error || "Failed to save"); return; }
       toast({ title: editingUser ? "Team member updated" : "Team member added" });
@@ -104,7 +110,7 @@ export default function AdminTeam() {
   const handleDelete = async () => {
     if (!deleteTarget) return;
     try {
-      const res = await fetch(`${BASE}/api/admin/team/${deleteTarget.id}`, { method: "DELETE" });
+      const res = await fetch(`${BASE}/api/admin/team/${deleteTarget.id}`, { method: "DELETE", headers: adminToken() });
       if (!res.ok) throw new Error();
       toast({ title: "Team member removed" });
       setDeleteTarget(null);
@@ -118,7 +124,7 @@ export default function AdminTeam() {
     const newStatus = user.status === "active" ? "inactive" : "active";
     try {
       const res = await fetch(`${BASE}/api/admin/team/${user.id}`, {
-        method: "PUT", headers: { "Content-Type": "application/json" },
+        method: "PUT", headers: { "Content-Type": "application/json", ...adminToken() },
         body: JSON.stringify({ status: newStatus }),
       });
       if (!res.ok) throw new Error();
