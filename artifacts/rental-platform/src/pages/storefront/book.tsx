@@ -850,6 +850,9 @@ export default function StorefrontBook() {
       .catch(() => {});
   }, [listingId]);
 
+  // Derived early so useEffect dependency array can reference it without TDZ
+  const protectionIsOptional = !!(businessProfile as any)?.protectionPlanOptional;
+
   // When the admin makes protection plan required (not optional), ensure protection addons
   // are re-selected and any opt-out state is cleared.
   useEffect(() => {
@@ -1143,7 +1146,7 @@ export default function StorefrontBook() {
   const platformProtectionFeeBase = primaryProtectionFeeBase + bundleProtectionFeeBase;
   // Renter opt-out: if the company has made the protection plan optional, the renter
   // can decline it. When declined, remove the fee from the total.
-  const protectionIsOptional = !!(businessProfile as any)?.protectionPlanOptional;
+  // (protectionIsOptional is declared earlier to avoid TDZ in useEffect)
   // effectiveProtectionFee is 0 when the renter has opted out
   const platformProtectionFee = protectionIsOptional && protectionDeclined ? 0 : platformProtectionFeeBase;
   // For addon-based protection plans: has the renter deselected an optional protection addon?
