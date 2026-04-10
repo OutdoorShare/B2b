@@ -223,16 +223,25 @@ function emailShell(opts: {
   badgeLabel: string;
   badgeColor: string;
   body: string;
+  /** Explicit logo URL — takes priority over the brand context value. */
+  logoUrlOverride?: string | null;
+  /** Explicit accent color — takes priority over the brand context value. */
+  primaryColorOverride?: string | null;
+  /** Explicit company name — takes priority over the brand context value. */
+  companyNameOverride?: string | null;
 }): string {
   // Pull tenant branding from context (set via withBrand), falling back to platform defaults
-  const brand       = brandStorage.getStore();
-  const accentColor = brand?.primaryColor  || BRAND_GREEN;
-  const companyName = brand?.companyName   || "OutdoorShare";
-  const contactEmail = brand?.contactEmail || "samhos@myoutdoorshare.com";
+  const brand        = brandStorage.getStore();
+  const accentColor  = opts.primaryColorOverride ?? brand?.primaryColor  ?? BRAND_GREEN;
+  const companyName  = opts.companyNameOverride  ?? brand?.companyName   ?? "OutdoorShare";
+  const contactEmail = brand?.contactEmail ?? "samhos@myoutdoorshare.com";
 
-  // Header: tenant logo → tenant name text → platform logo (fallback cascade)
+  // Header: explicit override → brand context logo → brand name text → platform logo (no-brand fallback only)
   // Make relative paths absolute — email clients cannot fetch relative URLs
-  const rawLogoUrl = brand?.logoUrl || (brand ? null : PLATFORM_LOGO_URL);
+  const rawLogoUrl =
+    opts.logoUrlOverride !== undefined
+      ? opts.logoUrlOverride                                // explicit value (may be null = show text)
+      : brand?.logoUrl ?? (brand ? null : PLATFORM_LOGO_URL); // context or platform fallback
   const logoSrc = rawLogoUrl
     ? (rawLogoUrl.startsWith("http") ? rawLogoUrl : `${getAppUrl()}${rawLogoUrl}`)
     : null;
@@ -334,8 +343,12 @@ export async function sendBlastEmail(opts: {
   bodyText: string;
   companyName: string;
   companyEmail?: string | null;
+  /** Tenant logo URL — passed explicitly so the correct logo always shows regardless of async context. */
+  logoUrl?: string | null;
+  /** Tenant primary color hex — passed explicitly for accent color. */
+  primaryColor?: string | null;
 }): Promise<void> {
-  const { toEmail, customerName, subject, bodyText, companyName, companyEmail } = opts;
+  const { toEmail, customerName, subject, bodyText, companyName, companyEmail, logoUrl, primaryColor } = opts;
   const fromHeader = `${companyName} <samhos@myoutdoorshare.com>`;
   const replyTo = companyEmail || undefined;
 
@@ -349,16 +362,21 @@ export async function sendBlastEmail(opts: {
     <p style="margin:0 0 4px;font-size:16px;font-weight:700;color:${BRAND_DARK};">Hi ${esc(customerName)},</p>
     ${bodyHtml}
     <p style="margin:24px 0 0;font-size:14px;color:#6b7280;border-top:1px solid #e5e7eb;padding-top:16px;">
-      &mdash; The team at <strong>${companyName}</strong>
-      ${companyEmail ? `&nbsp;·&nbsp;<a href="mailto:${companyEmail}" style="color:${BRAND_GREEN};">${companyEmail}</a>` : ""}
+      &mdash; The team at <strong>${esc(companyName)}</strong>
+      ${companyEmail ? `&nbsp;·&nbsp;<a href="mailto:${companyEmail}" style="color:${BRAND_GREEN};">${esc(companyEmail)}</a>` : ""}
     </p>
   `;
 
   const html = emailShell({
     preheader: subject,
-    badgeLabel: `Message from ${companyName}`,
+    badgeLabel: `Message from ${esc(companyName)}`,
     badgeColor: BRAND_DARK,
     body,
+    // Pass branding explicitly so the correct tenant logo/color is used
+    // even if the AsyncLocalStorage context was not propagated correctly.
+    logoUrlOverride: logoUrl !== undefined ? logoUrl : undefined,
+    primaryColorOverride: primaryColor ?? undefined,
+    companyNameOverride: companyName,
   });
 
   const gmail = await getUncachableGmailClient();

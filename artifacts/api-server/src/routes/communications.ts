@@ -157,6 +157,8 @@ router.post("/communications/send", async (req, res) => {
             bodyText: body,
             companyName,
             companyEmail,
+            logoUrl: brand?.logoUrl ?? null,
+            primaryColor: brand?.primaryColor ?? null,
           })));
           status = "sent";
         } catch (emailErr: any) {
@@ -262,6 +264,8 @@ router.post("/communications/send-automation", async (req, res) => {
           bodyText: body,
           companyName,
           companyEmail,
+          logoUrl: brand?.logoUrl ?? null,
+          primaryColor: brand?.primaryColor ?? null,
         })));
         status = "sent";
       } catch (emailErr) {
