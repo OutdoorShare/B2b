@@ -89,19 +89,17 @@ export default function AdminWaivers() {
                       </div>
                     </div>
                     <div className="flex items-center gap-2 shrink-0">
-                      {booking.agreementPdfPath && (
-                        <a
-                          href={`${import.meta.env.BASE_URL.replace(/\/$/, "")}/api/bookings/${booking.id}/agreement-pdf`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          download={`rental-agreement-${booking.id}.pdf`}
-                        >
-                          <Button variant="outline" size="sm" className="gap-1.5">
-                            <Download className="w-3.5 h-3.5" />
-                            PDF
-                          </Button>
-                        </a>
-                      )}
+                      <a
+                        href={`${import.meta.env.BASE_URL.replace(/\/$/, "")}/api/bookings/${booking.id}/agreement-pdf`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        download={`rental-agreement-${booking.id}.pdf`}
+                      >
+                        <Button variant="outline" size="sm" className="gap-1.5">
+                          <Download className="w-3.5 h-3.5" />
+                          Download PDF
+                        </Button>
+                      </a>
                       <div className="text-right">
                         <div className="text-xs text-muted-foreground">Booking</div>
                         <Link href={adminPath(`/bookings/${booking.id}`)}>

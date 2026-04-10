@@ -662,24 +662,58 @@ router.get("/bookings/:id/agreement-pdf", async (req, res) => {
     if (req.tenantId) conditions.push(eq(bookingsTable.tenantId, req.tenantId));
     const [booking] = await db.select().from(bookingsTable).where(and(...conditions));
     if (!booking) { res.status(404).json({ error: "Not found" }); return; }
-    if (!booking.agreementPdfPath) { res.status(404).json({ error: "No PDF available for this booking" }); return; }
 
-    const filepath = path.resolve(UPLOADS_DIR_BOOKINGS, booking.agreementPdfPath);
-    if (!filepath.startsWith(path.resolve(UPLOADS_DIR_BOOKINGS) + path.sep)) {
-      res.status(400).json({ error: "Invalid file path" }); return;
+    // If a stored PDF already exists, serve it
+    if (booking.agreementPdfPath) {
+      const filepath = path.resolve(UPLOADS_DIR_BOOKINGS, booking.agreementPdfPath);
+      if (filepath.startsWith(path.resolve(UPLOADS_DIR_BOOKINGS) + path.sep) && fs.existsSync(filepath)) {
+        res.setHeader("Content-Type", "application/pdf");
+        res.setHeader("Content-Disposition", `attachment; filename="rental-agreement-${booking.id}.pdf"`);
+        fs.createReadStream(filepath).pipe(res);
+        return;
+      }
     }
-    if (!fs.existsSync(filepath)) { res.status(404).json({ error: "PDF file not found" }); return; }
 
-    const forceDownload = req.query.download === "1";
+    // No stored PDF — generate on-the-fly if we have the agreement data
+    if (!booking.agreementText || !booking.agreementSignerName) {
+      res.status(404).json({ error: "No signed agreement available for this booking" }); return;
+    }
+
+    // Look up listing title and company name
+    const [listing] = await db.select({ title: listingsTable.title })
+      .from(listingsTable).where(eq(listingsTable.id, booking.listingId));
+    let companyName = "Rental Company";
+    const [biz] = await db.select({ name: businessProfileTable.name })
+      .from(businessProfileTable).where(eq(businessProfileTable.tenantId, booking.tenantId));
+    if (biz?.name) companyName = biz.name;
+
+    const pdfFilename = await generateAgreementPdf({
+      bookingId: booking.id,
+      companyName,
+      customerName: booking.customerName ?? "",
+      customerEmail: booking.customerEmail ?? "",
+      listingTitle: listing?.title ?? `Listing #${booking.listingId}`,
+      startDate: booking.startDate,
+      endDate: booking.endDate,
+      agreementText: booking.agreementText,
+      signerName: booking.agreementSignerName,
+      signedAt: booking.agreementSignedAt ? new Date(booking.agreementSignedAt) : new Date(),
+      signatureDataUrl: booking.agreementSignature ?? "",
+      ruleInitials: booking.ruleInitials ? JSON.parse(booking.ruleInitials as string) : undefined,
+    });
+
+    // Cache the generated PDF so future requests are faster
+    await db.update(bookingsTable)
+      .set({ agreementPdfPath: pdfFilename })
+      .where(eq(bookingsTable.id, booking.id));
+
+    const filepath = path.resolve(UPLOADS_DIR_BOOKINGS, pdfFilename);
     res.setHeader("Content-Type", "application/pdf");
-    res.setHeader(
-      "Content-Disposition",
-      `${forceDownload ? "attachment" : "inline"}; filename="rental-agreement-${booking.id}.pdf"`
-    );
+    res.setHeader("Content-Disposition", `attachment; filename="rental-agreement-${booking.id}.pdf"`);
     fs.createReadStream(filepath).pipe(res);
   } catch (err) {
     req.log.error(err);
-    res.status(500).json({ error: "Failed to serve PDF" });
+    res.status(500).json({ error: "Failed to generate PDF" });
   }
 });
 
