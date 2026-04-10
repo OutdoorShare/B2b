@@ -418,6 +418,9 @@ router.get("/marketplace/renter/claims", async (req, res) => {
         refundStatus: claimsTable.refundStatus,
         status: claimsTable.status,
         evidenceUrls: claimsTable.evidenceUrls,
+        disputeStatus: claimsTable.disputeStatus,
+        disputeNote: claimsTable.disputeNote,
+        disputedAt: claimsTable.disputedAt,
         createdAt: claimsTable.createdAt,
         updatedAt: claimsTable.updatedAt,
         bookingId: claimsTable.bookingId,
@@ -447,6 +450,7 @@ router.get("/marketplace/renter/claims", async (req, res) => {
       refundAmount: c.refundAmount ? parseFloat(String(c.refundAmount)) : null,
       listingImage: (() => { try { const imgs = JSON.parse(String(c.listingImage ?? "[]")); return imgs[0] ?? null; } catch { return null; } })(),
       evidenceUrls: (() => { try { return JSON.parse(String(c.evidenceUrls ?? "[]")); } catch { return []; } })(),
+      disputedAt: c.disputedAt ? c.disputedAt.toISOString() : null,
       createdAt: c.createdAt.toISOString(),
       updatedAt: c.updatedAt.toISOString(),
     })));

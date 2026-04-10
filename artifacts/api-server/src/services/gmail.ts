@@ -927,6 +927,109 @@ export async function sendClaimSettlementEmail(opts: {
   });
 }
 
+// ── Policy violation charge notice (to renter, auto-resolved) ─────────────────
+export async function sendPolicyViolationChargeEmail(opts: {
+  claimId: number;
+  customerName: string;
+  customerEmail: string;
+  chargedAmount: number;
+  description: string;
+  companyName: string;
+  disputeUrl: string;
+}): Promise<void> {
+  const { claimId, customerName, customerEmail, chargedAmount, description, companyName, disputeUrl } = opts;
+
+  const tableRows: { label: string; value: string; mono?: boolean }[] = [
+    { label: "Claim #",     value: `#${claimId}`, mono: true },
+    { label: "Company",     value: companyName },
+    { label: "Charged",     value: `$${chargedAmount.toFixed(2)}` },
+    { label: "Reason",      value: description.length > 140 ? description.substring(0, 140) + "…" : description },
+  ];
+
+  const body = `
+    <p style="margin:0 0 8px;font-size:18px;font-weight:700;color:${BRAND_DARK};">Policy Violation Charge</p>
+    <p style="margin:0 0 20px;font-size:15px;color:#374151;line-height:1.6;">
+      Dear <strong>${esc(customerName)}</strong>, a charge of <strong>$${chargedAmount.toFixed(2)}</strong> has been applied to your payment method on file by <strong>${esc(companyName)}</strong> for a policy violation during your recent rental.
+    </p>
+    ${infoTable(tableRows)}
+    <div style="background:#fef9ec;border:1px solid #fde68a;border-radius:8px;padding:16px;margin:24px 0;">
+      <p style="margin:0 0 6px;font-size:14px;font-weight:700;color:#92400e;">Believe this charge is incorrect?</p>
+      <p style="margin:0;font-size:14px;color:#78350f;line-height:1.6;">
+        You have the right to dispute this charge directly with OutdoorShare. Click the button below to open a dispute and our team will review it impartially.
+      </p>
+    </div>
+    ${ctaButton("Dispute This Charge", disputeUrl, "#d97706")}
+    <p style="margin:0;font-size:13px;color:#9ca3af;text-align:center;">
+      Disputes are reviewed by the OutdoorShare team, not by ${esc(companyName)}.
+    </p>
+  `;
+
+  const html = emailShell({
+    preheader: `A policy violation charge of $${chargedAmount.toFixed(2)} has been applied to your account — dispute within 7 days.`,
+    badgeLabel: "Policy Violation Charge",
+    badgeColor: "#d97706",
+    body,
+  });
+
+  const gmail = await getUncachableGmailClient();
+  await gmail.users.messages.send({
+    userId: "me",
+    requestBody: { raw: makeRawEmail(customerEmail, `[Claim #${claimId}] Policy Violation Charge — $${chargedAmount.toFixed(2)} | ${companyName}`, html) },
+  });
+}
+
+// ── Dispute alert email (to superadmin when renter disputes a policy charge) ────
+export async function sendDisputeAlertEmail(opts: {
+  claimId: number;
+  customerName: string;
+  customerEmail: string;
+  chargedAmount: number | null;
+  disputeNote: string;
+  companyName: string;
+  slug: string;
+}): Promise<void> {
+  const { claimId, customerName, customerEmail, chargedAmount, disputeNote, companyName, slug } = opts;
+
+  const gmail = await getUncachableGmailClient();
+  const profile = await gmail.users.getProfile({ userId: "me" });
+  const toEmail = profile.data.emailAddress!;
+
+  const claimsUrl = `${getAppUrl()}/superadmin/claims`;
+
+  const tableRows: { label: string; value: string; mono?: boolean }[] = [
+    { label: "Claim #",     value: `#${claimId}`, mono: true },
+    { label: "Customer",    value: `${customerName} <${customerEmail}>` },
+    { label: "Company",     value: `${companyName} (/${slug})` },
+    ...(chargedAmount != null ? [{ label: "Charged Amount", value: `$${chargedAmount.toFixed(2)}` }] : []),
+    { label: "Dispute Reason", value: disputeNote.length > 300 ? disputeNote.substring(0, 300) + "…" : disputeNote },
+  ];
+
+  const body = `
+    <p style="margin:0 0 8px;font-size:18px;font-weight:700;color:${BRAND_DARK};">Renter Dispute Filed</p>
+    <p style="margin:0 0 20px;font-size:15px;color:#374151;line-height:1.6;">
+      <strong>${esc(customerName)}</strong> has disputed a policy violation charge on Claim <strong>#${claimId}</strong>
+      for <strong>${esc(companyName)}</strong>. Please review and determine whether the charge was valid.
+    </p>
+    ${infoTable(tableRows)}
+    ${ctaButton("Review Dispute in Console", claimsUrl, "#d97706")}
+    <p style="margin:0;font-size:13px;color:#9ca3af;text-align:center;">
+      If the dispute is upheld, initiate a refund from the claim detail page.
+    </p>
+  `;
+
+  const html = emailShell({
+    preheader: `${customerName} has disputed Claim #${claimId} for ${companyName} — action required.`,
+    badgeLabel: "Dispute Filed — Action Required",
+    badgeColor: "#d97706",
+    body,
+  });
+
+  await gmail.users.messages.send({
+    userId: "me",
+    requestBody: { raw: makeRawEmail(toEmail, `[Claim #${claimId}] Dispute Filed by ${customerName} — ${companyName}`, html) },
+  });
+}
+
 // ── Booking confirmation + pickup reminder (to renter, non-kiosk) ──────────────
 export async function sendBookingPickupReminderEmail(opts: {
   customerName: string;

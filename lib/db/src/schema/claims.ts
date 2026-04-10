@@ -25,6 +25,9 @@ export const claimsTable = pgTable("claims", {
   refundAmount: decimal("refund_amount", { precision: 10, scale: 2 }),
   refundStatus: text("refund_status", { enum: ["none", "partial", "full"] }),
   stripeRefundId: text("stripe_refund_id"),
+  disputeNote: text("dispute_note"),
+  disputeStatus: text("dispute_status", { enum: ["submitted", "under_review", "upheld", "rejected"] }),
+  disputedAt: timestamp("disputed_at"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });

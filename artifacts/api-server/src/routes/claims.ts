@@ -2,9 +2,20 @@ import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
 import { claimsTable, bookingsTable, listingsTable, tenantsTable } from "@workspace/db/schema";
 import { eq, desc, and, gte, lte } from "drizzle-orm";
-import { sendClaimAlertEmail, sendClaimStatusAlertEmail } from "../services/gmail";
+import {
+  sendClaimAlertEmail, sendClaimStatusAlertEmail,
+  sendPolicyViolationChargeEmail, sendDisputeAlertEmail,
+} from "../services/gmail";
+
 import { getStripeForTenant } from "../services/stripe";
 import { createNotification } from "../services/notifications";
+
+function buildAppUrl(): string {
+  if (process.env.APP_URL?.trim()) return process.env.APP_URL.trim().replace(/\/$/, "");
+  if (process.env.REPLIT_DOMAINS) return `https://${process.env.REPLIT_DOMAINS.split(",")[0].trim()}`;
+  if (process.env.REPLIT_DEV_DOMAIN) return `https://${process.env.REPLIT_DEV_DOMAIN}`;
+  return "http://localhost:8080";
+}
 
 const router: IRouter = Router();
 
@@ -13,6 +24,8 @@ function formatClaim(c: typeof claimsTable.$inferSelect) {
     ...c,
     claimedAmount: c.claimedAmount ? parseFloat(c.claimedAmount) : null,
     settledAmount: c.settledAmount ? parseFloat(c.settledAmount) : null,
+    chargedAmount: c.chargedAmount ? parseFloat(c.chargedAmount) : null,
+    disputedAt: c.disputedAt ? c.disputedAt.toISOString() : null,
     createdAt: c.createdAt.toISOString(),
     updatedAt: c.updatedAt.toISOString(),
   };
@@ -232,8 +245,17 @@ router.post("/claims", async (req, res) => {
       }
     }
 
+    // ── Auto-resolve policy violation claims immediately ──────────────────────
+    let finalStatus = created.status;
+    if (created.type === "policy_violation") {
+      finalStatus = "resolved";
+      await db.update(claimsTable)
+        .set({ status: "resolved", updatedAt: new Date() })
+        .where(eq(claimsTable.id, created.id));
+    }
+
     res.status(201).json({
-      ...formatClaim(created),
+      ...formatClaim({ ...created, status: finalStatus as any }),
       depositCaptured: !!depositCaptureIntentId,
       depositCapturedAmount: depositCapturedAmountCents != null ? depositCapturedAmountCents / 100 : null,
       cardCharged,
@@ -241,7 +263,7 @@ router.post("/claims", async (req, res) => {
       cardChargeBlocked,
     });
 
-    // Fire-and-forget email alert to superadmin
+    // Fire-and-forget email alert to superadmin + renter notifications
     (async () => {
       try {
         let companyName = "Unknown Company";
@@ -254,20 +276,39 @@ router.post("/claims", async (req, res) => {
             .limit(1);
           if (tenant) { companyName = tenant.name; slug = tenant.slug; }
         }
-        await sendClaimAlertEmail({
-          claimId: created.id,
-          customerName: created.customerName,
-          customerEmail: created.customerEmail,
-          type: created.type,
-          description: created.description,
-          claimedAmount: created.claimedAmount ? parseFloat(created.claimedAmount) : null,
-          companyName,
-          slug,
-          bookingId: created.bookingId ?? null,
-        });
 
-        // Notify admin in-app (action required)
-        if (created.tenantId) {
+        // For policy violations: notify renter directly with a dispute link
+        if (created.type === "policy_violation" && (cardCharged || !!depositCaptureIntentId)) {
+          const charged = cardCharged
+            ? (cardChargedAmountCents ?? 0) / 100
+            : (depositCapturedAmountCents ?? 0) / 100;
+          const disputeUrl = `${buildAppUrl()}/${slug}/my-claims`;
+          await sendPolicyViolationChargeEmail({
+            claimId: created.id,
+            customerName: created.customerName,
+            customerEmail: created.customerEmail,
+            chargedAmount: charged,
+            description: created.description,
+            companyName,
+            disputeUrl,
+          });
+        } else {
+          // For all other claim types: alert superadmin
+          await sendClaimAlertEmail({
+            claimId: created.id,
+            customerName: created.customerName,
+            customerEmail: created.customerEmail,
+            type: created.type,
+            description: created.description,
+            claimedAmount: created.claimedAmount ? parseFloat(created.claimedAmount) : null,
+            companyName,
+            slug,
+            bookingId: created.bookingId ?? null,
+          });
+        }
+
+        // Notify admin in-app (action required for non-policy-violation claims)
+        if (created.tenantId && created.type !== "policy_violation") {
           await createNotification({
             tenantId: created.tenantId,
             targetType: "admin",
@@ -358,6 +399,87 @@ router.delete("/claims/:id", async (req, res) => {
   } catch (err) {
     req.log.error(err);
     res.status(500).json({ error: "Failed to delete claim" });
+  }
+});
+
+// ── Public: renter disputes a policy violation charge ─────────────────────────
+// No admin auth — renter submits their reason, OutdoorShare reviews independently.
+router.post("/public/claims/:id/dispute", async (req, res) => {
+  try {
+    const claimId = Number(req.params.id);
+    const { note, email } = req.body;
+    if (!note || !note.trim()) return res.status(400).json({ error: "A dispute reason is required." });
+
+    // Fetch the claim (no tenant restriction — renter is public)
+    const [claim] = await db.select().from(claimsTable).where(eq(claimsTable.id, claimId)).limit(1);
+    if (!claim) return res.status(404).json({ error: "Claim not found." });
+    if (claim.type !== "policy_violation") {
+      return res.status(400).json({ error: "Only policy violation claims can be disputed through this channel." });
+    }
+    if (claim.disputeStatus) {
+      return res.status(409).json({ error: "A dispute has already been submitted for this claim." });
+    }
+
+    const now = new Date();
+    await db.update(claimsTable).set({
+      disputeNote: note.trim(),
+      disputeStatus: "submitted",
+      disputedAt: now,
+      updatedAt: now,
+    }).where(eq(claimsTable.id, claimId));
+
+    res.json({ success: true, message: "Your dispute has been submitted. The OutdoorShare team will review it and contact you within 2–3 business days." });
+
+    // Fire-and-forget: alert superadmin
+    (async () => {
+      try {
+        let companyName = "Unknown Company";
+        let slug = "unknown";
+        if (claim.tenantId) {
+          const [tenant] = await db
+            .select({ name: tenantsTable.name, slug: tenantsTable.slug })
+            .from(tenantsTable)
+            .where(eq(tenantsTable.id, claim.tenantId))
+            .limit(1);
+          if (tenant) { companyName = tenant.name; slug = tenant.slug; }
+        }
+        await sendDisputeAlertEmail({
+          claimId: claim.id,
+          customerName: claim.customerName,
+          customerEmail: email || claim.customerEmail,
+          chargedAmount: claim.chargedAmount ? parseFloat(claim.chargedAmount) : null,
+          disputeNote: note.trim(),
+          companyName,
+          slug,
+        });
+      } catch (e) {
+        req.log.warn({ err: e }, "Failed to send dispute alert email (non-fatal)");
+      }
+    })();
+  } catch (err) {
+    req.log.error(err);
+    res.status(500).json({ error: "Failed to submit dispute" });
+  }
+});
+
+// ── Admin: update dispute status (under_review → upheld | rejected) ────────────
+router.put("/claims/:id/dispute", async (req, res) => {
+  try {
+    const { disputeStatus } = req.body;
+    if (!["under_review", "upheld", "rejected"].includes(disputeStatus)) {
+      return res.status(400).json({ error: "Invalid dispute status." });
+    }
+    const whereConditions = [eq(claimsTable.id, Number(req.params.id))];
+    if (req.tenantId) whereConditions.push(eq(claimsTable.tenantId, req.tenantId));
+    const [updated] = await db.update(claimsTable)
+      .set({ disputeStatus, updatedAt: new Date() })
+      .where(and(...whereConditions))
+      .returning();
+    if (!updated) return res.status(404).json({ error: "Not found" });
+    res.json(formatClaim(updated));
+  } catch (err) {
+    req.log.error(err);
+    res.status(500).json({ error: "Failed to update dispute status" });
   }
 });
 

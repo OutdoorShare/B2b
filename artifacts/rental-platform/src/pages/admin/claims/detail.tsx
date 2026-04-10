@@ -11,7 +11,8 @@ import { useToast } from "@/hooks/use-toast";
 import {
   ArrowLeft, ShieldAlert, User, CalendarDays,
   AlertTriangle, Clock, CheckCircle2, XCircle,
-  DollarSign, Image as ImageIcon, Trash2, Plus, Package, Link
+  DollarSign, Image as ImageIcon, Trash2, Plus, Package, Link,
+  MessageSquareWarning, RotateCcw, ThumbsUp, ThumbsDown
 } from "lucide-react";
 import { format } from "date-fns";
 import { ImageUploadCrop } from "@/components/image-upload-crop";
@@ -20,6 +21,8 @@ const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
 type ClaimStatus = "open" | "reviewing" | "resolved" | "denied";
 type ClaimType = "damage" | "theft" | "overage" | "dispute" | "policy_violation" | "other";
+
+type DisputeStatus = "submitted" | "under_review" | "upheld" | "rejected";
 
 interface Claim {
   id: number;
@@ -37,6 +40,9 @@ interface Claim {
   status: ClaimStatus;
   adminNotes: string | null;
   evidenceUrls: string | null;
+  disputeStatus: DisputeStatus | null;
+  disputeNote: string | null;
+  disputedAt: string | null;
   createdAt: string;
   updatedAt: string;
   booking?: { id: number; startDate: string; endDate: string; totalPrice: string } | null;
@@ -70,6 +76,7 @@ export default function AdminClaimDetail() {
   const [claim, setClaim] = useState<Claim | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [disputeUpdating, setDisputeUpdating] = useState(false);
 
   const [status, setStatus] = useState<ClaimStatus>("open");
   const [adminNotes, setAdminNotes] = useState("");
@@ -141,6 +148,25 @@ export default function AdminClaimDetail() {
     if (!url) return;
     setEvidenceUrls(prev => [...prev, url]);
     setNewEvidenceUrl("");
+  };
+
+  const handleDisputeUpdate = async (disputeStatus: string) => {
+    setDisputeUpdating(true);
+    try {
+      const res = await fetch(`${BASE}/api/claims/${claimId}/dispute`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ disputeStatus }),
+      });
+      if (!res.ok) throw new Error();
+      const updated = await res.json();
+      setClaim(prev => prev ? { ...prev, ...updated } : updated);
+      toast({ title: `Dispute marked as ${disputeStatus.replace("_", " ")}` });
+    } catch {
+      toast({ title: "Failed to update dispute status", variant: "destructive" });
+    } finally {
+      setDisputeUpdating(false);
+    }
   };
 
   if (loading) {
@@ -453,6 +479,97 @@ export default function AdminClaimDetail() {
               {saving ? "Saving…" : "Save Changes"}
             </Button>
           </div>
+
+          {/* Dispute panel — shown when renter has submitted a dispute */}
+          {claim.disputeStatus && (
+            <div className={`rounded-2xl border-2 p-5 space-y-4 ${
+              claim.disputeStatus === "upheld" ? "border-green-400 bg-green-50"
+              : claim.disputeStatus === "rejected" ? "border-gray-300 bg-gray-50"
+              : "border-amber-300 bg-amber-50"
+            }`}>
+              <div className="flex items-center gap-2">
+                <MessageSquareWarning className={`w-4 h-4 shrink-0 ${
+                  claim.disputeStatus === "upheld" ? "text-green-600"
+                  : claim.disputeStatus === "rejected" ? "text-gray-500"
+                  : "text-amber-600"
+                }`} />
+                <h3 className="font-semibold text-sm">Renter Dispute</h3>
+                <span className={`ml-auto text-xs px-2 py-0.5 rounded-full font-semibold ${
+                  claim.disputeStatus === "submitted"    ? "bg-amber-100 text-amber-800"
+                  : claim.disputeStatus === "under_review" ? "bg-blue-100 text-blue-800"
+                  : claim.disputeStatus === "upheld"       ? "bg-green-100 text-green-800"
+                  : "bg-gray-100 text-gray-600"
+                }`}>
+                  {claim.disputeStatus.replace("_", " ").replace(/\b\w/g, c => c.toUpperCase())}
+                </span>
+              </div>
+
+              {claim.disputedAt && (
+                <p className="text-xs text-muted-foreground">
+                  Submitted {format(new Date(claim.disputedAt), "MMM d, yyyy 'at' h:mm a")}
+                </p>
+              )}
+
+              {claim.disputeNote && (
+                <div className="rounded-lg bg-white/70 border px-3 py-2">
+                  <p className="text-xs font-semibold text-muted-foreground mb-1">Renter's Reason</p>
+                  <p className="text-sm leading-relaxed">{claim.disputeNote}</p>
+                </div>
+              )}
+
+              {/* Dispute action buttons */}
+              {(claim.disputeStatus === "submitted" || claim.disputeStatus === "under_review") && (
+                <div className="space-y-2">
+                  <p className="text-xs text-muted-foreground font-medium">Update dispute status:</p>
+                  <div className="grid grid-cols-3 gap-2">
+                    <Button
+                      type="button" variant="outline" size="sm"
+                      className="gap-1 text-blue-700 border-blue-300 hover:bg-blue-50"
+                      disabled={disputeUpdating || claim.disputeStatus === "under_review"}
+                      onClick={() => handleDisputeUpdate("under_review")}
+                    >
+                      <RotateCcw className="w-3 h-3" />
+                      Review
+                    </Button>
+                    <Button
+                      type="button" size="sm"
+                      className="gap-1 bg-green-600 hover:bg-green-700 text-white"
+                      disabled={disputeUpdating}
+                      onClick={() => handleDisputeUpdate("upheld")}
+                    >
+                      <ThumbsUp className="w-3 h-3" />
+                      Uphold
+                    </Button>
+                    <Button
+                      type="button" size="sm"
+                      className="gap-1 bg-gray-600 hover:bg-gray-700 text-white"
+                      disabled={disputeUpdating}
+                      onClick={() => handleDisputeUpdate("rejected")}
+                    >
+                      <ThumbsDown className="w-3 h-3" />
+                      Reject
+                    </Button>
+                  </div>
+                  {claim.disputeStatus === "upheld" || claim.disputeStatus === "rejected" ? null : (
+                    <p className="text-xs text-muted-foreground">
+                      Upholding triggers a refund reminder — issue it from the Refunds section above.
+                    </p>
+                  )}
+                </div>
+              )}
+
+              {claim.disputeStatus === "upheld" && (
+                <div className="rounded-lg bg-green-100 border border-green-300 px-3 py-2 text-xs text-green-800">
+                  Dispute upheld — remember to issue a refund via the settled amount field and save changes.
+                </div>
+              )}
+              {claim.disputeStatus === "rejected" && (
+                <div className="rounded-lg bg-gray-100 border border-gray-300 px-3 py-2 text-xs text-gray-600">
+                  Dispute rejected — the charge stands. The renter has been notified.
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Quick info */}
           <div className="bg-muted/30 rounded-2xl border p-4 text-xs space-y-2 text-muted-foreground">
