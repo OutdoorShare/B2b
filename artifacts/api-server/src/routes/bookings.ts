@@ -354,6 +354,36 @@ router.post("/bookings", async (req, res) => {
       seenByRenter: true,
     }).returning();
 
+    // Update the Stripe PI with the booking ID and listing title so it's clearly identifiable in Stripe
+    if (created.stripePaymentIntentId && req.tenantId) {
+      const tenantIdForStripe = req.tenantId;
+      const piId = created.stripePaymentIntentId;
+      const bookingNum = created.id;
+      const listingTitle = listing.title;
+      (async () => {
+        try {
+          const [tenantRow] = await db
+            .select({ testMode: tenantsTable.testMode, name: tenantsTable.name })
+            .from(tenantsTable)
+            .where(eq(tenantsTable.id, tenantIdForStripe))
+            .limit(1);
+          if (tenantRow) {
+            const stripeClient = getStripeForTenant(!!tenantRow.testMode);
+            await stripeClient.paymentIntents.update(piId, {
+              description: `Rental booking #${bookingNum} — ${listingTitle} (${tenantRow.name})${tenantRow.testMode ? " [TEST]" : ""}`,
+              metadata: {
+                booking_id: String(bookingNum),
+                listing_title: listingTitle,
+                type: "rental_payment",
+              },
+            });
+          }
+        } catch (e: any) {
+          req.log.warn({ err: e.message }, "Non-fatal: failed to label Stripe PI with booking ID");
+        }
+      })();
+    }
+
     // Generate and save agreement PDF in the background
     if (agreementSignatureDataUrl && restBody.agreementSignerName && restBody.agreementText) {
       try {
