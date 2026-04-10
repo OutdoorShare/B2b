@@ -48,9 +48,13 @@ export const businessProfileTable = pgTable("business_profile", {
   // When true, the OutdoorShare service fee is added on top of the rental price
   // and charged to the customer instead of being deducted from the host's payout.
   passPlatformFeeToCustomer: boolean("pass_platform_fee_to_customer").notNull().default(false),
-  // The % to charge the customer when pass-through is on. NULL = use the tenant's
-  // platformFeePercent (i.e. exactly what OutdoorShare charges). Editable by admin.
+  // "percent" = charge a % of the rental base; "fixed" = charge a flat dollar amount.
+  passPlatformFeeType: text("pass_platform_fee_type").default("percent"),
+  // The % to charge the customer when pass-through is on and type="percent".
+  // NULL = use the tenant's platformFeePercent (i.e. exactly what OutdoorShare charges).
   passPlatformFeePercent: decimal("pass_platform_fee_percent", { precision: 5, scale: 2 }),
+  // Flat dollar amount when type="fixed". NULL = not in use.
+  passPlatformFeeFixed: decimal("pass_platform_fee_fixed", { precision: 8, scale: 2 }),
   // When true, renters may opt out of the platform protection plan at checkout.
   // Admin must acknowledge the insurance-risk warning to enable this.
   protectionPlanOptional: boolean("protection_plan_optional").notNull().default(false),

@@ -119,7 +119,9 @@ router.put("/business", requireTenant as any, async (req, res) => {
       paymentPlanDepositFixed, paymentPlanDepositPercent,
       paymentPlanDaysBeforePickup,
       passPlatformFeeToCustomer,
+      passPlatformFeeType,
       passPlatformFeePercent,
+      passPlatformFeeFixed,
       protectionPlanOptional,
     } = req.body;
 
@@ -181,7 +183,9 @@ router.put("/business", requireTenant as any, async (req, res) => {
       ...(paymentPlanDepositPercent  !== undefined && { paymentPlanDepositPercent: String(paymentPlanDepositPercent) }),
       ...(paymentPlanDaysBeforePickup !== undefined && { paymentPlanDaysBeforePickup: Number(paymentPlanDaysBeforePickup) }),
       ...(passPlatformFeeToCustomer  !== undefined && { passPlatformFeeToCustomer }),
+      ...(passPlatformFeeType        !== undefined && { passPlatformFeeType }),
       ...(passPlatformFeePercent     !== undefined && { passPlatformFeePercent: passPlatformFeePercent !== null ? String(passPlatformFeePercent) : null }),
+      ...(passPlatformFeeFixed       !== undefined && { passPlatformFeeFixed: passPlatformFeeFixed !== null ? String(passPlatformFeeFixed) : null }),
       ...(protectionPlanOptional     !== undefined && { protectionPlanOptional }),
     };
 

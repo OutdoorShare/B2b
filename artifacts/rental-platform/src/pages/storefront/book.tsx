@@ -1163,17 +1163,22 @@ export default function StorefrontBook() {
   // goes 100% to OutdoorShare and is not subject to the percentage split).
   const bpRaw = businessProfile as any;
   const passThrough = !!bpRaw?.passPlatformFeeToCustomer;
-  // Use the admin-configured pass-through rate if set; otherwise fall back to the
-  // platform's actual fee for this tenant (both returned by GET /api/business).
-  const effectiveFeePercent = passThrough
-    ? (bpRaw?.passPlatformFeePercent != null
-        ? parseFloat(String(bpRaw.passPlatformFeePercent))
-        : (bpRaw?.platformFeePercent != null ? parseFloat(String(bpRaw.platformFeePercent)) : 5))
-    : 0;
-  const platformFeePercent = effectiveFeePercent / 100;
+  const feeType: "percent" | "fixed" = bpRaw?.passPlatformFeeType ?? "percent";
   // Fee applies only to the rental portion (excluding protection plan fee)
   const rentalAfterDiscounts = Math.max(0, afterPromo - platformProtectionFee);
-  const serviceFee = passThrough ? rentalAfterDiscounts * platformFeePercent : 0;
+  let serviceFee = 0;
+  if (passThrough) {
+    if (feeType === "fixed") {
+      serviceFee = bpRaw?.passPlatformFeeFixed != null ? parseFloat(String(bpRaw.passPlatformFeeFixed)) : 0;
+    } else {
+      // Use the admin-configured pass-through rate if set; otherwise fall back to
+      // the platform's actual fee for this tenant (both returned by GET /api/business).
+      const effectiveFeePercent = bpRaw?.passPlatformFeePercent != null
+        ? parseFloat(String(bpRaw.passPlatformFeePercent))
+        : (bpRaw?.platformFeePercent != null ? parseFloat(String(bpRaw.platformFeePercent)) : 10);
+      serviceFee = rentalAfterDiscounts * (effectiveFeePercent / 100);
+    }
+  }
   const discountedTotal = Math.max(0.50, afterPromo + serviceFee);
 
   // ── Payment plan / split deposit ──────────────────────────────────────────
