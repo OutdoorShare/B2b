@@ -2626,3 +2626,99 @@ export async function sendQuoteEmail(opts: {
     },
   });
 }
+
+// ── Payment failed — renter notification ─────────────────────────────────────
+export async function sendPaymentFailedRenterEmail(opts: {
+  customerName: string;
+  customerEmail: string;
+  bookingId: number;
+  listingTitle: string;
+  startDate: string;
+  endDate: string;
+  totalPrice: number;
+  companyName: string;
+  companyEmail?: string;
+  retryUrl?: string;
+  logoUrl?: string | null;
+  primaryColor?: string | null;
+}): Promise<void> {
+  const { customerName, customerEmail, bookingId, listingTitle, startDate, endDate, totalPrice, companyName, companyEmail, retryUrl, logoUrl, primaryColor } = opts;
+  const fromHeader = `${companyName} <samhos@myoutdoorshare.com>`;
+  const replyTo = companyEmail;
+  const subject = `[${companyName}] Action needed — your payment for booking #${bookingId} was declined`;
+
+  const body = `
+    <p style="margin:0 0 8px;font-size:18px;font-weight:700;color:#991b1b;">Your payment didn't go through</p>
+    <p style="margin:0 0 20px;font-size:15px;color:#374151;line-height:1.6;">
+      Hi <strong>${esc(customerName)}</strong>, we weren't able to process your payment for the rental below.
+      This can happen due to insufficient funds, an expired card, or a bank decline. Your booking is currently on hold until payment is resolved.
+    </p>
+    ${infoTable([
+      { label: "Booking #",    value: `#${bookingId}`, mono: true },
+      { label: "Rental",       value: listingTitle },
+      { label: "Pickup",       value: startDate },
+      { label: "Return",       value: endDate },
+      { label: "Amount Due",   value: `$${totalPrice.toFixed(2)}` },
+    ])}
+    <div style="background:#fef2f2;border:1px solid #fecaca;border-radius:8px;padding:14px 18px;margin:20px 0;">
+      <p style="margin:0;font-size:13px;color:#991b1b;font-weight:600;">
+        ⚠️ Your reservation is at risk. Please resolve your payment to keep your booking.
+      </p>
+    </div>
+    ${retryUrl ? ctaButton("Retry Payment →", retryUrl, "#dc2626") : `<p style="font-size:14px;color:#374151;text-align:center;">Please contact <strong>${esc(companyName)}</strong> at ${esc(companyEmail ?? "")} to resolve your payment.</p>`}
+    <p style="margin:20px 0 0;font-size:13px;color:#9ca3af;text-align:center;line-height:1.6;">
+      If you believe this is an error, please contact your bank or reach out to ${esc(companyName)} directly.
+    </p>
+  `;
+
+  const html = emailShell({ preheader: `Action needed — your payment for booking #${bookingId} was declined`, badgeLabel: "Payment Failed", badgeColor: "#dc2626", body, logoUrl: logoUrl ?? null, primaryColor: primaryColor ?? null, companyName });
+  const gmail = await getUncachableGmailClient();
+  await gmail.users.messages.send({
+    userId: "me",
+    requestBody: { raw: makeRawEmail(customerEmail, subject, html, fromHeader, replyTo) },
+  });
+}
+
+// ── Payment failed — admin notification ──────────────────────────────────────
+export async function sendPaymentFailedAdminEmail(opts: {
+  adminEmail: string;
+  customerName: string;
+  customerEmail: string;
+  bookingId: number;
+  listingTitle: string;
+  startDate: string;
+  endDate: string;
+  totalPrice: number;
+  companyName: string;
+  bookingUrl?: string;
+}): Promise<void> {
+  const { adminEmail, customerName, customerEmail, bookingId, listingTitle, startDate, endDate, totalPrice, companyName, bookingUrl } = opts;
+  const subject = `[OutdoorShare] ⚠️ Payment failed — Booking #${bookingId} (${customerName})`;
+
+  const body = `
+    <p style="margin:0 0 8px;font-size:18px;font-weight:700;color:#991b1b;">A customer payment failed</p>
+    <p style="margin:0 0 20px;font-size:15px;color:#374151;line-height:1.6;">
+      A payment for the booking below was declined by Stripe. The renter has been notified automatically. You may want to follow up or send a new payment link.
+    </p>
+    ${infoTable([
+      { label: "Booking #",    value: `#${bookingId}`, mono: true },
+      { label: "Customer",     value: `${customerName} (${customerEmail})` },
+      { label: "Rental",       value: listingTitle },
+      { label: "Dates",        value: `${startDate} → ${endDate}` },
+      { label: "Amount",       value: `$${totalPrice.toFixed(2)}` },
+    ])}
+    <div style="background:#fef2f2;border:1px solid #fecaca;border-radius:8px;padding:14px 18px;margin:20px 0;">
+      <p style="margin:0;font-size:13px;color:#991b1b;font-weight:600;">
+        The booking remains in your system. Send a payment link or contact the customer to resolve.
+      </p>
+    </div>
+    ${bookingUrl ? ctaButton("View Booking →", bookingUrl, "#dc2626") : ""}
+  `;
+
+  const html = emailShell({ preheader: `Payment failed for booking #${bookingId} — ${customerName}`, badgeLabel: "Payment Failed", badgeColor: "#dc2626", body });
+  const gmail = await getUncachableGmailClient();
+  await gmail.users.messages.send({
+    userId: "me",
+    requestBody: { raw: makeRawEmail(adminEmail, subject, html) },
+  });
+}

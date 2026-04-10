@@ -449,6 +449,16 @@ export default function AdminBookings() {
                         <TableCell>{getStatusBadge(booking.status)}</TableCell>
                         <TableCell className="font-medium">
                           <div>${booking.totalPrice.toFixed(2)}</div>
+                          {(booking as any).stripePaymentStatus === "failed" && (
+                            <span className="mt-1 inline-flex items-center gap-1 text-[10px] font-semibold px-1.5 py-0.5 rounded border bg-red-50 text-red-700 border-red-300">
+                              ⚠ Payment Failed
+                            </span>
+                          )}
+                          {(booking as any).splitRemainingStatus === "failed" && (booking as any).stripePaymentStatus !== "failed" && (
+                            <span className="mt-1 inline-flex items-center gap-1 text-[10px] font-semibold px-1.5 py-0.5 rounded border bg-red-50 text-red-700 border-red-300">
+                              ⚠ Split Failed
+                            </span>
+                          )}
                           {(booking as any).depositPaid && parseFloat((booking as any).depositPaid) > 0 && (() => {
                             const ds = (booking as any).depositHoldStatus as string | null | undefined;
                             const cfg: Record<string, { label: string; cls: string }> = {

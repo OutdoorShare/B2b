@@ -3,7 +3,7 @@ import { db } from "@workspace/db";
 import { tenantsTable, bookingsTable, customersTable, listingsTable, businessProfileTable } from "@workspace/db/schema";
 import { eq, desc, and } from "drizzle-orm";
 import { stripe, getStripeForTenant, PLATFORM_FEE_PERCENT } from "../services/stripe";
-import { sendStripeRestrictedAlertEmail, sendPaymentRequestEmail } from "../services/gmail";
+import { sendStripeRestrictedAlertEmail, sendPaymentRequestEmail, sendPaymentFailedRenterEmail, sendPaymentFailedAdminEmail } from "../services/gmail";
 import { triggerAvailablePayout, sweepPendingPayouts } from "../services/payouts";
 import type { Request } from "express";
 
@@ -626,10 +626,60 @@ router.post("/stripe/webhook", async (req, res) => {
       }
       case "payment_intent.payment_failed": {
         const pi = event.data.object;
-        await db.update(bookingsTable).set({
+        const [updatedBooking] = await db.update(bookingsTable).set({
           stripePaymentStatus: "failed",
           updatedAt: new Date(),
-        }).where(eq(bookingsTable.stripePaymentIntentId, pi.id));
+        }).where(eq(bookingsTable.stripePaymentIntentId, pi.id)).returning();
+
+        // Send failure notifications — best-effort
+        if (updatedBooking) {
+          (async () => {
+            try {
+              const [tenant] = await db.select().from(tenantsTable).where(eq(tenantsTable.id, updatedBooking.tenantId));
+              const [listing] = updatedBooking.listingId
+                ? await db.select({ title: listingsTable.title }).from(listingsTable).where(eq(listingsTable.id, updatedBooking.listingId!))
+                : [{ title: "Rental" }];
+              const [brand] = await db.select({ logoUrl: businessProfileTable.logoUrl, primaryColor: businessProfileTable.primaryColor })
+                .from(businessProfileTable).where(eq(businessProfileTable.tenantId, updatedBooking.tenantId));
+              if (!tenant) return;
+
+              const appUrl = process.env.APP_URL ?? "https://myoutdoorshare.com";
+              const bookingUrl = `${appUrl}/${tenant.slug}/admin/bookings/${updatedBooking.id}`;
+              const listingTitle = listing?.title ?? "Rental";
+
+              await sendPaymentFailedRenterEmail({
+                customerName: updatedBooking.customerName,
+                customerEmail: updatedBooking.customerEmail,
+                bookingId: updatedBooking.id,
+                listingTitle,
+                startDate: updatedBooking.startDate,
+                endDate: updatedBooking.endDate,
+                totalPrice: parseFloat(String(updatedBooking.totalPrice)),
+                companyName: tenant.name,
+                companyEmail: tenant.email ?? undefined,
+                logoUrl: brand?.logoUrl ?? null,
+                primaryColor: brand?.primaryColor ?? null,
+              });
+
+              await sendPaymentFailedAdminEmail({
+                adminEmail: tenant.email,
+                customerName: updatedBooking.customerName,
+                customerEmail: updatedBooking.customerEmail,
+                bookingId: updatedBooking.id,
+                listingTitle,
+                startDate: updatedBooking.startDate,
+                endDate: updatedBooking.endDate,
+                totalPrice: parseFloat(String(updatedBooking.totalPrice)),
+                companyName: tenant.name,
+                bookingUrl,
+              });
+
+              console.log(`[webhook] payment_intent.payment_failed → notified renter+admin for booking #${updatedBooking.id}`);
+            } catch (emailErr: any) {
+              console.warn("[webhook] payment_intent.payment_failed — email send failed:", emailErr.message);
+            }
+          })();
+        }
         break;
       }
       case "checkout.session.completed": {
@@ -1334,6 +1384,34 @@ router.post("/stripe/charge-remaining/:bookingId", requireAdminAuth, async (req,
         splitRemainingStatus: "failed",
         updatedAt: new Date(),
       }).where(eq(bookingsTable.id, booking.id));
+
+      // Notify renter + admin about split-payment failure — best-effort
+      (async () => {
+        try {
+          const [listingRow] = booking.listingId
+            ? await db.select({ title: listingsTable.title }).from(listingsTable).where(eq(listingsTable.id, booking.listingId!))
+            : [{ title: "Rental" }];
+          const appUrl = process.env.APP_URL ?? "https://myoutdoorshare.com";
+          const bookingUrl = `${appUrl}/${tenant.slug}/admin/bookings/${booking.id}`;
+          await sendPaymentFailedRenterEmail({
+            customerName: booking.customerName, customerEmail: booking.customerEmail,
+            bookingId: booking.id, listingTitle: listingRow?.title ?? "Rental",
+            startDate: booking.startDate, endDate: booking.endDate,
+            totalPrice: parseFloat(String(booking.splitRemainingAmount ?? booking.totalPrice ?? "0")),
+            companyName: tenant.name, companyEmail: tenant.email ?? undefined,
+          });
+          await sendPaymentFailedAdminEmail({
+            adminEmail: tenant.email, customerName: booking.customerName, customerEmail: booking.customerEmail,
+            bookingId: booking.id, listingTitle: listingRow?.title ?? "Rental",
+            startDate: booking.startDate, endDate: booking.endDate,
+            totalPrice: parseFloat(String(booking.splitRemainingAmount ?? booking.totalPrice ?? "0")),
+            companyName: tenant.name, bookingUrl,
+          });
+        } catch (emailErr: any) {
+          console.warn("[stripe/charge-remaining] failure email send failed:", emailErr.message);
+        }
+      })();
+
       res.status(400).json({ error: `Payment not completed (status: ${pi.status}).` });
     }
   } catch (e: any) {

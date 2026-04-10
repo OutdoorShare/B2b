@@ -334,6 +334,15 @@ export default function AdminBookingDetail() {
   };
 
   const handleStatusChange = async (newStatus: any) => {
+    const paymentFailed = (booking as any)?.stripePaymentStatus === "failed";
+    if (paymentFailed && ["confirmed", "active"].includes(newStatus)) {
+      toast({
+        title: "Payment failed — action blocked",
+        description: "Resolve the outstanding payment before confirming or activating this booking. Send a new payment link or contact the renter.",
+        variant: "destructive",
+      });
+      return;
+    }
     try {
       const res = await fetch(`${BASE}/api/bookings/${id}`, {
         method: "PUT",
@@ -481,6 +490,35 @@ export default function AdminBookingDetail() {
           Cancel
         </Button>
       </div>
+
+      {/* ── Payment Failed Banner ── */}
+      {(booking as any).stripePaymentStatus === "failed" && (
+        <div className="rounded-xl border-2 border-red-400 bg-red-50 p-4 flex flex-col gap-3">
+          <div className="flex items-start gap-3">
+            <AlertCircle className="w-6 h-6 text-red-600 shrink-0 mt-0.5" />
+            <div className="flex-1 min-w-0">
+              <p className="font-bold text-red-800 text-base">Payment Failed</p>
+              <p className="text-sm text-red-700 mt-0.5 leading-relaxed">
+                The renter's payment was declined by Stripe. This booking cannot be confirmed or activated until payment is resolved.
+                The renter has been notified automatically. Send a new payment link or contact the renter to retry.
+              </p>
+            </div>
+          </div>
+          <div className="flex flex-wrap gap-2 pl-9">
+            <Button
+              size="sm"
+              variant="outline"
+              className="border-red-300 text-red-700 hover:bg-red-100 gap-1.5"
+              onClick={() => {
+                const el = document.getElementById("payment-link-section");
+                if (el) { el.scrollIntoView({ behavior: "smooth", block: "center" }); }
+              }}
+            >
+              <CreditCard className="w-3.5 h-3.5" /> Send Payment Link
+            </Button>
+          </div>
+        </div>
+      )}
 
       {/* ── Rental Timeline / Countdown ── */}
       {!["cancelled"].includes(booking.status) && (
@@ -1544,7 +1582,7 @@ export default function AdminBookingDetail() {
             );
           })()}
 
-          <Card>
+          <Card id="payment-link-section">
             <CardHeader>
               <CardTitle>Payment Summary</CardTitle>
             </CardHeader>
@@ -1720,7 +1758,7 @@ export default function AdminBookingDetail() {
                       <span className="ml-auto text-xs font-semibold px-2 py-0.5 rounded-full bg-amber-100 text-amber-700">Remaining Pending</span>
                     )}
                     {(booking as any).splitRemainingStatus === "failed" && (
-                      <span className="ml-auto text-xs font-semibold px-2 py-0.5 rounded-full bg-red-100 text-red-700">Charge Failed</span>
+                      <span className="ml-auto text-xs font-semibold px-2 py-0.5 rounded-full bg-red-100 text-red-700">⚠ Charge Failed</span>
                     )}
                   </div>
                   <div className="space-y-1.5 text-sm">
@@ -1745,6 +1783,12 @@ export default function AdminBookingDetail() {
                       </div>
                     )}
                   </div>
+                  {(booking as any).splitRemainingStatus === "failed" && (
+                    <div className="flex items-start gap-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2.5 mt-2 text-xs text-red-800">
+                      <AlertCircle className="w-4 h-4 shrink-0 text-red-600 mt-0.5" />
+                      <span>The automatic charge failed. The renter has been notified. You can retry the charge using the button below, or contact the renter.</span>
+                    </div>
+                  )}
                   {(booking as any).splitRemainingStatus !== "charged" && (
                     <Button
                       size="sm"
