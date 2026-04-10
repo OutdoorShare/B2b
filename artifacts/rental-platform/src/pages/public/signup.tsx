@@ -516,8 +516,11 @@ export default function SignupPage() {
                 Next: Choose a Plan <ArrowRight className="w-4 h-4" />
               </button>
 
-              <p className="text-center text-xs" style={{ color: "rgba(255,255,255,0.25)" }}>
-                By continuing you agree to our Terms of Service &amp; Privacy Policy.
+              <p className="text-center text-xs" style={{ color: "rgba(255,255,255,0.35)" }}>
+                By continuing you agree to our{" "}
+                <a href="/terms" target="_blank" rel="noopener noreferrer" className="underline hover:opacity-80 transition-opacity">Terms of Service</a>
+                {" "}&amp;{" "}
+                <a href="/privacy" target="_blank" rel="noopener noreferrer" className="underline hover:opacity-80 transition-opacity">Privacy Policy</a>.
               </p>
             </form>
           )}

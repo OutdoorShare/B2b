@@ -29,6 +29,8 @@ import SignupPage from "@/pages/public/signup";
 import VerifyEmailPage from "@/pages/public/verify-email";
 import AuditPage from "@/pages/public/audit";
 import ContactCardView from "@/pages/public/contact-card-view";
+import PrivacyPolicyPage from "@/pages/public/privacy";
+import TermsOfServicePage from "@/pages/public/terms";
 import DemoPage from "@/pages/demo";
 import AdminOnboarding from "@/pages/admin/onboarding";
 import AdminLoginPage from "@/pages/admin/admin-login";
@@ -239,6 +241,12 @@ function Router() {
       </Route>
       <Route path="/audit">
         <AuditPage />
+      </Route>
+      <Route path="/privacy">
+        <PrivacyPolicyPage />
+      </Route>
+      <Route path="/terms">
+        <TermsOfServicePage />
       </Route>
 
       {/* Admin Onboarding — guarded so only the authenticated owner can access it */}

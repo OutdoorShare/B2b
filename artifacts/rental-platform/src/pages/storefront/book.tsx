@@ -537,6 +537,12 @@ function StripePaymentForm({ onSuccess, customerEmail, testMode }: { onSuccess: 
       <Button type="submit" size="lg" className="w-full h-13 text-base font-bold rounded-xl" disabled={paying || !stripe}>
         {paying ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Processing…</> : <><ShieldCheck className="w-4 h-4 mr-2" />Pay & Book</>}
       </Button>
+      <p className="text-center text-xs text-muted-foreground">
+        By booking you agree to our{" "}
+        <a href="/terms" target="_blank" rel="noopener noreferrer" className="underline hover:text-foreground transition-colors">Terms of Service</a>
+        {" "}&amp;{" "}
+        <a href="/privacy" target="_blank" rel="noopener noreferrer" className="underline hover:text-foreground transition-colors">Privacy Policy</a>.
+      </p>
     </form>
   );
 }
