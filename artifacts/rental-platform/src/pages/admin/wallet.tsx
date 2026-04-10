@@ -19,6 +19,8 @@ import {
   FlaskConical,
 } from "lucide-react";
 
+const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
+
 function getAdminToken(): string {
   try {
     const raw = localStorage.getItem("admin_session");
@@ -31,7 +33,7 @@ function getAdminToken(): string {
 }
 
 const api = (path: string, opts?: RequestInit) =>
-  fetch(`/api${path}`, {
+  fetch(`${BASE}/api${path}`, {
     ...opts,
     headers: {
       "Content-Type": "application/json",

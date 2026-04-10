@@ -168,7 +168,7 @@ router.get("/stripe/wallet", requireAdminAuth, async (req, res) => {
       })
       .from(bookingsTable)
       .leftJoin(listingsTable, eq(bookingsTable.listingId, listingsTable.id))
-      .where(and(eq(bookingsTable.tenantId, tenantId), eq(bookingsTable.stripePaymentStatus, "paid")))
+      .where(and(eq(bookingsTable.tenantId, tenantId), or(eq(bookingsTable.stripePaymentStatus, "paid"), eq(bookingsTable.stripePaymentStatus, "succeeded"))))
       .orderBy(desc(bookingsTable.createdAt))
       .limit(50);
 
