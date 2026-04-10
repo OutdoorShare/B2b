@@ -390,6 +390,13 @@ router.get("/listings/addresses", async (req, res) => {
 
 router.get("/listings/:id", async (req, res) => {
   try {
+    // Require a resolved tenant context to prevent cross-tenant data leakage.
+    // Un-authenticated storefront calls include x-tenant-slug; if it doesn't resolve
+    // to a known tenant the middleware leaves tenantId undefined → 404.
+    if (!req.tenantId && !req.adminUser) {
+      res.status(404).json({ error: "Not found" });
+      return;
+    }
     const conditions = [eq(listingsTable.id, Number(req.params.id))];
     if (req.tenantId) conditions.push(eq(listingsTable.tenantId, req.tenantId));
     const [listing] = await db.select().from(listingsTable).where(and(...conditions));

@@ -606,8 +606,8 @@ export default function StorefrontBook() {
     query: { enabled: !!listingId, queryKey: getGetListingQueryKey(listingId) }
   });
 
-  const { data: businessProfile } = useGetBusinessProfile({
-    query: { queryKey: getGetBusinessProfileQueryKey() }
+  const { data: businessProfile, isError: businessNotFound } = useGetBusinessProfile({
+    query: { queryKey: [...getGetBusinessProfileQueryKey(), slug] }
   });
 
   // ── 2 screens ──
@@ -1542,6 +1542,7 @@ export default function StorefrontBook() {
   }
 
   if (isLoading) return <div className="container mx-auto px-4 py-16 text-center">Loading...</div>;
+  if (businessNotFound) return <div className="container mx-auto px-4 py-16 text-center text-muted-foreground">Rental store not found.</div>;
   if (!listing) return <div className="container mx-auto px-4 py-16 text-center">Listing not found</div>;
 
   // ── Validate + register/login then go to screen 2 ──
