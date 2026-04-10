@@ -850,6 +850,24 @@ export default function StorefrontBook() {
       .catch(() => {});
   }, [listingId]);
 
+  // When the admin makes protection plan required (not optional), ensure protection addons
+  // are re-selected and any opt-out state is cleared.
+  useEffect(() => {
+    if (protectionIsOptional) return; // nothing to enforce when optional
+    if (availableAddons.length === 0) return; // wait until addons are loaded
+    const protectionAddons = availableAddons.filter(a => a.name.toLowerCase().includes("protection"));
+    if (protectionAddons.length === 0) return;
+    setSelectedAddonIds(prev => {
+      const anyMissing = protectionAddons.some(a => !prev.has(a.id));
+      if (!anyMissing) return prev; // nothing to change
+      const next = new Set(prev);
+      protectionAddons.forEach(a => next.add(a.id));
+      return next;
+    });
+    // Also clear platform-plan opt-out state
+    setProtectionDeclined(false);
+  }, [protectionIsOptional, availableAddons]);
+
   // Fetch listing rules + check promos
   useEffect(() => {
     if (!listingId) return;
