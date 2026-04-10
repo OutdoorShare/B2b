@@ -16,7 +16,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { ArrowLeft, Upload, X, CheckCircle2, AlertCircle, CircleDashed, ImagePlus, Loader2, IdCard, Sparkles, ChevronDown, ChevronUp, RefreshCw, Info, Plus, Trash2, Clock, Search, Package, Link2, Unlink, Wand2, Lock } from "lucide-react";
+import { ArrowLeft, Upload, X, CheckCircle2, AlertCircle, CircleDashed, ImagePlus, Loader2, IdCard, Sparkles, ChevronDown, ChevronUp, RefreshCw, Info, Plus, Trash2, Clock, Search, Package, Link2, Unlink, Wand2, Lock, Pencil } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Checkbox } from "@/components/ui/checkbox";
 import { AddonManager } from "@/components/addon-manager";
@@ -264,13 +264,34 @@ export default function AdminListingsForm() {
   });
   const [advancedPricingOpen, setAdvancedPricingOpen] = useState(false);
   const [timeSlotsOpen, setTimeSlotsOpen] = useState(false);
+  const [editingSlotIdx, setEditingSlotIdx] = useState<number | null>(null);
+  const defaultTsD = { label: '', startTime: SLOT_TIMES[4] ?? "8:00 AM", endTime: SLOT_TIMES[8] ?? "10:00 AM", rate: "full_day" as const };
   const addTimeSlot = () => {
     if (!tsD.startTime || !tsD.endTime) return;
     const label = tsD.label.trim() || `${tsD.startTime} – ${tsD.endTime}`;
-    setFormData(prev => ({ ...prev, timeSlots: [...prev.timeSlots, { label, startTime: tsD.startTime, endTime: tsD.endTime, rate: tsD.rate }] }));
-    setTsD(prev => ({ ...prev, label: '' }));
+    if (editingSlotIdx !== null) {
+      setFormData(prev => {
+        const updated = [...prev.timeSlots];
+        updated[editingSlotIdx] = { label, startTime: tsD.startTime, endTime: tsD.endTime, rate: tsD.rate };
+        return { ...prev, timeSlots: updated };
+      });
+      setEditingSlotIdx(null);
+    } else {
+      setFormData(prev => ({ ...prev, timeSlots: [...prev.timeSlots, { label, startTime: tsD.startTime, endTime: tsD.endTime, rate: tsD.rate }] }));
+    }
+    setTsD(defaultTsD);
+  };
+  const startEditSlot = (idx: number) => {
+    const slot = formData.timeSlots[idx];
+    setTsD({ label: slot.label, startTime: slot.startTime, endTime: slot.endTime, rate: slot.rate });
+    setEditingSlotIdx(idx);
+  };
+  const cancelEditSlot = () => {
+    setEditingSlotIdx(null);
+    setTsD(defaultTsD);
   };
   const removeTimeSlot = (idx: number) => {
+    if (editingSlotIdx === idx) { setEditingSlotIdx(null); setTsD(defaultTsD); }
     setFormData(prev => ({ ...prev, timeSlots: prev.timeSlots.filter((_, i) => i !== idx) }));
   };
 
@@ -1310,7 +1331,7 @@ export default function AdminListingsForm() {
                       {formData.timeSlots.length > 0 && (
                         <div className="space-y-2">
                           {formData.timeSlots.map((slot, idx) => (
-                            <div key={idx} className="flex items-center gap-3 bg-muted/30 rounded-lg px-3 py-2.5 border">
+                            <div key={idx} className={`flex items-center gap-3 rounded-lg px-3 py-2.5 border transition-colors ${editingSlotIdx === idx ? "border-primary bg-primary/5 ring-1 ring-primary/30" : "bg-muted/30"}`}>
                               <Clock className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
                               <div className="flex-1 min-w-0">
                                 <p className="text-sm font-semibold truncate">{slot.label}</p>
@@ -1319,15 +1340,20 @@ export default function AdminListingsForm() {
                               <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${slot.rate === "half_day" ? "bg-amber-100 text-amber-700" : "bg-blue-100 text-blue-700"}`}>
                                 {slot.rate === "half_day" ? "Half Day Rate" : "Full Day Rate"}
                               </span>
-                              <button type="button" onClick={() => removeTimeSlot(idx)} className="text-muted-foreground hover:text-destructive transition-colors shrink-0">
+                              <button type="button" onClick={() => startEditSlot(idx)} className="text-muted-foreground hover:text-primary transition-colors shrink-0" title="Edit slot">
+                                <Pencil className="w-3.5 h-3.5" />
+                              </button>
+                              <button type="button" onClick={() => removeTimeSlot(idx)} className="text-muted-foreground hover:text-destructive transition-colors shrink-0" title="Delete slot">
                                 <Trash2 className="w-3.5 h-3.5" />
                               </button>
                             </div>
                           ))}
                         </div>
                       )}
-                      <div className="rounded-lg border border-dashed p-3 space-y-3 bg-muted/10">
-                        <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Add a Slot</p>
+                      <div className={`rounded-lg border p-3 space-y-3 ${editingSlotIdx !== null ? "border-primary bg-primary/5" : "border-dashed bg-muted/10"}`}>
+                        <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                          {editingSlotIdx !== null ? `Editing Slot ${editingSlotIdx + 1}` : "Add a Slot"}
+                        </p>
                         <div className="space-y-1">
                           <Label className="text-xs">Label <span className="text-muted-foreground font-normal">(optional)</span></Label>
                           <Input className="h-8 text-sm" placeholder='e.g. "Morning Slot"' value={tsD.label} onChange={e => setTsD(prev => ({ ...prev, label: e.target.value }))} />
@@ -1359,9 +1385,19 @@ export default function AdminListingsForm() {
                         {tsD.rate === "half_day" && !formData.halfDayEnabled && (
                           <p className="text-xs text-amber-600 flex items-center gap-1"><Info className="w-3 h-3" /> Enable Half Day Pricing above to use this rate.</p>
                         )}
-                        <Button type="button" size="sm" variant="outline" onClick={addTimeSlot} className="w-full gap-1.5">
-                          <Plus className="w-3.5 h-3.5" /> Add Time Slot
-                        </Button>
+                        <div className="flex gap-2">
+                          <Button type="button" size="sm" variant={editingSlotIdx !== null ? "default" : "outline"} onClick={addTimeSlot} className="flex-1 gap-1.5">
+                            {editingSlotIdx !== null
+                              ? <><Pencil className="w-3.5 h-3.5" /> Save Changes</>
+                              : <><Plus className="w-3.5 h-3.5" /> Add Time Slot</>
+                            }
+                          </Button>
+                          {editingSlotIdx !== null && (
+                            <Button type="button" size="sm" variant="ghost" onClick={cancelEditSlot}>
+                              Cancel
+                            </Button>
+                          )}
+                        </div>
                       </div>
                     </div>
                   )}
