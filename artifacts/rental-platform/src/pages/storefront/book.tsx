@@ -527,7 +527,7 @@ function StripePaymentForm({ onSuccess, customerEmail, testMode }: { onSuccess: 
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
-      <PaymentElement options={{ layout: "tabs", ...(testMode ? { wallets: { link: "never" } } : {}) }} />
+      <PaymentElement options={{ layout: "tabs", wallets: { applePay: "auto", googlePay: "auto", ...(testMode ? { link: "never" } : {}) } }} />
       {error && (
         <div className="flex items-center gap-2 text-destructive text-sm bg-destructive/10 rounded-lg px-4 py-3">
           <AlertTriangle className="w-4 h-4 shrink-0" />

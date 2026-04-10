@@ -339,8 +339,13 @@ router.post("/stripe/payment-intent", async (req, res) => {
       amount: amountCents,
       currency: "usd",
       receipt_email: (customerEmail && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(customerEmail)) ? customerEmail : undefined,
-      // Save the payment method for future off-session use (required for deposit hold/charge at pickup)
-      setup_future_usage: "off_session",
+      // Enable all available payment methods (Apple Pay, Google Pay, cards, etc.)
+      automatic_payment_methods: { enabled: true, allow_redirects: "never" },
+      // Save cards for future off-session use (deposit hold/charge at pickup).
+      // Scoped to card only so Apple Pay / Google Pay can still appear.
+      payment_method_options: {
+        card: { setup_future_usage: "off_session" },
+      },
       // Non-instant bookings: authorize only — capture when admin confirms
       ...(!instantBooking ? { capture_method: "manual" } : {}),
       description: `Rental booking — ${tenant.name}${isTestMode ? " [TEST MODE]" : ""}`,
