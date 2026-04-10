@@ -10,7 +10,7 @@ import {
   Mail, MessageSquare, Users, Send, Clock, CheckCircle2,
   Zap, ChevronDown, ChevronUp, History, Settings2, Filter,
   MailOpen, Phone, ToggleLeft, ToggleRight, Edit2, Check, X,
-  ExternalLink,
+  ExternalLink, Search, User,
 } from "lucide-react";
 import { adminPath, getAdminSession } from "@/lib/admin-nav";
 
@@ -74,6 +74,7 @@ export default function CommunicationsPage() {
   const [renters, setRenters] = useState<Renter[]>([]);
   const [loadingRenters, setLoadingRenters] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
+  const [recipientSearch, setRecipientSearch] = useState("");
   const [channel, setChannel] = useState<Channel>("email");
   const [subject, setSubject] = useState("");
   const [body, setBody] = useState("");
@@ -262,48 +263,104 @@ export default function CommunicationsPage() {
                   ))}
                 </div>
 
-                {/* Renter list */}
-                <div className="space-y-1.5 max-h-72 overflow-y-auto">
-                  {loadingRenters ? (
-                    <p className="text-xs text-muted-foreground text-center py-4">Loading renters…</p>
-                  ) : renters.length === 0 ? (
-                    <p className="text-xs text-muted-foreground text-center py-4">No renters found</p>
-                  ) : (
-                    <>
-                      <button
-                        onClick={() => {
-                          if (selectedIds.size === renters.length) setSelectedIds(new Set());
-                          else setSelectedIds(new Set(renters.map(r => r.bookingId)));
-                        }}
-                        className="text-xs font-semibold w-full text-left px-2 py-1 rounded hover:bg-gray-50 transition-colors"
-                        style={{ color: OS_GREEN }}
-                      >
-                        {selectedIds.size === renters.length ? "Deselect all" : "Select all"}
-                      </button>
-                      {renters.map(r => (
-                        <button
-                          key={r.bookingId}
-                          onClick={() => {
-                            const next = new Set(selectedIds);
-                            if (next.has(r.bookingId)) next.delete(r.bookingId);
-                            else next.add(r.bookingId);
-                            setSelectedIds(next);
-                          }}
-                          className={`w-full text-left p-2.5 rounded-xl border transition-all ${selectedIds.has(r.bookingId) ? "border-green-200 bg-green-50" : "border-gray-100 hover:border-gray-200"}`}
-                        >
-                          <div className="flex items-center justify-between">
-                            <span className="text-xs font-semibold text-gray-800 truncate">{r.name}</span>
-                            <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full text-white shrink-0 ml-1" style={{ backgroundColor: statusColor[r.status] || "#6b7280" }}>
-                              {r.status}
-                            </span>
-                          </div>
-                          <div className="text-[10px] text-muted-foreground truncate">{r.email}</div>
-                          <div className="text-[10px] text-muted-foreground">{r.startDate} → {r.endDate}</div>
-                        </button>
-                      ))}
-                    </>
+                {/* Search */}
+                <div className="relative">
+                  <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
+                  <input
+                    type="text"
+                    value={recipientSearch}
+                    onChange={e => setRecipientSearch(e.target.value)}
+                    placeholder="Search by name or email…"
+                    className="w-full pl-8 pr-3 py-1.5 text-xs rounded-lg border border-gray-200 bg-gray-50 focus:outline-none focus:ring-2 focus:ring-green-200 focus:border-green-400 transition-all"
+                  />
+                  {recipientSearch && (
+                    <button
+                      onClick={() => setRecipientSearch("")}
+                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
                   )}
                 </div>
+
+                {/* Renter list */}
+                {(() => {
+                  const q = recipientSearch.trim().toLowerCase();
+                  const visible = q
+                    ? renters.filter(r =>
+                        r.name.toLowerCase().includes(q) ||
+                        r.email.toLowerCase().includes(q)
+                      )
+                    : renters;
+                  return (
+                    <div className="space-y-1.5 max-h-64 overflow-y-auto">
+                      {loadingRenters ? (
+                        <p className="text-xs text-muted-foreground text-center py-4">Loading renters…</p>
+                      ) : visible.length === 0 ? (
+                        <p className="text-xs text-muted-foreground text-center py-4">
+                          {recipientSearch ? "No renters match your search" : "No renters found"}
+                        </p>
+                      ) : (
+                        <>
+                          {!recipientSearch && (
+                            <button
+                              onClick={() => {
+                                if (selectedIds.size === renters.length) setSelectedIds(new Set());
+                                else setSelectedIds(new Set(renters.map(r => r.bookingId)));
+                              }}
+                              className="text-xs font-semibold w-full text-left px-2 py-1 rounded hover:bg-gray-50 transition-colors"
+                              style={{ color: OS_GREEN }}
+                            >
+                              {selectedIds.size === renters.length ? "Deselect all" : "Select all"}
+                            </button>
+                          )}
+                          {visible.map(r => {
+                            const checked = selectedIds.has(r.bookingId);
+                            const isOnlyOne = selectedIds.size === 1 && checked;
+                            return (
+                              <div
+                                key={r.bookingId}
+                                className={`relative group rounded-xl border transition-all ${checked ? "border-green-200 bg-green-50" : "border-gray-100 hover:border-gray-200"}`}
+                              >
+                                {/* Main click = toggle */}
+                                <button
+                                  onClick={() => {
+                                    const next = new Set(selectedIds);
+                                    if (next.has(r.bookingId)) next.delete(r.bookingId);
+                                    else next.add(r.bookingId);
+                                    setSelectedIds(next);
+                                  }}
+                                  className="w-full text-left p-2.5 pr-9"
+                                >
+                                  <div className="flex items-center gap-2">
+                                    <div className={`w-4 h-4 rounded border-2 flex items-center justify-center shrink-0 transition-colors ${checked ? "border-green-500 bg-green-500" : "border-gray-300"}`}>
+                                      {checked && <Check className="w-2.5 h-2.5 text-white" />}
+                                    </div>
+                                    <span className="text-xs font-semibold text-gray-800 truncate">{r.name}</span>
+                                    <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full text-white shrink-0 ml-auto" style={{ backgroundColor: statusColor[r.status] || "#6b7280" }}>
+                                      {r.status}
+                                    </span>
+                                  </div>
+                                  <div className="text-[10px] text-muted-foreground truncate mt-0.5 pl-6">{r.email}</div>
+                                </button>
+                                {/* "Only this person" button — visible on hover */}
+                                {!isOnlyOne && (
+                                  <button
+                                    title="Send to only this person"
+                                    onClick={() => setSelectedIds(new Set([r.bookingId]))}
+                                    className="absolute right-2 top-1/2 -translate-y-1/2 w-6 h-6 rounded-lg flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity bg-white border border-gray-200 hover:border-green-400 hover:text-green-600 text-muted-foreground shadow-sm"
+                                  >
+                                    <User className="w-3 h-3" />
+                                  </button>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </>
+                      )}
+                    </div>
+                  );
+                })()}
               </div>
             </div>
 
