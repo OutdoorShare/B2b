@@ -12,9 +12,14 @@ import {
   MailOpen, Phone, ToggleLeft, ToggleRight, Edit2, Check, X,
   ExternalLink,
 } from "lucide-react";
-import { adminPath } from "@/lib/admin-nav";
+import { adminPath, getAdminSession } from "@/lib/admin-nav";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
+
+function adminHeaders(): HeadersInit {
+  const s = getAdminSession();
+  return s?.token ? { "x-admin-token": s.token } : {};
+}
 const OS_GREEN = "#3ab549";
 
 type Filter = "all" | "future" | "active" | "past";
@@ -76,6 +81,7 @@ export default function CommunicationsPage() {
 
   // Automations state
   const [automations, setAutomations] = useState<Automation[]>([]);
+  const [loadingAutomations, setLoadingAutomations] = useState(false);
   const [editingTrigger, setEditingTrigger] = useState<string | null>(null);
   const [editDraft, setEditDraft] = useState<Partial<Automation>>({});
   const [savingAuto, setSavingAuto] = useState(false);
@@ -89,33 +95,37 @@ export default function CommunicationsPage() {
   }, [filter]);
 
   useEffect(() => {
-    if (tab === "automations" && automations.length === 0) fetchAutomations();
+    if (tab === "automations") fetchAutomations();
     if (tab === "history") fetchLogs();
   }, [tab]);
 
   async function fetchRenters() {
     setLoadingRenters(true);
     try {
-      const res = await fetch(`${BASE}/api/communications/renters?filter=${filter}`);
+      const res = await fetch(`${BASE}/api/communications/renters?filter=${filter}`, { headers: adminHeaders() });
       const data = await res.json();
-      setRenters(data);
-      setSelectedIds(new Set(data.map((r: Renter) => r.bookingId)));
+      setRenters(Array.isArray(data) ? data : []);
+      setSelectedIds(new Set((Array.isArray(data) ? data : []).map((r: Renter) => r.bookingId)));
     } catch { toast({ title: "Error", description: "Failed to load renters", variant: "destructive" }); }
     finally { setLoadingRenters(false); }
   }
 
   async function fetchAutomations() {
+    setLoadingAutomations(true);
     try {
-      const res = await fetch(`${BASE}/api/communications/automations`);
-      setAutomations(await res.json());
+      const res = await fetch(`${BASE}/api/communications/automations`, { headers: adminHeaders() });
+      const data = await res.json();
+      setAutomations(Array.isArray(data) ? data : []);
     } catch { toast({ title: "Error", description: "Failed to load automations", variant: "destructive" }); }
+    finally { setLoadingAutomations(false); }
   }
 
   async function fetchLogs() {
     setLoadingLogs(true);
     try {
-      const res = await fetch(`${BASE}/api/communications/logs`);
-      setLogs(await res.json());
+      const res = await fetch(`${BASE}/api/communications/logs`, { headers: adminHeaders() });
+      const data = await res.json();
+      setLogs(Array.isArray(data) ? data : []);
     } catch { toast({ title: "Error", description: "Failed to load history", variant: "destructive" }); }
     finally { setLoadingLogs(false); }
   }
@@ -130,7 +140,7 @@ export default function CommunicationsPage() {
       const recipients = renters.filter(r => selectedIds.has(r.bookingId));
       const res = await fetch(`${BASE}/api/communications/send`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...adminHeaders() },
         body: JSON.stringify({ recipients, channel, subject, body }),
       });
       const data = await res.json();
@@ -155,7 +165,7 @@ export default function CommunicationsPage() {
     try {
       const res = await fetch(`${BASE}/api/communications/automations/${auto.trigger}`, {
         method: "PUT",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...adminHeaders() },
         body: JSON.stringify(updated),
       });
       const data = await res.json();
@@ -169,7 +179,7 @@ export default function CommunicationsPage() {
     try {
       const res = await fetch(`${BASE}/api/communications/automations/${editingTrigger}`, {
         method: "PUT",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...adminHeaders() },
         body: JSON.stringify(editDraft),
       });
       const data = await res.json();
@@ -382,8 +392,14 @@ export default function CommunicationsPage() {
           <div className="space-y-4">
             <p className="text-sm text-muted-foreground">Automatically send messages when a booking changes phase. Edit templates with placeholders like <code className="bg-gray-100 px-1 rounded text-xs">{"{{customerName}}"}</code>, <code className="bg-gray-100 px-1 rounded text-xs">{"{{startDate}}"}</code>, <code className="bg-gray-100 px-1 rounded text-xs">{"{{endDate}}"}</code>, <code className="bg-gray-100 px-1 rounded text-xs">{"{{totalPrice}}"}</code>.</p>
 
-            {automations.length === 0 ? (
-              <p className="text-sm text-muted-foreground py-8 text-center">Loading automations…</p>
+            {loadingAutomations ? (
+              <div className="py-8 text-center space-y-2">
+                {[1,2,3,4,5].map(i => (
+                  <div key={i} className="h-16 bg-muted/50 rounded-xl animate-pulse" />
+                ))}
+              </div>
+            ) : automations.length === 0 ? (
+              <p className="text-sm text-muted-foreground py-8 text-center">No automation templates found.</p>
             ) : (
               automations.map(auto => {
                 const isEditing = editingTrigger === auto.trigger;
