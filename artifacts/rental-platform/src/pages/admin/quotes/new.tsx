@@ -163,7 +163,7 @@ export default function AdminQuotesNew() {
                       id="startDate" 
                       type="date"
                       value={formData.startDate} 
-                      onChange={e => setFormData({...formData, startDate: e.target.value})} 
+                      onChange={e => setFormData(d => ({...d, startDate: e.target.value}))} 
                       required 
                     />
                   </div>
@@ -173,7 +173,7 @@ export default function AdminQuotesNew() {
                       id="endDate" 
                       type="date"
                       value={formData.endDate} 
-                      onChange={e => setFormData({...formData, endDate: e.target.value})} 
+                      onChange={e => setFormData(d => ({...d, endDate: e.target.value}))} 
                       required 
                     />
                   </div>
@@ -267,7 +267,7 @@ export default function AdminQuotesNew() {
               <CardContent>
                 <Textarea 
                   value={formData.notes} 
-                  onChange={e => setFormData({...formData, notes: e.target.value})} 
+                  onChange={e => setFormData(d => ({...d, notes: e.target.value}))} 
                   placeholder="Additional terms, instructions, or internal notes..."
                   rows={4}
                 />
@@ -294,7 +294,7 @@ export default function AdminQuotesNew() {
                       min="0" 
                       step="0.01"
                       value={formData.discount || ''} 
-                      onChange={e => setFormData({...formData, discount: parseFloat(e.target.value) || 0})} 
+                      onChange={e => setFormData(d => ({...d, discount: parseFloat(e.target.value) || 0}))} 
                     />
                   </div>
                   
