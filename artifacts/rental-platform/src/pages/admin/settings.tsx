@@ -357,8 +357,9 @@ export default function AdminSettings() {
   const [logoUploading,  setLogoUploading]  = useState(false);
   const [coverUploading, setCoverUploading] = useState(false);
   const [logoCropFiles, setLogoCropFiles] = useState<File[]>([]);
+  const [coverCropFiles, setCoverCropFiles] = useState<File[]>([]);
 
-  const logoUploadFn = async (blob: Blob, filename: string): Promise<string> => {
+  const makeUploadFn = () => async (blob: Blob, filename: string): Promise<string> => {
     const fd = new FormData();
     fd.append("file", new File([blob], filename, { type: blob.type }));
     const res = await fetch(`${BASE}/api/upload/image`, { method: "POST", body: fd });
@@ -366,6 +367,8 @@ export default function AdminSettings() {
     const data = await res.json();
     return data.url;
   };
+  const logoUploadFn = makeUploadFn();
+  const coverUploadFn = makeUploadFn();
 
   const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
@@ -523,6 +526,39 @@ export default function AdminSettings() {
             setLogoCropFiles([]);
           }}
           onCancel={() => setLogoCropFiles([])}
+        />
+      )}
+      {coverCropFiles.length > 0 && (
+        <ImageCropDialog
+          files={coverCropFiles}
+          aspect={12 / 5}
+          outputWidth={1440}
+          uploadFn={coverUploadFn}
+          onDone={([url]) => {
+            if (url) {
+              setCoverUploading(true);
+              setFormData((prev: any) => {
+                const updated = { ...prev, coverImageUrl: url };
+                fetch(`${BASE}/api/business`, {
+                  method: "PUT",
+                  headers: { ...adminHeaders(), "Content-Type": "application/json" },
+                  body: JSON.stringify(updated),
+                })
+                  .then(r => r.ok ? r.json() : null)
+                  .then(saved => {
+                    if (saved) {
+                      queryClient.setQueryData(["/api/business", urlSlug], saved);
+                      queryClient.setQueryData(getGetBusinessProfileQueryKey(), saved);
+                      toast({ title: "Cover photo saved" });
+                    }
+                  })
+                  .finally(() => setCoverUploading(false));
+                return updated;
+              });
+            }
+            setCoverCropFiles([]);
+          }}
+          onCancel={() => setCoverCropFiles([])}
         />
       )}
       <div>
@@ -986,7 +1022,7 @@ export default function AdminSettings() {
                     type="file"
                     accept="image/jpeg,image/png,image/webp,image/gif"
                     className="hidden"
-                    onChange={e => { const f = e.target.files?.[0]; if (f) uploadImageFile(f, setCoverUploading, "coverImageUrl"); }}
+                    onChange={e => { const f = e.target.files?.[0]; if (f) { setCoverCropFiles([f]); e.target.value = ""; } }}
                   />
                   {coverUrl ? (
                     <div className="relative rounded-xl overflow-hidden border group">
