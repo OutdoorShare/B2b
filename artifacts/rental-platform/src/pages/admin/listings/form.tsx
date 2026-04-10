@@ -16,7 +16,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { ArrowLeft, Upload, X, CheckCircle2, AlertCircle, CircleDashed, ImagePlus, Loader2, IdCard, Sparkles, ChevronDown, ChevronUp, RefreshCw, Info, Plus, Trash2, Clock, Search, Package, Link2, Unlink, Wand2, Lock, Pencil } from "lucide-react";
+import { ArrowLeft, Upload, X, CheckCircle2, AlertCircle, CircleDashed, ImagePlus, Loader2, IdCard, Sparkles, ChevronDown, ChevronUp, RefreshCw, Info, Plus, Trash2, Clock, Search, Package, Link2, Unlink, Wand2, Lock, Pencil, Zap, Save } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Checkbox } from "@/components/ui/checkbox";
 import { AddonManager } from "@/components/addon-manager";
@@ -1533,28 +1533,83 @@ export default function AdminListingsForm() {
               );
             })()}
 
-            {/* ── Action Buttons ── */}
-            <div className="flex justify-end gap-3 pt-2">
-              <Button type="button" variant="outline" onClick={() => setLocation(adminPath("/listings"))}>
-                Cancel
-              </Button>
-              <Button
-                type="submit"
-                variant="outline"
-                disabled={isPending}
-                onClick={() => setPublishIntent(false)}
-              >
-                {isPending && !publishIntent ? 'Saving...' : (isEditing ? 'Save Changes' : 'Save as Draft')}
-              </Button>
-              {formData.status !== "active" && (
-                <Button
-                  type="submit"
-                  disabled={isPending || publishBlocked}
-                  onClick={() => setPublishIntent(true)}
-                >
-                  {isPending && publishIntent ? 'Publishing...' : 'Save & Publish'}
-                </Button>
-              )}
+            {/* ── Sticky Action Bar ── */}
+            <div className="sticky bottom-0 z-30 -mx-4 sm:-mx-6 lg:-mx-8 mt-6">
+              <div className="bg-white border-t border-gray-200 shadow-[0_-4px_16px_rgba(0,0,0,0.08)] px-4 sm:px-6 lg:px-8 py-4">
+                <div className="max-w-5xl mx-auto flex items-center justify-between gap-4">
+                  {/* Left: context */}
+                  <div className="hidden sm:flex items-center gap-2 text-sm text-muted-foreground">
+                    <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold border ${
+                      formData.status === "active"
+                        ? "bg-green-50 text-green-700 border-green-200"
+                        : formData.status === "inactive"
+                        ? "bg-gray-50 text-gray-600 border-gray-200"
+                        : "bg-amber-50 text-amber-700 border-amber-200"
+                    }`}>
+                      <span className={`w-1.5 h-1.5 rounded-full ${
+                        formData.status === "active" ? "bg-green-500" : formData.status === "inactive" ? "bg-gray-400" : "bg-amber-500"
+                      }`} />
+                      {formData.status === "active" ? "Published" : formData.status === "inactive" ? "Inactive" : "Draft"}
+                    </span>
+                    <span className="text-muted-foreground/60">·</span>
+                    <span>{isEditing ? "Editing listing" : "New listing"}</span>
+                  </div>
+
+                  {/* Right: actions */}
+                  <div className="flex items-center gap-3 ml-auto">
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setLocation(adminPath("/listings"))}
+                      className="text-muted-foreground"
+                    >
+                      Cancel
+                    </Button>
+                    <Button
+                      type="submit"
+                      variant="outline"
+                      size="lg"
+                      disabled={isPending}
+                      onClick={() => setPublishIntent(false)}
+                      className="min-w-[130px] font-semibold"
+                    >
+                      {isPending && !publishIntent
+                        ? <><Loader2 className="w-4 h-4 animate-spin mr-2" />Saving…</>
+                        : isEditing ? 'Save Changes' : 'Save as Draft'
+                      }
+                    </Button>
+                    {formData.status !== "active" && (
+                      <Button
+                        type="submit"
+                        size="lg"
+                        disabled={isPending || publishBlocked}
+                        onClick={() => setPublishIntent(true)}
+                        className="min-w-[150px] font-bold gap-2 bg-primary hover:bg-primary/90 text-white shadow-md hover:shadow-lg transition-shadow"
+                      >
+                        {isPending && publishIntent
+                          ? <><Loader2 className="w-4 h-4 animate-spin" />Publishing…</>
+                          : <><Zap className="w-4 h-4" />Save & Publish</>
+                        }
+                      </Button>
+                    )}
+                    {formData.status === "active" && (
+                      <Button
+                        type="submit"
+                        size="lg"
+                        disabled={isPending}
+                        onClick={() => setPublishIntent(false)}
+                        className="min-w-[150px] font-bold gap-2 bg-primary hover:bg-primary/90 text-white shadow-md hover:shadow-lg transition-shadow"
+                      >
+                        {isPending
+                          ? <><Loader2 className="w-4 h-4 animate-spin" />Saving…</>
+                          : <><Save className="w-4 h-4" />Save Changes</>
+                        }
+                      </Button>
+                    )}
+                  </div>
+                </div>
+              </div>
             </div>
       </form>
 
