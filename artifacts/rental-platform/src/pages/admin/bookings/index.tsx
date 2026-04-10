@@ -1,6 +1,7 @@
 import { adminPath } from "@/lib/admin-nav";
 import { useState, useMemo } from "react";
 import { Link, useLocation } from "wouter";
+import { CustomerContactPopover } from "@/components/admin/customer-contact-popover";
 import {
   useGetBookings,
   useUpdateBooking,
@@ -414,7 +415,11 @@ export default function AdminBookings() {
                           </div>
                         </TableCell>
                         <TableCell>
-                          <div className={`font-medium ${isUnseen ? "font-semibold" : ""}`}>{booking.customerName}</div>
+                          <CustomerContactPopover
+                            customerName={booking.customerName}
+                            customerEmail={booking.customerEmail ?? ""}
+                            className={isUnseen ? "font-semibold" : ""}
+                          />
                           <div className="text-xs text-muted-foreground">{booking.customerEmail}</div>
                         </TableCell>
                         <TableCell className="font-medium">{booking.listingTitle}</TableCell>

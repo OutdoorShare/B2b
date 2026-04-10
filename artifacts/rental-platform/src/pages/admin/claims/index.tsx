@@ -1,6 +1,7 @@
 import { adminPath } from "@/lib/admin-nav";
 import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
+import { CustomerContactPopover } from "@/components/admin/customer-contact-popover";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -218,7 +219,10 @@ export default function AdminClaims() {
                     >
                       <td className="px-5 py-4 font-mono text-xs text-muted-foreground">#{claim.id}</td>
                       <td className="px-5 py-4">
-                        <p className="font-semibold leading-snug">{claim.customerName}</p>
+                        <CustomerContactPopover
+                          customerName={claim.customerName}
+                          customerEmail={claim.customerEmail}
+                        />
                         <p className="text-xs text-muted-foreground">{claim.customerEmail}</p>
                       </td>
                       <td className="px-5 py-4">

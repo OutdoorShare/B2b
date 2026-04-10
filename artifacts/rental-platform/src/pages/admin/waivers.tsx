@@ -1,5 +1,6 @@
 import { adminPath } from "@/lib/admin-nav";
 import { useState } from "react";
+import { CustomerContactPopover } from "@/components/admin/customer-contact-popover";
 import { useGetBookings } from "@workspace/api-client-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -78,7 +79,11 @@ export default function AdminWaivers() {
                   <div className="flex items-start justify-between gap-4">
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 flex-wrap">
-                        <span className="font-semibold text-base">{booking.customerName}</span>
+                        <CustomerContactPopover
+                          customerName={booking.customerName}
+                          customerEmail={booking.customerEmail ?? ""}
+                          className="font-semibold text-base"
+                        />
                         <Badge variant="outline" className="border-green-300 text-green-700 bg-green-50 text-xs">
                           <FileSignature className="w-3 h-3 mr-1" />
                           Signed

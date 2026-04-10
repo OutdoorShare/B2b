@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { Link } from "wouter";
+import { CustomerContactPopover } from "@/components/admin/customer-contact-popover";
 import { AdminLayout } from "@/components/layout/admin-layout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -578,7 +579,11 @@ export default function CommunicationsPage() {
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 mb-0.5">
-                        <span className="text-sm font-semibold text-gray-900">{log.customerName}</span>
+                        <CustomerContactPopover
+                          customerName={log.customerName}
+                          customerEmail={log.customerEmail}
+                          className="text-sm font-semibold text-gray-900"
+                        />
                         <span className="text-xs text-muted-foreground">{log.customerEmail}</span>
                         <Badge className="text-[10px] px-1.5 py-0 h-4 ml-auto" variant="outline">
                           {triggerLabel[log.trigger] || log.trigger}

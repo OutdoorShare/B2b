@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useParams, useLocation } from "wouter";
+import { CustomerContactPopover } from "@/components/admin/customer-contact-popover";
 import { getAdminSession, getAdminSlug } from "@/lib/admin-nav";
 import {
   MessageCircle,
@@ -256,9 +257,11 @@ export default function AdminMessages() {
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex justify-between items-start gap-1">
-                    <p className={cn("text-sm truncate", hasUnread ? "font-semibold text-foreground" : "text-foreground/80")}>
-                      {thread.customerName}
-                    </p>
+                    <CustomerContactPopover
+                      customerName={thread.customerName}
+                      customerEmail={thread.customerEmail}
+                      className={cn("text-sm", hasUnread ? "font-semibold text-foreground" : "text-foreground/80")}
+                    />
                     <span className="text-[10px] text-muted-foreground shrink-0">{timeAgo(thread.lastMessageAt)}</span>
                   </div>
                   <div className="flex items-center gap-1.5 mt-0.5">
@@ -289,7 +292,11 @@ export default function AdminMessages() {
                 {initials(activeThread.customerName)}
               </div>
               <div className="min-w-0">
-                <p className="text-sm font-semibold text-foreground truncate">{activeThread.customerName}</p>
+                <CustomerContactPopover
+                  customerName={activeThread.customerName}
+                  customerEmail={activeThread.customerEmail}
+                  className="text-sm font-semibold text-foreground"
+                />
                 <p className="text-xs text-muted-foreground truncate">{activeThread.customerEmail}</p>
               </div>
             </div>

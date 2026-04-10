@@ -346,6 +346,10 @@ router.post("/customers/:id/save-payment-method", async (req, res) => {
 router.get("/admin/renters", async (req, res) => {
   if (!req.tenantId) { res.status(401).json({ error: "Unauthorized" }); return; }
   try {
+    const emailFilter = req.query.email ? String(req.query.email).toLowerCase().trim() : null;
+    const conditions: any[] = [eq(bookingsTable.tenantId, req.tenantId)];
+    if (emailFilter) conditions.push(eq(bookingsTable.customerEmail, emailFilter));
+
     const rows = await db
       .select({
         email: bookingsTable.customerEmail,
@@ -356,7 +360,7 @@ router.get("/admin/renters", async (req, res) => {
         createdAt: bookingsTable.createdAt,
       })
       .from(bookingsTable)
-      .where(eq(bookingsTable.tenantId, req.tenantId))
+      .where(and(...conditions))
       .orderBy(desc(bookingsTable.createdAt));
 
     // Aggregate by email
