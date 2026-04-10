@@ -59,7 +59,31 @@ app.use(
     },
   }),
 );
-app.use(cors());
+const ALLOWED_ORIGIN_PATTERNS = [
+  /^https?:\/\/localhost(:\d+)?$/,
+  /^https?:\/\/.*\.replit\.dev$/,
+  /^https?:\/\/.*\.replit\.app$/,
+  /^https?:\/\/.*\.myoutdoorshare\.com$/,
+];
+
+// Extra origins from env (space-separated), e.g. ALLOWED_ORIGINS="https://custom.com"
+const extraOrigins = (process.env.ALLOWED_ORIGINS ?? "")
+  .split(" ")
+  .map(s => s.trim())
+  .filter(Boolean);
+
+app.use(
+  cors({
+    origin(origin, cb) {
+      // Allow server-to-server / same-origin requests (no Origin header)
+      if (!origin) return cb(null, true);
+      if (extraOrigins.includes(origin)) return cb(null, true);
+      if (ALLOWED_ORIGIN_PATTERNS.some(re => re.test(origin))) return cb(null, true);
+      cb(new Error(`CORS: origin not allowed — ${origin}`));
+    },
+    credentials: true,
+  })
+);
 
 // Stripe + billing webhooks need raw body for signature verification — must be before express.json()
 app.use("/api/stripe/webhook", express.raw({ type: "application/json" }));
