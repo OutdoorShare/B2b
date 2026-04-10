@@ -324,7 +324,7 @@ export default function GetStartedPage() {
           <nav className="hidden md:flex items-center gap-8 text-sm font-medium text-white/70">
             <a href="#features" className="hover:text-white transition-colors">Features</a>
             <a href="#pricing" className="hover:text-white transition-colors">Pricing</a>
-            <Link href="/audit" className="hover:text-white transition-colors font-semibold" style={{ color: OS_GREEN }}>Free Audit</Link>
+            <a href="/audit" target="_blank" rel="noopener noreferrer" className="hover:text-white transition-colors font-semibold" style={{ color: OS_GREEN }}>Free Audit</a>
           </nav>
           <div className="flex items-center gap-3">
             <SignInDropdown />
@@ -772,7 +772,7 @@ export default function GetStartedPage() {
                 ))}
               </ul>
               <div className="flex flex-wrap gap-3">
-                <Link href="/audit">
+                <a href="/audit" target="_blank" rel="noopener noreferrer">
                   <Button
                     size="lg"
                     className="rounded-full px-8 font-bold text-white hover:opacity-90"
@@ -780,7 +780,7 @@ export default function GetStartedPage() {
                   >
                     Get My Free Audit <ArrowRight className="w-4 h-4 ml-2" />
                   </Button>
-                </Link>
+                </a>
               </div>
               <p className="text-white/40 text-xs mt-4 flex items-center gap-1.5">
                 <Phone className="w-3.5 h-3.5" />
