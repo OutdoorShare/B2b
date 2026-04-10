@@ -28,8 +28,10 @@ router.get("/billing/status", requireAdmin, async (req, res) => {
 
     const isBlocked = tenant.status === "suspended";
 
+    const PLAN_FEE: Record<string, number> = { starter: 15, professional: 7, enterprise: 7 };
     res.json({
       plan: tenant.plan,
+      feePercent: parseFloat(tenant.platformFeePercent ?? String(PLAN_FEE[tenant.plan ?? "starter"] ?? 15)),
       status: tenant.status,
       trialActive: false,
       trialExpired: false,
@@ -53,7 +55,9 @@ router.post("/billing/checkout-session", requireAdmin, async (req, res) => {
     const [tenant] = await db.select().from(tenantsTable).where(eq(tenantsTable.id, req.tenantId!)).limit(1);
     if (!tenant) { res.status(404).json({ error: "Tenant not found" }); return; }
 
-    const planConfig = PLAN_CONFIG[tenant.plan];
+    // Allow caller to specify a target plan; fall back to tenant's current plan
+    const targetPlan: string = req.body?.plan ?? tenant.plan;
+    const planConfig = PLAN_CONFIG[targetPlan];
     if (!planConfig) {
       res.status(400).json({ error: "This plan requires manual setup. Please contact us." });
       return;
@@ -89,7 +93,7 @@ router.post("/billing/checkout-session", requireAdmin, async (req, res) => {
       }],
       success_url: `${baseUrl}/${tenant.slug}/admin/billing?success=true&session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${baseUrl}/${tenant.slug}/admin/billing?canceled=true`,
-      metadata: { tenant_id: String(tenant.id), tenant_slug: tenant.slug },
+      metadata: { tenant_id: String(tenant.id), tenant_slug: tenant.slug, target_plan: targetPlan },
     });
 
     res.json({ url: session.url });
@@ -146,15 +150,18 @@ router.post("/billing/webhook", async (req, res) => {
       case "checkout.session.completed": {
         const session = event.data.object;
         const tenantId = Number(session.metadata?.tenant_id);
+        const targetPlan = session.metadata?.target_plan;
         if (tenantId && session.subscription) {
           const sub = await stripe.subscriptions.retrieve(session.subscription);
-          await db.update(tenantsTable).set({
+          const update: Record<string, any> = {
             subscriptionId: sub.id,
             subscriptionStatus: sub.status,
             currentPeriodEnd: new Date((sub as any).current_period_end * 1000),
             status: "active",
             updatedAt: new Date(),
-          }).where(eq(tenantsTable.id, tenantId));
+          };
+          if (targetPlan && PAID_PLANS.has(targetPlan)) update.plan = targetPlan;
+          await db.update(tenantsTable).set(update).where(eq(tenantsTable.id, tenantId));
           // Provision GHL sub-account for paid plan (non-blocking)
           provisionGHLIfNeeded(tenantId).catch(e => console.error("[GHL] background provision error:", e.message));
         }
