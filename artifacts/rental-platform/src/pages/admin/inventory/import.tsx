@@ -26,6 +26,10 @@ const COLUMN_MAP: Record<string, string> = {
   title: "name",
   sku: "sku",
   "item #": "sku",
+  "item number": "sku",
+  "item no": "sku",
+  "part number": "sku",
+  "part #": "sku",
   vin: "serialNumber",
   hin: "serialNumber",
   "serial number": "serialNumber",
@@ -33,12 +37,21 @@ const COLUMN_MAP: Record<string, string> = {
   "serial #": "serialNumber",
   serial_number: "serialNumber",
   "vehicle id number": "serialNumber",
+  "vehicle identification number": "serialNumber",
+  "hull id": "serialNumber",
   "hull id number": "serialNumber",
+  "hull identification number": "serialNumber",
   "vin/hin": "serialNumber",
   "vin / hin": "serialNumber",
-  "registration number": "serialNumber",
-  vin_hin_serial: "serialNumber",
   "vin/hin/serial": "serialNumber",
+  "vin / hin / serial": "serialNumber",
+  "vin/hin/serial #": "serialNumber",
+  "serial/vin/hin": "serialNumber",
+  "serial # / hull id": "serialNumber",
+  "serial# / hull id": "serialNumber",
+  "registration number": "serialNumber",
+  "registration #": "serialNumber",
+  vin_hin_serial: "serialNumber",
   category: "category",
   "category name": "category",
   type: "category",
@@ -60,7 +73,7 @@ const COLUMN_MAP: Record<string, string> = {
   count: "quantity",
   year: "year",
   "model year": "year",
-  "yr": "year",
+  yr: "year",
   brand: "brand",
   manufacturer: "brand",
   make: "brand",
@@ -74,6 +87,52 @@ const COLUMN_MAP: Record<string, string> = {
   "next service": "nextMaintenanceDate",
   "service date": "nextMaintenanceDate",
 };
+
+/** Strip all non-alphanumeric characters and collapse whitespace. */
+function normStr(s: string): string {
+  return s.toLowerCase().replace(/[^a-z0-9]+/g, " ").replace(/\s+/g, " ").trim();
+}
+
+/**
+ * Auto-detect which COLUMN_MAP field a raw CSV/spreadsheet header should map to.
+ * Steps (highest → lowest confidence):
+ *  1. Exact lowercase match against COLUMN_MAP keys.
+ *  2. Normalized (strip punctuation) exact match against COLUMN_MAP keys.
+ *  3. Word-overlap: all key words must appear in the header — prefer longer/more-specific keys.
+ */
+function matchColumn(rawHeader: string): string {
+  const lower = rawHeader.toLowerCase().trim();
+
+  // 1. Exact
+  if (COLUMN_MAP[lower]) return COLUMN_MAP[lower];
+
+  // 2. Normalized exact
+  const normHeader = normStr(lower);
+  if (COLUMN_MAP[normHeader]) return COLUMN_MAP[normHeader];
+  for (const [k, v] of Object.entries(COLUMN_MAP)) {
+    if (normStr(k) === normHeader) return v;
+  }
+
+  // 3. Token overlap: every word in the key must appear in the header tokens
+  //    Prefer the longest key that fully matches (more specific wins).
+  const headerTokens = new Set(normHeader.split(" ").filter(w => w.length >= 2));
+  const candidates: Array<{ field: string; keyLen: number }> = [];
+
+  for (const [k, v] of Object.entries(COLUMN_MAP)) {
+    const keyTokens = normStr(k).split(" ").filter(w => w.length >= 2);
+    if (!keyTokens.length) continue;
+    const allMatch = keyTokens.every(t => headerTokens.has(t));
+    if (allMatch) candidates.push({ field: v, keyLen: k.length });
+  }
+
+  if (candidates.length) {
+    // Longest key = most specific match
+    candidates.sort((a, b) => b.keyLen - a.keyLen);
+    return candidates[0].field;
+  }
+
+  return "";
+}
 
 const REQUIRED_FIELDS = ["name"];
 
@@ -230,7 +289,7 @@ export default function AdminInventoryImport() {
 
         const initialMapping: Record<string, string> = {};
         headers.forEach(h => {
-          initialMapping[h] = COLUMN_MAP[h.toLowerCase()] ?? "";
+          initialMapping[h] = matchColumn(h);
         });
 
         setRawHeaders(headers);
