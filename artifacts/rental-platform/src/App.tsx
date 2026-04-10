@@ -45,6 +45,9 @@ import AdminBookingDetail from "@/pages/admin/bookings/detail";
 import AdminBookingForm from "@/pages/admin/bookings/form";
 import AdminQuotes from "@/pages/admin/quotes/index";
 import AdminQuotesNew from "@/pages/admin/quotes/new";
+import AdminQuoteDetail from "@/pages/admin/quotes/detail";
+import AdminQuoteEdit from "@/pages/admin/quotes/edit";
+import StorefrontQuoteView from "@/pages/storefront/quote-view";
 import AdminAnalytics from "@/pages/admin/analytics";
 import AdminLaunchpad from "@/pages/admin/launchpad";
 import AdminSettings from "@/pages/admin/settings";
@@ -322,6 +325,12 @@ function Router() {
       <Route path="/:slug/admin/quotes/new">
         <AdminGuard><AdminLayout><AdminQuotesNew /></AdminLayout></AdminGuard>
       </Route>
+      <Route path="/:slug/admin/quotes/:id/edit">
+        <AdminGuard><AdminLayout><AdminQuoteEdit /></AdminLayout></AdminGuard>
+      </Route>
+      <Route path="/:slug/admin/quotes/:id">
+        <AdminGuard><AdminLayout><AdminQuoteDetail /></AdminLayout></AdminGuard>
+      </Route>
       <Route path="/:slug/admin/quotes">
         <AdminGuard><AdminLayout><AdminQuotes /></AdminLayout></AdminGuard>
       </Route>
@@ -425,6 +434,11 @@ function Router() {
       {/* Listing Embed Route — iframe-friendly, no layout wrapper */}
       <Route path="/:slug/embed/listing/:id">
         <EmbedListing />
+      </Route>
+
+      {/* Public Quote View — no auth, no storefront layout */}
+      <Route path="/:slug/quotes/:id">
+        <StorefrontQuoteView />
       </Route>
 
       {/* Storefront Routes — tenant-specific via slug prefix */}

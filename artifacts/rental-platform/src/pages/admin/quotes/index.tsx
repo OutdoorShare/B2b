@@ -1,6 +1,6 @@
 import { adminPath, getAdminSession } from "@/lib/admin-nav";
 import { useState } from "react";
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
 import { 
   useGetQuotes, 
   getGetQuotesQueryKey
@@ -30,6 +30,7 @@ export default function AdminQuotes() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const [sendingId, setSendingId] = useState<number | null>(null);
+  const [, setLocation] = useLocation();
 
   const sendQuote = async (id: number, email: string) => {
     setSendingId(id);
@@ -94,7 +95,11 @@ export default function AdminQuotes() {
               </TableHeader>
               <TableBody>
                 {quotes.map((quote) => (
-                  <TableRow key={quote.id}>
+                  <TableRow
+                    key={quote.id}
+                    className="cursor-pointer hover:bg-muted/40 transition-colors"
+                    onClick={() => setLocation(adminPath(`/quotes/${quote.id}`))}
+                  >
                     <TableCell className="font-mono text-xs text-muted-foreground">
                       QT-{quote.id.toString().padStart(4, '0')}
                     </TableCell>
@@ -112,7 +117,7 @@ export default function AdminQuotes() {
                     </TableCell>
                     <TableCell className="font-medium">${quote.totalPrice.toFixed(2)}</TableCell>
                     <TableCell>{getStatusBadge(quote.status)}</TableCell>
-                    <TableCell>
+                    <TableCell onClick={e => e.stopPropagation()}>
                       {(quote.status === "draft" || quote.status === "sent") && (
                         <Button
                           size="sm"

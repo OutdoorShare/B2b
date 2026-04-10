@@ -30,6 +30,42 @@ router.get("/quotes", async (req, res) => {
   }
 });
 
+router.get("/quotes/:id", async (req, res) => {
+  try {
+    const conditions = [eq(quotesTable.id, Number(req.params.id))];
+    if (req.tenantId) conditions.push(eq(quotesTable.tenantId, req.tenantId));
+    const [quote] = await db.select().from(quotesTable).where(and(...conditions));
+    if (!quote) { res.status(404).json({ error: "Not found" }); return; }
+    res.json(formatQuote(quote));
+  } catch (err) {
+    req.log.error(err);
+    res.status(500).json({ error: "Failed to fetch quote" });
+  }
+});
+
+// Public (no auth) — used for the customer-facing quote view link
+router.get("/public/quotes/:id", async (req, res) => {
+  try {
+    const [quote] = await db.select().from(quotesTable).where(eq(quotesTable.id, Number(req.params.id)));
+    if (!quote) { res.status(404).json({ error: "Not found" }); return; }
+    // Fetch company name for display
+    const [profileRow] = quote.tenantId
+      ? await db
+          .select({ name: businessProfileTable.name, email: businessProfileTable.email, outboundEmail: businessProfileTable.outboundEmail })
+          .from(businessProfileTable)
+          .where(eq(businessProfileTable.tenantId, quote.tenantId))
+      : [];
+    res.json({
+      ...formatQuote(quote),
+      companyName: profileRow?.name ?? null,
+      companyEmail: profileRow?.outboundEmail ?? profileRow?.email ?? null,
+    });
+  } catch (err) {
+    req.log.error(err);
+    res.status(500).json({ error: "Failed to fetch quote" });
+  }
+});
+
 router.post("/quotes", async (req, res) => {
   try {
     const body = req.body;
@@ -82,13 +118,60 @@ router.post("/quotes", async (req, res) => {
 router.put("/quotes/:id", async (req, res) => {
   try {
     const body = req.body;
+    const whereConditions = [eq(quotesTable.id, Number(req.params.id))];
+    if (req.tenantId) whereConditions.push(eq(quotesTable.tenantId, req.tenantId));
+
+    // Full edit: re-enrich items if provided
+    if (body.items && Array.isArray(body.items)) {
+      const enrichedItems = await Promise.all(
+        body.items.map(async (item: any) => {
+          const listingConditions = [eq(listingsTable.id, item.listingId)];
+          if (req.tenantId) listingConditions.push(eq(listingsTable.tenantId, req.tenantId));
+          const [listing] = await db.select({ title: listingsTable.title }).from(listingsTable).where(and(...listingConditions));
+          const subtotal = item.pricePerDay * item.days * item.quantity;
+          return {
+            listingId: item.listingId,
+            listingTitle: listing?.title ?? item.listingTitle ?? "Unknown",
+            quantity: item.quantity,
+            pricePerDay: item.pricePerDay,
+            days: item.days,
+            subtotal,
+          };
+        })
+      );
+      const subtotal = enrichedItems.reduce((sum, i) => sum + i.subtotal, 0);
+      const discount = body.discount ?? 0;
+      const totalPrice = Math.max(0, subtotal - discount);
+      const [updated] = await db
+        .update(quotesTable)
+        .set({
+          items: enrichedItems,
+          subtotal: String(subtotal),
+          discount: String(discount),
+          totalPrice: String(totalPrice),
+          startDate: body.startDate,
+          endDate: body.endDate,
+          customerName: body.customerName,
+          customerEmail: body.customerEmail,
+          customerPhone: body.customerPhone ?? null,
+          notes: body.notes ?? null,
+          validUntil: body.validUntil ?? null,
+          status: body.status ?? "draft",
+          updatedAt: new Date(),
+        })
+        .where(and(...whereConditions))
+        .returning();
+      if (!updated) { res.status(404).json({ error: "Not found" }); return; }
+      res.json(formatQuote(updated));
+      return;
+    }
+
+    // Partial update (status, discount, notes, validUntil only)
     const updateData: Record<string, any> = { updatedAt: new Date() };
     if (body.status) updateData.status = body.status;
     if (body.discount !== undefined) {
       updateData.discount = String(body.discount);
-      const conditions = [eq(quotesTable.id, Number(req.params.id))];
-      if (req.tenantId) conditions.push(eq(quotesTable.tenantId, req.tenantId));
-      const [existing] = await db.select().from(quotesTable).where(and(...conditions));
+      const [existing] = await db.select().from(quotesTable).where(and(...whereConditions));
       if (existing) {
         updateData.totalPrice = String(Math.max(0, parseFloat(existing.subtotal) - body.discount));
       }
@@ -96,8 +179,6 @@ router.put("/quotes/:id", async (req, res) => {
     if (body.notes !== undefined) updateData.notes = body.notes;
     if (body.validUntil !== undefined) updateData.validUntil = body.validUntil;
 
-    const whereConditions = [eq(quotesTable.id, Number(req.params.id))];
-    if (req.tenantId) whereConditions.push(eq(quotesTable.tenantId, req.tenantId));
     const [updated] = await db
       .update(quotesTable)
       .set(updateData)
