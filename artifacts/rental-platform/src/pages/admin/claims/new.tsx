@@ -7,13 +7,14 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Switch } from "@/components/ui/switch";
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { useToast } from "@/hooks/use-toast";
-import { ArrowLeft, ShieldAlert, AlertTriangle, Search, X, CalendarDays, User, Zap, BookOpen, DollarSign, Shield } from "lucide-react";
-import { format, parseISO } from "date-fns";
+import { ArrowLeft, ShieldAlert, AlertTriangle, Search, X, CalendarDays, User, Zap, BookOpen, DollarSign, Shield, CreditCard, Clock } from "lucide-react";
+import { format, parseISO, addHours } from "date-fns";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
@@ -41,6 +42,7 @@ type DepositInfo = {
   depositHoldStatus: string | null;
   depositHoldIntentId: string | null;
   depositAmount: number | null;
+  stripePaymentIntentId: string | null;
 };
 
 export default function AdminClaimsNew() {
@@ -67,6 +69,9 @@ export default function AdminClaimsNew() {
 
   // Business profile for cancellation policy
   const [cancellationPolicy, setCancellationPolicy] = useState<string | null>(null);
+
+  // Whether to charge card on file (policy violations only, within 48h window)
+  const [chargeCard, setChargeCard] = useState(false);
 
   // Confirmation dialog
   const [showConfirm, setShowConfirm] = useState(false);
@@ -125,6 +130,11 @@ export default function AdminClaimsNew() {
     return () => document.removeEventListener("mousedown", handler);
   }, []);
 
+  // Reset chargeCard when type changes away from policy_violation
+  useEffect(() => {
+    if (type !== "policy_violation") setChargeCard(false);
+  }, [type]);
+
   const filteredBookings = (() => {
     const q = bookingSearch.trim().toLowerCase();
     if (!q) return allBookings.slice(0, 10);
@@ -148,6 +158,7 @@ export default function AdminClaimsNew() {
         depositHoldStatus: d.depositHoldStatus ?? null,
         depositHoldIntentId: d.depositHoldIntentId ?? null,
         depositAmount: d.depositAmount ?? null,
+        stripePaymentIntentId: d.stripePaymentIntentId ?? null,
       });
     } catch { /* non-fatal */ }
   }
@@ -163,6 +174,7 @@ export default function AdminClaimsNew() {
     setActiveShortcut(null);
     setSelectedRuleId("");
     setDepositInfo(null);
+    setChargeCard(false);
     fetchDepositInfo(b.id);
   }
 
@@ -173,6 +185,7 @@ export default function AdminClaimsNew() {
     setActiveShortcut(null);
     setSelectedRuleId("");
     setDepositInfo(null);
+    setChargeCard(false);
   }
 
   // Fetch listing rules when listing ID is known
@@ -207,6 +220,18 @@ export default function AdminClaimsNew() {
   const hasAuthorizedHold = depositInfo?.depositHoldStatus === "authorized" && !!depositInfo.depositHoldIntentId;
   const depositDisplay = depositInfo?.depositAmount != null ? `$${depositInfo.depositAmount.toFixed(2)}` : "security deposit";
 
+  // 48-hour charge window: can charge card up to 48 hours after rental end date
+  const chargeWindowDeadline = selectedBooking
+    ? addHours(new Date(selectedBooking.endDate + "T23:59:59"), 48)
+    : null;
+  const withinChargeWindow = chargeWindowDeadline ? chargeWindowDeadline > new Date() : false;
+  const hasCardOnFile = !!depositInfo?.stripePaymentIntentId;
+
+  // Show card-charge toggle when: policy violation, no deposit hold, card on file
+  const showCardChargeOption = type === "policy_violation" && !hasAuthorizedHold && hasCardOnFile;
+  // Show expired warning when: policy violation, no deposit hold, card existed but window closed
+  const showWindowExpiredNotice = type === "policy_violation" && !hasAuthorizedHold && selectedBooking && !withinChargeWindow;
+
   // Show confirmation dialog on submit
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -234,6 +259,7 @@ export default function AdminClaimsNew() {
           type,
           description,
           claimedAmount: claimedAmount ? parseFloat(claimedAmount) : null,
+          chargeCardOnFile: chargeCard && type === "policy_violation" && withinChargeWindow,
         }),
       });
       const data = await res.json();
@@ -243,6 +269,17 @@ export default function AdminClaimsNew() {
         toast({
           title: "Claim filed & deposit charged",
           description: `The security deposit of $${data.depositCapturedAmount?.toFixed(2)} has been captured.`,
+        });
+      } else if (data.cardCharged) {
+        toast({
+          title: "Claim filed & card charged",
+          description: `$${data.cardChargedAmount?.toFixed(2)} has been charged to the renter's card on file.`,
+        });
+      } else if (data.cardChargeBlocked) {
+        toast({
+          title: "Claim filed — charge window expired",
+          description: "The 48-hour window to charge the card on file has passed. Claim was still filed.",
+          variant: "destructive",
         });
       } else {
         toast({ title: "Claim created" });
@@ -290,6 +327,16 @@ export default function AdminClaimsNew() {
                       The renter's {depositDisplay} security deposit hold will be immediately converted to a charge and transferred to your account.
                     </p>
                   </div>
+                ) : chargeCard && type === "policy_violation" && withinChargeWindow && claimedAmount ? (
+                  <div className="rounded-lg bg-blue-50 border border-blue-200 px-4 py-3 space-y-1">
+                    <p className="font-semibold text-blue-900 text-sm flex items-center gap-1.5">
+                      <CreditCard className="w-4 h-4 text-blue-600" />
+                      Card on file will be charged
+                    </p>
+                    <p className="text-sm text-blue-800">
+                      The renter's card on file will be immediately charged <strong>${parseFloat(claimedAmount).toFixed(2)}</strong> for this policy violation.
+                    </p>
+                  </div>
                 ) : selectedBooking && depositInfo && !hasAuthorizedHold ? (
                   <div className="rounded-lg bg-muted px-4 py-3">
                     <p className="text-sm text-muted-foreground">
@@ -297,7 +344,7 @@ export default function AdminClaimsNew() {
                         ? "The security deposit for this booking was already captured."
                         : depositInfo.depositHoldStatus === "released"
                           ? "The security deposit for this booking was released."
-                          : "No security deposit hold found for this booking."}
+                          : "No security deposit hold found for this booking. The claim will be opened for manual review."}
                     </p>
                   </div>
                 ) : null}
@@ -307,8 +354,21 @@ export default function AdminClaimsNew() {
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={confirmAndFile} className={hasAuthorizedHold ? "bg-amber-600 hover:bg-amber-700 text-white" : ""}>
-              {hasAuthorizedHold ? `Yes, File & Charge ${depositDisplay}` : "Yes, File Claim"}
+            <AlertDialogAction
+              onClick={confirmAndFile}
+              className={
+                hasAuthorizedHold
+                  ? "bg-amber-600 hover:bg-amber-700 text-white"
+                  : chargeCard && type === "policy_violation" && withinChargeWindow && claimedAmount
+                    ? "bg-blue-600 hover:bg-blue-700 text-white"
+                    : ""
+              }
+            >
+              {hasAuthorizedHold
+                ? `Yes, File & Charge ${depositDisplay}`
+                : chargeCard && type === "policy_violation" && withinChargeWindow && claimedAmount
+                  ? `Yes, File & Charge $${parseFloat(claimedAmount).toFixed(2)}`
+                  : "Yes, File Claim"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -351,6 +411,34 @@ export default function AdminClaimsNew() {
         </div>
       )}
 
+      {/* No deposit — card available notice */}
+      {showCardChargeOption && withinChargeWindow && (
+        <div className="flex items-start gap-2.5 bg-blue-50 border border-blue-200 rounded-xl px-4 py-3 text-sm text-blue-900">
+          <CreditCard className="w-4 h-4 shrink-0 text-blue-600 mt-0.5" />
+          <div>
+            <p className="font-semibold">No deposit hold — card on file available</p>
+            <p className="text-blue-700 mt-0.5">
+              No security deposit was collected on this booking. For policy violations you may charge the renter's card on file directly.
+              This option expires <strong>{chargeWindowDeadline ? format(chargeWindowDeadline, "MMM d 'at' h:mm a") : ""}</strong>.
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* 48-hour window expired notice */}
+      {showWindowExpiredNotice && !withinChargeWindow && (
+        <div className="flex items-start gap-2.5 bg-orange-50 border border-orange-200 rounded-xl px-4 py-3 text-sm text-orange-900">
+          <Clock className="w-4 h-4 shrink-0 text-orange-600 mt-0.5" />
+          <div>
+            <p className="font-semibold">Charge window expired</p>
+            <p className="text-orange-700 mt-0.5">
+              The 48-hour window to charge the renter's card on file has passed (deadline was {chargeWindowDeadline ? format(chargeWindowDeadline, "MMM d 'at' h:mm a") : "unknown"}).
+              You can still file this claim for your records, but no automatic charge will be applied.
+            </p>
+          </div>
+        </div>
+      )}
+
       <form onSubmit={handleSubmit} className="space-y-5">
         {/* Rental Reference — booking search */}
         <Card>
@@ -370,6 +458,11 @@ export default function AdminClaimsNew() {
                     {hasAuthorizedHold && (
                       <span className="text-[10px] px-1.5 py-0.5 rounded-full font-medium bg-amber-100 text-amber-800 flex items-center gap-0.5">
                         <DollarSign className="w-2.5 h-2.5" /> Deposit hold: {depositDisplay}
+                      </span>
+                    )}
+                    {!hasAuthorizedHold && hasCardOnFile && withinChargeWindow && (
+                      <span className="text-[10px] px-1.5 py-0.5 rounded-full font-medium bg-blue-100 text-blue-800 flex items-center gap-0.5">
+                        <CreditCard className="w-2.5 h-2.5" /> Card on file
                       </span>
                     )}
                   </div>
@@ -518,11 +611,11 @@ export default function AdminClaimsNew() {
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-1.5">
                 <Label>Full Name <span className="text-destructive">*</span></Label>
-                <Input value={customerName} onChange={e => setCustomerName(e.target.value)} placeholder="Jane Doe" />
+                <Input value={customerName} onChange={e => setCustomerName(e.target.value)} placeholder="Jane Smith" required />
               </div>
               <div className="space-y-1.5">
                 <Label>Email <span className="text-destructive">*</span></Label>
-                <Input type="email" value={customerEmail} onChange={e => setCustomerEmail(e.target.value)} placeholder="jane@example.com" />
+                <Input type="email" value={customerEmail} onChange={e => setCustomerEmail(e.target.value)} placeholder="jane@example.com" required />
               </div>
             </div>
           </CardContent>
@@ -587,6 +680,39 @@ export default function AdminClaimsNew() {
                 placeholder={type === "policy_violation" ? "Describe the policy violation in detail…" : "Describe the incident, damage, or dispute in detail…"}
               />
             </div>
+
+            {/* ── Charge card on file toggle (policy violations only, within 48h window) ── */}
+            {showCardChargeOption && (
+              <div className={`rounded-lg border-2 px-4 py-4 transition-colors ${chargeCard ? "border-blue-400 bg-blue-50" : "border-gray-200 bg-gray-50"}`}>
+                <div className="flex items-center justify-between gap-4">
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2">
+                      <CreditCard className={`w-4 h-4 ${chargeCard ? "text-blue-600" : "text-muted-foreground"}`} />
+                      <span className="font-semibold text-sm">Charge card on file</span>
+                      {withinChargeWindow && chargeWindowDeadline && (
+                        <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-green-100 text-green-800 font-medium flex items-center gap-0.5">
+                          <Clock className="w-2.5 h-2.5" />
+                          Available until {format(chargeWindowDeadline, "MMM d, h:mm a")}
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      {withinChargeWindow
+                        ? `Immediately charge the renter's card on file${claimedAmount ? ` $${parseFloat(claimedAmount || "0").toFixed(2)}` : " the claimed amount"} for this policy breach. Requires a claimed amount.`
+                        : "The 48-hour window has closed — you cannot charge the card for this booking."}
+                    </p>
+                  </div>
+                  <Switch
+                    checked={chargeCard}
+                    onCheckedChange={setChargeCard}
+                    disabled={!withinChargeWindow || !claimedAmount}
+                  />
+                </div>
+                {chargeCard && !claimedAmount && (
+                  <p className="text-xs text-destructive mt-2">Enter a claimed amount above to enable card charging.</p>
+                )}
+              </div>
+            )}
           </CardContent>
         </Card>
 

@@ -77,7 +77,7 @@ router.get("/claims/:id", async (req, res) => {
 
 router.post("/claims", async (req, res) => {
   try {
-    const { bookingId, listingId, customerName, customerEmail, type, description, claimedAmount, evidenceUrls } = req.body;
+    const { bookingId, listingId, customerName, customerEmail, type, description, claimedAmount, evidenceUrls, chargeCardOnFile } = req.body;
     if (!customerName || !customerEmail || !description) {
       return res.status(400).json({ error: "customerName, customerEmail, and description are required" });
     }
@@ -117,16 +117,20 @@ router.post("/claims", async (req, res) => {
       .returning();
 
     // ── Auto-capture security deposit to OutdoorShare platform account ──────────
-    // Fire-and-forget: capture the authorized deposit hold (if any) on the booking.
-    // The hold was created without transfer_data, so funds land on the platform account.
     let depositCaptureIntentId: string | null = null;
     let depositCapturedAmountCents: number | null = null;
+    let cardCharged = false;
+    let cardChargedAmountCents: number | null = null;
+    let cardChargeBlocked = false; // true when outside the 48-hour window
+
     if (created.bookingId) {
       try {
         const [booking] = await db
           .select({
             depositHoldIntentId: bookingsTable.depositHoldIntentId,
             depositHoldStatus: bookingsTable.depositHoldStatus,
+            stripePaymentIntentId: bookingsTable.stripePaymentIntentId,
+            endDate: bookingsTable.endDate,
             tenantId: bookingsTable.tenantId,
           })
           .from(bookingsTable)
@@ -134,6 +138,7 @@ router.post("/claims", async (req, res) => {
           .limit(1);
 
         if (booking?.depositHoldIntentId && booking.depositHoldStatus === "authorized") {
+          // ── Path 1: Capture existing deposit hold ──────────────────────────────
           const [tenant] = await db
             .select({ testMode: tenantsTable.testMode })
             .from(tenantsTable)
@@ -145,16 +150,15 @@ router.post("/claims", async (req, res) => {
           depositCaptureIntentId = captured.id;
           depositCapturedAmountCents = captured.amount_received ?? captured.amount;
 
-          // Mark booking deposit as captured
           await db
             .update(bookingsTable)
             .set({ depositHoldStatus: "captured", updatedAt: new Date() })
             .where(eq(bookingsTable.id, created.bookingId));
 
-          // Persist capture info on the claim
           await db
             .update(claimsTable)
             .set({
+              chargeMode: "deposit_capture",
               chargeStatus: "deposit_captured",
               chargedAmount: String((depositCapturedAmountCents ?? 0) / 100),
               stripeChargeRefs: JSON.stringify([captured.id]),
@@ -163,9 +167,68 @@ router.post("/claims", async (req, res) => {
             .where(eq(claimsTable.id, created.id));
 
           req.log.info({ claimId: created.id, intentId: captured.id }, "Deposit auto-captured on claim submission");
+
+        } else if (chargeCardOnFile && type === "policy_violation" && booking?.stripePaymentIntentId) {
+          // ── Path 2: No deposit hold — charge card on file for policy violations ──
+          // Enforce 48-hour window from booking end date.
+          const endDateMs = new Date(booking.endDate + "T23:59:59").getTime();
+          const windowDeadlineMs = endDateMs + 48 * 60 * 60 * 1000;
+
+          if (Date.now() > windowDeadlineMs) {
+            // Outside the 48-hour window — flag it but don't block the claim
+            cardChargeBlocked = true;
+            req.log.warn({ claimId: created.id }, "Card charge blocked: outside 48-hour return window");
+          } else {
+            const [tenant] = await db
+              .select({ testMode: tenantsTable.testMode })
+              .from(tenantsTable)
+              .where(eq(tenantsTable.id, booking.tenantId!))
+              .limit(1);
+
+            const stripeClient = getStripeForTenant(!!tenant?.testMode);
+            const originalPi = await stripeClient.paymentIntents.retrieve(booking.stripePaymentIntentId);
+
+            if (originalPi.payment_method) {
+              const chargeCents = claimedAmount != null ? Math.round(parseFloat(String(claimedAmount)) * 100) : null;
+              if (chargeCents && chargeCents >= 50) {
+                const chargePi = await stripeClient.paymentIntents.create({
+                  amount: chargeCents,
+                  currency: "usd",
+                  customer: typeof originalPi.customer === "string"
+                    ? originalPi.customer
+                    : (originalPi.customer as any)?.id ?? undefined,
+                  payment_method: String(originalPi.payment_method),
+                  confirm: true,
+                  off_session: true,
+                  description: `Policy violation charge — Claim #${created.id}, Booking #${created.bookingId}`,
+                  metadata: {
+                    claim_id: String(created.id),
+                    booking_id: String(created.bookingId),
+                    type: "policy_violation_charge",
+                  },
+                });
+
+                cardCharged = true;
+                cardChargedAmountCents = chargePi.amount;
+
+                await db
+                  .update(claimsTable)
+                  .set({
+                    chargeMode: "card_on_file",
+                    chargeStatus: "card_charged",
+                    chargedAmount: String(chargePi.amount / 100),
+                    stripeChargeRefs: JSON.stringify([chargePi.id]),
+                    updatedAt: new Date(),
+                  })
+                  .where(eq(claimsTable.id, created.id));
+
+                req.log.info({ claimId: created.id, intentId: chargePi.id }, "Card-on-file charged on policy violation claim");
+              }
+            }
+          }
         }
       } catch (e: any) {
-        req.log.warn({ err: e }, "Deposit auto-capture failed (non-fatal) — claim still created");
+        req.log.warn({ err: e }, "Deposit/card charge failed (non-fatal) — claim still created");
       }
     }
 
@@ -173,6 +236,9 @@ router.post("/claims", async (req, res) => {
       ...formatClaim(created),
       depositCaptured: !!depositCaptureIntentId,
       depositCapturedAmount: depositCapturedAmountCents != null ? depositCapturedAmountCents / 100 : null,
+      cardCharged,
+      cardChargedAmount: cardChargedAmountCents != null ? cardChargedAmountCents / 100 : null,
+      cardChargeBlocked,
     });
 
     // Fire-and-forget email alert to superadmin
