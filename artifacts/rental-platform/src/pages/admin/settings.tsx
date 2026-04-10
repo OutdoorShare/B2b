@@ -398,6 +398,7 @@ export default function AdminSettings() {
   };
 
   const redirectToLogin = (reason: string) => {
+    fetch(`${BASE}/api/admin/auth/logout`, { method: "POST" }).catch(() => {});
     localStorage.removeItem("admin_session");
     toast({ title: "Session expired", description: reason, variant: "destructive" });
     const slug = urlSlug || "";

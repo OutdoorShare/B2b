@@ -31,8 +31,9 @@ export default function SuperAdminLogin() {
       const data = await res.json();
       if (!res.ok) { setError(data.error || "Invalid credentials."); return; }
 
+      // Store only non-sensitive user metadata — the auth token is in an httpOnly cookie set by the server
       localStorage.removeItem("superadmin_key");
-      localStorage.setItem("superadmin_token", data.token);
+      localStorage.removeItem("superadmin_token");
       localStorage.setItem("superadmin_user", JSON.stringify(data.user));
       setLocation("/superadmin/dashboard");
     } catch {

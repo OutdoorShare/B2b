@@ -14,7 +14,10 @@ declare global {
 }
 
 export async function resolveTenant(req: Request, _res: Response, next: NextFunction) {
-  const adminToken = req.headers["x-admin-token"] as string | undefined;
+  // Accept token from httpOnly cookie (preferred) or legacy header (backward compat)
+  const adminToken =
+    (req as any).cookies?.admin_session ??
+    (req.headers["x-admin-token"] as string | undefined);
   const tenantSlug = req.headers["x-tenant-slug"] as string | undefined;
 
   try {

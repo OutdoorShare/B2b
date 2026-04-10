@@ -12,7 +12,10 @@ const router: IRouter = Router();
 
 // ── Superadmin auth guard ─────────────────────────────────────────────────────
 async function requireSuperAdmin(req: Request, res: Response, next: NextFunction) {
-  const token = req.headers["x-superadmin-token"] as string | undefined;
+  // Accept token from httpOnly cookie (preferred) or legacy header (backward compat)
+  const token =
+    (req as any).cookies?.sa_session ??
+    (req.headers["x-superadmin-token"] as string | undefined);
   if (!token) { res.status(401).json({ error: "Unauthorized" }); return; }
   const [user] = await db.select().from(superadminUsersTable)
     .where(eq(superadminUsersTable.token, token)).limit(1);

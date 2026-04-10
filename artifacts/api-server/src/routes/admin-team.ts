@@ -84,8 +84,17 @@ router.post("/admin/auth/owner-login", async (req, res) => {
         .where(eq(tenantsTable.id, tenant.id));
     }
 
+    // Set token in an httpOnly cookie — JS cannot read this value
+    res.cookie("admin_session", token, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "lax",
+      path: "/",
+      maxAge: 7 * 24 * 60 * 60 * 1000,
+    });
+
+    // Return metadata only — the token is NOT returned in the body
     res.json({
-      token,
       tenantId: tenant.id,
       tenantName: tenant.name,
       tenantSlug: tenant.slug,
@@ -122,7 +131,18 @@ router.post("/admin/auth/login", async (req, res) => {
 
     const token = randomBytes(32).toString("hex");
     await db.update(adminUsersTable).set({ token, updatedAt: new Date() }).where(eq(adminUsersTable.id, user.id));
-    res.json({ token, tenantId, tenantSlug, user: safeUser({ ...user, token }) });
+
+    // Set token in an httpOnly cookie — JS cannot read this value
+    res.cookie("admin_session", token, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "lax",
+      path: "/",
+      maxAge: 7 * 24 * 60 * 60 * 1000,
+    });
+
+    // Return metadata only — the token is NOT returned in the body
+    res.json({ tenantId, tenantSlug, user: safeUser({ ...user, token }) });
   } catch {
     res.status(500).json({ error: "Login failed" });
   }
@@ -140,11 +160,14 @@ router.get("/admin/auth/verify", async (req, res) => {
 // POST /admin/auth/logout
 router.post("/admin/auth/logout", async (req, res) => {
   try {
-    const token = req.headers["x-admin-token"] as string;
+    // Read token from cookie (primary) or header (legacy fallback)
+    const token = (req as any).cookies?.admin_session ?? req.headers["x-admin-token"] as string | undefined;
     if (token) {
       await db.update(adminUsersTable).set({ token: null, updatedAt: new Date() }).where(eq(adminUsersTable.token, token));
       await db.update(tenantsTable).set({ adminToken: null, updatedAt: new Date() }).where(eq(tenantsTable.adminToken, token));
     }
+    // Clear the httpOnly cookie regardless of whether a token was found
+    res.clearCookie("admin_session", { path: "/" });
     res.json({ ok: true });
   } catch {
     res.status(500).json({ error: "Logout failed" });

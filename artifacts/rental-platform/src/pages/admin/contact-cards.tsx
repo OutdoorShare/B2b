@@ -19,6 +19,7 @@ import QRCode from "react-qr-code";
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
 function handleUnauthorized() {
+  fetch(`${BASE}/api/admin/auth/logout`, { method: "POST" }).catch(() => {});
   localStorage.removeItem("admin_session");
   window.location.reload();
 }

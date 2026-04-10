@@ -307,8 +307,9 @@ export default function AdminKiosk() {
             <Button
               size="lg"
               className="w-full h-14 text-base font-bold rounded-xl"
-              onClick={() => {
+              onClick={async () => {
                 const dest = adminPath(""); // compute path before clearing session
+                await fetch(`${BASE}/api/admin/auth/logout`, { method: "POST" }).catch(() => {});
                 localStorage.removeItem("admin_session");
                 setLocation(dest);
               }}

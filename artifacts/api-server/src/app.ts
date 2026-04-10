@@ -1,6 +1,7 @@
 import express, { type Express } from "express";
 import helmet from "helmet";
 import cors from "cors";
+import cookieParser from "cookie-parser";
 import { rateLimit } from "express-rate-limit";
 import pinoHttp from "pino-http";
 import path from "path";
@@ -40,6 +41,8 @@ const aiRateLimit = rateLimit({
 });
 
 const app: Express = express();
+
+app.use(cookieParser());
 
 // Security headers — must be first so every response is covered
 app.use(

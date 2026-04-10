@@ -121,7 +121,10 @@ function safeSAUser(u: typeof superadminUsersTable.$inferSelect) {
 
 // ── Super admin auth middleware (token only) ───────────────────────────────────
 async function requireSuperAdminFn(req: Request, res: Response, next: NextFunction) {
-  const token = req.headers["x-superadmin-token"] as string | undefined;
+  // Accept token from httpOnly cookie (preferred) or legacy header (backward compat)
+  const token =
+    (req as any).cookies?.sa_session ??
+    (req.headers["x-superadmin-token"] as string | undefined);
 
   if (token) {
     const [user] = await db.select().from(superadminUsersTable)
@@ -403,9 +406,38 @@ router.post("/superadmin/auth/login", async (req, res) => {
     if (!valid) { res.status(401).json({ error: "Invalid email or password" }); return; }
     const token = randomBytes(32).toString("hex");
     await db.update(superadminUsersTable).set({ token, updatedAt: new Date() }).where(eq(superadminUsersTable.id, user.id));
-    res.json({ token, user: safeSAUser({ ...user, token }) });
+
+    // Set token in an httpOnly cookie — not accessible to JavaScript
+    res.cookie("sa_session", token, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "lax",
+      path: "/",
+      maxAge: 7 * 24 * 60 * 60 * 1000,
+    });
+
+    // Return user metadata only — the token is NOT returned in the body
+    res.json({ user: safeSAUser({ ...user, token }) });
   } catch {
     res.status(500).json({ error: "Login failed" });
+  }
+});
+
+// ── POST /superadmin/auth/logout ───────────────────────────────────────────────
+router.post("/superadmin/auth/logout", async (req, res) => {
+  try {
+    const token =
+      (req as any).cookies?.sa_session ??
+      (req.headers["x-superadmin-token"] as string | undefined);
+    if (token) {
+      await db.update(superadminUsersTable)
+        .set({ token: null, updatedAt: new Date() })
+        .where(eq(superadminUsersTable.token, token));
+    }
+    res.clearCookie("sa_session", { path: "/" });
+    res.json({ ok: true });
+  } catch {
+    res.status(500).json({ error: "Logout failed" });
   }
 });
 
