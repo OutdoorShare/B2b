@@ -229,6 +229,7 @@ export default function AdminListingsForm() {
     hourlyPerHourEnabled: false,
     hourlyMinimumHours: 1 as number | null,
     timeSlots: [] as TimeSlotDef[],
+    requireIdentityVerification: false,
     quantity: 1,
     imageUrls: [] as string[],
     location: '',
@@ -359,6 +360,7 @@ export default function AdminListingsForm() {
         hourlyPerHourEnabled: (listing as any).hourlyPerHourEnabled ?? false,
         hourlyMinimumHours: (listing as any).hourlyMinimumHours ?? 1,
         timeSlots: (listing as any).timeSlots ?? [],
+        requireIdentityVerification: (listing as any).requireIdentityVerification ?? false,
         quantity: listing.quantity,
         imageUrls: listing.imageUrls || [],
         location: listing.location || '',
@@ -1183,6 +1185,25 @@ export default function AdminListingsForm() {
                     onChange={handleChange}
                     rows={3}
                   />
+                </div>
+
+                {/* Identity Verification toggle */}
+                <div className="flex items-start gap-3 rounded-xl border p-4">
+                  <Checkbox
+                    id="requireIdentityVerification"
+                    checked={formData.requireIdentityVerification}
+                    onCheckedChange={v => setFormData(prev => ({ ...prev, requireIdentityVerification: !!v }))}
+                    className="mt-0.5"
+                  />
+                  <div>
+                    <label htmlFor="requireIdentityVerification" className="text-sm font-medium cursor-pointer flex items-center gap-1.5">
+                      <IdCard className="w-4 h-4 text-primary" />
+                      Require ID Verification at booking
+                    </label>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      When enabled, renters are prompted to verify their identity via Stripe Identity (photo ID + selfie) after payment. Requires Stripe Identity to be enabled on your account.
+                    </p>
+                  </div>
                 </div>
 
                 {/* Sub-Day & Hourly Pricing (collapsible) */}

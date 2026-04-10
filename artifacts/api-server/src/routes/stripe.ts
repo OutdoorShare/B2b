@@ -612,9 +612,11 @@ router.post("/stripe/identity/session", async (req, res) => {
         (primaryErr?.message ?? "").includes("rak_identity_product_write");
 
       if (!isTestMode && isPermissionError) {
-        console.warn("[stripe/identity/session] Live key missing identity permission — falling back to test mode");
-        session = await createSession(getStripeForTenant(true));
-        usedTestMode = true;
+        // Live key lacks identity permission — skip verification gracefully rather
+        // than falling back to test mode (which would show a "Test mode" banner to real customers).
+        console.warn("[stripe/identity/session] Live key missing identity permission — skipping verification");
+        res.json({ skip: true });
+        return;
       } else {
         throw primaryErr;
       }

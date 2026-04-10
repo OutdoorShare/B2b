@@ -27,6 +27,8 @@ export const listingsTable = pgTable("listings", {
   hourlyMinimumHours: integer("hourly_minimum_hours"),
   // Fixed time slots — if any are defined, renter must pick one
   timeSlots: json("time_slots").$type<TimeSlot[]>(),
+  // Identity verification — if true, renters must complete Stripe Identity after payment
+  requireIdentityVerification: boolean("require_identity_verification").notNull().default(false),
   quantity: integer("quantity").notNull().default(1),
   imageUrls: json("image_urls").$type<string[]>().notNull().default([]),
   location: text("location"),

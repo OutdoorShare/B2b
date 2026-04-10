@@ -912,8 +912,8 @@ export default function StorefrontBook() {
         }),
       });
       const idData = await idRes.json();
-      if (idRes.ok && idData.alreadyVerified) {
-        // Customer already verified — skip the step entirely
+      if (idRes.ok && (idData.alreadyVerified || idData.skip)) {
+        // Customer already verified, or live Stripe key lacks identity permissions — skip the step
         setIdentityStatus("verified");
         sessionStorage.removeItem(`identity_session_${listingId}`);
         setTimeout(() => { setCompletePhase(isKiosk ? "photos" : "confirmed"); window.scrollTo(0, 0); }, 600);
@@ -1672,8 +1672,13 @@ export default function StorefrontBook() {
         }).catch(() => {});
       }
 
-      setCompletePhase("verification");
-      fetchIdentitySession(session?.id ?? undefined);
+      const needsIdentity = !!(listing as any)?.requireIdentityVerification;
+      if (needsIdentity) {
+        setCompletePhase("verification");
+        fetchIdentitySession(session?.id ?? undefined);
+      } else {
+        setCompletePhase(isKiosk ? "photos" : "confirmed");
+      }
       window.scrollTo(0, 0);
     } catch {
       toast({ title: "Booking failed", description: "Please try again.", variant: "destructive" });
@@ -1798,15 +1803,16 @@ export default function StorefrontBook() {
   };
 
   // ── Progress indicator ──
+  const needsIdentityVerif = !!(listing as any)?.requireIdentityVerification;
   const progressLabels = isKiosk
-    ? ["Details & Payment", "Agreement", "Verify ID", "Photos", "Confirmed"]
-    : ["Details & Payment", "Agreement", "Verify ID", "Confirmed"];
+    ? (needsIdentityVerif ? ["Details & Payment", "Agreement", "Verify ID", "Photos", "Confirmed"] : ["Details & Payment", "Agreement", "Photos", "Confirmed"])
+    : (needsIdentityVerif ? ["Details & Payment", "Agreement", "Verify ID", "Confirmed"] : ["Details & Payment", "Agreement", "Confirmed"]);
   const progressStep = step === "book" ? 0
     : completePhase === "agreement" ? 1
     : completePhase === "verification" ? 2
-    : isKiosk && completePhase === "photos" ? 3
-    : isKiosk ? 4
-    : 3;
+    : isKiosk && completePhase === "photos" ? (needsIdentityVerif ? 3 : 2)
+    : isKiosk ? (needsIdentityVerif ? 4 : 3)
+    : needsIdentityVerif ? 3 : 2;
 
   return (
     <>
