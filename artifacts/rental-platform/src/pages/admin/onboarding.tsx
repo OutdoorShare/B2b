@@ -1,14 +1,16 @@
 import { adminPath, getAdminSession } from "@/lib/admin-nav";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useLocation, useParams } from "wouter";
 import {
   CheckCircle2, ArrowRight, Package, Palette, Plus,
-  Rocket, ChevronRight, Building2, MapPin, Mail, Phone
+  Rocket, ChevronRight, Building2, MapPin, Mail, Phone,
+  ImagePlus, X, Loader2
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { useGetBusinessProfile } from "@workspace/api-client-react";
 
@@ -22,6 +24,8 @@ const STEPS = [
 
 type StepId = "branding" | "listing" | "launch";
 
+const PRESET_CATEGORIES = ["ATV / UTV", "Jet Ski", "Boat", "E-Bike", "Snowmobile", "Camper / RV", "Trailer", "Kayak / Paddleboard", "Other"];
+
 export default function AdminOnboarding() {
   const [, setLocation] = useLocation();
   const { slug } = useParams<{ slug: string }>();
@@ -29,6 +33,43 @@ export default function AdminOnboarding() {
   const [step, setStep] = useState<StepId>("branding");
   const [saving, setSaving] = useState(false);
   const [prefilled, setPrefilled] = useState(false);
+
+  const [categories, setCategories] = useState<string[]>([]);
+  useEffect(() => {
+    const token = getAdminSession()?.token;
+    fetch(`${BASE}/api/categories`, { headers: token ? { "x-admin-token": token } : {} })
+      .then(r => r.ok ? r.json() : [])
+      .then((cats: { name: string }[]) => {
+        const names = cats.map(c => c.name);
+        setCategories(names.length > 0 ? names : PRESET_CATEGORIES);
+      })
+      .catch(() => setCategories(PRESET_CATEGORIES));
+  }, []);
+
+  const photoInputRef = useRef<HTMLInputElement>(null);
+  const [photos, setPhotos] = useState<string[]>([]);
+  const [photoUploading, setPhotoUploading] = useState(false);
+
+  const handlePhotoUpload = async (file: File) => {
+    setPhotoUploading(true);
+    try {
+      const fd = new FormData();
+      fd.append("image", file);
+      const token = getAdminSession()?.token;
+      const res = await fetch(`${BASE}/api/upload/image`, {
+        method: "POST",
+        body: fd,
+        headers: token ? { "x-admin-token": token } : {},
+      });
+      if (!res.ok) throw new Error("Upload failed");
+      const { url } = await res.json();
+      setPhotos(prev => [...prev, url]);
+    } catch {
+      toast({ title: "Photo upload failed", description: "Please try again.", variant: "destructive" });
+    } finally {
+      setPhotoUploading(false);
+    }
+  };
 
   const [branding, setBranding] = useState({
     name: "",
@@ -102,9 +143,9 @@ export default function AdminOnboarding() {
   };
 
   const saveListing = async () => {
-    if (!listing.title.trim()) { toast({ title: "Listing title is required", variant: "destructive" }); return false; }
+    if (!listing.title.trim()) { toast({ title: "Item name is required", variant: "destructive" }); return false; }
     if (!listing.pricePerDay || isNaN(parseFloat(listing.pricePerDay))) {
-      toast({ title: "Enter a valid price", variant: "destructive" }); return false;
+      toast({ title: "Enter a valid daily rate", variant: "destructive" }); return false;
     }
     setSaving(true);
     const token = getAdminSession()?.token;
@@ -121,6 +162,7 @@ export default function AdminOnboarding() {
           pricePerDay: parseFloat(listing.pricePerDay),
           quantity: parseInt(listing.quantity) || 1,
           category: listing.category || "General",
+          imageUrls: photos,
           status: "active",
         }),
       });
@@ -269,28 +311,77 @@ export default function AdminOnboarding() {
               </div>
             </div>
 
-            <div className="space-y-4">
+            <div className="space-y-5">
+              {/* Photo upload */}
+              <div className="space-y-2">
+                <Label>Photos</Label>
+                <div className="flex flex-wrap gap-3">
+                  {photos.map((url, i) => (
+                    <div key={i} className="relative w-24 h-24 rounded-xl overflow-hidden border bg-gray-100 shrink-0">
+                      <img src={url} alt="" className="w-full h-full object-cover" />
+                      <button
+                        onClick={() => setPhotos(prev => prev.filter((_, idx) => idx !== i))}
+                        className="absolute top-1 right-1 w-5 h-5 bg-black/60 rounded-full flex items-center justify-center text-white hover:bg-black/80 transition-colors"
+                      >
+                        <X className="w-3 h-3" />
+                      </button>
+                    </div>
+                  ))}
+                  <button
+                    type="button"
+                    onClick={() => photoInputRef.current?.click()}
+                    disabled={photoUploading}
+                    className="w-24 h-24 rounded-xl border-2 border-dashed border-gray-200 flex flex-col items-center justify-center gap-1 text-gray-400 hover:border-primary hover:text-primary transition-colors shrink-0"
+                  >
+                    {photoUploading
+                      ? <Loader2 className="w-5 h-5 animate-spin" />
+                      : <><ImagePlus className="w-5 h-5" /><span className="text-[11px] font-medium">Add photo</span></>
+                    }
+                  </button>
+                  <input
+                    ref={photoInputRef}
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={e => { const f = e.target.files?.[0]; if (f) handlePhotoUpload(f); e.target.value = ""; }}
+                  />
+                </div>
+                <p className="text-xs text-muted-foreground">JPG, PNG, WebP · up to 10 MB</p>
+              </div>
+
               <div className="space-y-1.5">
                 <Label>Item Name <span className="text-destructive">*</span></Label>
-                <Input value={listing.title} onChange={e => setList("title", e.target.value)} placeholder='e.g. "Jet Ski — 3-Seater" or "ATV — Large"' className="h-11" />
+                <Input value={listing.title} onChange={e => setList("title", e.target.value)} placeholder='e.g. "2024 Yamaha WaveRunner FX" or "Polaris RZR 900"' className="h-11" />
               </div>
+
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-1.5">
-                  <Label>Price per Day ($) <span className="text-destructive">*</span></Label>
-                  <Input type="number" min="0" step="0.01" value={listing.pricePerDay} onChange={e => setList("pricePerDay", e.target.value)} placeholder="45.00" className="h-11" />
+                  <Label>Daily Rate ($) <span className="text-destructive">*</span></Label>
+                  <Input type="number" min="0" step="1" value={listing.pricePerDay} onChange={e => setList("pricePerDay", e.target.value)} placeholder="250" className="h-11" />
                 </div>
                 <div className="space-y-1.5">
-                  <Label>Quantity in Fleet</Label>
+                  <Label>Units Available</Label>
                   <Input type="number" min="1" value={listing.quantity} onChange={e => setList("quantity", e.target.value)} placeholder="1" className="h-11" />
                 </div>
               </div>
+
               <div className="space-y-1.5">
                 <Label>Category</Label>
-                <Input value={listing.category} onChange={e => setList("category", e.target.value)} placeholder='e.g. "Jet Ski", "ATV", "Camper"' className="h-11" />
+                <Select value={listing.category} onValueChange={v => setList("category", v)}>
+                  <SelectTrigger className="h-11">
+                    <SelectValue placeholder="Select a category" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {(categories.length > 0 ? categories : PRESET_CATEGORIES).map(cat => (
+                      <SelectItem key={cat} value={cat}>{cat}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
+
               <div className="space-y-1.5">
                 <Label>Description</Label>
-                <Textarea value={listing.description} onChange={e => setList("description", e.target.value)} placeholder="Describe the item, included accessories, condition..." rows={3} />
+                <Textarea value={listing.description} onChange={e => setList("description", e.target.value)} placeholder="Describe the item — model year, included accessories, fuel policy, condition..." rows={3} />
               </div>
             </div>
 
