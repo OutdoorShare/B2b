@@ -369,9 +369,13 @@ router.post("/stripe/payment-intent", async (req, res) => {
     }
     // Otherwise: full amount held on platform, swept later via sweep-pending
 
+    // Idempotency key: deterministic per (tenant, email, amount, listing) so retries
+    // return the same intent instead of creating duplicates.
+    const idempotencyKey = `pi_${tenant.id}_${(customerEmail ?? "anon").replace(/[^a-z0-9@._-]/gi, "")}_${amountCents}_${bookingMeta?.listing_id ?? "none"}`;
+
     let intent;
     try {
-      intent = await stripeClient.paymentIntents.create(intentParams);
+      intent = await stripeClient.paymentIntents.create(intentParams, { idempotencyKey });
     } catch (piErr: any) {
       // Stale customer ID — happens when the Stripe mode changed (test ↔ live)
       // or the connected account was reset. Create a fresh customer and retry once.
@@ -392,7 +396,8 @@ router.post("/stripe/payment-intent", async (req, res) => {
           .set({ stripeCustomerId: sc.id, updatedAt: new Date() })
           .where(eq(customersTable.id, dbCustomerRef.id));
         intentParams.customer = sc.id;
-        intent = await stripeClient.paymentIntents.create(intentParams);
+        // Use a different idempotency key for the retry since customer changed
+        intent = await stripeClient.paymentIntents.create(intentParams, { idempotencyKey: idempotencyKey + "_c2" });
       } else {
         throw piErr;
       }

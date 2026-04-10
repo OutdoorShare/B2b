@@ -321,6 +321,20 @@ router.post("/bookings", async (req, res) => {
     const splitRemainingAmount = usingSplitPayment ? String(parseFloat(reqSplitRemaining).toFixed(2)) : null;
     const splitRemainingDueDate = usingSplitPayment && reqSplitDueDate ? String(reqSplitDueDate) : null;
 
+    // ── Idempotency: if this paymentIntentId already has a booking, return it ──
+    if (restBody.stripePaymentIntentId) {
+      const [existingBooking] = await db
+        .select({ id: bookingsTable.id, totalPrice: bookingsTable.totalPrice })
+        .from(bookingsTable)
+        .where(eq(bookingsTable.stripePaymentIntentId, restBody.stripePaymentIntentId))
+        .limit(1);
+      if (existingBooking) {
+        console.warn(`[bookings] Duplicate booking attempt for PI ${restBody.stripePaymentIntentId} — returning existing booking #${existingBooking.id}`);
+        res.status(200).json({ id: existingBooking.id, totalPrice: existingBooking.totalPrice, duplicate: true });
+        return;
+      }
+    }
+
     // Kiosk bookings are always auto-confirmed; otherwise check the tenant's instant booking setting
     let autoConfirm = restBody.source === "kiosk";
     if (!autoConfirm && req.tenantId) {

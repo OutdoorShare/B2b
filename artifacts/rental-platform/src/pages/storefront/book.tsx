@@ -647,6 +647,9 @@ export default function StorefrontBook() {
   const [isTestMode, setIsTestMode] = useState(false);
   const [isInstantBooking, setIsInstantBooking] = useState(false);
   const [showStripeForm, setShowStripeForm] = useState(false);
+  const [paymentInitFailed, setPaymentInitFailed] = useState(false);
+  const [paymentInitTimedOut, setPaymentInitTimedOut] = useState(false);
+  const paymentTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   // Prevents the auto-create effect from firing again when email/name change after intent is already in flight
   const intentFiredRef = useRef(false);
   // Split / payment plan
@@ -1461,39 +1464,55 @@ export default function StorefrontBook() {
 
   const createPaymentIntent = useCallback(async (totalCents: number) => {
     if (!slug) return;
-    try {
-      const res = await fetch(`${BASE}/api/stripe/payment-intent`, {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          tenantSlug: slug,
-          amountCents: totalCents,
-          customerEmail: email,
-          customerName: name,
-          bookingMeta: { listing_id: String(listingId) },
-          customerId: session?.id ?? undefined,
-          // For host tenants: pass protection fee separately so OutdoorShare keeps 100% of it
-          protectionFeeCents: platformProtectionFee > 0 ? Math.round(platformProtectionFee * (dateRange?.days ?? 1) * 100) : undefined,
-          // Pass-through: tell the backend the exact service fee charged to the customer
-          passthroughFeeCents: serviceFee > 0 ? Math.round(serviceFee * 100) : undefined,
-          // Custom fees: backend adds 3% platform processing fee if total > $100
-          customFeesCents: customFeesSubtotal > 0 ? Math.round(customFeesSubtotal * 100) : undefined,
-        }),
-      });
-      if (!res.ok) {
-        const errData = await res.json().catch(() => ({}));
-        toast({ title: "Unable to initialize payment", description: errData.error ?? `HTTP ${res.status}`, variant: "destructive" });
-        setShowStripeForm(false);
-        return;
+    setPaymentInitFailed(false);
+    setPaymentInitTimedOut(false);
+
+    const body = JSON.stringify({
+      tenantSlug: slug,
+      amountCents: totalCents,
+      customerEmail: email,
+      customerName: name,
+      bookingMeta: { listing_id: String(listingId) },
+      customerId: session?.id ?? undefined,
+      protectionFeeCents: platformProtectionFee > 0 ? Math.round(platformProtectionFee * (dateRange?.days ?? 1) * 100) : undefined,
+      passthroughFeeCents: serviceFee > 0 ? Math.round(serviceFee * 100) : undefined,
+      customFeesCents: customFeesSubtotal > 0 ? Math.round(customFeesSubtotal * 100) : undefined,
+    });
+
+    const MAX_ATTEMPTS = 3;
+    for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+      try {
+        const res = await fetch(`${BASE}/api/stripe/payment-intent`, {
+          method: "POST", headers: { "Content-Type": "application/json" }, body,
+        });
+        if (!res.ok) {
+          const errData = await res.json().catch(() => ({}));
+          if (attempt < MAX_ATTEMPTS) {
+            await new Promise(r => setTimeout(r, attempt * 1200));
+            continue;
+          }
+          toast({ title: "Unable to initialize payment", description: errData.error ?? `Please refresh and try again.`, variant: "destructive" });
+          setShowStripeForm(false);
+          setPaymentInitFailed(true);
+          return;
+        }
+        const data = await res.json();
+        setClientSecret(data.clientSecret);
+        setPaymentIntentId(data.paymentIntentId);
+        setCustomerSessionClientSecret(data.customerSessionClientSecret ?? null);
+        setIsTestMode(!!data.testMode);
+        setIsInstantBooking(!!data.instantBooking);
+        if (paymentTimeoutRef.current) clearTimeout(paymentTimeoutRef.current);
+        return; // success — exit retry loop
+      } catch {
+        if (attempt < MAX_ATTEMPTS) {
+          await new Promise(r => setTimeout(r, attempt * 1200));
+        } else {
+          toast({ title: "Payment setup failed — please try again", variant: "destructive" });
+          setShowStripeForm(false);
+          setPaymentInitFailed(true);
+        }
       }
-      const data = await res.json();
-      setClientSecret(data.clientSecret);
-      setPaymentIntentId(data.paymentIntentId);
-      setCustomerSessionClientSecret(data.customerSessionClientSecret ?? null);
-      setIsTestMode(!!data.testMode);
-      setIsInstantBooking(!!data.instantBooking);
-    } catch {
-      toast({ title: "Payment setup failed — please try again", variant: "destructive" });
-      setShowStripeForm(false);
     }
   }, [slug, email, name, listingId, toast]);
 
@@ -1510,9 +1529,13 @@ export default function StorefrontBook() {
     if (!dateRange?.from || !dateRange?.to) return;
     if (discountedTotal <= 0) return;
     intentFiredRef.current = true;
-    // Use deposit amount if payment plan is selected, otherwise full total
     const cents = Math.round(chargeNowAmount * 100);
     setShowStripeForm(true);
+    // Timeout guard: if payment form isn't ready in 18 s, offer a manual retry
+    if (paymentTimeoutRef.current) clearTimeout(paymentTimeoutRef.current);
+    paymentTimeoutRef.current = setTimeout(() => {
+      setPaymentInitTimedOut(true);
+    }, 18000);
     createPaymentIntent(cents);
   }, [session, isKiosk, email, name, discountedTotal, chargeNowAmount, clientSecret, paymentConfirmed, dateRange, createPaymentIntent]);
 
@@ -1740,8 +1763,18 @@ export default function StorefrontBook() {
         setCompletePhase(isKiosk ? "photos" : "confirmed");
       }
       window.scrollTo(0, 0);
-    } catch {
-      toast({ title: "Booking failed", description: "Please try again.", variant: "destructive" });
+    } catch (bookErr: any) {
+      if (paymentConfirmed && paymentIntentId) {
+        // Payment went through but booking record creation failed.
+        // Give the customer their payment reference so they can contact support.
+        toast({
+          title: "Payment received — booking save failed",
+          description: `Your payment was processed. Please contact us and provide reference: ${paymentIntentId}`,
+          variant: "destructive",
+        });
+      } else {
+        toast({ title: "Booking failed", description: bookErr?.message ?? "Please try again.", variant: "destructive" });
+      }
     } finally { setIsSubmitting(false); }
   };
 
@@ -3084,10 +3117,50 @@ export default function StorefrontBook() {
                                 <p className="text-xs text-muted-foreground mt-0.5">Fill in your name and email below to unlock payment.</p>
                               </div>
                             </div>
+                          ) : paymentInitFailed ? (
+                            <div className="flex flex-col items-center gap-3 py-6 text-center">
+                              <p className="text-sm text-destructive font-medium">Payment setup failed.</p>
+                              <button
+                                type="button"
+                                className="text-sm font-semibold text-primary underline underline-offset-2"
+                                onClick={() => {
+                                  setPaymentInitFailed(false);
+                                  setPaymentInitTimedOut(false);
+                                  intentFiredRef.current = false;
+                                  setShowStripeForm(true);
+                                  const cents = Math.round(chargeNowAmount * 100);
+                                  if (paymentTimeoutRef.current) clearTimeout(paymentTimeoutRef.current);
+                                  paymentTimeoutRef.current = setTimeout(() => setPaymentInitTimedOut(true), 18000);
+                                  createPaymentIntent(cents);
+                                }}
+                              >
+                                Retry payment setup
+                              </button>
+                            </div>
                           ) : (
-                            <div className="flex items-center justify-center py-6 gap-3 text-muted-foreground">
-                              <Loader2 className="w-5 h-5 animate-spin" />
-                              <span>Preparing payment…</span>
+                            <div className="flex flex-col items-center gap-2 py-6">
+                              <div className="flex items-center gap-3 text-muted-foreground">
+                                <Loader2 className="w-5 h-5 animate-spin" />
+                                <span>Preparing payment…</span>
+                              </div>
+                              {paymentInitTimedOut && (
+                                <button
+                                  type="button"
+                                  className="mt-2 text-sm font-semibold text-primary underline underline-offset-2"
+                                  onClick={() => {
+                                    setPaymentInitFailed(false);
+                                    setPaymentInitTimedOut(false);
+                                    intentFiredRef.current = false;
+                                    setShowStripeForm(true);
+                                    const cents = Math.round(chargeNowAmount * 100);
+                                    if (paymentTimeoutRef.current) clearTimeout(paymentTimeoutRef.current);
+                                    paymentTimeoutRef.current = setTimeout(() => setPaymentInitTimedOut(true), 18000);
+                                    createPaymentIntent(cents);
+                                  }}
+                                >
+                                  Taking longer than expected — tap to retry
+                                </button>
+                              )}
                             </div>
                           )}
                           <div className="flex justify-center">
@@ -3130,9 +3203,51 @@ export default function StorefrontBook() {
                           )}
 
                           {!clientSecret ? (
-                            <div className="flex items-center justify-center py-16 gap-3 text-muted-foreground">
-                              <Loader2 className="w-5 h-5 animate-spin" />
-                              <span>Preparing payment…</span>
+                            <div className="flex flex-col items-center gap-3 py-16 text-center">
+                              {paymentInitFailed ? (
+                                <>
+                                  <p className="text-sm text-destructive font-medium">Payment setup failed.</p>
+                                  <button
+                                    type="button"
+                                    className="text-sm font-semibold text-primary underline underline-offset-2"
+                                    onClick={() => {
+                                      setPaymentInitFailed(false);
+                                      setPaymentInitTimedOut(false);
+                                      intentFiredRef.current = false;
+                                      const cents = Math.round(chargeNowAmount * 100);
+                                      if (paymentTimeoutRef.current) clearTimeout(paymentTimeoutRef.current);
+                                      paymentTimeoutRef.current = setTimeout(() => setPaymentInitTimedOut(true), 18000);
+                                      createPaymentIntent(cents);
+                                    }}
+                                  >
+                                    Retry payment setup
+                                  </button>
+                                </>
+                              ) : (
+                                <>
+                                  <div className="flex items-center gap-3 text-muted-foreground">
+                                    <Loader2 className="w-5 h-5 animate-spin" />
+                                    <span>Preparing payment…</span>
+                                  </div>
+                                  {paymentInitTimedOut && (
+                                    <button
+                                      type="button"
+                                      className="mt-1 text-sm font-semibold text-primary underline underline-offset-2"
+                                      onClick={() => {
+                                        setPaymentInitFailed(false);
+                                        setPaymentInitTimedOut(false);
+                                        intentFiredRef.current = false;
+                                        const cents = Math.round(chargeNowAmount * 100);
+                                        if (paymentTimeoutRef.current) clearTimeout(paymentTimeoutRef.current);
+                                        paymentTimeoutRef.current = setTimeout(() => setPaymentInitTimedOut(true), 18000);
+                                        createPaymentIntent(cents);
+                                      }}
+                                    >
+                                      Taking longer than expected — tap to retry
+                                    </button>
+                                  )}
+                                </>
+                              )}
                             </div>
                           ) : (
                             <>
