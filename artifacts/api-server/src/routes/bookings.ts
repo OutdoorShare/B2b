@@ -4,7 +4,7 @@ import path from "path";
 import multer from "multer";
 import { randomBytes } from "crypto";
 import { db } from "@workspace/db";
-import { bookingsTable, listingsTable, businessProfileTable, tenantsTable, contactCardsTable, customersTable, productsTable } from "@workspace/db/schema";
+import { bookingsTable, listingsTable, businessProfileTable, tenantsTable, contactCardsTable, customersTable, productsTable, quotesTable } from "@workspace/db/schema";
 import { eq, and, gte, lte, isNull, or, sql } from "drizzle-orm";
 import { generateAgreementPdf } from "../lib/generate-agreement-pdf";
 import {
@@ -307,8 +307,10 @@ router.post("/bookings", async (req, res) => {
       splitRemainingAmount: reqSplitRemaining,
       splitRemainingDueDate: reqSplitDueDate,
       protectionPlanDeclined: reqProtectionPlanDeclined,
+      quoteId: reqQuoteId,
       ...restBody
     } = body;
+    const quoteId = reqQuoteId ? Number(reqQuoteId) : null;
     const assignedUnitIds = Array.isArray(rawUnitIds) && rawUnitIds.length > 0 ? JSON.stringify(rawUnitIds) : null;
     // Set agreementSignedAt server-side when the customer provides their signature
     const agreementSignedAt = restBody.agreementSignerName ? new Date() : null;
@@ -354,6 +356,19 @@ router.post("/bookings", async (req, res) => {
       seenByAdmin: restBody.source === "online" ? false : true,
       seenByRenter: true,
     }).returning();
+
+    // If this booking was created from a quote, mark the quote as accepted
+    if (quoteId) {
+      (async () => {
+        try {
+          await db.update(quotesTable)
+            .set({ status: "accepted" })
+            .where(eq(quotesTable.id, quoteId));
+        } catch (e: any) {
+          req.log.warn({ err: e.message }, "Non-fatal: failed to mark quote as accepted");
+        }
+      })();
+    }
 
     // Update the Stripe PI with the booking ID and listing title so it's clearly identifiable in Stripe
     if (created.stripePaymentIntentId && req.tenantId) {

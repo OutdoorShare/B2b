@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
-import { useParams } from "wouter";
-import { Loader2, FileText, Building2, Mail, Phone, Calendar, CheckCircle2, XCircle, Package } from "lucide-react";
+import { useParams, useLocation } from "wouter";
+import { Loader2, FileText, Building2, Mail, Phone, Calendar, CheckCircle2, XCircle, Package, CreditCard } from "lucide-react";
+import { Button } from "@/components/ui/button";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
@@ -18,9 +19,23 @@ function StatusChip({ status }: { status: string }) {
   );
 }
 
+function getFirstListingId(items: any[]): number | null {
+  for (const item of items) {
+    if (item.type === "bundle") {
+      const sub = item.bundleItems ?? [];
+      if (sub.length > 0 && sub[0].listingId) return Number(sub[0].listingId);
+    } else if (item.listingId) {
+      return Number(item.listingId);
+    }
+  }
+  return null;
+}
+
 export default function StorefrontQuoteView() {
   const params = useParams<{ slug: string; id: string }>();
   const id = params?.id;
+  const slug = params?.slug;
+  const [, setLocation] = useLocation();
 
   const [quote, setQuote] = useState<any | null>(null);
   const [loading, setLoading] = useState(true);
@@ -62,6 +77,25 @@ export default function StorefrontQuoteView() {
   const discount = Number(quote.discount ?? 0);
   const totalPrice = Number(quote.totalPrice ?? 0);
   const quoteRef = `QT-${String(quote.id).padStart(4, "0")}`;
+
+  const canBook = quote.status === "sent" || quote.status === "draft";
+  const firstListingId = getFirstListingId(items);
+
+  function handleBookNow() {
+    if (!firstListingId || !slug) return;
+    const sfBase = `/${slug}`;
+    const params = new URLSearchParams({
+      listingId: String(firstListingId),
+      quoteId: String(quote.id),
+      quoteTotal: String(totalPrice),
+      ...(quote.startDate ? { startDate: quote.startDate } : {}),
+      ...(quote.endDate   ? { endDate:   quote.endDate }   : {}),
+      ...(quote.customerName  ? { quoteName:  quote.customerName }  : {}),
+      ...(quote.customerEmail ? { quoteEmail: quote.customerEmail } : {}),
+      ...(quote.customerPhone ? { quotePhone: quote.customerPhone } : {}),
+    });
+    setLocation(`${sfBase}/book?${params.toString()}`);
+  }
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -212,9 +246,10 @@ export default function StorefrontQuoteView() {
                   </div>
                 )}
                 <div className="flex justify-between text-base font-bold text-gray-900 pt-2 border-t border-gray-200">
-                  <span>Total</span>
+                  <span>Rental Total</span>
                   <span>${totalPrice.toFixed(2)}</span>
                 </div>
+                <p className="text-xs text-gray-400 pt-1">Security deposit, applicable fees, and protection plan are added at checkout.</p>
               </div>
             </>
           )}
@@ -228,13 +263,36 @@ export default function StorefrontQuoteView() {
           </div>
         )}
 
+        {/* Pay Now CTA */}
+        {canBook && firstListingId && (
+          <div className="bg-white rounded-xl border border-gray-200 p-6">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+              <div>
+                <p className="font-semibold text-gray-900 text-base">Ready to book?</p>
+                <p className="text-sm text-gray-500 mt-0.5">
+                  Rental total: <span className="font-bold text-gray-800">${totalPrice.toFixed(2)}</span>
+                  <span className="text-gray-400 ml-1">+ deposit, fees &amp; protection at checkout</span>
+                </p>
+              </div>
+              <Button
+                size="lg"
+                className="bg-green-600 hover:bg-green-700 text-white font-bold px-8 rounded-xl shrink-0"
+                onClick={handleBookNow}
+              >
+                <CreditCard className="w-4 h-4 mr-2" />
+                Book &amp; Pay Now
+              </Button>
+            </div>
+          </div>
+        )}
+
         {/* Status callout */}
         {quote.status === "accepted" && (
           <div className="bg-green-50 border border-green-200 rounded-xl p-5 flex items-center gap-3">
             <CheckCircle2 className="w-6 h-6 text-green-600 flex-shrink-0" />
             <div>
               <p className="font-semibold text-green-800 text-sm">Quote Accepted</p>
-              <p className="text-green-700 text-xs mt-0.5">Thank you! The business will be in touch to confirm your booking.</p>
+              <p className="text-green-700 text-xs mt-0.5">Thank you! Your booking is being processed.</p>
             </div>
           </div>
         )}
@@ -244,6 +302,15 @@ export default function StorefrontQuoteView() {
             <div>
               <p className="font-semibold text-red-800 text-sm">Quote Declined</p>
               <p className="text-red-700 text-xs mt-0.5">This quote has been declined. Please contact the business for assistance.</p>
+            </div>
+          </div>
+        )}
+        {quote.status === "expired" && (
+          <div className="bg-amber-50 border border-amber-200 rounded-xl p-5 flex items-center gap-3">
+            <XCircle className="w-6 h-6 text-amber-500 flex-shrink-0" />
+            <div>
+              <p className="font-semibold text-amber-800 text-sm">Quote Expired</p>
+              <p className="text-amber-700 text-xs mt-0.5">This quote is no longer valid. Contact the business to request a new quote.</p>
             </div>
           </div>
         )}

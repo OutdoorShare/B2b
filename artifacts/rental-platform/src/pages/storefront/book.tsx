@@ -555,6 +555,13 @@ export default function StorefrontBook() {
   const urlEnd = searchParams.get("endDate");
   const isKiosk = searchParams.get("kiosk") === "1";
   const fromMarketplace = searchParams.get("from") === "marketplace";
+  const quoteIdStr = searchParams.get("quoteId");
+  const quoteTotalStr = searchParams.get("quoteTotal");
+  const quoteTotalOverride = quoteTotalStr ? parseFloat(quoteTotalStr) : null;
+  const quotePreName = searchParams.get("quoteName") ?? "";
+  const quotePreEmail = searchParams.get("quoteEmail") ?? "";
+  const quotePrePhone = searchParams.get("quotePhone") ?? "";
+  const quoteRef = quoteIdStr ? `QT-${String(quoteIdStr).padStart(4, "0")}` : null;
 
   // Scroll to top on initial mount so navigating from the listing page doesn't
   // carry over the previous scroll position.
@@ -616,9 +623,9 @@ export default function StorefrontBook() {
   const [pickupTime, setPickupTime] = useState<string>(() => isKiosk ? currentTimeSlot() : "10:00 AM");
   const [dropoffTime, setDropoffTime] = useState<string>("10:00 AM");
   const [notes, setNotes] = useState("");
-  const [name, setName] = useState(session?.name ?? "");
-  const [email, setEmail] = useState(session?.email ?? "");
-  const [phone, setPhone] = useState(session?.phone ?? "");
+  const [name, setName] = useState(session?.name ?? quotePreName ?? "");
+  const [email, setEmail] = useState(session?.email ?? quotePreEmail ?? "");
+  const [phone, setPhone] = useState(session?.phone ?? quotePrePhone ?? "");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -1126,6 +1133,8 @@ export default function StorefrontBook() {
   }, [usePaymentPlan]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const subtotal = useMemo(() => {
+    // Quote checkout: use the negotiated quote total as-is
+    if (quoteTotalOverride != null) return quoteTotalOverride;
     // Time-slot rate overrides everything else when a slot is selected
     let base: number;
     if (hasTimeSlots && selectedTimeSlot) {
@@ -1148,7 +1157,7 @@ export default function StorefrontBook() {
       base = fullDayPrice * days;
     }
     return base * selectedQuantity;
-  }, [hasTimeSlots, selectedTimeSlot, listing, isOneDay, selectedOption, fullDayPrice, days, selectedHours, selectedQuantity]);
+  }, [quoteTotalOverride, hasTimeSlots, selectedTimeSlot, listing, isOneDay, selectedOption, fullDayPrice, days, selectedHours, selectedQuantity]);
   const deposit = listing?.depositAmount ? parseFloat(String(listing.depositAmount)) : 0;
   const platformProtectionRate = platformProtectionPlan?.enabled ? parseFloat(platformProtectionPlan.feeAmount || "0") : 0;
   const primaryProtectionFeeBase = platformProtectionRate * days;
@@ -1679,6 +1688,7 @@ export default function StorefrontBook() {
           agreementText: agreementText ? resolveAgreementText(agreementText) : undefined,
           agreementSignatureDataUrl: signatureDataUrl,
           stripePaymentIntentId: paymentIntentId || undefined,
+          quoteId: quoteIdStr ? Number(quoteIdStr) : undefined,
           appliedPromoCode: appliedPromo?.code || undefined,
           discountAmount: promoDiscount > 0 ? promoDiscount : undefined,
           depositPaid: totalDeposit > 0 ? String(totalDeposit) : undefined,
@@ -1898,6 +1908,17 @@ export default function StorefrontBook() {
             <ArrowLeft className="w-4 h-4 mr-2" />
             {step === "book" ? (isKiosk ? "Back to Listings" : fromMarketplace ? "Back to Marketplace" : "Back to listing") : "Back"}
           </Button>
+        )}
+
+        {/* Quote mode banner */}
+        {quoteRef && (
+          <div className="mb-6 rounded-xl border border-blue-200 bg-blue-50 px-5 py-3.5 flex items-center gap-3">
+            <FileText className="w-5 h-5 text-blue-600 flex-shrink-0" />
+            <div>
+              <p className="text-sm font-semibold text-blue-800">Checking out from Quote {quoteRef}</p>
+              <p className="text-xs text-blue-600 mt-0.5">Your rental items and dates have been pre-filled from the quote. Security deposit, fees, and protection plan apply as usual.</p>
+            </div>
+          </div>
         )}
 
         <div className={`grid grid-cols-1 gap-8 ${completePhase !== "confirmed" ? "xl:grid-cols-5" : ""}`}>
