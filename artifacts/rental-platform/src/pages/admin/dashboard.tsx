@@ -9,7 +9,7 @@ import {
   getGetBookingsQueryKey
 } from "@workspace/api-client-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { DollarSign, CalendarDays, Package, TrendingUp, Mountain, AlertTriangle, ArrowRight } from "lucide-react";
+import { DollarSign, CalendarDays, Package, TrendingUp, Mountain, AlertTriangle, ArrowRight, Wallet } from "lucide-react";
 import { Link } from "wouter";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -117,6 +117,63 @@ export default function AdminDashboard() {
           </Link>
         </div>
       )}
+
+      {/* ── Earnings summary banner ── */}
+      {(() => {
+        const s = summary as any;
+        const net: number = s?.netEarnings ?? 0;
+        const gross: number = s?.totalRevenue ?? 0;
+        const fee: number = s?.platformFeeTotal ?? 0;
+        const feeRate: number = s?.platformFeePercent ?? 0;
+        const passed: boolean = s?.passPlatformFeeToCustomer ?? false;
+        const netMonth: number = s?.netEarningsThisMonth ?? 0;
+        return (
+          <div className="rounded-2xl overflow-hidden ring-1 ring-emerald-200 dark:ring-emerald-800 bg-gradient-to-r from-emerald-600 to-emerald-500 shadow-md">
+            <div className="flex flex-col sm:flex-row sm:items-center gap-4 px-6 py-5">
+              <div className="flex items-center gap-3 flex-1">
+                <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center shrink-0">
+                  <Wallet className="w-5 h-5 text-white" />
+                </div>
+                <div>
+                  <p className="text-xs font-semibold text-emerald-100 uppercase tracking-widest">Your Earnings</p>
+                  <p className="text-4xl font-extrabold text-white tracking-tight leading-none mt-0.5">
+                    ${net.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  </p>
+                  <p className="text-[11px] text-emerald-100/80 mt-1 font-medium">
+                    +${netMonth.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} this month
+                  </p>
+                </div>
+              </div>
+              <div className="sm:text-right space-y-1.5 shrink-0">
+                <div className="flex sm:justify-end items-center gap-2 text-sm text-emerald-100">
+                  <span className="text-emerald-100/70">Gross Revenue</span>
+                  <span className="font-semibold text-white">
+                    ${gross.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  </span>
+                </div>
+                <div className="flex sm:justify-end items-center gap-2 text-sm text-emerald-100">
+                  <span className="text-emerald-100/70">
+                    {passed ? "Platform fee (paid by renters)" : `Platform fee (${feeRate}%)`}
+                  </span>
+                  <span className="font-semibold text-white">
+                    {passed ? "—" : `-$${fee.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
+                  </span>
+                </div>
+                {!passed && (
+                  <div className="flex sm:justify-end">
+                    <div className="w-36 h-1.5 rounded-full bg-white/20 overflow-hidden">
+                      <div
+                        className="h-full rounded-full bg-white/70"
+                        style={{ width: `${gross > 0 ? ((net / gross) * 100).toFixed(1) : 100}%` }}
+                      />
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* ── Stat cards ── */}
       <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-4">

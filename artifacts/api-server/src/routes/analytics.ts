@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
-import { bookingsTable, listingsTable, customersTable, categoriesTable } from "@workspace/db/schema";
+import { bookingsTable, listingsTable, customersTable, categoriesTable, tenantsTable, businessProfileTable } from "@workspace/db/schema";
 import { count, sum, eq, and, gte, sql, isNotNull } from "drizzle-orm";
 
 const router: IRouter = Router();
@@ -63,10 +63,39 @@ router.get("/analytics/summary", async (req, res) => {
         ? and(listingTenantFilter, eq(listingsTable.status, "active"))
         : eq(listingsTable.status, "active"));
 
+    // ── Fetch tenant fee config ────────────────────────────────────────────
+    let platformFeePercent = 10; // starter default
+    let passPlatformFeeToCustomer = false;
+    if (req.tenantId) {
+      const [tenant] = await db
+        .select({ platformFeePercent: tenantsTable.platformFeePercent })
+        .from(tenantsTable)
+        .where(eq(tenantsTable.id, req.tenantId))
+        .limit(1);
+      if (tenant?.platformFeePercent != null) {
+        platformFeePercent = parseFloat(String(tenant.platformFeePercent));
+      }
+      const [biz] = await db
+        .select({ passPlatformFeeToCustomer: businessProfileTable.passPlatformFeeToCustomer })
+        .from(businessProfileTable)
+        .where(eq(businessProfileTable.tenantId, req.tenantId))
+        .limit(1);
+      if (biz?.passPlatformFeeToCustomer != null) {
+        passPlatformFeeToCustomer = biz.passPlatformFeeToCustomer;
+      }
+    }
+
     const totalBookings = Number(allStats?.totalBookings ?? 0);
     const totalRevenue = parseFloat(allStats?.totalRevenue ?? "0");
     const revenueThisMonth = parseFloat(thisMonthStats?.revenue ?? "0");
     const revenueLastMonth = parseFloat(lastMonthStats?.revenue ?? "0");
+
+    // Net earnings = gross revenue minus platform fee (0 if fee is passed to customer)
+    const feeRate = passPlatformFeeToCustomer ? 0 : platformFeePercent / 100;
+    const platformFeeTotal = parseFloat((totalRevenue * feeRate).toFixed(2));
+    const netEarnings = parseFloat((totalRevenue - platformFeeTotal).toFixed(2));
+    const platformFeeTotalThisMonth = parseFloat((revenueThisMonth * feeRate).toFixed(2));
+    const netEarningsThisMonth = parseFloat((revenueThisMonth - platformFeeTotalThisMonth).toFixed(2));
 
     res.json({
       totalRevenue,
@@ -81,6 +110,12 @@ router.get("/analytics/summary", async (req, res) => {
       bookingsLastMonth: Number(lastMonthStats?.bookings ?? 0),
       averageBookingValue: totalBookings > 0 ? totalRevenue / totalBookings : 0,
       utilization: Number(activeListingStats?.count ?? 0) > 0 ? (Number(activeStats?.count ?? 0) / Number(activeListingStats?.count ?? 1)) * 100 : 0,
+      // Earnings
+      netEarnings,
+      netEarningsThisMonth,
+      platformFeePercent,
+      platformFeeTotal,
+      passPlatformFeeToCustomer,
     });
   } catch (err) {
     req.log.error(err);

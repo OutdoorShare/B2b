@@ -2,8 +2,10 @@ import { useState, useEffect } from "react";
 import {
   useGetRevenueAnalytics,
   useGetBookingStatusBreakdown,
+  useGetAnalyticsSummary,
   getGetRevenueAnalyticsQueryKey,
-  getGetBookingStatusBreakdownQueryKey
+  getGetBookingStatusBreakdownQueryKey,
+  getGetAnalyticsSummaryQueryKey,
 } from "@workspace/api-client-react";
 import { getAdminSession } from "@/lib/admin-nav";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -14,7 +16,7 @@ import {
   PieChart, Pie, Cell, Legend,
   CartesianGrid
 } from "recharts";
-import { MapPin, Tag, TrendingUp, Users, Smartphone, Globe, Phone, UserCheck } from "lucide-react";
+import { MapPin, Tag, TrendingUp, Users, Smartphone, Globe, Phone, UserCheck, Wallet, ArrowDownRight } from "lucide-react";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
@@ -42,6 +44,11 @@ export default function AdminAnalytics() {
   const [locationMode, setLocationMode] = useState<LocationMode>("state");
 
   // ── Existing data ──────────────────────────────────────────────────────
+  const { data: summaryRaw } = useGetAnalyticsSummary({
+    query: { queryKey: getGetAnalyticsSummaryQueryKey() }
+  });
+  const summary = summaryRaw as any;
+
   const { data: revenueData,   isLoading: isLoadingRevenue } = useGetRevenueAnalytics(
     { period },
     { query: { queryKey: getGetRevenueAnalyticsQueryKey({ period }) } }
@@ -136,6 +143,86 @@ export default function AdminAnalytics() {
           </Select>
         </div>
       </div>
+
+      {/* ── Earnings summary ── */}
+      {summary && (
+        <div className="grid gap-4 md:grid-cols-3">
+          {/* Net Earnings */}
+          <Card className="border-0 shadow-sm bg-gradient-to-br from-emerald-600 to-emerald-500 text-white ring-1 ring-emerald-400/30 md:col-span-1">
+            <CardContent className="p-5">
+              <div className="flex items-center gap-2 mb-3">
+                <div className="w-7 h-7 rounded-lg bg-white/20 flex items-center justify-center">
+                  <Wallet className="w-3.5 h-3.5 text-white" />
+                </div>
+                <p className="text-xs font-semibold text-emerald-100 uppercase tracking-widest">Your Earnings</p>
+              </div>
+              <p className="text-4xl font-extrabold tracking-tight leading-none">
+                ${(summary?.netEarnings ?? 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              </p>
+              <p className="text-[11px] text-emerald-100/80 mt-2 font-medium">
+                +${(summary?.netEarningsThisMonth ?? 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} this month
+              </p>
+            </CardContent>
+          </Card>
+
+          {/* Gross Revenue */}
+          <Card className="border-0 shadow-sm ring-1 ring-border">
+            <CardContent className="p-5">
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-widest mb-3">Gross Revenue</p>
+              <p className="text-3xl font-extrabold tracking-tight">
+                ${(summary?.totalRevenue ?? 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              </p>
+              <p className="text-[11px] text-muted-foreground mt-2 font-medium">
+                +${(summary?.revenueThisMonth ?? 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} this month
+              </p>
+            </CardContent>
+          </Card>
+
+          {/* Platform Fee */}
+          <Card className="border-0 shadow-sm ring-1 ring-border">
+            <CardContent className="p-5">
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-widest mb-3">
+                Platform Fee
+                {summary?.passPlatformFeeToCustomer
+                  ? " · Passed to renters"
+                  : ` · ${summary?.platformFeePercent ?? 0}%`}
+              </p>
+              {summary?.passPlatformFeeToCustomer ? (
+                <>
+                  <p className="text-3xl font-extrabold tracking-tight text-muted-foreground">$0.00</p>
+                  <p className="text-[11px] text-muted-foreground mt-2 font-medium">Renters pay this on checkout</p>
+                </>
+              ) : (
+                <>
+                  <p className="text-3xl font-extrabold tracking-tight text-rose-500">
+                    -${(summary?.platformFeeTotal ?? 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  </p>
+                  <div className="mt-3">
+                    <div className="flex items-center justify-between text-[11px] text-muted-foreground mb-1">
+                      <span>Keep rate</span>
+                      <span className="font-semibold text-foreground">
+                        {summary?.totalRevenue > 0
+                          ? (((summary.netEarnings ?? 0) / summary.totalRevenue) * 100).toFixed(1)
+                          : 100}%
+                      </span>
+                    </div>
+                    <div className="w-full h-1.5 rounded-full bg-muted overflow-hidden">
+                      <div
+                        className="h-full rounded-full bg-emerald-500"
+                        style={{
+                          width: `${summary?.totalRevenue > 0
+                            ? (((summary.netEarnings ?? 0) / summary.totalRevenue) * 100).toFixed(1)
+                            : 100}%`
+                        }}
+                      />
+                    </div>
+                  </div>
+                </>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+      )}
 
       {/* Row 1: Revenue + Status */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-7">
