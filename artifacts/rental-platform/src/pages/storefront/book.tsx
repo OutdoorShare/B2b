@@ -1128,6 +1128,9 @@ export default function StorefrontBook() {
   const protectionIsOptional = !!(businessProfile as any)?.protectionPlanOptional;
   // effectiveProtectionFee is 0 when the renter has opted out
   const platformProtectionFee = protectionIsOptional && protectionDeclined ? 0 : platformProtectionFeeBase;
+  // For addon-based protection plans: has the renter deselected an optional protection addon?
+  const addonProtectionDeclined = protectionIsOptional && platformProtectionFeeBase === 0 &&
+    availableAddons.some(a => a.name.toLowerCase().includes("protection") && !selectedAddonIds.has(a.id));
   // Bundle item deposits (20% of each item's subtotal)
   const bundleDepositTotal = bundleItems.reduce((s, i) => s + i.subtotal * 0.20, 0);
   const totalDeposit = deposit + bundleDepositTotal;
@@ -1640,7 +1643,7 @@ export default function StorefrontBook() {
           discountAmount: promoDiscount > 0 ? promoDiscount : undefined,
           depositPaid: totalDeposit > 0 ? String(totalDeposit) : undefined,
           protectionPlanFee: platformProtectionFee > 0 ? String(platformProtectionFee) : undefined,
-          protectionPlanDeclined: protectionIsOptional && protectionDeclined ? true : undefined,
+          protectionPlanDeclined: (protectionIsOptional && protectionDeclined) || addonProtectionDeclined ? true : undefined,
           // Payment plan (split deposit)
           ...(usePaymentPlan && planEnabled ? {
             paymentPlanEnabled: true,
@@ -2045,13 +2048,68 @@ export default function StorefrontBook() {
                       </div>
                     )}
                     {availableAddons
-                      .filter(a => selectedAddonIds.has(a.id) && !(platformProtectionFee > 0 && a.name.toLowerCase().includes("protection")))
-                      .map(a => (
-                        <div key={a.id} className="px-4 py-3 flex items-center justify-between text-sm text-muted-foreground">
-                          <span>{a.name}</span>
-                          <span>+${(a.priceType === "per_day" ? a.price * days : a.price).toFixed(2)}</span>
-                        </div>
-                      ))}
+                      .filter(a => {
+                        const isProtection = a.name.toLowerCase().includes("protection");
+                        // When platform plan is active, suppress addon-level protection line (avoid double-counting)
+                        if (isProtection && platformProtectionFee > 0) return false;
+                        // Always show optional protection addons in summary (even if not selected) so renter can toggle
+                        if (isProtection && protectionIsOptional) return true;
+                        return selectedAddonIds.has(a.id);
+                      })
+                      .map(a => {
+                        const isProtection = a.name.toLowerCase().includes("protection");
+                        const included = selectedAddonIds.has(a.id);
+                        const lineAmt = (a.priceType === "per_day" ? a.price * days : a.price);
+                        if (isProtection && protectionIsOptional) {
+                          // Render with opt-in/opt-out checkbox in the order summary
+                          return (
+                            <div key={a.id} className="px-4 py-3 space-y-2 text-sm">
+                              <div className="flex items-center justify-between">
+                                <span className="flex items-center gap-2">
+                                  <ShieldCheck className="w-4 h-4 shrink-0" style={{ color: included ? "#3ab549" : "#9ca3af" }} />
+                                  <span>
+                                    <span className="font-semibold" style={{ color: included ? "#1a2332" : "#9ca3af" }}>Protection Plan</span>
+                                    <span className="ml-1 text-xs font-bold px-1.5 py-0.5 rounded-full bg-muted text-muted-foreground">Optional</span>
+                                  </span>
+                                  <span className="text-xs text-muted-foreground">
+                                    {a.priceType === "per_day" ? `$${a.price}/day × ${days} day${days !== 1 ? "s" : ""}` : "flat fee"}
+                                  </span>
+                                </span>
+                                <span className={`font-semibold ${!included ? "line-through text-muted-foreground" : "text-blue-700"}`}>
+                                  +${lineAmt.toFixed(2)}
+                                </span>
+                              </div>
+                              <label className="flex items-start gap-2 cursor-pointer pl-6">
+                                <input
+                                  type="checkbox"
+                                  className="mt-0.5"
+                                  checked={!included}
+                                  onChange={e => {
+                                    setSelectedAddonIds(prev => {
+                                      const next = new Set(prev);
+                                      if (e.target.checked) next.delete(a.id); else next.add(a.id);
+                                      return next;
+                                    });
+                                  }}
+                                />
+                                <span className="text-xs text-muted-foreground">I do not want the protection plan</span>
+                              </label>
+                              {!included && (
+                                <div className="ml-6 rounded-lg bg-red-50 border border-red-200 p-3 space-y-1">
+                                  <p className="text-xs font-bold text-red-700 flex items-center gap-1.5"><span>⚠️</span> No OutdoorShare Protection</p>
+                                  <p className="text-xs text-red-700">By declining the protection plan, you will have <strong>no assistance from OutdoorShare</strong> in the event of any accident, damage, or loss. You will <strong>not</strong> be able to submit a claim.</p>
+                                </div>
+                              )}
+                            </div>
+                          );
+                        }
+                        return (
+                          <div key={a.id} className="px-4 py-3 flex items-center justify-between text-sm text-muted-foreground">
+                            <span>{a.name}</span>
+                            <span>+${lineAmt.toFixed(2)}</span>
+                          </div>
+                        );
+                      })}
                     {/* Business custom fees — mandatory, auto-applied */}
                     {customFees.map(f => {
                       const amt = parseFloat(f.amount);
@@ -2261,7 +2319,8 @@ export default function StorefrontBook() {
                   const regularAddons = availableAddons.filter(a => !a.name.toLowerCase().includes("protection"));
 
                   const toggleAddon = (id: number, isProtection: boolean, isRequired: boolean) => {
-                    if (isRequired || isProtection) return;
+                    if (isRequired) return; // required addons can never be removed
+                    if (isProtection && !protectionIsOptional) return; // protection only removable when admin made it optional
                     setSelectedAddonIds(prev => {
                       const next = new Set(prev);
                       if (next.has(id)) next.delete(id); else next.add(id);
@@ -2276,25 +2335,33 @@ export default function StorefrontBook() {
                         // listing-level protection addon card — the platform plan is the canonical fee.
                         if (platformProtectionFee > 0) return null;
                         const addonPrice = addon.priceType === "per_day" ? addon.price * days : addon.price;
+                        const addonIncluded = selectedAddonIds.has(addon.id);
+                        const borderColor = addonIncluded ? "#3ab549" : "#d1d5db";
                         return (
                           <div
                             key={addon.id}
                             className="w-full text-left rounded-2xl overflow-hidden shadow-lg"
-                            style={{ border: "2px solid #3ab549" }}
+                            style={{ border: `2px solid ${borderColor}` }}
                           >
-                            <div className="px-5 py-3 flex items-center justify-between" style={{ background: "#1a2332" }}>
+                            <div className="px-5 py-3 flex items-center justify-between" style={{ background: addonIncluded ? "#1a2332" : "#374151" }}>
                               <div className="flex items-center gap-2.5">
-                                <ShieldCheck className="w-5 h-5" style={{ color: "#3ab549" }} />
+                                <ShieldCheck className="w-5 h-5" style={{ color: addonIncluded ? "#3ab549" : "#9ca3af" }} />
                                 <div className="flex flex-col leading-tight">
                                   <span className="font-black text-white text-sm tracking-wide">Protection Plan</span>
-                                  <span className="text-[10px] font-bold tracking-widest uppercase" style={{ color: "#3ab549" }}>by OutdoorShare</span>
+                                  <span className="text-[10px] font-bold tracking-widest uppercase" style={{ color: addonIncluded ? "#3ab549" : "#9ca3af" }}>by OutdoorShare</span>
                                 </div>
                               </div>
-                              <span className="text-white text-xs font-bold px-2.5 py-1 rounded-full flex items-center gap-1 border" style={{ background: "rgba(58,181,73,0.15)", borderColor: "#3ab549", color: "#3ab549" }}>
-                                <Lock className="w-3 h-3" /> Required
-                              </span>
+                              {protectionIsOptional ? (
+                                <span className="text-white text-xs font-bold px-2.5 py-1 rounded-full flex items-center gap-1 border border-gray-500" style={{ background: "rgba(255,255,255,0.1)", color: "#d1d5db" }}>
+                                  Optional
+                                </span>
+                              ) : (
+                                <span className="text-white text-xs font-bold px-2.5 py-1 rounded-full flex items-center gap-1 border" style={{ background: "rgba(58,181,73,0.15)", borderColor: "#3ab549", color: "#3ab549" }}>
+                                  <Lock className="w-3 h-3" /> Required
+                                </span>
+                              )}
                             </div>
-                            <div className="p-5" style={{ background: "#f0faf1" }}>
+                            <div className="p-5" style={{ background: addonIncluded ? "#f0faf1" : "#f9fafb" }}>
                               <div className="flex items-start justify-between gap-4">
                                 <div className="flex-1">
                                   <p className="text-sm text-gray-700 mb-3">
@@ -2309,14 +2376,21 @@ export default function StorefrontBook() {
                                       { icon: Lock, text: "Theft w/ forcible entry" },
                                     ].map(({ icon: Icon, text }) => (
                                       <div key={text} className="flex items-center gap-1.5">
-                                        <Icon className="w-3.5 h-3.5 shrink-0" style={{ color: "#3ab549" }} />
-                                        <span className="text-xs text-gray-700">{text}</span>
+                                        <Icon className="w-3.5 h-3.5 shrink-0" style={{ color: addonIncluded ? "#3ab549" : "#9ca3af" }} />
+                                        <span className={`text-xs ${addonIncluded ? "text-gray-700" : "text-gray-400 line-through"}`}>{text}</span>
                                       </div>
                                     ))}
                                   </div>
+                                  {/* Opt-out warning for optional plan */}
+                                  {protectionIsOptional && !addonIncluded && (
+                                    <div className="mt-3 rounded-lg bg-red-50 border border-red-200 p-3">
+                                      <p className="text-xs font-bold text-red-700 flex items-center gap-1.5">⚠️ No OutdoorShare Protection</p>
+                                      <p className="text-xs text-red-700 mt-0.5">By declining, you will have no assistance from OutdoorShare in the event of damage, loss, or accidents. You are fully responsible under the signed rental agreement.</p>
+                                    </div>
+                                  )}
                                 </div>
                                 <div className="shrink-0 text-right">
-                                  <p className="text-3xl font-black" style={{ color: "#1a2332" }}>
+                                  <p className="text-3xl font-black" style={{ color: addonIncluded ? "#1a2332" : "#9ca3af" }}>
                                     ${addonPrice.toFixed(0)}
                                   </p>
                                   {addon.priceType === "per_day" ? (
@@ -2324,9 +2398,23 @@ export default function StorefrontBook() {
                                   ) : (
                                     <p className="text-xs text-gray-500">flat fee</p>
                                   )}
-                                  <div className="mt-3 flex items-center justify-center gap-1.5 rounded-lg px-4 py-2 font-bold text-sm text-white cursor-default" style={{ background: "#3ab549" }}>
-                                    <CheckCircle2 className="w-4 h-4" /> Included
-                                  </div>
+                                  {protectionIsOptional ? (
+                                    <button
+                                      type="button"
+                                      onClick={() => toggleAddon(addon.id, true, false)}
+                                      className="mt-3 w-full flex items-center justify-center gap-1.5 rounded-lg px-4 py-2 font-bold text-sm transition-colors"
+                                      style={addonIncluded
+                                        ? { background: "#3ab549", color: "#ffffff" }
+                                        : { background: "#f3f4f6", color: "#6b7280", border: "1px solid #d1d5db" }
+                                      }
+                                    >
+                                      {addonIncluded ? <><CheckCircle2 className="w-4 h-4" /> Included</> : <><span>+</span> Add Protection</>}
+                                    </button>
+                                  ) : (
+                                    <div className="mt-3 flex items-center justify-center gap-1.5 rounded-lg px-4 py-2 font-bold text-sm text-white cursor-default" style={{ background: "#3ab549" }}>
+                                      <CheckCircle2 className="w-4 h-4" /> Included
+                                    </div>
+                                  )}
                                   <img src="/outdoorshare-logo-transparent.png" alt="OutdoorShare" className="mt-3 h-7 object-contain mx-auto" />
                                 </div>
                               </div>
