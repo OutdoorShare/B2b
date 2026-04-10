@@ -1,9 +1,11 @@
-import { adminPath } from "@/lib/admin-nav";
+import { adminPath, getAdminSession } from "@/lib/admin-nav";
+import { useState } from "react";
 import { Link } from "wouter";
 import { 
   useGetQuotes, 
   getGetQuotesQueryKey
 } from "@workspace/api-client-react";
+import { useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { 
@@ -15,13 +17,37 @@ import {
   TableRow 
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { FileText, Plus, Search } from "lucide-react";
+import { FileText, Plus, Send, Loader2 } from "lucide-react";
 import { format } from "date-fns";
+import { useToast } from "@/hooks/use-toast";
+
+const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
 export default function AdminQuotes() {
   const { data: quotes, isLoading } = useGetQuotes({
     query: { queryKey: getGetQuotesQueryKey() }
   });
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+  const [sendingId, setSendingId] = useState<number | null>(null);
+
+  const sendQuote = async (id: number, email: string) => {
+    setSendingId(id);
+    try {
+      const session = getAdminSession();
+      const resp = await fetch(`${BASE}/api/quotes/${id}/send`, {
+        method: "POST",
+        headers: { "x-admin-token": session?.token ?? "" },
+      });
+      if (!resp.ok) throw new Error("send failed");
+      await queryClient.invalidateQueries({ queryKey: getGetQuotesQueryKey() });
+      toast({ title: "Quote sent!", description: `Emailed to ${email}` });
+    } catch {
+      toast({ title: "Failed to send quote", description: "Please try again.", variant: "destructive" });
+    } finally {
+      setSendingId(null);
+    }
+  };
 
   const getStatusBadge = (status: string) => {
     switch(status) {
@@ -63,6 +89,7 @@ export default function AdminQuotes() {
                   <TableHead>Items</TableHead>
                   <TableHead>Total</TableHead>
                   <TableHead>Status</TableHead>
+                  <TableHead className="w-28"></TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -85,6 +112,22 @@ export default function AdminQuotes() {
                     </TableCell>
                     <TableCell className="font-medium">${quote.totalPrice.toFixed(2)}</TableCell>
                     <TableCell>{getStatusBadge(quote.status)}</TableCell>
+                    <TableCell>
+                      {(quote.status === "draft" || quote.status === "sent") && (
+                        <Button
+                          size="sm"
+                          variant={quote.status === "draft" ? "default" : "outline"}
+                          disabled={sendingId === quote.id}
+                          onClick={() => sendQuote(quote.id, quote.customerEmail)}
+                          className="gap-1.5 text-xs h-8"
+                        >
+                          {sendingId === quote.id
+                            ? <><Loader2 className="w-3 h-3 animate-spin" />Sending…</>
+                            : <><Send className="w-3 h-3" />{quote.status === "sent" ? "Resend" : "Send"}</>
+                          }
+                        </Button>
+                      )}
+                    </TableCell>
                   </TableRow>
                 ))}
               </TableBody>

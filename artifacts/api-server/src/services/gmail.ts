@@ -2355,3 +2355,133 @@ export async function sendSignupInviteEmail(opts: {
     requestBody: { raw: makeRawEmail(toEmail, "You're invited to start your rental business on OutdoorShare — free", html) },
   });
 }
+
+// ── Quote email (sent to customer when admin sends a quote) ────────────────────
+export async function sendQuoteEmail(opts: {
+  toEmail: string;
+  customerName: string;
+  quoteId: number;
+  companyName: string;
+  companyEmail?: string | null;
+  startDate: string;
+  endDate: string;
+  items: Array<{
+    listingTitle: string;
+    quantity: number;
+    pricePerDay: number;
+    days: number;
+    subtotal: number;
+  }>;
+  subtotal: number;
+  discount: number;
+  totalPrice: number;
+  notes?: string | null;
+  validUntil?: string | null;
+}): Promise<void> {
+  const {
+    toEmail, customerName, quoteId, companyName, companyEmail,
+    startDate, endDate, items, subtotal, discount, totalPrice,
+    notes, validUntil,
+  } = opts;
+
+  const fromHeader = `${companyName} <samhos@myoutdoorshare.com>`;
+  const replyTo = companyEmail || undefined;
+  const quoteRef = `QT-${String(quoteId).padStart(4, "0")}`;
+
+  const itemRows = items.map(item => `
+    <tr>
+      <td style="padding:10px 16px;font-size:14px;color:#111827;border-bottom:1px solid #e5e7eb;">${esc(item.listingTitle)}</td>
+      <td style="padding:10px 16px;font-size:14px;color:#374151;border-bottom:1px solid #e5e7eb;text-align:center;">${item.quantity}</td>
+      <td style="padding:10px 16px;font-size:14px;color:#374151;border-bottom:1px solid #e5e7eb;text-align:center;">${item.days}</td>
+      <td style="padding:10px 16px;font-size:14px;color:#374151;border-bottom:1px solid #e5e7eb;text-align:right;">$${Number(item.pricePerDay).toFixed(2)}/day</td>
+      <td style="padding:10px 16px;font-size:14px;font-weight:600;color:#111827;border-bottom:1px solid #e5e7eb;text-align:right;">$${Number(item.subtotal).toFixed(2)}</td>
+    </tr>`).join("");
+
+  const itemsTable = `
+    <table cellpadding="0" cellspacing="0" border="0" width="100%" style="border-radius:8px;overflow:hidden;border:1px solid #e5e7eb;margin:20px 0;">
+      <thead>
+        <tr style="background:#f8faf8;">
+          <th style="padding:10px 16px;font-size:12px;font-weight:700;color:#6b7280;text-align:left;border-bottom:1px solid #e5e7eb;letter-spacing:0.5px;text-transform:uppercase;">Item</th>
+          <th style="padding:10px 16px;font-size:12px;font-weight:700;color:#6b7280;text-align:center;border-bottom:1px solid #e5e7eb;letter-spacing:0.5px;text-transform:uppercase;">Qty</th>
+          <th style="padding:10px 16px;font-size:12px;font-weight:700;color:#6b7280;text-align:center;border-bottom:1px solid #e5e7eb;letter-spacing:0.5px;text-transform:uppercase;">Days</th>
+          <th style="padding:10px 16px;font-size:12px;font-weight:700;color:#6b7280;text-align:right;border-bottom:1px solid #e5e7eb;letter-spacing:0.5px;text-transform:uppercase;">Rate</th>
+          <th style="padding:10px 16px;font-size:12px;font-weight:700;color:#6b7280;text-align:right;border-bottom:1px solid #e5e7eb;letter-spacing:0.5px;text-transform:uppercase;">Subtotal</th>
+        </tr>
+      </thead>
+      <tbody>${itemRows}</tbody>
+    </table>`;
+
+  const discountRow = discount > 0
+    ? `<tr><td style="padding:5px 0;font-size:14px;color:#374151;text-align:right;padding-right:16px;">Discount</td><td style="padding:5px 0;font-size:14px;color:#16a34a;font-weight:600;text-align:right;white-space:nowrap;">−$${Number(discount).toFixed(2)}</td></tr>`
+    : "";
+
+  const totalsBlock = `
+    <table cellpadding="0" cellspacing="0" border="0" style="margin:0 0 0 auto;">
+      <tbody>
+        <tr>
+          <td style="padding:5px 16px 5px 0;font-size:14px;color:#6b7280;text-align:right;">Subtotal</td>
+          <td style="padding:5px 0;font-size:14px;color:#374151;text-align:right;white-space:nowrap;">$${Number(subtotal).toFixed(2)}</td>
+        </tr>
+        ${discountRow}
+        <tr>
+          <td style="padding:12px 16px 4px 0;font-size:16px;font-weight:700;color:#111827;border-top:2px solid #e5e7eb;text-align:right;">Total</td>
+          <td style="padding:12px 0 4px;font-size:18px;font-weight:900;color:${BRAND_GREEN};border-top:2px solid #e5e7eb;text-align:right;white-space:nowrap;">$${Number(totalPrice).toFixed(2)}</td>
+        </tr>
+      </tbody>
+    </table>`;
+
+  const notesBlock = notes
+    ? `<div style="background:#f8faf8;border:1px solid #e5e7eb;border-radius:8px;padding:16px;margin:24px 0 0;">
+        <p style="margin:0 0 6px;font-size:11px;font-weight:700;color:#6b7280;letter-spacing:0.8px;text-transform:uppercase;">Notes</p>
+        <p style="margin:0;font-size:14px;color:#374151;line-height:1.6;">${esc(notes)}</p>
+       </div>`
+    : "";
+
+  const replyLine = replyTo
+    ? `Reply to <a href="mailto:${esc(replyTo)}" style="color:${BRAND_GREEN};">${esc(replyTo)}</a> to accept or ask any questions.`
+    : "Reply to this email to accept or ask any questions.";
+
+  const validLine = validUntil
+    ? `This quote is valid until <strong>${esc(validUntil)}</strong>. ${replyLine}`
+    : replyLine;
+
+  const body = `
+    <p style="margin:0 0 4px;font-size:16px;font-weight:700;color:${BRAND_DARK};">Hi ${esc(customerName)},</p>
+    <p style="margin:0 0 24px;font-size:15px;color:#374151;line-height:1.6;">
+      Thank you for your interest. Here is your custom quote from <strong>${esc(companyName)}</strong>.
+    </p>
+
+    ${infoTable([
+      { label: "Quote #",       value: quoteRef },
+      { label: "Rental Start",  value: startDate },
+      { label: "Rental End",    value: endDate },
+    ])}
+
+    ${itemsTable}
+    ${totalsBlock}
+    ${notesBlock}
+
+    <p style="margin:28px 0 0;font-size:13px;color:#9ca3af;text-align:center;">${validLine}</p>
+  `;
+
+  const html = emailShell({
+    preheader: `Your quote ${quoteRef} from ${companyName} — $${Number(totalPrice).toFixed(2)} total`,
+    badgeLabel: `Quote ${quoteRef}`,
+    badgeColor: "#0e7490",
+    body,
+  });
+
+  const gmail = await getUncachableGmailClient();
+  await gmail.users.messages.send({
+    userId: "me",
+    requestBody: {
+      raw: makeRawEmail(
+        toEmail,
+        `[${companyName}] Your rental quote — $${Number(totalPrice).toFixed(2)}`,
+        html,
+        fromHeader,
+        replyTo,
+      ),
+    },
+  });
+}

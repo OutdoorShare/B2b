@@ -1,5 +1,5 @@
-import { adminPath } from "@/lib/admin-nav";
-import { useState, useMemo } from "react";
+import { adminPath, getAdminSession } from "@/lib/admin-nav";
+import { useState, useMemo, useRef } from "react";
 import { useLocation } from "wouter";
 import { 
   useGetListings, 
@@ -24,13 +24,17 @@ import {
   TableRow 
 } from "@/components/ui/table";
 import { useToast } from "@/hooks/use-toast";
-import { ArrowLeft, Trash2, Plus } from "lucide-react";
+import { ArrowLeft, Trash2, Plus, Send, FileText, Loader2 } from "lucide-react";
 import { format, differenceInDays, addDays } from "date-fns";
+
+const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
 export default function AdminQuotesNew() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const sendIntentRef = useRef(false);
+  const [isSending, setIsSending] = useState(false);
 
   const { data: listings } = useGetListings(
     { status: "active" },
@@ -102,6 +106,8 @@ export default function AdminQuotesNew() {
       return;
     }
 
+    const shouldSend = sendIntentRef.current;
+
     createQuote.mutate(
       { 
         data: {
@@ -113,12 +119,31 @@ export default function AdminQuotesNew() {
         } 
       },
       {
-        onSuccess: () => {
+        onSuccess: async (created) => {
           queryClient.invalidateQueries({ queryKey: getGetQuotesQueryKey() });
-          toast({ title: "Quote created successfully" });
+          if (shouldSend) {
+            setIsSending(true);
+            try {
+              const session = getAdminSession();
+              const resp = await fetch(`${BASE}/api/quotes/${created.id}/send`, {
+                method: "POST",
+                headers: { "x-admin-token": session?.token ?? "" },
+              });
+              if (!resp.ok) throw new Error("send failed");
+              toast({ title: "Quote sent!", description: `Emailed to ${formData.customerEmail}` });
+            } catch {
+              toast({ title: "Quote saved but email failed to send", variant: "destructive" });
+            } finally {
+              setIsSending(false);
+              sendIntentRef.current = false;
+            }
+          } else {
+            toast({ title: "Quote saved as draft" });
+          }
           setLocation(adminPath("/quotes"));
         },
         onError: () => {
+          sendIntentRef.current = false;
           toast({ title: "Failed to create quote", variant: "destructive" });
         }
       }
@@ -303,9 +328,36 @@ export default function AdminQuotesNew() {
                     <span>${total.toFixed(2)}</span>
                   </div>
 
-                  <Button type="submit" className="w-full mt-4" size="lg" disabled={createQuote.isPending || items.length === 0}>
-                    {createQuote.isPending ? 'Saving...' : 'Save Draft Quote'}
-                  </Button>
+                  <div className="flex flex-col gap-2 mt-4">
+                    <Button
+                      type="submit"
+                      size="lg"
+                      disabled={createQuote.isPending || isSending || items.length === 0 || !formData.customerEmail.trim()}
+                      onClick={() => { sendIntentRef.current = true; }}
+                      className="w-full font-bold gap-2"
+                    >
+                      {(createQuote.isPending || isSending) && sendIntentRef.current
+                        ? <><Loader2 className="w-4 h-4 animate-spin" />Sending…</>
+                        : <><Send className="w-4 h-4" />Save & Send Quote</>
+                      }
+                    </Button>
+                    <Button
+                      type="submit"
+                      variant="outline"
+                      size="lg"
+                      disabled={createQuote.isPending || isSending || items.length === 0}
+                      onClick={() => { sendIntentRef.current = false; }}
+                      className="w-full gap-2"
+                    >
+                      {createQuote.isPending && !sendIntentRef.current
+                        ? <><Loader2 className="w-4 h-4 animate-spin" />Saving…</>
+                        : <><FileText className="w-4 h-4" />Save as Draft</>
+                      }
+                    </Button>
+                    {!formData.customerEmail.trim() && (
+                      <p className="text-xs text-muted-foreground text-center">Add a customer email to send</p>
+                    )}
+                  </div>
                 </CardContent>
               </Card>
             </div>

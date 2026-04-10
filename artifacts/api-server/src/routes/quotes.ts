@@ -1,7 +1,9 @@
 import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
-import { quotesTable, listingsTable } from "@workspace/db/schema";
+import { quotesTable, listingsTable, businessProfileTable } from "@workspace/db/schema";
 import { eq, and } from "drizzle-orm";
+import { sendQuoteEmail, withBrand, withSmtpCreds } from "../services/gmail";
+import { getTenantSmtpCreds, getTenantBrand } from "../services/smtp-helper";
 
 const router: IRouter = Router();
 
@@ -107,6 +109,69 @@ router.put("/quotes/:id", async (req, res) => {
   } catch (err) {
     req.log.error(err);
     res.status(500).json({ error: "Failed to update quote" });
+  }
+});
+
+router.post("/quotes/:id/send", async (req, res) => {
+  try {
+    const conditions = [eq(quotesTable.id, Number(req.params.id))];
+    if (req.tenantId) conditions.push(eq(quotesTable.tenantId, req.tenantId));
+    const [quote] = await db.select().from(quotesTable).where(and(...conditions));
+    if (!quote) { res.status(404).json({ error: "Not found" }); return; }
+
+    // Fetch business profile for company name + contact email
+    const [profileRow] = quote.tenantId
+      ? await db
+          .select({ name: businessProfileTable.name, email: businessProfileTable.email, outboundEmail: businessProfileTable.outboundEmail })
+          .from(businessProfileTable)
+          .where(eq(businessProfileTable.tenantId, quote.tenantId))
+      : [];
+
+    const companyName = profileRow?.name ?? "Your Rental Company";
+    const companyEmail = profileRow?.outboundEmail ?? profileRow?.email ?? null;
+
+    const [smtpCreds, brand] = await Promise.all([
+      getTenantSmtpCreds(quote.tenantId),
+      getTenantBrand(quote.tenantId),
+    ]);
+
+    const items = (Array.isArray(quote.items) ? quote.items : []) as any[];
+    await withBrand(brand, () =>
+      withSmtpCreds(smtpCreds, () =>
+        sendQuoteEmail({
+          toEmail: quote.customerEmail,
+          customerName: quote.customerName,
+          quoteId: quote.id,
+          companyName,
+          companyEmail,
+          startDate: quote.startDate,
+          endDate: quote.endDate,
+          items: items.map((item: any) => ({
+            listingTitle: item.listingTitle ?? "Item",
+            quantity: Number(item.quantity ?? 1),
+            pricePerDay: Number(item.pricePerDay ?? 0),
+            days: Number(item.days ?? 1),
+            subtotal: Number(item.subtotal ?? 0),
+          })),
+          subtotal: parseFloat(quote.subtotal ?? "0"),
+          discount: parseFloat(quote.discount ?? "0"),
+          totalPrice: parseFloat(quote.totalPrice ?? "0"),
+          notes: quote.notes,
+          validUntil: quote.validUntil,
+        })
+      )
+    );
+
+    const [updated] = await db
+      .update(quotesTable)
+      .set({ status: "sent", updatedAt: new Date() })
+      .where(and(...conditions))
+      .returning();
+
+    res.json(formatQuote(updated));
+  } catch (err) {
+    req.log.error(err);
+    res.status(500).json({ error: "Failed to send quote" });
   }
 });
 
