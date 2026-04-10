@@ -2,13 +2,18 @@ import { useState, useEffect, useMemo } from "react";
 import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
+import { Label } from "@/components/ui/label";
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
+} from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
 import {
   Search, Users, Trophy, Phone, Mail, CalendarDays,
   ChevronRight, X, ExternalLink, Star, TrendingUp,
   ShieldCheck, Clock, Package, CreditCard, Hash,
-  ArrowUpDown, SortAsc, Copy, Check, AlertCircle,
+  ArrowUpDown, SortAsc, Copy, Check, AlertCircle, Send,
 } from "lucide-react";
 import { getAdminSession, adminPath } from "@/lib/admin-nav";
 
@@ -90,9 +95,54 @@ function RenterPanel({
   renter: Renter;
   onClose: () => void;
 }) {
+  const { toast } = useToast();
   const [bookings, setBookings] = useState<RenterBooking[]>([]);
   const [loading, setLoading] = useState(true);
   const [copied, setCopied] = useState<"email" | "phone" | null>(null);
+
+  // Email compose dialog
+  const [composeOpen, setComposeOpen] = useState(false);
+  const [composeSubject, setComposeSubject] = useState("");
+  const [composeBody, setComposeBody] = useState("");
+  const [composeSending, setComposeSending] = useState(false);
+
+  async function handleSendEmail() {
+    if (!composeSubject.trim()) {
+      toast({ title: "Subject required", description: "Please add a subject line.", variant: "destructive" });
+      return;
+    }
+    if (!composeBody.trim()) {
+      toast({ title: "Message required", description: "Please write a message.", variant: "destructive" });
+      return;
+    }
+    setComposeSending(true);
+    try {
+      const res = await fetch(`${BASE}/api/communications/send`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          recipients: [{ name: renter.name, email: renter.email }],
+          channel: "email",
+          subject: composeSubject,
+          body: composeBody,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Send failed");
+      if (data.sent > 0) {
+        toast({ title: "Email sent!", description: `Delivered to ${renter.email}` });
+        setComposeOpen(false);
+        setComposeSubject("");
+        setComposeBody("");
+      } else {
+        toast({ title: "Delivery issue", description: "Email logged but could not be delivered. Check your Gmail connection in Settings.", variant: "destructive" });
+      }
+    } catch (err: any) {
+      toast({ title: "Failed to send", description: err.message, variant: "destructive" });
+    } finally {
+      setComposeSending(false);
+    }
+  }
 
   function copyToClipboard(text: string, type: "email" | "phone") {
     navigator.clipboard.writeText(text).then(() => {
@@ -177,16 +227,59 @@ function RenterPanel({
         </div>
       </div>
 
+      {/* Email compose dialog */}
+      <Dialog open={composeOpen} onOpenChange={setComposeOpen}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Mail className="w-4 h-4" /> Email {renter.name}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-1">
+            <div className="space-y-1.5">
+              <Label className="text-xs text-muted-foreground">To</Label>
+              <Input value={renter.email} readOnly className="bg-muted/50 text-muted-foreground" />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs text-muted-foreground">Subject</Label>
+              <Input
+                value={composeSubject}
+                onChange={e => setComposeSubject(e.target.value)}
+                placeholder="e.g. Your upcoming rental"
+                autoFocus
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs text-muted-foreground">Message</Label>
+              <Textarea
+                value={composeBody}
+                onChange={e => setComposeBody(e.target.value)}
+                placeholder={`Hi ${renter.name.split(" ")[0]},\n\n`}
+                rows={6}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setComposeOpen(false)} disabled={composeSending}>
+              Cancel
+            </Button>
+            <Button onClick={handleSendEmail} disabled={composeSending} className="gap-2">
+              <Send className="w-3.5 h-3.5" />
+              {composeSending ? "Sending…" : "Send Email"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       {/* Quick actions */}
       <div className="flex gap-2 p-4 border-b">
-        <a
-          href={`mailto:${renter.email}`}
-          target="_top"
-          rel="noopener noreferrer"
+        <button
+          type="button"
+          onClick={() => setComposeOpen(true)}
           className="flex-1 flex items-center justify-center gap-2 h-9 rounded-lg border bg-background hover:bg-muted transition-colors text-sm font-medium"
         >
           <Mail className="w-4 h-4" /> Email
-        </a>
+        </button>
         {renter.phone && (
           <a
             href={`tel:${renter.phone}`}
