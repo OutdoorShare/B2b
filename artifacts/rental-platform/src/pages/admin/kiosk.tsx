@@ -59,6 +59,73 @@ function getExitPin(slug: string): string {
   return localStorage.getItem(`kiosk_exit_pin_${slug}`) || "1234";
 }
 
+// ── Immersive card used when there are ≤ 5 listings ───────────────────────────
+function FunListingCard({ listing, single, onClick }: {
+  listing: SelectedListing & { categoryName?: string | null; description?: string | null };
+  single: boolean;
+  onClick: () => void;
+}) {
+  const imageUrl = (listing as any).imageUrls?.[0];
+
+  return (
+    <div
+      onClick={onClick}
+      className={`group relative rounded-3xl overflow-hidden cursor-pointer select-none
+        shadow-xl hover:shadow-2xl active:scale-[0.97] transition-all duration-300
+        border-2 border-transparent hover:border-primary/60
+        ${single ? "w-full max-w-2xl aspect-[3/2]" : "w-full"}
+      `}
+    >
+      {/* Full-bleed image */}
+      <div className={`relative w-full overflow-hidden bg-muted ${single ? "h-full" : "aspect-[3/2]"}`}>
+        {imageUrl ? (
+          <img
+            src={imageUrl}
+            alt={listing.title}
+            className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
+          />
+        ) : (
+          <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-slate-200 to-slate-300">
+            <Car className="w-24 h-24 text-slate-400" />
+          </div>
+        )}
+        {/* Dark gradient overlay */}
+        <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent" />
+
+        {/* Category pill */}
+        {listing.categoryName && (
+          <div className="absolute top-4 left-4">
+            <span className="text-xs font-bold uppercase tracking-widest bg-primary text-primary-foreground px-3 py-1.5 rounded-full shadow-md">
+              {listing.categoryName}
+            </span>
+          </div>
+        )}
+
+        {/* Bottom info overlay */}
+        <div className="absolute bottom-0 left-0 right-0 p-6 flex items-end justify-between gap-4">
+          <div className="flex-1 min-w-0">
+            <h3 className={`font-black text-white leading-tight drop-shadow-lg line-clamp-2 ${single ? "text-4xl" : "text-2xl"}`}>
+              {listing.title}
+            </h3>
+            <div className={`flex items-baseline gap-1 mt-1 ${single ? "mt-3" : "mt-1.5"}`}>
+              <span className={`font-black text-white drop-shadow-lg ${single ? "text-5xl" : "text-3xl"}`}>
+                ${listing.pricePerDay}
+              </span>
+              <span className={`text-white/70 font-semibold ${single ? "text-xl" : "text-base"}`}>/day</span>
+            </div>
+          </div>
+          <div className={`shrink-0 flex items-center gap-2 bg-primary group-hover:bg-primary/90 text-primary-foreground font-bold rounded-full shadow-xl transition-all group-hover:scale-105 group-hover:shadow-primary/40
+            ${single ? "px-8 py-4 text-xl" : "px-5 py-3 text-base"}
+          `}>
+            Rent Now
+            <ChevronRight className={`${single ? "w-6 h-6" : "w-4 h-4"}`} />
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function AdminKiosk() {
   const { slug: urlSlug } = useParams<{ slug: string }>();
   const [, setLocation] = useLocation();
@@ -295,73 +362,127 @@ export default function AdminKiosk() {
       </header>
 
       <main className="flex-1 flex overflow-hidden">
-        {/* Sidebar Categories */}
-        <aside className="w-64 border-r bg-card shrink-0 overflow-y-auto p-4 space-y-2">
-          <button
-            onClick={() => setActiveCategory(null)}
-            className={`w-full text-left px-6 py-4 rounded-xl text-lg font-medium transition-all ${
-              activeCategory === null ? "bg-primary text-primary-foreground shadow-md" : "hover:bg-muted text-foreground"
-            }`}
-          >
-            All Listings
-          </button>
-          {categories?.filter((cat, i, arr) => arr.findIndex(c => c.id === cat.id) === i).map(cat => (
+        {/* Sidebar Categories — only shown when there are more than 5 listings */}
+        {!isLoading && (listings?.length ?? 0) > 5 && (
+          <aside className="w-64 border-r bg-card shrink-0 overflow-y-auto p-4 space-y-2">
             <button
-              key={cat.id}
-              onClick={() => setActiveCategory(cat.id)}
+              onClick={() => setActiveCategory(null)}
               className={`w-full text-left px-6 py-4 rounded-xl text-lg font-medium transition-all ${
-                activeCategory === cat.id ? "bg-primary text-primary-foreground shadow-md" : "hover:bg-muted text-foreground"
+                activeCategory === null ? "bg-primary text-primary-foreground shadow-md" : "hover:bg-muted text-foreground"
               }`}
             >
-              {cat.name}
+              All Listings
             </button>
-          ))}
-        </aside>
+            {categories?.filter((cat, i, arr) => arr.findIndex(c => c.id === cat.id) === i).map(cat => (
+              <button
+                key={cat.id}
+                onClick={() => setActiveCategory(cat.id)}
+                className={`w-full text-left px-6 py-4 rounded-xl text-lg font-medium transition-all ${
+                  activeCategory === cat.id ? "bg-primary text-primary-foreground shadow-md" : "hover:bg-muted text-foreground"
+                }`}
+              >
+                {cat.name}
+              </button>
+            ))}
+          </aside>
+        )}
 
         {/* Content Grid */}
-        <div className="flex-1 overflow-y-auto p-8 bg-muted/30">
+        <div className="flex-1 overflow-y-auto bg-muted/20">
           {isLoading ? (
-            <div className="text-center py-20 text-muted-foreground text-xl">Loading vehicles...</div>
-          ) : listings && listings.length > 0 ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-              {listings.map(listing => (
-                <div
-                  key={listing.id}
-                  onClick={() => { setSelected(listing as SelectedListing); resetIdle(); }}
-                  className="bg-background rounded-2xl overflow-hidden border shadow-sm cursor-pointer group hover:border-primary/50 hover:shadow-lg transition-all active:scale-95"
-                >
-                  <div className="aspect-[4/3] bg-muted relative overflow-hidden">
-                    {listing.imageUrls?.[0] ? (
-                      <img src={listing.imageUrls[0]} alt={listing.title} className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" />
-                    ) : (
-                      <div className="w-full h-full flex items-center justify-center text-muted-foreground">
-                        <Car className="w-12 h-12 opacity-20" />
-                      </div>
-                    )}
-                    {listing.categoryName && (
-                      <div className="absolute top-3 left-3">
-                        <span className="text-[10px] font-bold uppercase tracking-widest bg-black/60 text-white px-2 py-1 rounded-full backdrop-blur">
-                          {listing.categoryName}
-                        </span>
-                      </div>
-                    )}
-                  </div>
-                  <div className="p-5">
-                    <h3 className="font-bold text-xl mb-3 line-clamp-1 group-hover:text-primary transition-colors">{listing.title}</h3>
-                    <div className="flex items-end justify-between">
-                      <div>
-                        <span className="text-2xl font-black">${listing.pricePerDay}</span>
-                        <span className="text-sm text-muted-foreground font-medium">/day</span>
-                      </div>
-                      <div className="flex items-center gap-1.5 bg-primary/10 text-primary px-3 py-1.5 rounded-full text-sm font-semibold group-hover:bg-primary group-hover:text-primary-foreground transition-colors">
-                        Rent <ChevronRight className="w-3.5 h-3.5" />
-                      </div>
+            <div className="p-8">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {[1,2,3].map(i => (
+                  <div key={i} className="animate-pulse rounded-3xl overflow-hidden border border-border">
+                    <div className="bg-muted aspect-[4/3]" />
+                    <div className="p-6 space-y-3">
+                      <div className="bg-muted h-6 rounded w-3/4" />
+                      <div className="bg-muted h-5 rounded w-1/3" />
                     </div>
                   </div>
-                </div>
-              ))}
+                ))}
+              </div>
             </div>
-          ) : (
+          ) : listings && listings.length > 0 ? (() => {
+            const count = listings.length;
+            const isFew = count <= 5;
+
+            if (isFew) {
+              // ── Immersive "few listings" layout ──────────────────────────
+              const gridClass =
+                count === 1 ? "flex items-center justify-center p-10 h-full" :
+                count === 2 ? "grid grid-cols-2 gap-8 p-10 max-w-5xl mx-auto w-full" :
+                count <= 4 ? "grid grid-cols-2 gap-7 p-8 max-w-6xl mx-auto w-full" :
+                              "grid grid-cols-3 gap-6 p-8 max-w-6xl mx-auto w-full";
+
+              return (
+                <div className={`min-h-full ${count === 1 ? gridClass : ""}`}>
+                  {count !== 1 ? (
+                    <div className={gridClass}>
+                      {listings.map(listing => (
+                        <FunListingCard
+                          key={listing.id}
+                          listing={listing as any}
+                          single={false}
+                          onClick={() => { setSelected(listing as SelectedListing); resetIdle(); }}
+                        />
+                      ))}
+                    </div>
+                  ) : (
+                    <FunListingCard
+                      listing={listings[0] as any}
+                      single
+                      onClick={() => { setSelected(listings[0] as SelectedListing); resetIdle(); }}
+                    />
+                  )}
+                </div>
+              );
+            }
+
+            // ── Standard multi-listing grid ───────────────────────────────
+            return (
+              <div className="p-8">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                  {listings.map(listing => (
+                    <div
+                      key={listing.id}
+                      onClick={() => { setSelected(listing as SelectedListing); resetIdle(); }}
+                      className="bg-background rounded-2xl overflow-hidden border shadow-sm cursor-pointer group hover:border-primary/50 hover:shadow-lg transition-all active:scale-95"
+                    >
+                      <div className="aspect-[4/3] bg-muted relative overflow-hidden">
+                        {listing.imageUrls?.[0] ? (
+                          <img src={listing.imageUrls[0]} alt={listing.title} className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" />
+                        ) : (
+                          <div className="w-full h-full flex items-center justify-center text-muted-foreground">
+                            <Car className="w-12 h-12 opacity-20" />
+                          </div>
+                        )}
+                        {listing.categoryName && (
+                          <div className="absolute top-3 left-3">
+                            <span className="text-[10px] font-bold uppercase tracking-widest bg-black/60 text-white px-2 py-1 rounded-full backdrop-blur">
+                              {listing.categoryName}
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                      <div className="p-5">
+                        <h3 className="font-bold text-xl mb-3 line-clamp-1 group-hover:text-primary transition-colors">{listing.title}</h3>
+                        <div className="flex items-end justify-between">
+                          <div>
+                            <span className="text-2xl font-black">${listing.pricePerDay}</span>
+                            <span className="text-sm text-muted-foreground font-medium">/day</span>
+                          </div>
+                          <div className="flex items-center gap-1.5 bg-primary/10 text-primary px-3 py-1.5 rounded-full text-sm font-semibold group-hover:bg-primary group-hover:text-primary-foreground transition-colors">
+                            Rent <ChevronRight className="w-3.5 h-3.5" />
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            );
+          })() : (
             <div className="text-center py-32">
               <Car className="w-24 h-24 mx-auto text-muted mb-6" />
               <h2 className="text-2xl font-bold text-foreground">No listings found</h2>
