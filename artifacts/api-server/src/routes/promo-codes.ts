@@ -74,6 +74,10 @@ router.post("/promo-codes", requireAdminAuth, async (req, res) => {
 
     res.status(201).json(created);
   } catch (e: any) {
+    if (e.code === "23505" || e.message?.includes("promo_codes_tenant_code_unique")) {
+      res.status(409).json({ error: "A promo code with this name already exists" });
+      return;
+    }
     res.status(500).json({ error: e.message });
   }
 });

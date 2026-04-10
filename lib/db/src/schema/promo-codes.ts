@@ -1,4 +1,4 @@
-import { pgTable, serial, text, integer, numeric, timestamp, boolean } from "drizzle-orm/pg-core";
+import { pgTable, serial, text, integer, numeric, timestamp, boolean, uniqueIndex } from "drizzle-orm/pg-core";
 
 export const promoCodesTable = pgTable("promo_codes", {
   id: serial("id").primaryKey(),
@@ -13,7 +13,9 @@ export const promoCodesTable = pgTable("promo_codes", {
   isActive: boolean("is_active").notNull().default(true),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
-});
+}, (table) => ({
+  tenantCodeUnique: uniqueIndex("promo_codes_tenant_code_unique").on(table.tenantId, table.code),
+}));
 
 export type PromoCode = typeof promoCodesTable.$inferSelect;
 export type InsertPromoCode = typeof promoCodesTable.$inferInsert;
