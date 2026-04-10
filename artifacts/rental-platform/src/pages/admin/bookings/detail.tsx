@@ -1726,7 +1726,7 @@ export default function AdminBookingDetail() {
                         try {
                           const r = await fetch(`${BASE}/api/stripe/charge-remaining/${booking.id}`, {
                             method: "POST",
-                            headers: { "Content-Type": "application/json" },
+                            headers: adminHeaders(),
                           });
                           const d = await r.json();
                           if (!r.ok) { alert(d.error || "Charge failed."); return; }

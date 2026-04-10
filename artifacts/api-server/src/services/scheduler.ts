@@ -599,6 +599,7 @@ async function autoChargeRemainingBalances() {
         or(
           eq(bookingsTable.status, "confirmed"),
           eq(bookingsTable.status, "active"),
+          eq(bookingsTable.status, "completed"),
         ),
       )
     );
