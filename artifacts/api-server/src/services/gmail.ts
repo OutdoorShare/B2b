@@ -2365,13 +2365,7 @@ export async function sendQuoteEmail(opts: {
   companyEmail?: string | null;
   startDate: string;
   endDate: string;
-  items: Array<{
-    listingTitle: string;
-    quantity: number;
-    pricePerDay: number;
-    days: number;
-    subtotal: number;
-  }>;
+  items: any[];
   subtotal: number;
   discount: number;
   totalPrice: number;
@@ -2388,14 +2382,40 @@ export async function sendQuoteEmail(opts: {
   const replyTo = companyEmail || undefined;
   const quoteRef = `QT-${String(quoteId).padStart(4, "0")}`;
 
-  const itemRows = items.map(item => `
-    <tr>
-      <td style="padding:10px 16px;font-size:14px;color:#111827;border-bottom:1px solid #e5e7eb;">${esc(item.listingTitle)}</td>
-      <td style="padding:10px 16px;font-size:14px;color:#374151;border-bottom:1px solid #e5e7eb;text-align:center;">${item.quantity}</td>
-      <td style="padding:10px 16px;font-size:14px;color:#374151;border-bottom:1px solid #e5e7eb;text-align:center;">${item.days}</td>
-      <td style="padding:10px 16px;font-size:14px;color:#374151;border-bottom:1px solid #e5e7eb;text-align:right;">$${Number(item.pricePerDay).toFixed(2)}/day</td>
-      <td style="padding:10px 16px;font-size:14px;font-weight:600;color:#111827;border-bottom:1px solid #e5e7eb;text-align:right;">$${Number(item.subtotal).toFixed(2)}</td>
-    </tr>`).join("");
+  const cell = (content: string, extra = "") =>
+    `<td style="padding:10px 16px;font-size:14px;color:#374151;border-bottom:1px solid #e5e7eb;${extra}">${content}</td>`;
+
+  const itemRows = items.map((item: any) => {
+    if (item.type === "bundle") {
+      const bundleSubs = (item.bundleItems ?? []).map((si: any) => `
+        <tr style="background:#f9fafb;">
+          ${cell(`<span style="padding-left:16px;color:#6b7280;">↳ ${esc(si.listingTitle ?? "Item")}</span>`)}
+          ${cell(String(si.quantity), "text-align:center;")}
+          ${cell(String(si.days), "text-align:center;")}
+          ${cell(`$${Number(si.pricePerDay).toFixed(2)}/day`, "text-align:right;")}
+          ${cell(`$${Number(si.subtotal).toFixed(2)}`, "text-align:right;color:#6b7280;")}
+        </tr>`).join("");
+      const priceNote = (item.bundlePrice != null && item.bundlePrice > 0)
+        ? `<span style="font-size:12px;color:#6b7280;font-weight:400;"> (bundle price)</span>` : "";
+      return `
+        <tr style="background:#f0fdf4;">
+          <td colspan="4" style="padding:10px 16px;font-size:14px;font-weight:700;color:#15803d;border-bottom:1px solid #e5e7eb;">
+            📦 ${esc(item.name ?? "Bundle")}
+          </td>
+          <td style="padding:10px 16px;font-size:14px;font-weight:700;color:#111827;border-bottom:1px solid #e5e7eb;text-align:right;">
+            $${Number(item.subtotal).toFixed(2)}${priceNote}
+          </td>
+        </tr>${bundleSubs}`;
+    }
+    return `
+      <tr>
+        ${cell(esc(item.listingTitle ?? "Item"))}
+        ${cell(String(item.quantity ?? 1), "text-align:center;")}
+        ${cell(String(item.days ?? 1), "text-align:center;")}
+        ${cell(`$${Number(item.pricePerDay ?? 0).toFixed(2)}/day`, "text-align:right;")}
+        ${cell(`$${Number(item.subtotal ?? 0).toFixed(2)}`, "text-align:right;font-weight:600;color:#111827;")}
+      </tr>`;
+  }).join("");
 
   const itemsTable = `
     <table cellpadding="0" cellspacing="0" border="0" width="100%" style="border-radius:8px;overflow:hidden;border:1px solid #e5e7eb;margin:20px 0;">

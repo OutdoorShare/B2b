@@ -11,11 +11,17 @@ import { CustomerAutocomplete } from "@/components/customer-autocomplete";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
-import { ArrowLeft, Trash2, Plus, Send, FileText, Loader2 } from "lucide-react";
+import { ArrowLeft, Trash2, Plus, Send, FileText, Loader2, Package, X } from "lucide-react";
 import { format, differenceInDays, addDays } from "date-fns";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
+
+type LineItem = { type?: "item"; listingId: number; quantity: number; pricePerDay: number };
+type BundleSubItem = { listingId: number; quantity: number; pricePerDay: number };
+type BundleItem = { type: "bundle"; name: string; bundleItems: BundleSubItem[]; bundlePrice?: number | null };
+type AnyItem = LineItem | BundleItem;
 
 export default function AdminQuoteEdit() {
   const params = useParams<{ slug: string; id: string }>();
@@ -34,17 +40,21 @@ export default function AdminQuoteEdit() {
   );
 
   const [formData, setFormData] = useState({
-    customerName: '',
-    customerEmail: '',
-    customerPhone: '',
+    customerName: '', customerEmail: '', customerPhone: '',
     startDate: format(new Date(), 'yyyy-MM-dd'),
     endDate: format(addDays(new Date(), 3), 'yyyy-MM-dd'),
-    notes: '',
-    discount: 0,
-    validUntil: '',
+    notes: '', discount: 0, validUntil: '',
   });
-  const [items, setItems] = useState<Array<{ listingId: number; quantity: number; pricePerDay: number }>>([]);
+  const [items, setItems] = useState<AnyItem[]>([]);
   const [selectedListingId, setSelectedListingId] = useState("");
+
+  // Bundle dialog state
+  const [bundleOpen, setBundleOpen] = useState(false);
+  const [bundleName, setBundleName] = useState("");
+  const [bundlePrice, setBundlePrice] = useState<string>("");
+  const [bundleSubItems, setBundleSubItems] = useState<Array<{ listingId: string; quantity: number; pricePerDay: number }>>([
+    { listingId: "", quantity: 1, pricePerDay: 0 }
+  ]);
 
   const adminHeaders = useCallback((): Record<string, string> => {
     const session = getAdminSession();
@@ -72,11 +82,21 @@ export default function AdminQuoteEdit() {
           validUntil: q.validUntil ?? '',
         });
         const rawItems: any[] = Array.isArray(q.items) ? q.items : [];
-        setItems(rawItems.map((i: any) => ({
-          listingId: i.listingId,
-          quantity: i.quantity ?? 1,
-          pricePerDay: i.pricePerDay ?? 0,
-        })));
+        setItems(rawItems.map((i: any) => {
+          if (i.type === "bundle") {
+            return {
+              type: "bundle" as const,
+              name: i.name ?? "Bundle",
+              bundleItems: (i.bundleItems ?? []).map((si: any) => ({
+                listingId: si.listingId,
+                quantity: si.quantity ?? 1,
+                pricePerDay: si.pricePerDay ?? 0,
+              })),
+              bundlePrice: i.bundlePrice ?? null,
+            };
+          }
+          return { listingId: i.listingId, quantity: i.quantity ?? 1, pricePerDay: i.pricePerDay ?? 0 };
+        }));
       } catch { /* ignore */ }
       finally { setInitialLoading(false); }
     })();
@@ -89,17 +109,24 @@ export default function AdminQuoteEdit() {
     } catch { return 1; }
   }, [formData.startDate, formData.endDate]);
 
-  const subtotal = useMemo(
-    () => items.reduce((sum, item) => sum + item.pricePerDay * item.quantity * days, 0),
-    [items, days]
-  );
+  const subtotal = useMemo(() => {
+    return items.reduce((sum, item) => {
+      if (item.type === "bundle") {
+        if (item.bundlePrice != null && item.bundlePrice > 0) return sum + item.bundlePrice;
+        return sum + item.bundleItems.reduce((s, si) => s + si.pricePerDay * si.quantity * days, 0);
+      }
+      return sum + item.pricePerDay * item.quantity * days;
+    }, 0);
+  }, [items, days]);
+
   const total = useMemo(() => Math.max(0, subtotal - formData.discount), [subtotal, formData.discount]);
 
+  // ─── Regular item ─────────────────────────────────────────────
   const addItem = () => {
     if (!selectedListingId) return;
     const listingId = parseInt(selectedListingId);
     const listing = listings?.find(l => l.id === listingId);
-    if (listing && !items.find(i => i.listingId === listingId)) {
+    if (listing && !items.some(i => i.type !== "bundle" && (i as LineItem).listingId === listingId)) {
       setItems(prev => [...prev, { listingId, quantity: 1, pricePerDay: listing.pricePerDay }]);
       setSelectedListingId("");
     }
@@ -113,22 +140,67 @@ export default function AdminQuoteEdit() {
     });
   };
 
-  const removeItem = (index: number) => {
-    setItems(prev => prev.filter((_, i) => i !== index));
+  const removeItem = (index: number) => setItems(prev => prev.filter((_, i) => i !== index));
+
+  // ─── Bundle dialog ────────────────────────────────────────────
+  const openBundleDialog = () => {
+    setBundleName(""); setBundlePrice("");
+    setBundleSubItems([{ listingId: "", quantity: 1, pricePerDay: 0 }]);
+    setBundleOpen(true);
   };
 
+  const addBundleSubItem = () => setBundleSubItems(prev => [...prev, { listingId: "", quantity: 1, pricePerDay: 0 }]);
+  const removeBundleSubItem = (i: number) => setBundleSubItems(prev => prev.filter((_, idx) => idx !== i));
+  const updateBundleSubItem = (i: number, field: string, value: any) => {
+    setBundleSubItems(prev => {
+      const next = [...prev];
+      if (field === "listingId") {
+        const listing = listings?.find(l => l.id === parseInt(value));
+        next[i] = { ...next[i], listingId: value, pricePerDay: listing?.pricePerDay ?? next[i].pricePerDay };
+      } else {
+        next[i] = { ...next[i], [field]: value };
+      }
+      return next;
+    });
+  };
+
+  const bundleSubtotalPreview = useMemo(() => {
+    return bundleSubItems.reduce((sum, si) => {
+      if (!si.listingId) return sum;
+      return sum + si.pricePerDay * si.quantity * days;
+    }, 0);
+  }, [bundleSubItems, days]);
+
+  const confirmBundle = () => {
+    if (!bundleName.trim()) { toast({ title: "Please enter a bundle name", variant: "destructive" }); return; }
+    const valid = bundleSubItems.filter(si => si.listingId);
+    if (valid.length === 0) { toast({ title: "Please add at least one listing", variant: "destructive" }); return; }
+    const bp = bundlePrice !== "" ? parseFloat(bundlePrice) : null;
+    const bundle: BundleItem = {
+      type: "bundle",
+      name: bundleName.trim(),
+      bundleItems: valid.map(si => ({ listingId: parseInt(si.listingId), quantity: si.quantity, pricePerDay: si.pricePerDay })),
+      bundlePrice: bp != null && bp > 0 ? bp : null,
+    };
+    setItems(prev => [...prev, bundle]);
+    setBundleOpen(false);
+  };
+
+  // ─── Submit ───────────────────────────────────────────────────
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (items.length === 0) {
-      toast({ title: "Please add at least one item", variant: "destructive" });
-      return;
-    }
+    if (items.length === 0) { toast({ title: "Please add at least one item", variant: "destructive" }); return; }
     const shouldSend = sendIntentRef.current;
     setIsSaving(true);
     try {
       const body = {
         ...formData,
-        items: items.map(i => ({ ...i, days })),
+        items: items.map(item => {
+          if (item.type === "bundle") {
+            return { ...item, bundleItems: item.bundleItems.map(si => ({ ...si, days })) };
+          }
+          return { ...item, days };
+        }),
       };
       const res = await fetch(`${BASE}/api/quotes/${id}`, {
         method: "PUT",
@@ -137,14 +209,10 @@ export default function AdminQuoteEdit() {
       });
       if (!res.ok) throw new Error("save failed");
       queryClient.invalidateQueries({ queryKey: getGetQuotesQueryKey() });
-
       if (shouldSend) {
         setIsSending(true);
         try {
-          const sendRes = await fetch(`${BASE}/api/quotes/${id}/send`, {
-            method: "POST",
-            headers: adminHeaders(),
-          });
+          const sendRes = await fetch(`${BASE}/api/quotes/${id}/send`, { method: "POST", headers: adminHeaders() });
           if (!sendRes.ok) throw new Error("send failed");
           toast({ title: "Quote saved & sent!", description: `Emailed to ${formData.customerEmail}` });
         } catch {
@@ -190,9 +258,7 @@ export default function AdminQuoteEdit() {
               <CardHeader><CardTitle>Customer Information</CardTitle></CardHeader>
               <CardContent className="space-y-4">
                 <CustomerAutocomplete
-                  name={formData.customerName}
-                  email={formData.customerEmail}
-                  phone={formData.customerPhone}
+                  name={formData.customerName} email={formData.customerEmail} phone={formData.customerPhone}
                   onChangeName={v => setFormData(d => ({ ...d, customerName: v }))}
                   onChangeEmail={v => setFormData(d => ({ ...d, customerEmail: v }))}
                   onChangePhone={v => setFormData(d => ({ ...d, customerPhone: v }))}
@@ -216,7 +282,14 @@ export default function AdminQuoteEdit() {
 
             {/* Line Items */}
             <Card>
-              <CardHeader><CardTitle>Line Items</CardTitle></CardHeader>
+              <CardHeader>
+                <div className="flex items-center justify-between">
+                  <CardTitle>Line Items</CardTitle>
+                  <Button type="button" variant="outline" size="sm" onClick={openBundleDialog} className="gap-1.5">
+                    <Package className="w-4 h-4" />Add Bundle
+                  </Button>
+                </div>
+              </CardHeader>
               <CardContent className="space-y-6">
                 <div className="flex gap-2">
                   <Select value={selectedListingId} onValueChange={setSelectedListingId}>
@@ -230,7 +303,7 @@ export default function AdminQuoteEdit() {
                     </SelectContent>
                   </Select>
                   <Button type="button" onClick={addItem} disabled={!selectedListingId}>
-                    <Plus className="w-4 h-4 mr-2" />Add
+                    <Plus className="w-4 h-4 mr-2" />Add Item
                   </Button>
                 </div>
 
@@ -247,6 +320,47 @@ export default function AdminQuoteEdit() {
                     </TableHeader>
                     <TableBody>
                       {items.map((item, index) => {
+                        if (item.type === "bundle") {
+                          const bItems = item.bundleItems;
+                          const calcTotal = bItems.reduce((s, si) => s + si.pricePerDay * si.quantity * days, 0);
+                          const displayTotal = (item.bundlePrice != null && item.bundlePrice > 0) ? item.bundlePrice : calcTotal;
+                          return (
+                            <>
+                              <TableRow key={`bundle-${index}`} className="bg-green-50/60 dark:bg-green-950/20">
+                                <TableCell colSpan={3} className="font-semibold text-green-800 dark:text-green-300">
+                                  <span className="flex items-center gap-2">
+                                    <Package className="w-3.5 h-3.5 flex-shrink-0" />
+                                    {item.name}
+                                    {item.bundlePrice != null && item.bundlePrice > 0 && (
+                                      <span className="text-xs font-normal text-muted-foreground">(flat bundle price)</span>
+                                    )}
+                                  </span>
+                                </TableCell>
+                                <TableCell className="text-right font-bold">${displayTotal.toFixed(2)}</TableCell>
+                                <TableCell>
+                                  <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" type="button"
+                                    onClick={() => removeItem(index)}>
+                                    <Trash2 className="w-4 h-4" />
+                                  </Button>
+                                </TableCell>
+                              </TableRow>
+                              {bItems.map((si, si_idx) => {
+                                const listing = listings?.find(l => l.id === si.listingId);
+                                return (
+                                  <TableRow key={`bundle-${index}-item-${si_idx}`} className="bg-green-50/20">
+                                    <TableCell className="pl-8 text-sm text-muted-foreground">↳ {listing?.title ?? `Listing #${si.listingId}`}</TableCell>
+                                    <TableCell className="text-center text-sm text-muted-foreground">{si.quantity}</TableCell>
+                                    <TableCell className="text-sm text-muted-foreground">${si.pricePerDay}/day</TableCell>
+                                    <TableCell className="text-right text-sm text-muted-foreground">
+                                      ${(si.pricePerDay * si.quantity * days).toFixed(2)}
+                                    </TableCell>
+                                    <TableCell></TableCell>
+                                  </TableRow>
+                                );
+                              })}
+                            </>
+                          );
+                        }
                         const listing = listings?.find(l => l.id === item.listingId);
                         const itemSubtotal = item.pricePerDay * item.quantity * days;
                         return (
@@ -264,8 +378,8 @@ export default function AdminQuoteEdit() {
                             </TableCell>
                             <TableCell className="text-right">${itemSubtotal.toFixed(2)}</TableCell>
                             <TableCell>
-                              <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive"
-                                type="button" onClick={() => removeItem(index)}>
+                              <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" type="button"
+                                onClick={() => removeItem(index)}>
                                 <Trash2 className="w-4 h-4" />
                               </Button>
                             </TableCell>
@@ -285,12 +399,9 @@ export default function AdminQuoteEdit() {
             <Card>
               <CardHeader><CardTitle>Notes</CardTitle></CardHeader>
               <CardContent className="space-y-4">
-                <Textarea
-                  value={formData.notes}
+                <Textarea value={formData.notes}
                   onChange={e => setFormData(d => ({ ...d, notes: e.target.value }))}
-                  placeholder="Additional terms, instructions, or internal notes..."
-                  rows={4}
-                />
+                  placeholder="Additional terms, instructions, or internal notes..." rows={4} />
                 <div className="space-y-2">
                   <Label htmlFor="validUntil">Quote Valid Until (optional)</Label>
                   <Input id="validUntil" type="date" value={formData.validUntil}
@@ -320,25 +431,18 @@ export default function AdminQuoteEdit() {
                     <span>${total.toFixed(2)}</span>
                   </div>
                   <div className="flex flex-col gap-2 mt-4">
-                    <Button
-                      type="submit"
-                      size="lg"
+                    <Button type="submit" size="lg"
                       disabled={isSaving || isSending || items.length === 0 || !formData.customerEmail.trim()}
                       onClick={() => { sendIntentRef.current = true; }}
-                      className="w-full font-bold gap-2"
-                    >
+                      className="w-full font-bold gap-2">
                       {(isSaving || isSending) && sendIntentRef.current
                         ? <><Loader2 className="w-4 h-4 animate-spin" />Sending…</>
                         : <><Send className="w-4 h-4" />Save & Send Quote</>}
                     </Button>
-                    <Button
-                      type="submit"
-                      variant="outline"
-                      size="lg"
+                    <Button type="submit" variant="outline" size="lg"
                       disabled={isSaving || isSending || items.length === 0}
                       onClick={() => { sendIntentRef.current = false; }}
-                      className="w-full gap-2"
-                    >
+                      className="w-full gap-2">
                       {isSaving && !sendIntentRef.current
                         ? <><Loader2 className="w-4 h-4 animate-spin" />Saving…</>
                         : <><FileText className="w-4 h-4" />Save Changes</>}
@@ -353,6 +457,77 @@ export default function AdminQuoteEdit() {
           </div>
         </div>
       </form>
+
+      {/* Bundle Dialog */}
+      <Dialog open={bundleOpen} onOpenChange={setBundleOpen}>
+        <DialogContent className="max-w-xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Package className="w-5 h-5 text-primary" />Create Bundle Package
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-5 py-2">
+            <div className="space-y-2">
+              <Label htmlFor="bundleName">Bundle Name</Label>
+              <Input id="bundleName" value={bundleName} onChange={e => setBundleName(e.target.value)}
+                placeholder="e.g. Weekend Adventure Package" />
+            </div>
+            <div className="space-y-3">
+              <Label>Items in this bundle</Label>
+              {bundleSubItems.map((si, i) => (
+                <div key={i} className="flex items-end gap-2 p-3 rounded-lg bg-muted/40 border border-border">
+                  <div className="flex-1 space-y-1">
+                    <Label className="text-xs text-muted-foreground">Listing</Label>
+                    <Select value={si.listingId} onValueChange={v => updateBundleSubItem(i, "listingId", v)}>
+                      <SelectTrigger className="h-9"><SelectValue placeholder="Select listing…" /></SelectTrigger>
+                      <SelectContent>
+                        {listings?.map(l => <SelectItem key={l.id} value={l.id.toString()}>{l.title}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="w-16 space-y-1">
+                    <Label className="text-xs text-muted-foreground">Qty</Label>
+                    <Input type="number" min="1" value={si.quantity} className="h-9 p-2"
+                      onChange={e => updateBundleSubItem(i, "quantity", parseInt(e.target.value) || 1)} />
+                  </div>
+                  <div className="w-24 space-y-1">
+                    <Label className="text-xs text-muted-foreground">$/day</Label>
+                    <Input type="number" min="0" step="0.01" value={si.pricePerDay} className="h-9 p-2"
+                      onChange={e => updateBundleSubItem(i, "pricePerDay", parseFloat(e.target.value) || 0)} />
+                  </div>
+                  <Button type="button" variant="ghost" size="icon" className="h-9 w-9 text-destructive flex-shrink-0"
+                    onClick={() => removeBundleSubItem(i)} disabled={bundleSubItems.length === 1}>
+                    <X className="w-4 h-4" />
+                  </Button>
+                </div>
+              ))}
+              <Button type="button" variant="outline" size="sm" onClick={addBundleSubItem} className="gap-1.5">
+                <Plus className="w-3.5 h-3.5" />Add Another Item
+              </Button>
+            </div>
+            <div className="border-t pt-4 space-y-3">
+              <div className="flex justify-between text-sm">
+                <span className="text-muted-foreground">Calculated total ({days} day{days !== 1 ? "s" : ""})</span>
+                <span className="font-semibold">${bundleSubtotalPreview.toFixed(2)}</span>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="bundlePrice" className="text-sm font-medium">
+                  Bundle Price Override <span className="text-muted-foreground font-normal">(optional)</span>
+                </Label>
+                <Input id="bundlePrice" type="number" min="0" step="0.01" value={bundlePrice}
+                  onChange={e => setBundlePrice(e.target.value)}
+                  placeholder={`e.g. ${(bundleSubtotalPreview * 0.9).toFixed(2)}`} />
+              </div>
+            </div>
+          </div>
+          <DialogFooter className="gap-2">
+            <Button type="button" variant="outline" onClick={() => setBundleOpen(false)}>Cancel</Button>
+            <Button type="button" onClick={confirmBundle} className="gap-2">
+              <Package className="w-4 h-4" />Add Bundle to Quote
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

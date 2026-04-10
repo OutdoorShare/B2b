@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useParams } from "wouter";
-import { Loader2, FileText, Building2, Mail, Phone, Calendar, CheckCircle2, XCircle } from "lucide-react";
+import { Loader2, FileText, Building2, Mail, Phone, Calendar, CheckCircle2, XCircle, Package } from "lucide-react";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
@@ -157,19 +157,46 @@ export default function StorefrontQuoteView() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
-                  {items.map((item: any, i: number) => (
-                    <tr key={i}>
-                      <td className="px-5 py-3.5">
-                        <p className="font-medium text-gray-900 text-sm">{item.listingTitle ?? "Item"}</p>
-                        <p className="text-xs text-gray-400 mt-0.5 sm:hidden">
-                          {item.quantity}× · {item.days} day{item.days !== 1 ? "s" : ""} · ${Number(item.pricePerDay).toFixed(2)}/day
-                        </p>
-                      </td>
-                      <td className="px-3 py-3.5 text-center text-sm text-gray-500 hidden sm:table-cell">{item.quantity}</td>
-                      <td className="px-3 py-3.5 text-center text-sm text-gray-500 hidden sm:table-cell">{item.days}</td>
-                      <td className="px-5 py-3.5 text-right font-semibold text-gray-900 text-sm">${Number(item.subtotal).toFixed(2)}</td>
-                    </tr>
-                  ))}
+                  {items.map((item: any, i: number) => {
+                    if (item.type === "bundle") {
+                      return (
+                        <>
+                          <tr key={`b-${i}`} className="bg-green-50">
+                            <td colSpan={3} className="px-5 py-3 font-semibold text-green-800 text-sm">
+                              <span className="flex items-center gap-2">
+                                <Package className="w-3.5 h-3.5 inline-block" />{item.name ?? "Bundle"}
+                                {item.bundlePrice != null && item.bundlePrice > 0 && (
+                                  <span className="text-xs font-normal text-gray-500">(bundle price)</span>
+                                )}
+                              </span>
+                            </td>
+                            <td className="px-5 py-3 text-right font-bold text-green-800 text-sm">${Number(item.subtotal).toFixed(2)}</td>
+                          </tr>
+                          {(item.bundleItems ?? []).map((si: any, si_i: number) => (
+                            <tr key={`b-${i}-${si_i}`} className="bg-green-50/40">
+                              <td className="px-5 py-2.5 pl-10 text-xs text-gray-500">↳ {si.listingTitle ?? "Item"}</td>
+                              <td className="px-3 py-2.5 text-center text-xs text-gray-400 hidden sm:table-cell">{si.quantity}</td>
+                              <td className="px-3 py-2.5 text-center text-xs text-gray-400 hidden sm:table-cell">{si.days}</td>
+                              <td className="px-5 py-2.5 text-right text-xs text-gray-400">${Number(si.subtotal).toFixed(2)}</td>
+                            </tr>
+                          ))}
+                        </>
+                      );
+                    }
+                    return (
+                      <tr key={i}>
+                        <td className="px-5 py-3.5">
+                          <p className="font-medium text-gray-900 text-sm">{item.listingTitle ?? "Item"}</p>
+                          <p className="text-xs text-gray-400 mt-0.5 sm:hidden">
+                            {item.quantity}× · {item.days} day{item.days !== 1 ? "s" : ""} · ${Number(item.pricePerDay).toFixed(2)}/day
+                          </p>
+                        </td>
+                        <td className="px-3 py-3.5 text-center text-sm text-gray-500 hidden sm:table-cell">{item.quantity}</td>
+                        <td className="px-3 py-3.5 text-center text-sm text-gray-500 hidden sm:table-cell">{item.days}</td>
+                        <td className="px-5 py-3.5 text-right font-semibold text-gray-900 text-sm">${Number(item.subtotal).toFixed(2)}</td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
               {/* Totals */}

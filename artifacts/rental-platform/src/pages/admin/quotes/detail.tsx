@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
-import { ArrowLeft, Send, Pencil, Copy, ExternalLink, Loader2, User, Mail, Phone, Calendar, FileText, Check } from "lucide-react";
+import { ArrowLeft, Send, Pencil, Copy, ExternalLink, Loader2, User, Mail, Phone, Calendar, FileText, Check, Package } from "lucide-react";
 import { format } from "date-fns";
 import { useQueryClient } from "@tanstack/react-query";
 import { getGetQuotesQueryKey } from "@workspace/api-client-react";
@@ -237,15 +237,41 @@ export default function AdminQuoteDetail() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-border">
-                    {items.map((item: any, i: number) => (
-                      <tr key={i}>
-                        <td className="px-6 py-3 font-medium">{item.listingTitle ?? "Item"}</td>
-                        <td className="px-3 py-3 text-center text-muted-foreground">{item.quantity}</td>
-                        <td className="px-3 py-3 text-center text-muted-foreground">{item.days}</td>
-                        <td className="px-3 py-3 text-right text-muted-foreground">${Number(item.pricePerDay).toFixed(2)}/day</td>
-                        <td className="px-6 py-3 text-right font-semibold">${Number(item.subtotal).toFixed(2)}</td>
-                      </tr>
-                    ))}
+                    {items.map((item: any, i: number) => {
+                      if (item.type === "bundle") {
+                        return (
+                          <>
+                            <tr key={`b-${i}`} className="bg-green-50/60 dark:bg-green-950/20">
+                              <td colSpan={4} className="px-6 py-3 font-semibold text-green-800 dark:text-green-300 flex items-center gap-2">
+                                <Package className="w-3.5 h-3.5 inline-block mr-1" />{item.name ?? "Bundle"}
+                                {item.bundlePrice != null && item.bundlePrice > 0 && (
+                                  <span className="text-xs font-normal text-muted-foreground ml-2">(flat bundle price)</span>
+                                )}
+                              </td>
+                              <td className="px-6 py-3 text-right font-bold">${Number(item.subtotal).toFixed(2)}</td>
+                            </tr>
+                            {(item.bundleItems ?? []).map((si: any, si_i: number) => (
+                              <tr key={`b-${i}-${si_i}`} className="bg-green-50/20 dark:bg-green-950/10">
+                                <td className="px-6 py-2 pl-10 text-muted-foreground">↳ {si.listingTitle ?? "Item"}</td>
+                                <td className="px-3 py-2 text-center text-muted-foreground">{si.quantity}</td>
+                                <td className="px-3 py-2 text-center text-muted-foreground">{si.days}</td>
+                                <td className="px-3 py-2 text-right text-muted-foreground">${Number(si.pricePerDay).toFixed(2)}/day</td>
+                                <td className="px-6 py-2 text-right text-muted-foreground">${Number(si.subtotal).toFixed(2)}</td>
+                              </tr>
+                            ))}
+                          </>
+                        );
+                      }
+                      return (
+                        <tr key={i}>
+                          <td className="px-6 py-3 font-medium">{item.listingTitle ?? "Item"}</td>
+                          <td className="px-3 py-3 text-center text-muted-foreground">{item.quantity}</td>
+                          <td className="px-3 py-3 text-center text-muted-foreground">{item.days}</td>
+                          <td className="px-3 py-3 text-right text-muted-foreground">${Number(item.pricePerDay).toFixed(2)}/day</td>
+                          <td className="px-6 py-3 text-right font-semibold">${Number(item.subtotal).toFixed(2)}</td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
               )}

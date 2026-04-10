@@ -7,6 +7,42 @@ import { getTenantSmtpCreds, getTenantBrand } from "../services/smtp-helper";
 
 const router: IRouter = Router();
 
+async function enrichItems(rawItems: any[], tenantId: number | null): Promise<any[]> {
+  return Promise.all(rawItems.map(async (item: any) => {
+    if (item.type === "bundle") {
+      const enrichedBundleItems = await Promise.all(
+        (item.bundleItems ?? []).map(async (si: any) => {
+          const conds = [eq(listingsTable.id, si.listingId)];
+          if (tenantId) conds.push(eq(listingsTable.tenantId, tenantId));
+          const [listing] = await db.select({ title: listingsTable.title }).from(listingsTable).where(and(...conds));
+          return {
+            listingId: si.listingId,
+            listingTitle: listing?.title ?? "Unknown",
+            quantity: si.quantity,
+            pricePerDay: si.pricePerDay,
+            days: si.days,
+            subtotal: si.pricePerDay * si.days * si.quantity,
+          };
+        })
+      );
+      const itemsTotal = enrichedBundleItems.reduce((s, si) => s + si.subtotal, 0);
+      const subtotal = (item.bundlePrice != null && item.bundlePrice > 0) ? item.bundlePrice : itemsTotal;
+      return { type: "bundle", name: item.name, bundleItems: enrichedBundleItems, bundlePrice: item.bundlePrice ?? null, subtotal };
+    }
+    const conds = [eq(listingsTable.id, item.listingId)];
+    if (tenantId) conds.push(eq(listingsTable.tenantId, tenantId));
+    const [listing] = await db.select({ title: listingsTable.title }).from(listingsTable).where(and(...conds));
+    return {
+      listingId: item.listingId,
+      listingTitle: listing?.title ?? "Unknown",
+      quantity: item.quantity,
+      pricePerDay: item.pricePerDay,
+      days: item.days,
+      subtotal: item.pricePerDay * item.days * item.quantity,
+    };
+  }));
+}
+
 function formatQuote(q: typeof quotesTable.$inferSelect) {
   return {
     ...q,
@@ -70,25 +106,8 @@ router.post("/quotes", async (req, res) => {
   try {
     const body = req.body;
 
-    // Enrich items with listing titles — only from this tenant's listings
-    const enrichedItems = await Promise.all(
-      (body.items ?? []).map(async (item: any) => {
-        const listingConditions = [eq(listingsTable.id, item.listingId)];
-        if (req.tenantId) listingConditions.push(eq(listingsTable.tenantId, req.tenantId));
-        const [listing] = await db.select({ title: listingsTable.title }).from(listingsTable).where(and(...listingConditions));
-        const subtotal = item.pricePerDay * item.days * item.quantity;
-        return {
-          listingId: item.listingId,
-          listingTitle: listing?.title ?? "Unknown",
-          quantity: item.quantity,
-          pricePerDay: item.pricePerDay,
-          days: item.days,
-          subtotal,
-        };
-      })
-    );
-
-    const subtotal = enrichedItems.reduce((sum, item) => sum + item.subtotal, 0);
+    const enrichedItems = await enrichItems(body.items ?? [], req.tenantId ?? null);
+    const subtotal = enrichedItems.reduce((sum: number, item: any) => sum + item.subtotal, 0);
     const discount = body.discount ?? 0;
     const totalPrice = Math.max(0, subtotal - discount);
 
@@ -123,23 +142,8 @@ router.put("/quotes/:id", async (req, res) => {
 
     // Full edit: re-enrich items if provided
     if (body.items && Array.isArray(body.items)) {
-      const enrichedItems = await Promise.all(
-        body.items.map(async (item: any) => {
-          const listingConditions = [eq(listingsTable.id, item.listingId)];
-          if (req.tenantId) listingConditions.push(eq(listingsTable.tenantId, req.tenantId));
-          const [listing] = await db.select({ title: listingsTable.title }).from(listingsTable).where(and(...listingConditions));
-          const subtotal = item.pricePerDay * item.days * item.quantity;
-          return {
-            listingId: item.listingId,
-            listingTitle: listing?.title ?? item.listingTitle ?? "Unknown",
-            quantity: item.quantity,
-            pricePerDay: item.pricePerDay,
-            days: item.days,
-            subtotal,
-          };
-        })
-      );
-      const subtotal = enrichedItems.reduce((sum, i) => sum + i.subtotal, 0);
+      const enrichedItems = await enrichItems(body.items, req.tenantId ?? null);
+      const subtotal = enrichedItems.reduce((sum: number, i: any) => sum + i.subtotal, 0);
       const discount = body.discount ?? 0;
       const totalPrice = Math.max(0, subtotal - discount);
       const [updated] = await db
@@ -227,13 +231,7 @@ router.post("/quotes/:id/send", async (req, res) => {
           companyEmail,
           startDate: quote.startDate,
           endDate: quote.endDate,
-          items: items.map((item: any) => ({
-            listingTitle: item.listingTitle ?? "Item",
-            quantity: Number(item.quantity ?? 1),
-            pricePerDay: Number(item.pricePerDay ?? 0),
-            days: Number(item.days ?? 1),
-            subtotal: Number(item.subtotal ?? 0),
-          })),
+          items,
           subtotal: parseFloat(quote.subtotal ?? "0"),
           discount: parseFloat(quote.discount ?? "0"),
           totalPrice: parseFloat(quote.totalPrice ?? "0"),
