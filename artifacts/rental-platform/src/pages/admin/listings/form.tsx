@@ -500,11 +500,23 @@ export default function AdminListingsForm() {
   ];
   const publishBlocked = formData.status === "active" && publishChecks.some(c => !c.done);
   const [publishIntent, setPublishIntent] = useState(false);
+  const [submitAttempted, setSubmitAttempted] = useState(false);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    setSubmitAttempted(true);
 
     const statusToSave = publishIntent ? "active" : formData.status;
+
+    // Category is always required
+    if (!formData.categoryId) {
+      toast({
+        title: "Category required",
+        description: "Please select a category before saving.",
+        variant: "destructive",
+      });
+      return;
+    }
 
     // Deposit is always required regardless of draft/published state
     if (!formData.depositAmount || formData.depositAmount <= 0) {
@@ -711,9 +723,9 @@ export default function AdminListingsForm() {
                 
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
-                    <Label>Category</Label>
+                    <Label>Category <span className="text-destructive">*</span></Label>
                     <Select value={formData.categoryId?.toString() || ""} onValueChange={(v) => handleSelectChange('categoryId', v)}>
-                      <SelectTrigger>
+                      <SelectTrigger className={submitAttempted && !formData.categoryId ? "border-destructive" : ""}>
                         <SelectValue placeholder="Select a category" />
                       </SelectTrigger>
                       <SelectContent>
@@ -722,6 +734,9 @@ export default function AdminListingsForm() {
                         ))}
                       </SelectContent>
                     </Select>
+                    {submitAttempted && !formData.categoryId && (
+                      <p className="text-xs text-destructive">Please select a category</p>
+                    )}
                   </div>
                   <div className="space-y-2">
                     <Label>Status</Label>
