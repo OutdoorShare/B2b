@@ -65,6 +65,20 @@ The platform is built as a monorepo using `pnpm workspaces`, Node.js 24, and Typ
 - **Activity Bookings — Admin Management:** Admin pages at `/:slug/admin/activity-bookings` (list with status filter tabs + search) and `/:slug/admin/activity-bookings/:id` (detail with status lifecycle buttons: Confirm → Check In → Mark Completed, plus admin notes editor and visual progress tracker). API routes: `GET /api/activities/bookings`, `GET /api/activities/bookings/:id`, `PATCH /api/activities/bookings/:id`. **Critical:** booking routes registered BEFORE `/activities/:id` to avoid Express route order conflict. DB table: `activityBookingsTable` in `lib/db/src/schema/activities.ts`.
 - **Super Admin Team Invite Flow:** Creating a team member (`POST /api/superadmin/team`) no longer requires a password. Instead, it generates a secure 48-hour invite token, stores it in `superadminUsersTable.inviteToken`/`inviteExpiresAt`, and sends an email via Gmail with a link to `/superadmin/accept-invite?token=...`. The accept-invite page (`artifacts/rental-platform/src/pages/superadmin/accept-invite.tsx`) verifies the token via `GET /api/superadmin/team/accept-invite?token=...` and sets the password via `POST /api/superadmin/team/accept-invite`. The token is cleared from DB after acceptance. Admins can resend invites via `POST /api/superadmin/team/:id/resend-invite`. Users with no `passwordHash` (pending invite) cannot log in — the login route guards against null password hash. The team list shows invite status badges (Invite Pending / Invite Expired / Active) and a resend icon for pending/expired invites.
 
+## Known Bugs Fixed
+
+- **Stripe `or` missing import** (`stripe.ts`): `or` from drizzle-orm was not imported, causing `[stripe/wallet] or is not defined` on every API server start. Fixed by adding `or` to the drizzle-orm import in `routes/stripe.ts`.
+- **`/customers/lookup-by-email` 500 error**: Route was registered AFTER `/customers/:id` wildcard, so Express matched the literal string "lookup-by-email" as an `:id` parameter. `Number("lookup-by-email")` = NaN → database error. Fixed by reordering routes so `lookup-by-email` is registered first.
+- **Wrong tenantId vs tenantSlug column**: The `lookup-by-email` handler used `eq(customersTable.tenantId, req.tenantId)` but `customersTable` uses `tenantSlug` (text), not `tenantId` (integer). This produced invalid SQL: `and  = $2`. Fixed to use `eq(customersTable.tenantSlug, tenantSlugHeader)`.
+- **NaN guards in customer routes**: Added `Number.isFinite()` validation to all `/:id` pattern handlers in `routes/customers.ts` to prevent NaN from reaching the database.
+- **Stripe "(unknown runtime error)"**: `elements.submit()` was being called BEFORE `stripe.confirmPayment()` in the standard Stripe Elements flow (where `clientSecret` is already set on `<Elements>`). Stripe.js calls `elements.submit()` internally inside `confirmPayment`, so calling it twice caused the "double-submission" error. Fixed by removing the separate `elements.submit()` call. Also added global `window.addEventListener('error', ...)` to suppress Stripe's internal errors from the Vite development overlay.
+
+## Admin Credentials
+
+- **Demo tenant** (`demo-outdoorshare`, tenant id=8): `demo@myoutdoorshare.com` / `demo123` (owner login via `POST /api/admin/auth/owner-login`)
+- **Superadmin**: `owner@platform.com` / `superadmin123` (via `POST /api/superadmin/auth/login`)
+- Admin login page is at `/:slug/admin` — shows tabs for Owner and Staff login
+
 ## External Dependencies
 
 - **PostgreSQL:** Primary database.

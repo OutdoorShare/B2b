@@ -211,33 +211,17 @@ router.post("/customers/login", async (req, res) => {
   }
 });
 
-router.get("/customers/:id", async (req, res) => {
-  try {
-    const [customer] = await db
-      .select()
-      .from(customersTable)
-      .where(eq(customersTable.id, Number(req.params.id)));
-
-    if (!customer) {
-      res.status(404).json({ error: "Not found" });
-      return;
-    }
-
-    res.json(safeCustomer(customer));
-  } catch (err) {
-    req.log.error(err);
-    res.status(500).json({ error: "Failed to fetch customer" });
-  }
-});
-
 // ── Admin: lookup customer identity verification by email ──────────────────────
+// IMPORTANT: this specific route must be registered BEFORE /customers/:id
+// so the wildcard doesn't capture the path segment "lookup-by-email" as an id.
 router.get("/customers/lookup-by-email", async (req, res) => {
   try {
     const email = (req.query.email as string ?? "").toLowerCase().trim();
     if (!email) { res.status(400).json({ error: "email required" }); return; }
 
+    const tenantSlugHeader = (req.headers["x-tenant-slug"] as string | undefined)?.toLowerCase().trim();
     const conditions = [eq(customersTable.email, email)];
-    if (req.tenantId) conditions.push(eq(customersTable.tenantId, req.tenantId));
+    if (tenantSlugHeader) conditions.push(eq(customersTable.tenantSlug, tenantSlugHeader));
 
     const [customer] = await db
       .select({
@@ -259,11 +243,35 @@ router.get("/customers/lookup-by-email", async (req, res) => {
       identityVerifiedAt: customer.identityVerifiedAt?.toISOString() ?? null,
     });
   } catch (err) {
+    req.log.error(err, "lookup-by-email failed");
     res.status(500).json({ error: "Failed to lookup customer" });
   }
 });
 
+router.get("/customers/:id", async (req, res) => {
+  const id = Number(req.params.id);
+  if (!Number.isFinite(id)) { res.status(400).json({ error: "Invalid customer id" }); return; }
+  try {
+    const [customer] = await db
+      .select()
+      .from(customersTable)
+      .where(eq(customersTable.id, id));
+
+    if (!customer) {
+      res.status(404).json({ error: "Not found" });
+      return;
+    }
+
+    res.json(safeCustomer(customer));
+  } catch (err) {
+    req.log.error(err);
+    res.status(500).json({ error: "Failed to fetch customer" });
+  }
+});
+
 router.post("/customers/:id/change-password", async (req, res) => {
+  const idNum = Number(req.params.id);
+  if (!Number.isFinite(idNum)) { res.status(400).json({ error: "Invalid customer id" }); return; }
   try {
     const { currentPassword, newPassword } = req.body;
     if (!currentPassword || !newPassword) {
@@ -277,7 +285,7 @@ router.post("/customers/:id/change-password", async (req, res) => {
     const [customer] = await db
       .select()
       .from(customersTable)
-      .where(eq(customersTable.id, Number(req.params.id)));
+      .where(eq(customersTable.id, idNum));
     if (!customer) {
       res.status(404).json({ error: "Not found" });
       return;
@@ -301,8 +309,9 @@ router.post("/customers/:id/change-password", async (req, res) => {
 
 // ── Save payment method details after a successful booking ────────────────────
 router.post("/customers/:id/save-payment-method", async (req, res) => {
+  const customerId = Number(req.params.id);
+  if (!Number.isFinite(customerId)) { res.status(400).json({ error: "Invalid customer id" }); return; }
   try {
-    const customerId = Number(req.params.id);
     const { paymentIntentId, tenantSlug } = req.body ?? {};
     if (!paymentIntentId || !tenantSlug) {
       res.status(400).json({ error: "paymentIntentId and tenantSlug required" });
@@ -457,6 +466,8 @@ router.get("/admin/renters/:email/bookings", async (req, res) => {
 });
 
 router.put("/customers/:id", async (req, res) => {
+  const idPut = Number(req.params.id);
+  if (!Number.isFinite(idPut)) { res.status(400).json({ error: "Invalid customer id" }); return; }
   try {
     const { name, phone, billingAddress, billingCity, billingState, billingZip, cardLastFour, cardBrand, avatarUrl } = req.body;
     const updateData: Record<string, any> = { updatedAt: new Date() };
@@ -473,7 +484,7 @@ router.put("/customers/:id", async (req, res) => {
     const [updated] = await db
       .update(customersTable)
       .set(updateData)
-      .where(eq(customersTable.id, Number(req.params.id)))
+      .where(eq(customersTable.id, idPut))
       .returning();
 
     if (!updated) { res.status(404).json({ error: "Not found" }); return; }

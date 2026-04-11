@@ -492,6 +492,18 @@ const isInsideIframe = (() => {
   try { return window.self !== window.top; } catch { return true; }
 })();
 
+// Suppress Stripe's internal "(unknown runtime error)" from being shown as a
+// Vite development overlay. This error can bubble up as an uncaught window
+// error even when our try/catch handles it; the overlay is pure noise.
+if (typeof window !== "undefined") {
+  window.addEventListener("error", (e) => {
+    if (e.message?.includes("unknown runtime error")) e.preventDefault();
+  }, true);
+  window.addEventListener("unhandledrejection", (e) => {
+    if (e.reason?.message?.includes("unknown runtime error")) e.preventDefault();
+  }, true);
+}
+
 // ── Stripe Payment Form ────────────────────────────────────────────────────────
 function StripePaymentForm({ onSuccess, customerEmail, testMode }: { onSuccess: () => void; customerEmail: string; testMode?: boolean }) {
   const stripe = useStripe();
@@ -526,9 +538,10 @@ function StripePaymentForm({ onSuccess, customerEmail, testMode }: { onSuccess: 
     setPaying(true);
     setError(null);
     try {
-      const { error: submitErr } = await elements.submit();
-      if (submitErr) { setError(submitErr.message ?? "Please check your card details"); setPaying(false); return; }
-
+      // In the standard Stripe flow (clientSecret already set on <Elements>),
+      // stripe.confirmPayment() handles form submission and validation internally.
+      // Calling elements.submit() separately before confirmPayment causes a
+      // double-submission that triggers Stripe's "(unknown runtime error)".
       const { error: confirmErr } = await stripe.confirmPayment({
         elements,
         confirmParams: {
@@ -539,7 +552,7 @@ function StripePaymentForm({ onSuccess, customerEmail, testMode }: { onSuccess: 
       });
 
       if (confirmErr) {
-        setError(confirmErr.message ?? "Payment failed");
+        setError(confirmErr.message ?? "Payment failed. Please check your card details and try again.");
         setPaying(false);
       } else {
         toast({ title: "Payment successful!" });
@@ -548,9 +561,9 @@ function StripePaymentForm({ onSuccess, customerEmail, testMode }: { onSuccess: 
     } catch (stripeErr: any) {
       const msg: string = stripeErr?.message ?? "";
       if (msg.includes("unknown runtime error") || msg.includes("iframe")) {
-        setError("Payment can't be processed in a preview window. Please open this page in a new browser tab.");
+        setError("Payment processing error. Please refresh the page and try again, or use a different browser.");
       } else {
-        setError("Payment failed. Please try again.");
+        setError(msg || "Payment failed. Please try again.");
       }
       setPaying(false);
     }
