@@ -513,6 +513,13 @@ function StripePaymentForm({ onSuccess, customerEmail, testMode }: { onSuccess: 
   const [error, setError] = useState<string | null>(null);
   const { toast } = useToast();
 
+  // Fallback: if onReady hasn't fired within 6 seconds, enable the button anyway.
+  // This handles cases where Stripe's event doesn't fire (e.g. HTTP dev environment).
+  useEffect(() => {
+    const t = setTimeout(() => setElementReady(true), 6000);
+    return () => clearTimeout(t);
+  }, []);
+
   // If embedded in an iframe, Stripe.js will throw "(unknown runtime error)" due to
   // PCI-compliance cross-origin restrictions. Show a direct link instead.
   if (isInsideIframe) {
@@ -700,6 +707,9 @@ export default function StorefrontBook() {
   const [paymentConfirmed, setPaymentConfirmed] = useState(false);
   const [isTestMode, setIsTestMode] = useState(false);
   const [isInstantBooking, setIsInstantBooking] = useState(false);
+  // Stripe instance loaded with the exact publishable key returned by the payment-intent API,
+  // guaranteeing key↔secret mode alignment without any live↔test switching.
+  const [stripeInstance, setStripeInstance] = useState<ReturnType<typeof loadStripe> | null>(null);
   const [showStripeForm, setShowStripeForm] = useState(false);
   const [paymentInitFailed, setPaymentInitFailed] = useState(false);
   const [paymentInitTimedOut, setPaymentInitTimedOut] = useState(false);
@@ -1186,6 +1196,7 @@ export default function StorefrontBook() {
     if (paymentConfirmed) return; // already paid — don't reset
     if (!clientSecret) return;    // no intent yet — nothing to reset
     setClientSecret(null);
+    setStripeInstance(null);
     setShowStripeForm(false);
     intentFiredRef.current = false;
   }, [selectedQuantity]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -1195,6 +1206,7 @@ export default function StorefrontBook() {
     if (paymentConfirmed) return;
     if (!clientSecret && !intentFiredRef.current) return; // not started yet
     setClientSecret(null);
+    setStripeInstance(null);
     setShowStripeForm(false);
     intentFiredRef.current = false;
   }, [usePaymentPlan]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -1555,6 +1567,13 @@ export default function StorefrontBook() {
           return;
         }
         const data = await res.json();
+        // Load the exact Stripe instance for this payment intent's key to avoid
+        // a live↔test mismatch when isTestMode switches after first render.
+        if (data.stripePublishableKey) {
+          setStripeInstance(loadStripe(data.stripePublishableKey));
+        } else {
+          setStripeInstance(data.testMode ? testStripePromise : liveStripePromise);
+        }
         setClientSecret(data.clientSecret);
         setPaymentIntentId(data.paymentIntentId);
         setCustomerSessionClientSecret(data.customerSessionClientSecret ?? null);
@@ -3323,20 +3342,22 @@ export default function StorefrontBook() {
                                   </h3>
                                   <CardScanHelper />
                                 </div>
-                                <Elements
-                                  stripe={isTestMode ? testStripePromise : liveStripePromise}
-                                  options={{
-                                    clientSecret,
-                                    ...(customerSessionClientSecret ? { customerSessionClientSecret } : {}),
-                                    appearance: { theme: "stripe" },
-                                  }}
-                                >
-                                  <StripePaymentForm
-                                    onSuccess={() => setPaymentConfirmed(true)}
-                                    customerEmail={email}
-                                    testMode={isTestMode}
-                                  />
-                                </Elements>
+                                {stripeInstance && clientSecret && (
+                                  <Elements
+                                    stripe={stripeInstance}
+                                    options={{
+                                      clientSecret,
+                                      ...(customerSessionClientSecret ? { customerSessionClientSecret } : {}),
+                                      appearance: { theme: "stripe" },
+                                    }}
+                                  >
+                                    <StripePaymentForm
+                                      onSuccess={() => setPaymentConfirmed(true)}
+                                      customerEmail={email}
+                                      testMode={isTestMode}
+                                    />
+                                  </Elements>
+                                )}
                               </div>
                             </>
                           )}
