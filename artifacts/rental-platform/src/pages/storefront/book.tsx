@@ -771,7 +771,11 @@ export default function StorefrontBook() {
   const [previewListingId, setPreviewListingId] = useState<number | null>(null);
 
   // Quantity selection (multi-unit listings)
-  const [selectedQuantity, setSelectedQuantity] = useState(1);
+  const urlQuantity = searchParams.get("quantity");
+  const [selectedQuantity, setSelectedQuantity] = useState(() => {
+    const q = urlQuantity ? parseInt(urlQuantity, 10) : 1;
+    return q > 0 ? q : 1;
+  });
   const [availabilityData, setAvailabilityData] = useState<{
     listingQuantity: number;
     ranges: { start: string; end: string; type: string; quantity: number }[];

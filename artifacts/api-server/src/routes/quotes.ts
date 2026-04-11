@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
-import { quotesTable, listingsTable, businessProfileTable } from "@workspace/db/schema";
+import { quotesTable, listingsTable, businessProfileTable, tenantsTable } from "@workspace/db/schema";
 import { eq, and } from "drizzle-orm";
 import { sendQuoteEmail, withBrand, withSmtpCreds } from "../services/gmail";
 import { getTenantSmtpCreds, getTenantBrand } from "../services/smtp-helper";
@@ -204,16 +204,27 @@ router.post("/quotes/:id/send", async (req, res) => {
     const [quote] = await db.select().from(quotesTable).where(and(...conditions));
     if (!quote) { res.status(404).json({ error: "Not found" }); return; }
 
-    // Fetch business profile for company name + contact email
-    const [profileRow] = quote.tenantId
-      ? await db
-          .select({ name: businessProfileTable.name, email: businessProfileTable.email, outboundEmail: businessProfileTable.outboundEmail })
-          .from(businessProfileTable)
-          .where(eq(businessProfileTable.tenantId, quote.tenantId))
-      : [];
+    // Fetch business profile + tenant slug in parallel
+    const [profileRow, tenantRow] = await Promise.all([
+      quote.tenantId
+        ? db
+            .select({ name: businessProfileTable.name, email: businessProfileTable.email, outboundEmail: businessProfileTable.outboundEmail })
+            .from(businessProfileTable)
+            .where(eq(businessProfileTable.tenantId, quote.tenantId))
+            .then(r => r[0])
+        : Promise.resolve(undefined),
+      quote.tenantId
+        ? db
+            .select({ slug: tenantsTable.slug })
+            .from(tenantsTable)
+            .where(eq(tenantsTable.id, quote.tenantId))
+            .then(r => r[0])
+        : Promise.resolve(undefined),
+    ]);
 
     const companyName = profileRow?.name ?? "Your Rental Company";
     const companyEmail = profileRow?.outboundEmail ?? profileRow?.email ?? null;
+    const tenantSlug = tenantRow?.slug ?? null;
 
     const [smtpCreds, brand] = await Promise.all([
       getTenantSmtpCreds(quote.tenantId),
@@ -237,6 +248,8 @@ router.post("/quotes/:id/send", async (req, res) => {
           totalPrice: parseFloat(quote.totalPrice ?? "0"),
           notes: quote.notes,
           validUntil: quote.validUntil,
+          tenantSlug,
+          customerPhone: quote.customerPhone ?? null,
         })
       )
     );

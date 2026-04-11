@@ -2505,11 +2505,13 @@ export async function sendQuoteEmail(opts: {
   totalPrice: number;
   notes?: string | null;
   validUntil?: string | null;
+  tenantSlug?: string | null;
+  customerPhone?: string | null;
 }): Promise<void> {
   const {
     toEmail, customerName, quoteId, companyName, companyEmail,
     startDate, endDate, items, subtotal, discount, totalPrice,
-    notes, validUntil,
+    notes, validUntil, tenantSlug, customerPhone,
   } = opts;
 
   const fromHeader = `${companyName} <samhos@myoutdoorshare.com>`;
@@ -2599,6 +2601,37 @@ export async function sendQuoteEmail(opts: {
     ? `This quote is valid until <strong>${esc(validUntil)}</strong>. ${replyLine}`
     : replyLine;
 
+  // Build "Book Now" URL if we have a tenant slug and at least one non-bundle item
+  const firstItem = items.find((i: any) => i.type !== "bundle");
+  const bookNowUrl = (tenantSlug && firstItem?.listingId)
+    ? (() => {
+        const params = new URLSearchParams({
+          startDate,
+          endDate,
+          quoteId: String(quoteId),
+          quoteTotal: String(Number(totalPrice).toFixed(2)),
+          quoteName: customerName,
+          quoteEmail: toEmail,
+          ...(customerPhone ? { quotePhone: customerPhone } : {}),
+          ...(firstItem.quantity > 1 ? { quantity: String(firstItem.quantity) } : {}),
+        });
+        return `${getAppUrl()}/${tenantSlug}/book?listingId=${firstItem.listingId}&${params.toString()}`;
+      })()
+    : null;
+
+  const bookNowBlock = bookNowUrl
+    ? `<div style="text-align:center;margin:28px 0 8px;">
+        <a href="${bookNowUrl}"
+           style="display:inline-block;background:${BRAND_GREEN};color:#ffffff;font-size:15px;font-weight:700;
+                  padding:14px 32px;border-radius:8px;text-decoration:none;letter-spacing:0.3px;">
+          Book Now
+        </a>
+        <p style="margin:10px 0 0;font-size:12px;color:#6b7280;">
+          Your quote details and pricing have been pre-filled.
+        </p>
+       </div>`
+    : "";
+
   const body = `
     <p style="margin:0 0 4px;font-size:16px;font-weight:700;color:${BRAND_DARK};">Hi ${esc(customerName)},</p>
     <p style="margin:0 0 24px;font-size:15px;color:#374151;line-height:1.6;">
@@ -2614,6 +2647,8 @@ export async function sendQuoteEmail(opts: {
     ${itemsTable}
     ${totalsBlock}
     ${notesBlock}
+
+    ${bookNowBlock}
 
     <p style="margin:28px 0 0;font-size:13px;color:#9ca3af;text-align:center;">${validLine}</p>
   `;
