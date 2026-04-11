@@ -77,6 +77,7 @@ import SuperAdminFeedback from "@/pages/superadmin/feedback";
 import SuperAdminDeveloper from "@/pages/superadmin/developer";
 import DocsAdminPage from "@/pages/superadmin/docs-admin";
 import SuperAdminAcceptInvite from "@/pages/superadmin/accept-invite";
+import AdminAcceptInvite from "@/pages/admin/accept-invite";
 import SuperAdminExport from "@/pages/superadmin/export";
 import AdminFeedback from "@/pages/admin/feedback";
 import AdminMessages from "@/pages/admin/messages";
@@ -252,6 +253,11 @@ function Router() {
       {/* Admin Onboarding — guarded so only the authenticated owner can access it */}
       <Route path="/:slug/admin/onboarding">
         <AdminGuard><AdminOnboarding /></AdminGuard>
+      </Route>
+
+      {/* Admin staff accept-invite — public, no auth required */}
+      <Route path="/:slug/admin/accept-invite">
+        <AdminAcceptInvite />
       </Route>
 
       {/* Super Admin Routes */}

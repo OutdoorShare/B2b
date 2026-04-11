@@ -1,10 +1,15 @@
 import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
-import { adminUsersTable, tenantsTable } from "@workspace/db/schema";
+import { adminUsersTable, tenantsTable, businessProfileTable } from "@workspace/db/schema";
 import { eq, and } from "drizzle-orm";
 import { scrypt, randomBytes, timingSafeEqual } from "crypto";
 import { promisify } from "util";
 import { requireAdminToken } from "../middleware/admin-auth";
+import { sendStaffInviteEmail } from "../services/gmail";
+
+const APP_URL =
+  process.env.APP_URL ||
+  (process.env.REPLIT_DEV_DOMAIN ? `https://${process.env.REPLIT_DEV_DOMAIN}` : "https://myoutdoorshare.com");
 
 const scryptAsync = promisify(scrypt);
 const SALT = "rental_admin_salt_2024";
@@ -34,8 +39,29 @@ async function verifyPassword(password: string, stored: string): Promise<boolean
 }
 
 function safeUser(u: typeof adminUsersTable.$inferSelect) {
-  const { passwordHash: _, token: __, ...safe } = u;
-  return { ...safe, createdAt: u.createdAt.toISOString(), updatedAt: u.updatedAt.toISOString() };
+  const { passwordHash: _, token: __, inviteToken: ___, ...safe } = u;
+  const inviteStatus = !u.inviteAccepted && u.inviteToken
+    ? (u.inviteExpiresAt && u.inviteExpiresAt < new Date() ? "expired" : "pending")
+    : (u.inviteAccepted ? "accepted" : "none");
+  return {
+    ...safe,
+    inviteStatus,
+    createdAt: u.createdAt.toISOString(),
+    updatedAt: u.updatedAt.toISOString(),
+    inviteExpiresAt: u.inviteExpiresAt?.toISOString() ?? null,
+  };
+}
+
+async function getCompanyInfo(tenantId: number) {
+  const [tenant] = await db.select({ slug: tenantsTable.slug, email: tenantsTable.email, name: tenantsTable.name })
+    .from(tenantsTable).where(eq(tenantsTable.id, tenantId));
+  const [biz] = await db.select({ name: businessProfileTable.name, email: businessProfileTable.outboundEmail })
+    .from(businessProfileTable).where(eq(businessProfileTable.tenantId, tenantId));
+  return {
+    slug: tenant?.slug ?? "",
+    companyName: biz?.name ?? tenant?.name ?? "Your Company",
+    companyEmail: biz?.email ?? tenant?.email ?? null,
+  };
 }
 
 const router: IRouter = Router();
@@ -74,8 +100,6 @@ router.post("/admin/auth/owner-login", async (req, res) => {
       return;
     }
 
-    // Reuse the existing token so all active sessions remain valid.
-    // Only generate a new token if the tenant has none (first login ever).
     const token = tenant.adminToken ?? randomBytes(32).toString("hex");
     if (!tenant.adminToken) {
       await db
@@ -84,7 +108,6 @@ router.post("/admin/auth/owner-login", async (req, res) => {
         .where(eq(tenantsTable.id, tenant.id));
     }
 
-    // Set token in an httpOnly cookie — JS cannot read this value
     res.cookie("admin_session", token, {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
@@ -93,7 +116,6 @@ router.post("/admin/auth/owner-login", async (req, res) => {
       maxAge: 7 * 24 * 60 * 60 * 1000,
     });
 
-    // Return metadata only — the token is NOT returned in the body
     res.json({
       tenantId: tenant.id,
       tenantName: tenant.name,
@@ -113,6 +135,13 @@ router.post("/admin/auth/login", async (req, res) => {
     if (!email || !password) { res.status(400).json({ error: "Email and password required" }); return; }
     const [user] = await db.select().from(adminUsersTable).where(eq(adminUsersTable.email, email.toLowerCase().trim())).limit(1);
     if (!user || user.status !== "active") { res.status(401).json({ error: "Invalid email or password" }); return; }
+
+    // Block invite-pending users who haven't set a password yet
+    if (!user.passwordHash) {
+      res.status(401).json({ error: "Please check your email to set your password before logging in." });
+      return;
+    }
+
     const valid = await verifyPassword(password, user.passwordHash);
     if (!valid) { res.status(401).json({ error: "Invalid email or password" }); return; }
 
@@ -132,7 +161,6 @@ router.post("/admin/auth/login", async (req, res) => {
     const token = randomBytes(32).toString("hex");
     await db.update(adminUsersTable).set({ token, updatedAt: new Date() }).where(eq(adminUsersTable.id, user.id));
 
-    // Set token in an httpOnly cookie — JS cannot read this value
     res.cookie("admin_session", token, {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
@@ -141,14 +169,13 @@ router.post("/admin/auth/login", async (req, res) => {
       maxAge: 7 * 24 * 60 * 60 * 1000,
     });
 
-    // Return metadata only — the token is NOT returned in the body
     res.json({ tenantId, tenantSlug, user: safeUser({ ...user, token }) });
   } catch {
     res.status(500).json({ error: "Login failed" });
   }
 });
 
-// GET /admin/auth/verify — lightweight session check; 200 = valid, 401 = expired/invalid
+// GET /admin/auth/verify
 router.get("/admin/auth/verify", async (req, res) => {
   if (!req.tenantId) {
     res.status(401).json({ error: "Session expired or invalid" });
@@ -160,13 +187,11 @@ router.get("/admin/auth/verify", async (req, res) => {
 // POST /admin/auth/logout
 router.post("/admin/auth/logout", async (req, res) => {
   try {
-    // Read token from cookie (primary) or header (legacy fallback)
     const token = (req as any).cookies?.admin_session ?? req.headers["x-admin-token"] as string | undefined;
     if (token) {
       await db.update(adminUsersTable).set({ token: null, updatedAt: new Date() }).where(eq(adminUsersTable.token, token));
       await db.update(tenantsTable).set({ adminToken: null, updatedAt: new Date() }).where(eq(tenantsTable.adminToken, token));
     }
-    // Clear the httpOnly cookie regardless of whether a token was found
     res.clearCookie("admin_session", { path: "/" });
     res.json({ ok: true });
   } catch {
@@ -174,7 +199,7 @@ router.post("/admin/auth/logout", async (req, res) => {
   }
 });
 
-// GET /admin/team — scoped to tenant (requires valid auth token)
+// GET /admin/team
 router.get("/admin/team", requireAdminToken as any, async (req, res) => {
   try {
     const users = await db.select().from(adminUsersTable)
@@ -186,21 +211,87 @@ router.get("/admin/team", requireAdminToken as any, async (req, res) => {
   }
 });
 
-// POST /admin/team — scoped to tenant (requires valid auth token)
+// GET /admin/team/accept-invite?token=... — verify invite token (public)
+router.get("/admin/team/accept-invite", async (req, res) => {
+  try {
+    const { token } = req.query as { token?: string };
+    if (!token) { res.status(400).json({ error: "Token required" }); return; }
+
+    const [user] = await db.select().from(adminUsersTable).where(eq(adminUsersTable.inviteToken, token)).limit(1);
+    if (!user) { res.status(404).json({ error: "Invalid or expired invitation" }); return; }
+    if (user.inviteAccepted) { res.status(409).json({ error: "Invitation already accepted" }); return; }
+    if (user.inviteExpiresAt && user.inviteExpiresAt < new Date()) { res.status(410).json({ error: "Invitation has expired" }); return; }
+
+    // Return safe info for the accept form
+    const [tenant] = user.tenantId
+      ? await db.select({ slug: tenantsTable.slug }).from(tenantsTable).where(eq(tenantsTable.id, user.tenantId))
+      : [];
+
+    res.json({ name: user.name, email: user.email, role: user.role, tenantSlug: tenant?.slug ?? null });
+  } catch {
+    res.status(500).json({ error: "Failed to verify invitation" });
+  }
+});
+
+// POST /admin/team/accept-invite — set password from invite token (public)
+router.post("/admin/team/accept-invite", async (req, res) => {
+  try {
+    const { token, password } = req.body;
+    if (!token || !password) { res.status(400).json({ error: "Token and password required" }); return; }
+    if (password.length < 8) { res.status(400).json({ error: "Password must be at least 8 characters" }); return; }
+
+    const [user] = await db.select().from(adminUsersTable).where(eq(adminUsersTable.inviteToken, token)).limit(1);
+    if (!user) { res.status(404).json({ error: "Invalid or expired invitation" }); return; }
+    if (user.inviteAccepted) { res.status(409).json({ error: "Invitation already accepted" }); return; }
+    if (user.inviteExpiresAt && user.inviteExpiresAt < new Date()) { res.status(410).json({ error: "Invitation has expired. Ask your admin to resend the invite." }); return; }
+
+    const passwordHash = await hashPassword(password);
+    await db.update(adminUsersTable).set({
+      passwordHash,
+      inviteToken: null,
+      inviteAccepted: true,
+      status: "active",
+      updatedAt: new Date(),
+    }).where(eq(adminUsersTable.id, user.id));
+
+    res.json({ ok: true });
+  } catch {
+    res.status(500).json({ error: "Failed to accept invitation" });
+  }
+});
+
+// POST /admin/team — create staff member and send invite email
 router.post("/admin/team", requireAdminToken as any, async (req, res) => {
   try {
-    const { name, email, password, role, notes } = req.body;
-    if (!name || !email || !password) { res.status(400).json({ error: "name, email and password are required" }); return; }
-    if (password.length < 8) { res.status(400).json({ error: "Password must be at least 8 characters" }); return; }
-    const passwordHash = await hashPassword(password);
+    const { name, email, role, notes } = req.body;
+    if (!name || !email) { res.status(400).json({ error: "Name and email are required" }); return; }
+
+    const tenantId = req.tenantId!;
+    const inviteToken = randomBytes(32).toString("hex");
+    const inviteExpiresAt = new Date(Date.now() + 48 * 60 * 60 * 1000);
+
     const [user] = await db.insert(adminUsersTable).values({
       name: name.trim(),
       email: email.toLowerCase().trim(),
-      passwordHash,
+      passwordHash: null,
       role: role ?? "staff",
       notes: notes ?? null,
-      tenantId: req.tenantId ?? null,
+      tenantId,
+      inviteToken,
+      inviteExpiresAt,
+      inviteAccepted: false,
+      status: "active",
     }).returning();
+
+    // Send invite email — best-effort
+    try {
+      const { slug, companyName, companyEmail } = await getCompanyInfo(tenantId);
+      const inviteUrl = `${APP_URL}/${slug}/admin/accept-invite?token=${inviteToken}`;
+      await sendStaffInviteEmail({ toEmail: user.email, toName: user.name, role: user.role, inviteUrl, companyName, companyEmail });
+    } catch (emailErr: any) {
+      console.warn("[admin/team] Failed to send invite email:", emailErr.message);
+    }
+
     res.status(201).json(safeUser(user));
   } catch (err: any) {
     if (err?.code === "23505") { res.status(409).json({ error: "Email already in use" }); return; }
@@ -208,7 +299,40 @@ router.post("/admin/team", requireAdminToken as any, async (req, res) => {
   }
 });
 
-// PUT /admin/team/:id — scoped to tenant (requires valid auth token)
+// POST /admin/team/:id/resend-invite — regenerate invite token and resend email
+router.post("/admin/team/:id/resend-invite", requireAdminToken as any, async (req, res) => {
+  try {
+    const id = parseInt(req.params.id);
+    const tenantId = req.tenantId!;
+
+    const [user] = await db.select().from(adminUsersTable)
+      .where(and(eq(adminUsersTable.id, id), eq(adminUsersTable.tenantId, tenantId)));
+    if (!user) { res.status(404).json({ error: "Team member not found" }); return; }
+    if (user.inviteAccepted) { res.status(400).json({ error: "This user has already accepted their invitation" }); return; }
+
+    const inviteToken = randomBytes(32).toString("hex");
+    const inviteExpiresAt = new Date(Date.now() + 48 * 60 * 60 * 1000);
+
+    await db.update(adminUsersTable).set({ inviteToken, inviteExpiresAt, updatedAt: new Date() })
+      .where(eq(adminUsersTable.id, id));
+
+    try {
+      const { slug, companyName, companyEmail } = await getCompanyInfo(tenantId);
+      const inviteUrl = `${APP_URL}/${slug}/admin/accept-invite?token=${inviteToken}`;
+      await sendStaffInviteEmail({ toEmail: user.email, toName: user.name, role: user.role, inviteUrl, companyName, companyEmail });
+    } catch (emailErr: any) {
+      console.warn("[admin/team] Failed to resend invite email:", emailErr.message);
+      res.status(500).json({ error: "Invite token regenerated but email failed to send" });
+      return;
+    }
+
+    res.json({ ok: true });
+  } catch {
+    res.status(500).json({ error: "Failed to resend invite" });
+  }
+});
+
+// PUT /admin/team/:id
 router.put("/admin/team/:id", requireAdminToken as any, async (req, res) => {
   try {
     const id = parseInt(req.params.id);
@@ -236,7 +360,7 @@ router.put("/admin/team/:id", requireAdminToken as any, async (req, res) => {
   }
 });
 
-// DELETE /admin/team/:id — scoped to tenant (requires valid auth token)
+// DELETE /admin/team/:id
 router.delete("/admin/team/:id", requireAdminToken as any, async (req, res) => {
   try {
     const id = parseInt(req.params.id);

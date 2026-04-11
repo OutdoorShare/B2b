@@ -2442,6 +2442,63 @@ export async function sendSuperAdminInviteEmail(opts: {
   });
 }
 
+// ── Admin team (tenant staff) invite ──────────────────────────────────────────
+export async function sendStaffInviteEmail(opts: {
+  toEmail: string;
+  toName: string;
+  role: string;
+  inviteUrl: string;
+  companyName: string;
+  companyEmail?: string | null;
+}): Promise<void> {
+  const { toEmail, toName, role, inviteUrl, companyName, companyEmail } = opts;
+  const roleLabel = role === "owner" ? "Owner" : role === "manager" ? "Manager" : "Staff";
+  const fromHeader = `${companyName} <samhos@myoutdoorshare.com>`;
+  const replyTo = companyEmail || undefined;
+
+  const body = `
+    <p style="margin:0 0 8px;font-size:18px;font-weight:700;color:${BRAND_DARK};">You've been added to the team!</p>
+    <p style="margin:0 0 20px;font-size:15px;color:#374151;line-height:1.6;">
+      Hi <strong>${esc(toName)}</strong>, you've been invited to join <strong>${esc(companyName)}</strong> as a
+      <strong>${esc(roleLabel)}</strong> on the rental management dashboard.
+      Click the button below to set your password and activate your account.
+    </p>
+
+    ${infoTable([
+      { label: "Email",   value: toEmail },
+      { label: "Role",    value: roleLabel },
+      { label: "Company", value: companyName },
+    ])}
+
+    ${ctaButton("Set Password & Log In", inviteUrl, BRAND_GREEN)}
+
+    <p style="margin:20px 0 0;font-size:13px;color:#9ca3af;text-align:center;">
+      This invitation link expires in <strong>48 hours</strong>. If you didn't expect this, you can safely ignore it.
+    </p>
+  `;
+
+  const html = emailShell({
+    preheader: `${companyName} has added you as ${roleLabel}. Set your password to get started.`,
+    badgeLabel: "Team Invitation",
+    badgeColor: BRAND_GREEN,
+    body,
+  });
+
+  const gmail = await getUncachableGmailClient();
+  await gmail.users.messages.send({
+    userId: "me",
+    requestBody: {
+      raw: makeRawEmail(
+        toEmail,
+        `You've been invited to join ${companyName} — set your password`,
+        html,
+        fromHeader,
+        replyTo,
+      ),
+    },
+  });
+}
+
 // ── Superadmin → signup invite ─────────────────────────────────────────────────
 export async function sendSignupInviteEmail(opts: {
   toEmail: string;
