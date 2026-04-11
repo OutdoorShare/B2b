@@ -486,6 +486,12 @@ function CardScanHelper() {
   );
 }
 
+// Detect embedded iframe — Stripe cannot process payments inside a cross-origin iframe.
+// window.self !== window.top means we're inside at least one iframe layer.
+const isInsideIframe = (() => {
+  try { return window.self !== window.top; } catch { return true; }
+})();
+
 // ── Stripe Payment Form ────────────────────────────────────────────────────────
 function StripePaymentForm({ onSuccess, customerEmail, testMode }: { onSuccess: () => void; customerEmail: string; testMode?: boolean }) {
   const stripe = useStripe();
@@ -493,6 +499,26 @@ function StripePaymentForm({ onSuccess, customerEmail, testMode }: { onSuccess: 
   const [paying, setPaying] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const { toast } = useToast();
+
+  // If embedded in an iframe, Stripe.js will throw "(unknown runtime error)" due to
+  // PCI-compliance cross-origin restrictions. Show a direct link instead.
+  if (isInsideIframe) {
+    return (
+      <div className="rounded-xl border-2 border-dashed border-primary/40 bg-primary/5 px-5 py-6 text-center space-y-3">
+        <ShieldCheck className="w-8 h-8 text-primary mx-auto" />
+        <p className="text-sm font-semibold text-foreground">Secure payment requires a direct browser tab</p>
+        <p className="text-xs text-muted-foreground">Card processing can't run inside a preview window. Open the booking page in your browser to pay.</p>
+        <a
+          href={window.location.href}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex items-center gap-2 mt-1 bg-primary text-primary-foreground text-sm font-bold px-5 py-2.5 rounded-xl hover:bg-primary/90 transition-colors"
+        >
+          <ShieldCheck className="w-4 h-4" /> Open in browser to pay
+        </a>
+      </div>
+    );
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -519,8 +545,13 @@ function StripePaymentForm({ onSuccess, customerEmail, testMode }: { onSuccess: 
         toast({ title: "Payment successful!" });
         onSuccess();
       }
-    } catch {
-      setError("Payment failed. Please try again.");
+    } catch (stripeErr: any) {
+      const msg: string = stripeErr?.message ?? "";
+      if (msg.includes("unknown runtime error") || msg.includes("iframe")) {
+        setError("Payment can't be processed in a preview window. Please open this page in a new browser tab.");
+      } else {
+        setError("Payment failed. Please try again.");
+      }
       setPaying(false);
     }
   };
