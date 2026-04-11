@@ -640,7 +640,7 @@ router.get("/bookings/:id", async (req, res) => {
     if (!booking) { res.status(404).json({ error: "Not found" }); return; }
 
     const [listing] = await db
-      .select({ title: listingsTable.title, contactCardId: listingsTable.contactCardId, depositAmount: listingsTable.depositAmount })
+      .select({ title: listingsTable.title, contactCardId: listingsTable.contactCardId, depositAmount: listingsTable.depositAmount, requireIdentityVerification: listingsTable.requireIdentityVerification, categoryId: listingsTable.categoryId })
       .from(listingsTable)
       .where(eq(listingsTable.id, booking.listingId));
 
@@ -664,10 +664,68 @@ router.get("/bookings/:id", async (req, res) => {
       }
     }
 
-    res.json({ ...formatBooking(booking, listing?.title ?? "Unknown"), contactCard, depositAmount, platformFeePercent });
+    res.json({ ...formatBooking(booking, listing?.title ?? "Unknown"), contactCard, depositAmount, platformFeePercent, requireIdentityVerification: listing?.requireIdentityVerification ?? false });
   } catch (err) {
     req.log.error(err);
     res.status(500).json({ error: "Failed to fetch booking" });
+  }
+});
+
+// ── POST /bookings/:id/sign-agreement-public — renter signs agreement post-payment ──
+// Public endpoint authenticated by customerEmail matching the booking record.
+router.post("/bookings/:id/sign-agreement-public", async (req, res) => {
+  try {
+    const bookingId = Number(req.params.id);
+    const { customerEmail, agreementSignerName, agreementText, agreementSignatureDataUrl } = req.body ?? {};
+    if (!customerEmail || !agreementSignerName || !agreementSignatureDataUrl) {
+      res.status(400).json({ error: "customerEmail, agreementSignerName, and agreementSignatureDataUrl are required" });
+      return;
+    }
+
+    const [booking] = await db.select().from(bookingsTable).where(eq(bookingsTable.id, bookingId));
+    if (!booking) { res.status(404).json({ error: "Booking not found" }); return; }
+
+    // Verify customer email matches
+    if ((booking.customerEmail ?? "").toLowerCase().trim() !== String(customerEmail).toLowerCase().trim()) {
+      res.status(403).json({ error: "Email does not match this booking" });
+      return;
+    }
+
+    // Already signed — idempotent: just return ok
+    if (booking.agreementSignedAt) {
+      res.json({ ok: true, alreadySigned: true });
+      return;
+    }
+
+    const signedAt = new Date();
+    await db.update(bookingsTable).set({
+      agreementSignerName: agreementSignerName.trim(),
+      agreementText: agreementText ?? null,
+      agreementSignature: agreementSignatureDataUrl,
+      agreementSignedAt: signedAt,
+      updatedAt: new Date(),
+    }).where(eq(bookingsTable.id, bookingId));
+
+    // Best-effort PDF generation
+    try {
+      if (agreementText && agreementSignerName) {
+        const pdfFilename = await generateAgreementPdf({
+          bookingId,
+          agreementText,
+          signerName: agreementSignerName.trim(),
+          signedAt,
+          signatureDataUrl: agreementSignatureDataUrl,
+        });
+        await db.update(bookingsTable).set({ agreementPdfPath: pdfFilename, updatedAt: new Date() }).where(eq(bookingsTable.id, bookingId));
+      }
+    } catch (pdfErr: any) {
+      console.warn("[sign-agreement-public] PDF gen failed:", pdfErr.message);
+    }
+
+    res.json({ ok: true });
+  } catch (err) {
+    req.log.error(err);
+    res.status(500).json({ error: "Failed to sign agreement" });
   }
 });
 

@@ -1110,7 +1110,7 @@ router.post("/stripe/admin-payment-link", requireAdminAuth, async (req, res) => 
         quantity: 1,
       }],
       customer_email: booking.customerEmail,
-      success_url: `${baseUrl}/${tenant.slug}?payment_success=1`,
+      success_url: `${baseUrl}/${tenant.slug}/booking-complete?booking_id=${booking.id}`,
       cancel_url: `${baseUrl}/${tenant.slug}?payment_cancel=1`,
       payment_intent_data: {
         setup_future_usage: "off_session",

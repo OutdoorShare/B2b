@@ -15,6 +15,7 @@ import StorefrontHome from "@/pages/storefront/home";
 import StorefrontProductDetail from "@/pages/storefront/product-detail";
 import EmbedListing from "@/pages/storefront/embed-listing";
 import StorefrontBook from "@/pages/storefront/book";
+import BookingComplete from "@/pages/storefront/booking-complete";
 import StorefrontLogin from "@/pages/storefront/login";
 import StorefrontSetPassword from "@/pages/storefront/set-password";
 import StorefrontMyBookings from "@/pages/storefront/my-bookings";
@@ -469,6 +470,9 @@ function Router() {
       </Route>
       <Route path="/:slug/book">
         <SlugGuard><StorefrontLayout><StorefrontBook /></StorefrontLayout></SlugGuard>
+      </Route>
+      <Route path="/:slug/booking-complete">
+        <BookingComplete />
       </Route>
       <Route path="/:slug/login">
         <SlugGuard><StorefrontLayout><StorefrontLogin /></StorefrontLayout></SlugGuard>
