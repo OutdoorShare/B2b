@@ -17,6 +17,7 @@ import {
   DollarSign,
   Building2,
   FlaskConical,
+  Banknote,
 } from "lucide-react";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
@@ -53,7 +54,7 @@ type WalletData = {
   testMode: boolean;
   balance: { available: number; pending: number; currency: string } | null;
   payouts: { id: string; amount: number; currency: string; status: string; arrivalDate: string; description?: string | null }[];
-  transactions: { id: number; customerName: string; listingTitle: string; startDate: string; endDate: string; gross: number; platformFee: number; net: number; status: string; createdAt: string }[];
+  transactions: { id: number; customerName: string; listingTitle: string; startDate: string; endDate: string; gross: number; platformFee: number; net: number; status: string; paymentMethod: string; createdAt: string }[];
   feePercent: number;
 };
 
@@ -63,6 +64,29 @@ function payoutStatusBadge(s: string) {
   if (s === "in_transit") return <Badge className="bg-blue-100 text-blue-700 border-0">In transit</Badge>;
   if (s === "failed") return <Badge className="bg-red-100 text-red-700 border-0">Failed</Badge>;
   return <Badge variant="secondary">{s}</Badge>;
+}
+
+function paymentMethodBadge(method: string) {
+  if (method === "stripe") return (
+    <Badge className="bg-indigo-100 text-indigo-700 border-0 gap-1 font-normal">
+      <CreditCard className="h-3 w-3" /> Stripe
+    </Badge>
+  );
+  if (method === "walkin") return (
+    <Badge className="bg-slate-100 text-slate-600 border-0 gap-1 font-normal">
+      <Banknote className="h-3 w-3" /> Walk-in
+    </Badge>
+  );
+  if (method === "phone") return (
+    <Badge className="bg-slate-100 text-slate-600 border-0 gap-1 font-normal">
+      <Banknote className="h-3 w-3" /> Phone
+    </Badge>
+  );
+  return (
+    <Badge className="bg-slate-100 text-slate-600 border-0 gap-1 font-normal">
+      <Banknote className="h-3 w-3" /> Manual
+    </Badge>
+  );
 }
 
 export default function AdminWallet() {
@@ -294,7 +318,7 @@ export default function AdminWallet() {
         <CardHeader className="pb-3">
           <CardTitle className="text-base flex items-center gap-2">
             <Building2 className="h-4 w-4 text-muted-foreground" />
-            Paid Transactions
+            Revenue Transactions
           </CardTitle>
         </CardHeader>
         <CardContent className="p-0">
@@ -304,7 +328,7 @@ export default function AdminWallet() {
             </div>
           ) : (data?.transactions.length ?? 0) === 0 ? (
             <div className="p-8 text-center text-muted-foreground text-sm">
-              No paid transactions yet. Completed bookings will appear here.
+              No transactions yet. Confirmed bookings will appear here.
             </div>
           ) : (
             <div className="overflow-x-auto">
@@ -315,6 +339,7 @@ export default function AdminWallet() {
                     <th className="text-left px-4 py-3 font-medium">Listing</th>
                     <th className="text-left px-4 py-3 font-medium">Renter</th>
                     <th className="text-left px-4 py-3 font-medium">Rental Period</th>
+                    <th className="text-left px-4 py-3 font-medium">Payment</th>
                     <th className="text-right px-4 py-3 font-medium">Gross</th>
                     <th className="text-right px-4 py-3 font-medium">Platform Fee</th>
                     <th className="text-right px-4 py-3 font-medium text-emerald-700">Your Earnings</th>
@@ -329,6 +354,7 @@ export default function AdminWallet() {
                       <td className="px-4 py-3 text-muted-foreground whitespace-nowrap text-xs">
                         {t.startDate} → {t.endDate}
                       </td>
+                      <td className="px-4 py-3">{paymentMethodBadge(t.paymentMethod)}</td>
                       <td className="px-4 py-3 text-right">{fmt(t.gross)}</td>
                       <td className="px-4 py-3 text-right text-red-600">−{fmt(t.platformFee)}</td>
                       <td className="px-4 py-3 text-right font-semibold text-emerald-600">{fmt(t.net)}</td>
@@ -337,7 +363,7 @@ export default function AdminWallet() {
                 </tbody>
                 <tfoot>
                   <tr className="border-t bg-slate-50 font-semibold text-sm">
-                    <td colSpan={4} className="px-4 py-3 text-muted-foreground">Totals ({data?.transactions.length} transactions)</td>
+                    <td colSpan={5} className="px-4 py-3 text-muted-foreground">Totals ({data?.transactions.length} transactions)</td>
                     <td className="px-4 py-3 text-right">{fmt(totalGross)}</td>
                     <td className="px-4 py-3 text-right text-red-600">−{fmt(totalFees)}</td>
                     <td className="px-4 py-3 text-right text-emerald-600">{fmt(totalNet)}</td>

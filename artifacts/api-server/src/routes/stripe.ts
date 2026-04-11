@@ -152,7 +152,8 @@ router.get("/stripe/wallet", requireAdminAuth, async (req, res) => {
     const walletStripe = getStripeForTenant(isTestMode);
     const feePercent = parseFloat(tenant.platformFeePercent ?? String(PLATFORM_FEE_PERCENT * 100));
 
-    // Fetch bookings with listing titles
+    // Fetch all non-cancelled confirmed/active/completed bookings (Stripe-paid AND manual/cash)
+    // plus any pending bookings that were actually paid via Stripe
     const bookings = await db
       .select({
         id: bookingsTable.id,
@@ -162,20 +163,34 @@ router.get("/stripe/wallet", requireAdminAuth, async (req, res) => {
         totalPrice: bookingsTable.totalPrice,
         stripePlatformFee: bookingsTable.stripePlatformFee,
         stripePaymentStatus: bookingsTable.stripePaymentStatus,
+        source: bookingsTable.source,
         status: bookingsTable.status,
         createdAt: bookingsTable.createdAt,
         listingTitle: listingsTable.title,
       })
       .from(bookingsTable)
       .leftJoin(listingsTable, eq(bookingsTable.listingId, listingsTable.id))
-      .where(and(eq(bookingsTable.tenantId, tenantId), or(eq(bookingsTable.stripePaymentStatus, "paid"), eq(bookingsTable.stripePaymentStatus, "succeeded"))))
+      .where(and(
+        eq(bookingsTable.tenantId, tenantId),
+        // Include confirmed/active/completed regardless of stripe status (covers cash/manual bookings)
+        // Also include pending bookings that have been paid via Stripe
+        or(
+          sql`${bookingsTable.status} IN ('confirmed', 'active', 'completed')`,
+          and(
+            eq(bookingsTable.status, "pending"),
+            or(eq(bookingsTable.stripePaymentStatus, "paid"), eq(bookingsTable.stripePaymentStatus, "succeeded"))
+          )
+        )
+      ))
       .orderBy(desc(bookingsTable.createdAt))
-      .limit(50);
+      .limit(100);
 
     const transactions = bookings.map(b => {
       const gross = parseFloat(b.totalPrice ?? "0");
       const fee = b.stripePlatformFee != null ? parseFloat(b.stripePlatformFee) : gross * (feePercent / 100);
       const net = gross - fee;
+      const isStripePaid = b.stripePaymentStatus === "paid" || b.stripePaymentStatus === "succeeded";
+      const paymentMethod = isStripePaid ? "stripe" : (b.source === "walkin" || b.source === "phone" ? b.source : "manual");
       return {
         id: b.id,
         customerName: b.customerName,
@@ -186,6 +201,7 @@ router.get("/stripe/wallet", requireAdminAuth, async (req, res) => {
         platformFee: parseFloat(fee.toFixed(2)),
         net: parseFloat(net.toFixed(2)),
         status: b.status,
+        paymentMethod,
         createdAt: b.createdAt.toISOString(),
       };
     });
