@@ -1693,26 +1693,6 @@ export default function AdminBookingDetail() {
                               <span>${exactFee != null ? (rentalBase - (exactFee - ppFee)).toFixed(2) : netRentalEarnings.toFixed(2)}</span>
                             </div>
 
-                            {ppFee > 0 && (
-                              <>
-                                <Separator className="border-emerald-200 my-1" />
-                                <div className="flex justify-between text-muted-foreground">
-                                  <span className="flex items-center gap-1">
-                                    <Shield className="w-3 h-3 text-emerald-500" />
-                                    Protection plan fee
-                                  </span>
-                                  <span className="font-medium text-foreground">${ppFee.toFixed(2)}</span>
-                                </div>
-                                <div className="flex justify-between text-muted-foreground pl-3 border-l-2 border-emerald-200">
-                                  <span>Kept by OutdoorShare</span>
-                                  <span className="font-medium text-red-500">−${ppFee.toFixed(2)}</span>
-                                </div>
-                                <div className="flex justify-between font-semibold text-muted-foreground pt-0.5">
-                                  <span>Net protection earnings</span>
-                                  <span>$0.00</span>
-                                </div>
-                              </>
-                            )}
                           </div>
 
                           {/* Formula pill */}
@@ -1720,7 +1700,6 @@ export default function AdminBookingDetail() {
                             <span className="text-emerald-600">How it's calculated</span>
                             <span className="font-mono font-semibold">
                               ${rentalBase.toFixed(2)} × {keepPercent}% = ${exactFee != null ? (rentalBase - (exactFee - ppFee)).toFixed(2) : netRentalEarnings.toFixed(2)}
-                              {ppFee > 0 ? ` rental` : ""}
                             </span>
                           </div>
 
