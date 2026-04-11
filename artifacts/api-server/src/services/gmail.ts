@@ -2236,8 +2236,8 @@ export async function sendPaymentRequestEmail(opts: {
   const { toEmail, customerName, paymentUrl, listingTitle, startDate, endDate, totalPrice, companyName, companyEmail } = opts;
   const fromHeader = `${companyName} <samhos@myoutdoorshare.com>`;
   const replyToEmail = companyEmail || undefined;
-  const subject = `[${companyName}] Complete your rental payment — ${esc(listingTitle)}`;
-  const preheader = `Your rental from ${companyName} is reserved. Complete payment to confirm your booking.`;
+  const subject = `[${companyName}] Accept your rental booking — ${esc(listingTitle)}`;
+  const preheader = `${companyName} has created a rental for you. Accept and pay to confirm your booking.`;
 
   const tableRows = [
     { label: "Equipment",    value: listingTitle },
@@ -2248,10 +2248,10 @@ export async function sendPaymentRequestEmail(opts: {
   ];
 
   const body = `
-    <p style="margin:0 0 8px;font-size:18px;font-weight:700;color:${BRAND_DARK};">Your rental is reserved — payment required</p>
+    <p style="margin:0 0 8px;font-size:18px;font-weight:700;color:${BRAND_DARK};">Your rental is ready — accept to confirm</p>
     <p style="margin:0 0 20px;font-size:15px;color:#374151;line-height:1.6;">
       Hi <strong>${esc(customerName)}</strong>, <strong>${esc(companyName)}</strong> has created a rental booking for you.
-      Complete your secure payment below to confirm the reservation. Your booking will remain pending until payment is received.
+      Review the details below and click <strong>Accept &amp; Pay</strong> to confirm your reservation.
     </p>
     ${infoTable(tableRows)}
     <div style="background:#fffbeb;border:1px solid #fde68a;border-radius:8px;padding:14px 18px;margin:20px 0;">
@@ -2259,14 +2259,14 @@ export async function sendPaymentRequestEmail(opts: {
         🔒 Secure checkout powered by Stripe — your card details are never shared with us.
       </p>
     </div>
-    ${ctaButton("Complete Payment →", paymentUrl, BRAND_GREEN)}
+    ${ctaButton("Accept & Pay →", paymentUrl, BRAND_GREEN)}
     <p style="margin:0;font-size:13px;color:#9ca3af;text-align:center;line-height:1.6;">
-      After payment you will receive a confirmation and instructions for your rental pickup.<br/>
+      Your booking will confirm instantly once payment is complete. You'll receive a confirmation email with pickup details.<br/>
       Questions? Contact <strong>${esc(companyName)}</strong> directly.
     </p>
   `;
 
-  const html = emailShell({ preheader, badgeLabel: "Action Required — Complete Payment", badgeColor: BRAND_GREEN, body });
+  const html = emailShell({ preheader, badgeLabel: "Action Required — Accept & Pay", badgeColor: BRAND_GREEN, body });
   const gmail = await getUncachableGmailClient();
   await gmail.users.messages.send({
     userId: "me",

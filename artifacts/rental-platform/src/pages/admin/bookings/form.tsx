@@ -79,7 +79,7 @@ export default function AdminBookingForm() {
 
   // Payment options (new bookings only)
   type PaymentMode = "none" | "send_link" | "charge_saved" | "split_payment";
-  const [paymentMode, setPaymentMode] = useState<PaymentMode>("none");
+  const [paymentMode, setPaymentMode] = useState<PaymentMode>("send_link");
   const [savedCard, setSavedCard] = useState<{ brand: string; last4: string } | null>(null);
   const [savedCardLoading, setSavedCardLoading] = useState(false);
   const [paymentLinkUrl, setPaymentLinkUrl] = useState<string | null>(null);
@@ -398,12 +398,12 @@ export default function AdminBookingForm() {
         });
         const plData = await plRes.json();
         if (!plRes.ok) {
-          setError(plData.error || "Booking created but payment link failed. You can retry from the booking page.");
+          setError(plData.error || "Booking created but acceptance link failed. You can retry from the booking page.");
         } else {
           setPaymentLinkUrl(plData.url);
           toast({
-            title: "Payment link sent!",
-            description: `Email sent to ${form.customerEmail}. Booking #${newBookingId} is pending payment.`,
+            title: "Acceptance link sent!",
+            description: `Email sent to ${form.customerEmail}. Booking #${newBookingId} is pending — confirms automatically when renter pays.`,
           });
           queryClient.invalidateQueries({ queryKey: getGetBookingsQueryKey() });
           setLocation(`/${params.slug}/admin/bookings/${newBookingId}`);
@@ -918,29 +918,12 @@ export default function AdminBookingForm() {
             <Card>
               <CardHeader className="pb-3">
                 <CardTitle className="flex items-center gap-2 text-base">
-                  <CreditCard className="w-4 h-4 text-primary" /> Payment Collection
+                  <CreditCard className="w-4 h-4 text-primary" /> Renter Payment
                 </CardTitle>
-                <CardDescription className="text-xs">How will the renter pay for this booking?</CardDescription>
+                <CardDescription className="text-xs">How will the renter accept and pay for this booking?</CardDescription>
               </CardHeader>
               <CardContent className="space-y-2">
-                {/* Option: No payment / manual */}
-                <button
-                  type="button"
-                  onClick={() => setPaymentMode("none")}
-                  className={`w-full text-left rounded-lg border px-3.5 py-3 transition-colors ${paymentMode === "none" ? "border-primary bg-primary/5" : "border-border hover:bg-muted/50"}`}
-                >
-                  <div className="flex items-center gap-2.5">
-                    <div className={`w-4 h-4 rounded-full border-2 flex-shrink-0 flex items-center justify-center ${paymentMode === "none" ? "border-primary" : "border-muted-foreground/40"}`}>
-                      {paymentMode === "none" && <div className="w-2 h-2 rounded-full bg-primary" />}
-                    </div>
-                    <div>
-                      <p className="text-sm font-medium">Record only</p>
-                      <p className="text-xs text-muted-foreground">Cash, check, or already collected</p>
-                    </div>
-                  </div>
-                </button>
-
-                {/* Option: Send payment link */}
+                {/* Option: Send acceptance link — default */}
                 <button
                   type="button"
                   onClick={() => setPaymentMode("send_link")}
@@ -952,10 +935,27 @@ export default function AdminBookingForm() {
                     </div>
                     <div>
                       <div className="flex items-center gap-1.5">
-                        <p className="text-sm font-medium">Send payment link</p>
+                        <p className="text-sm font-medium">Send acceptance link to renter</p>
                         <Send className="w-3 h-3 text-primary" />
                       </div>
-                      <p className="text-xs text-muted-foreground">Email a secure Stripe checkout link to the renter</p>
+                      <p className="text-xs text-muted-foreground">Renter gets an email to review and pay — booking confirms automatically once paid</p>
+                    </div>
+                  </div>
+                </button>
+
+                {/* Option: No payment / manual */}
+                <button
+                  type="button"
+                  onClick={() => setPaymentMode("none")}
+                  className={`w-full text-left rounded-lg border px-3.5 py-3 transition-colors ${paymentMode === "none" ? "border-primary bg-primary/5" : "border-border hover:bg-muted/50"}`}
+                >
+                  <div className="flex items-center gap-2.5">
+                    <div className={`w-4 h-4 rounded-full border-2 flex-shrink-0 flex items-center justify-center ${paymentMode === "none" ? "border-primary" : "border-muted-foreground/40"}`}>
+                      {paymentMode === "none" && <div className="w-2 h-2 rounded-full bg-primary" />}
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium">Record only (no link)</p>
+                      <p className="text-xs text-muted-foreground">Cash, check, or payment already collected in person</p>
                     </div>
                   </div>
                 </button>
@@ -1085,11 +1085,11 @@ export default function AdminBookingForm() {
             {error && <p className="text-sm text-destructive font-medium">{error}</p>}
             <Button className="w-full" onClick={handleSubmit} disabled={saving}>
               {saving ? (
-                paymentMode === "send_link" ? "Sending payment link…" :
+                paymentMode === "send_link" ? "Creating & Sending Acceptance Link…" :
                 paymentMode === "charge_saved" ? "Charging card…" :
                 paymentMode === "split_payment" ? "Creating & Charging Deposit…" : "Saving…"
               ) : isEditing ? "Save Changes" : (
-                paymentMode === "send_link" ? "Create & Send Payment Link" :
+                paymentMode === "send_link" ? "Create Booking & Send Acceptance Link" :
                 paymentMode === "charge_saved" ? `Create & Charge ${savedCard ? `${savedCard.brand} ••••${savedCard.last4}` : "Card"}` :
                 paymentMode === "split_payment" ? `Create & Charge Deposit ($${splitDepositInput || "…"})` :
                 "Create Booking"
