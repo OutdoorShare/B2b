@@ -553,6 +553,7 @@ router.post("/bookings", async (req, res) => {
               endDate: created.endDate,
               companyName,
               tenantSlug,
+              source: created.source ?? undefined,
             });
           }
         } catch (emailErr) {

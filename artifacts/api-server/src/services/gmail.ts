@@ -1131,14 +1131,27 @@ export async function sendAdminPickupReminderEmail(opts: {
   endDate: string;
   companyName: string;
   tenantSlug: string;
+  source?: string;
 }): Promise<void> {
-  const { adminEmail, customerName, customerEmail, bookingId, listingTitle, startDate, endDate, companyName, tenantSlug } = opts;
+  const { adminEmail, customerName, customerEmail, bookingId, listingTitle, startDate, endDate, companyName, tenantSlug, source } = opts;
   const adminBookingsUrl = `${getAppUrl()}/${tenantSlug}/admin/bookings`;
 
+  const isOnline = !source || source === "online";
+  const sourceLabel: Record<string, string> = { walkin: "walk-in", phone: "phone", online: "online" };
+  const readableSource = sourceLabel[source ?? ""] ?? "in-house";
+
+  const heading = isOnline ? "New rental booking received" : "New in-house booking created";
+  const description = isOnline
+    ? `<strong>${esc(customerName)}</strong> has completed an online booking for <strong>${esc(listingTitle)}</strong>. See the details below.`
+    : `You created a new ${readableSource} booking for <strong>${esc(customerName)}</strong> — <strong>${esc(listingTitle)}</strong>. See the details below.`;
+  const footerNote = isOnline
+    ? "This is an automated reminder sent when a new online booking is confirmed."
+    : "This is an automated reminder sent when a new in-house booking is created.";
+
   const body = `
-    <p style="margin:0 0 8px;font-size:18px;font-weight:700;color:${BRAND_DARK};">New rental booking received</p>
+    <p style="margin:0 0 8px;font-size:18px;font-weight:700;color:${BRAND_DARK};">${heading}</p>
     <p style="margin:0 0 20px;font-size:15px;color:#374151;line-height:1.6;">
-      <strong>${esc(customerName)}</strong> has completed an online booking for <strong>${esc(listingTitle)}</strong>. See the details below.
+      ${description}
     </p>
 
     ${infoTable([
@@ -1161,7 +1174,7 @@ export async function sendAdminPickupReminderEmail(opts: {
     ${ctaButton("View Booking in Dashboard", adminBookingsUrl, BRAND_DARK)}
 
     <p style="margin:0;font-size:13px;color:#9ca3af;text-align:center;">
-      This is an automated reminder sent when a new online booking is confirmed.
+      ${footerNote}
     </p>
   `;
 
