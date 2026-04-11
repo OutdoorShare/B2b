@@ -509,6 +509,7 @@ function StripePaymentForm({ onSuccess, customerEmail, testMode }: { onSuccess: 
   const stripe = useStripe();
   const elements = useElements();
   const [paying, setPaying] = useState(false);
+  const [elementReady, setElementReady] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const { toast } = useToast();
 
@@ -571,14 +572,23 @@ function StripePaymentForm({ onSuccess, customerEmail, testMode }: { onSuccess: 
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
-      <PaymentElement options={{ layout: "tabs", wallets: { applePay: "auto", googlePay: "auto", ...(testMode ? { link: "never" } : {}) } }} />
+      <PaymentElement
+        options={{ layout: "tabs", wallets: { applePay: "auto", googlePay: "auto", ...(testMode ? { link: "never" } : {}) } }}
+        onReady={() => setElementReady(true)}
+      />
+      {!elementReady && !error && (
+        <div className="flex items-center justify-center gap-2 text-muted-foreground text-sm py-1">
+          <Loader2 className="w-3.5 h-3.5 animate-spin" />
+          Loading payment form…
+        </div>
+      )}
       {error && (
         <div className="flex items-center gap-2 text-destructive text-sm bg-destructive/10 rounded-lg px-4 py-3">
           <AlertTriangle className="w-4 h-4 shrink-0" />
           {error}
         </div>
       )}
-      <Button type="submit" size="lg" className="w-full h-13 text-base font-bold rounded-xl" disabled={paying || !stripe}>
+      <Button type="submit" size="lg" className="w-full h-13 text-base font-bold rounded-xl" disabled={paying || !stripe || !elementReady}>
         {paying ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Processing…</> : <><ShieldCheck className="w-4 h-4 mr-2" />Pay & Book</>}
       </Button>
       <p className="text-center text-xs text-muted-foreground">
