@@ -1,5 +1,5 @@
 import { adminPath, getAdminSession } from "@/lib/admin-nav";
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { useLocation, useParams } from "wouter";
 import { QRCodeSVG } from "qrcode.react";
 import { 
@@ -160,6 +160,17 @@ export default function AdminKiosk() {
     { status: "active", search: search || undefined, categoryId: activeCategory || undefined },
     { query: { queryKey: getGetListingsQueryKey({ status: "active", search: search || undefined, categoryId: activeCategory || undefined }) } }
   );
+
+  // Fetch all active listings (no filter) so we can know which categories are populated
+  const { data: allListings } = useGetListings(
+    { status: "active" },
+    { query: { queryKey: getGetListingsQueryKey({ status: "active" }) } }
+  );
+
+  const populatedCategoryIds = useMemo(() => {
+    if (!allListings) return null;
+    return new Set((allListings as any[]).map(l => l.categoryId).filter(Boolean));
+  }, [allListings]);
 
   const tenantSlug = urlSlug || (profile as any)?.siteSlug || (profile as any)?.slug || "";
   const bookingUrl = selected && tenantSlug
@@ -374,17 +385,22 @@ export default function AdminKiosk() {
             >
               All Listings
             </button>
-            {categories.filter((cat, i, arr) => arr.findIndex(c => c.id === cat.id) === i).map(cat => (
-              <button
-                key={cat.id}
-                onClick={() => setActiveCategory(cat.id)}
-                className={`w-full text-left px-6 py-4 rounded-xl text-lg font-medium transition-all ${
-                  activeCategory === cat.id ? "bg-primary text-primary-foreground shadow-md" : "hover:bg-muted text-foreground"
-                }`}
-              >
-                {cat.name}
-              </button>
-            ))}
+            {categories
+              .filter((cat, i, arr) =>
+                arr.findIndex(c => c.id === cat.id) === i &&
+                (!populatedCategoryIds || populatedCategoryIds.has(cat.id))
+              )
+              .map(cat => (
+                <button
+                  key={cat.id}
+                  onClick={() => setActiveCategory(cat.id)}
+                  className={`w-full text-left px-6 py-4 rounded-xl text-lg font-medium transition-all ${
+                    activeCategory === cat.id ? "bg-primary text-primary-foreground shadow-md" : "hover:bg-muted text-foreground"
+                  }`}
+                >
+                  {cat.name}
+                </button>
+              ))}
           </aside>
         )}
 
