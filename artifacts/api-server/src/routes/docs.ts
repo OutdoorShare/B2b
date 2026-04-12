@@ -48,9 +48,12 @@ export const PLATFORM_FEATURES: Array<{
   { name: "Contact Cards",       slug: "contact-cards",       description: "Digital contact cards shared with renters at every booking touchpoint.",       status: "stable",       category: "Customers" },
   { name: "Waivers",             slug: "waivers",             description: "Collect digital waiver signatures before pickup.",                             status: "stable",       category: "Customers" },
   { name: "Communications",      slug: "communications",      description: "Automated email notifications for every booking lifecycle event.",              status: "stable",       category: "Customers" },
+  // Operations (add-ons)
+  { name: "Bundle Bookings",     slug: "bundle-bookings",     description: "Add optional add-on items to bookings — customers can select or remove bundle items at checkout.", status: "stable", category: "Operations" },
+  { name: "Marketplace",         slug: "marketplace",         description: "Cross-tenant discovery platform where renters can search equipment across all OutdoorShare businesses.", status: "stable", category: "Core" },
   // AI & Tools
-  { name: "Roamio AI",       slug: "roamio-ai",       description: "AI assistant for renters on the storefront and for admins in the dashboard.", status: "stable",       category: "AI & Tools" },
-  { name: "Kiosk Mode",          slug: "kiosk-mode",          description: "Self-service booking kiosk for walk-in customers at a physical location.",     status: "stable",       category: "AI & Tools" },
+  { name: "Roamio AI",           slug: "roamio-ai",           description: "AI assistant for renters on the storefront and for admins in the dashboard — powered by leading LLMs.", status: "stable", category: "AI & Tools" },
+  { name: "Kiosk Mode",          slug: "kiosk-mode",          description: "Self-service booking kiosk with smart category filtering — only shows categories that have active listings.", status: "stable", category: "AI & Tools" },
   { name: "Analytics",           slug: "analytics",           description: "Revenue, booking, and occupancy dashboards for informed business decisions.",   status: "stable",       category: "AI & Tools" },
   // Account
   { name: "Team Management",     slug: "team-management",     description: "Invite staff and assign roles across your rental operations.",                 status: "stable",       category: "Account" },
