@@ -84,6 +84,7 @@ router.get("/public/quotes/:id", async (req, res) => {
   try {
     const [quote] = await db.select().from(quotesTable).where(eq(quotesTable.id, Number(req.params.id)));
     if (!quote) { res.status(404).json({ error: "Not found" }); return; }
+
     // Fetch company name for display
     const [profileRow] = quote.tenantId
       ? await db
@@ -91,10 +92,33 @@ router.get("/public/quotes/:id", async (req, res) => {
           .from(businessProfileTable)
           .where(eq(businessProfileTable.tenantId, quote.tenantId))
       : [];
+
+    // Determine if the first bookable listing still exists
+    const items = Array.isArray(quote.items) ? (quote.items as any[]) : [];
+    let firstListingId: number | null = null;
+    for (const item of items) {
+      if (item.type === "bundle") {
+        const subs = item.bundleItems ?? [];
+        if (subs.length > 0 && subs[0].listingId) { firstListingId = Number(subs[0].listingId); break; }
+      } else if (item.listingId) {
+        firstListingId = Number(item.listingId);
+        break;
+      }
+    }
+    let listingAvailable = false;
+    if (firstListingId && quote.tenantId) {
+      const [found] = await db
+        .select({ id: listingsTable.id })
+        .from(listingsTable)
+        .where(and(eq(listingsTable.id, firstListingId), eq(listingsTable.tenantId, quote.tenantId)));
+      listingAvailable = !!found;
+    }
+
     res.json({
       ...formatQuote(quote),
       companyName: profileRow?.name ?? null,
       companyEmail: profileRow?.outboundEmail ?? profileRow?.email ?? null,
+      listingAvailable,
     });
   } catch (err) {
     req.log.error(err);

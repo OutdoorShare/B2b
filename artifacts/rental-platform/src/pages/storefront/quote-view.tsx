@@ -80,6 +80,7 @@ export default function StorefrontQuoteView() {
 
   const canBook = quote.status === "sent" || quote.status === "draft";
   const firstListingId = getFirstListingId(items);
+  const listingAvailable: boolean = quote.listingAvailable ?? false;
 
   function handleBookNow() {
     if (!firstListingId || !slug) return;
@@ -220,7 +221,9 @@ export default function StorefrontQuoteView() {
                     return (
                       <tr key={i}>
                         <td className="px-5 py-3.5">
-                          <p className="font-medium text-gray-900 text-sm">{item.listingTitle ?? "Item"}</p>
+                          <p className="font-medium text-gray-900 text-sm">
+                            {item.listingTitle && item.listingTitle !== "Unknown" ? item.listingTitle : "Rental Item"}
+                          </p>
                           <p className="text-xs text-gray-400 mt-0.5 sm:hidden">
                             {item.quantity}× · {item.days} day{item.days !== 1 ? "s" : ""} · ${Number(item.pricePerDay).toFixed(2)}/day
                           </p>
@@ -274,14 +277,21 @@ export default function StorefrontQuoteView() {
                   <span className="text-gray-400 ml-1">+ deposit, fees &amp; protection at checkout</span>
                 </p>
               </div>
-              <Button
-                size="lg"
-                className="bg-green-600 hover:bg-green-700 text-white font-bold px-8 rounded-xl shrink-0"
-                onClick={handleBookNow}
-              >
-                <CreditCard className="w-4 h-4 mr-2" />
-                Book &amp; Pay Now
-              </Button>
+              {listingAvailable ? (
+                <Button
+                  size="lg"
+                  className="bg-green-600 hover:bg-green-700 text-white font-bold px-8 rounded-xl shrink-0"
+                  onClick={handleBookNow}
+                >
+                  <CreditCard className="w-4 h-4 mr-2" />
+                  Book &amp; Pay Now
+                </Button>
+              ) : (
+                <div className="text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-4 py-3 shrink-0">
+                  <p className="font-semibold">Item no longer available</p>
+                  <p className="text-xs mt-0.5 text-amber-700">Contact us to arrange your booking.</p>
+                </div>
+              )}
             </div>
           </div>
         )}
