@@ -1736,24 +1736,32 @@ export default function StorefrontBook() {
     if (hasTimeSlots && !selectedTimeSlot) {
       toast({ title: "Please select a time slot", description: "Choose a pickup time slot to continue.", variant: "destructive" }); return;
     }
-    if (password.length < 6) { setAuthError("Password must be at least 6 characters"); return; }
-    if (password !== confirmPassword) { setAuthError("Passwords don't match"); return; }
-    setIsSubmitting(true);
-    try {
-      const res = await fetch(`${BASE}/api/customers/register`, {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password, name, phone, slug: slug ?? "" })
-      });
-      const data = await res.json();
-      if (!res.ok) { setAuthError(data.error || "Registration failed"); return; }
-      saveSession(data); setSession(data);
-      // Now show payment
-      const cents = Math.round(discountedTotal * 100);
-      createPaymentIntent(cents);
-      setShowStripeForm(true);
-    } catch {
-      setAuthError("Connection error, please try again");
-    } finally { setIsSubmitting(false); }
+
+    // Password is optional — only validate if the user filled it in
+    if (password.length > 0) {
+      if (password.length < 6) { setAuthError("Password must be at least 6 characters"); return; }
+      if (password !== confirmPassword) { setAuthError("Passwords don't match"); return; }
+      setIsSubmitting(true);
+      try {
+        const res = await fetch(`${BASE}/api/customers/register`, {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email, password, name, phone, slug: slug ?? "" })
+        });
+        const data = await res.json();
+        if (!res.ok) { setAuthError(data.error || "Registration failed"); setIsSubmitting(false); return; }
+        saveSession(data); setSession(data);
+      } catch {
+        setAuthError("Connection error, please try again");
+        setIsSubmitting(false);
+        return;
+      }
+      setIsSubmitting(false);
+    }
+
+    // Proceed to payment (guest or registered)
+    const cents = Math.round(discountedTotal * 100);
+    createPaymentIntent(cents);
+    setShowStripeForm(true);
   };
 
   // ── Final agreement submission ──
