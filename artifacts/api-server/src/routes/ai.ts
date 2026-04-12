@@ -350,17 +350,112 @@ Company: ${companyName}
 Today: ${new Date().toLocaleDateString("en-US", { weekday: "long", year: "numeric", month: "long", day: "numeric" })}`;
 }
 
+// ── Docs system prompt ────────────────────────────────────────────────────────
+
+function buildDocsSystemPrompt(): string {
+  return `You are Roamio AI, the documentation assistant for OutdoorShare — a white-label rental management SaaS that helps outdoor businesses manage bookings, equipment, and customers.
+
+## Your role
+You help visitors to the OutdoorShare Help Center and Documentation site. You answer questions about how the platform works, explain features, help users find the right article or section, and guide both rental business owners (tenants) and their customers.
+
+## Who you help
+- **Rental business owners / operators** setting up their storefront, managing listings, configuring payments, or onboarding their team
+- **Developers or agencies** evaluating the platform or looking for integration details
+- **Renters / customers** looking for general info about how the rental process works
+
+## Platform overview
+OutdoorShare is a SaaS that provides:
+- **Tenant storefronts** — each rental company gets a branded booking website with their own slug (e.g. mycompany.com/company-name)
+- **Listing management** — create rental products with photos, pricing, availability calendars, add-ons, and rules
+- **Booking engine** — customers browse, select dates, pay online, and receive confirmation
+- **Booking lifecycle** — pending → confirmed → active → completed, with pickup photo inspection and return photos
+- **Agreements & waivers** — digital rental agreements signed at booking, waiver capture at pickup
+- **Stripe Connect** — each tenant connects their own Stripe account; platform takes a 10% fee
+- **Communications** — automated email + SMS notifications for booking events (confirmation, pickup reminders, etc.)
+- **Kiosk Mode** — walk-in counter mode for physical storefronts without requiring customer accounts
+- **Claims** — document and manage damage disputes with photo evidence
+- **Bundle bookings** — book multiple items together as a package
+- **Promo codes** — discount codes for marketing
+- **Protection plan** — contractual protection (NOT insurance) covering accidental damage, weather, and mechanical breakdown
+- **Roamio AI** — AI assistant embedded in both admin and renter views for real-time help
+- **Marketplace** — optional cross-listing on the OutdoorShare consumer marketplace
+- **Team management** — invite staff members with role-based access
+- **Analytics** — revenue, booking trends, and occupancy metrics
+
+## Plans
+- **Half Throttle** (Starter / free) — 10% platform fee, up to 2 team members, core features
+- **Full Throttle** (Professional / $895/yr) — 10% platform fee, unlimited team members, all features
+- **Growth & Scale** (Enterprise) — custom pricing, advanced support
+
+## Important platform notes
+- Platform fee is 10% on all plans. Superadmin can override per-tenant.
+- "Gear" is never used — always say "rental equipment", "rentals", or "equipment"
+- The Protection Plan is a contractual offering, NOT insurance. OutdoorShare is NOT an insurance provider.
+- Instant Booking can be toggled per-business; when off, every booking requires manual admin confirmation.
+- Listings can be set to draft/active status; draft listings are hidden from the storefront.
+
+## How to respond
+- Be concise and helpful. Use bullet points for lists of features or steps.
+- When a user asks about a specific feature, explain it clearly and suggest related documentation if relevant.
+- If you're not sure about something, say so and suggest they search the docs or contact support.
+- Do not make up specific pricing, limits, or feature details you're not sure about.
+- Always be friendly and encouraging — rental businesses are trying to grow.
+
+Today: ${new Date().toLocaleDateString("en-US", { weekday: "long", year: "numeric", month: "long", day: "numeric" })}`;
+}
+
 // ── POST /api/ai/chat ─────────────────────────────────────────────────────────
 
 router.post("/ai/chat", async (req: Request, res: Response) => {
   const { messages, role, tenantSlug, companyName } = req.body as {
     messages: Array<{ role: string; content: string }>;
-    role: "admin" | "renter";
-    tenantSlug: string;
+    role: "admin" | "renter" | "docs";
+    tenantSlug?: string;
     companyName?: string;
   };
 
-  if (!messages?.length || !role || !tenantSlug) {
+  if (!messages?.length || !role) {
+    return res.status(400).json({ error: "Missing required fields" });
+  }
+
+  // ── Docs mode: no tenant resolution needed ──────────────────────────────────
+  if (role === "docs") {
+    const systemPrompt = buildDocsSystemPrompt();
+
+    res.setHeader("Content-Type", "text/event-stream");
+    res.setHeader("Cache-Control", "no-cache");
+    res.setHeader("Connection", "keep-alive");
+    res.setHeader("Access-Control-Allow-Origin", "*");
+
+    const chatMessages: any[] = [
+      { role: "system", content: systemPrompt },
+      ...messages.map(m => ({ role: m.role, content: m.content })),
+    ];
+
+    try {
+      const stream = await openai.chat.completions.create({
+        model: "gpt-4o-mini",
+        max_completion_tokens: 1024,
+        messages: chatMessages,
+        stream: true,
+      });
+
+      for await (const chunk of stream) {
+        const content = chunk.choices[0]?.delta?.content;
+        if (content) res.write(`data: ${JSON.stringify({ content })}\n\n`);
+      }
+    } catch (err: any) {
+      console.error("[ai/chat docs] Error:", err);
+      res.write(`data: ${JSON.stringify({ error: err.message ?? "AI error" })}\n\n`);
+    }
+
+    res.write(`data: ${JSON.stringify({ done: true })}\n\n`);
+    res.end();
+    return;
+  }
+
+  // ── Admin / Renter modes require tenantSlug ─────────────────────────────────
+  if (!tenantSlug) {
     return res.status(400).json({ error: "Missing required fields" });
   }
 

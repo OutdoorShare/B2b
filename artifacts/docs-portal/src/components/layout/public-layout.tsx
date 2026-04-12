@@ -1,6 +1,7 @@
 import { Link, useLocation } from "wouter";
 import { Search, ExternalLink, ChevronDown, ChevronRight, BookOpen, HelpCircle, Home } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { DocsAIAssistant } from "@/components/docs-ai-assistant";
 import { useGetDocCategories, useGetDocCategory, getGetDocCategoriesQueryKey, getGetDocCategoryQueryKey } from "@workspace/api-client-react";
 import { useState, useEffect } from "react";
 
@@ -187,6 +188,9 @@ export function PublicLayout({ children }: { children: React.ReactNode }) {
           {children}
         </div>
       </main>
+
+      {/* Roamio AI — floating docs assistant */}
+      <DocsAIAssistant />
     </div>
   );
 }
