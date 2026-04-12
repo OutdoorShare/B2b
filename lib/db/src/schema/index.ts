@@ -28,6 +28,7 @@ export * from "./support-messages";
 export * from "./bundles";
 export * from "./memories";
 export * from "./conversations";
+export * from "./rental-extensions";
 export * from "./activities";
 export * from "./messages";
 export * from "./favorites";

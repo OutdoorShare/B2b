@@ -335,6 +335,130 @@ function infoTable(rows: { label: string; value: string; mono?: boolean; rawHtml
   </table>`;
 }
 
+// ── Rental extension — admin notification (renter requested) ─────────────────
+export async function sendExtensionRequestedAdminEmail(opts: {
+  adminEmail: string;
+  customerName: string;
+  customerEmail: string;
+  bookingId: number;
+  listingTitle: string;
+  originalEndDate: string;
+  requestedEndDate: string;
+  additionalDays: number;
+  additionalAmount: string;
+  requestNote: string | null;
+  companyName: string;
+  tenantSlug: string;
+  bookingUrl: string;
+}): Promise<void> {
+  const { adminEmail, customerName, customerEmail, bookingId, listingTitle, originalEndDate, requestedEndDate, additionalDays, additionalAmount, requestNote, companyName, bookingUrl } = opts;
+  const subject = `[${companyName}] Extension request — ${customerName} (Booking #${bookingId})`;
+  const body = `
+    <p style="margin:0 0 8px;font-size:18px;font-weight:700;color:${BRAND_DARK};">Rental extension requested</p>
+    <p style="margin:0 0 20px;font-size:15px;color:#374151;line-height:1.6;">
+      <strong>${esc(customerName)}</strong> is requesting to extend their rental. Review and approve or deny below.
+    </p>
+    ${infoTable([
+      { label: "Booking #",       value: `#${bookingId}`, mono: true },
+      { label: "Customer",        value: `${customerName} (${customerEmail})` },
+      { label: "Equipment",       value: listingTitle },
+      { label: "Current Return",  value: originalEndDate },
+      { label: "Requested Return",value: requestedEndDate },
+      { label: "Additional Days", value: `${additionalDays} day${additionalDays !== 1 ? "s" : ""}` },
+      { label: "Additional Charge",value: `$${additionalAmount}` },
+    ])}
+    ${requestNote ? `<div style="background:#f8faf8;border-left:4px solid ${BRAND_GREEN};padding:12px 16px;border-radius:0 8px 8px 0;margin-bottom:24px;">
+      <p style="margin:0 0 4px;font-size:12px;color:#6b7280;font-weight:600;text-transform:uppercase;letter-spacing:1px;">Renter's note</p>
+      <p style="margin:0;font-size:14px;color:#374151;line-height:1.6;">${esc(requestNote)}</p>
+    </div>` : ""}
+    ${ctaButton("Review & Respond →", bookingUrl)}
+  `;
+  const html = emailShell({ preheader: `${customerName} wants to extend their rental by ${additionalDays} days to ${requestedEndDate}.`, badgeLabel: "Extension Request", badgeColor: BRAND_GREEN, body });
+  const gmail = await getUncachableGmailClient();
+  await gmail.users.messages.send({ userId: "me", requestBody: { raw: makeRawEmail(adminEmail, subject, html, PLATFORM_FROM) } });
+}
+
+// ── Rental extension — renter notification (approved) ─────────────────────────
+export async function sendExtensionApprovedRenterEmail(opts: {
+  toEmail: string;
+  customerName: string;
+  bookingId: number;
+  listingTitle: string;
+  originalEndDate: string;
+  newEndDate: string;
+  additionalDays: number;
+  additionalAmount: string;
+  companyName: string;
+  bookingUrl: string;
+}): Promise<void> {
+  const { toEmail, customerName, bookingId, listingTitle, originalEndDate, newEndDate, additionalDays, additionalAmount, companyName, bookingUrl } = opts;
+  const subject = `Your rental extension was approved — ${listingTitle}`;
+  const body = `
+    <p style="margin:0 0 8px;font-size:18px;font-weight:700;color:${BRAND_DARK};">Extension approved!</p>
+    <p style="margin:0 0 20px;font-size:15px;color:#374151;line-height:1.6;">
+      Hi ${esc(customerName)}, great news — <strong>${esc(companyName)}</strong> has approved your extension request. Your new return date is <strong>${esc(newEndDate)}</strong>.
+    </p>
+    ${infoTable([
+      { label: "Booking #",        value: `#${bookingId}`, mono: true },
+      { label: "Equipment",        value: listingTitle },
+      { label: "Original Return",  value: originalEndDate },
+      { label: "New Return Date",  value: newEndDate },
+      { label: "Extra Days",       value: `${additionalDays} day${additionalDays !== 1 ? "s" : ""}` },
+      { label: "Additional Charge",value: `$${additionalAmount}` },
+    ])}
+    <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:14px 18px;margin-bottom:24px;">
+      <p style="margin:0;font-size:13px;color:#166534;line-height:1.6;">
+        The additional charge of <strong>$${esc(additionalAmount)}</strong> has been processed to your card on file.
+        Please ensure you return the equipment by your new return date of <strong>${esc(newEndDate)}</strong>.
+      </p>
+    </div>
+    ${ctaButton("View Booking →", bookingUrl)}
+  `;
+  const html = emailShell({ preheader: `Your extension to ${newEndDate} has been approved.`, badgeLabel: "Extension Approved", badgeColor: BRAND_GREEN, body });
+  const gmail = await getUncachableGmailClient();
+  await gmail.users.messages.send({ userId: "me", requestBody: { raw: makeRawEmail(toEmail, subject, html) } });
+}
+
+// ── Rental extension — renter notification (denied) ───────────────────────────
+export async function sendExtensionDeniedRenterEmail(opts: {
+  toEmail: string;
+  customerName: string;
+  bookingId: number;
+  listingTitle: string;
+  originalEndDate: string;
+  requestedEndDate: string;
+  denialReason: string | null;
+  companyName: string;
+  bookingUrl: string;
+}): Promise<void> {
+  const { toEmail, customerName, bookingId, listingTitle, originalEndDate, requestedEndDate, denialReason, companyName, bookingUrl } = opts;
+  const subject = `Your extension request was not approved — ${listingTitle}`;
+  const body = `
+    <p style="margin:0 0 8px;font-size:18px;font-weight:700;color:${BRAND_DARK};">Extension request not approved</p>
+    <p style="margin:0 0 20px;font-size:15px;color:#374151;line-height:1.6;">
+      Hi ${esc(customerName)}, unfortunately <strong>${esc(companyName)}</strong> was unable to approve your extension request.
+      Your return date remains <strong>${esc(originalEndDate)}</strong>.
+    </p>
+    ${infoTable([
+      { label: "Booking #",        value: `#${bookingId}`, mono: true },
+      { label: "Equipment",        value: listingTitle },
+      { label: "Your Return Date", value: originalEndDate },
+      { label: "Requested",        value: requestedEndDate },
+    ])}
+    ${denialReason ? `<div style="background:#fef2f2;border:1px solid #fecaca;border-radius:8px;padding:14px 18px;margin-bottom:24px;">
+      <p style="margin:0 0 4px;font-size:12px;color:#991b1b;font-weight:600;text-transform:uppercase;letter-spacing:1px;">Reason</p>
+      <p style="margin:0;font-size:14px;color:#7f1d1d;line-height:1.6;">${esc(denialReason)}</p>
+    </div>` : ""}
+    <p style="margin:0 0 24px;font-size:14px;color:#374151;line-height:1.6;">
+      Please ensure you return the equipment by <strong>${esc(originalEndDate)}</strong> as originally scheduled. If you have questions, contact ${esc(companyName)} directly.
+    </p>
+    ${ctaButton("View Booking →", bookingUrl)}
+  `;
+  const html = emailShell({ preheader: `Your extension request for ${listingTitle} was not approved. Return by ${originalEndDate}.`, badgeLabel: "Extension Not Approved", badgeColor: "#dc2626", body });
+  const gmail = await getUncachableGmailClient();
+  await gmail.users.messages.send({ userId: "me", requestBody: { raw: makeRawEmail(toEmail, subject, html) } });
+}
+
 // ── 36-hour claim window closing — admin warning ──────────────────────────────
 export async function sendClaimWindowClosingAdminEmail(opts: {
   adminEmail: string;

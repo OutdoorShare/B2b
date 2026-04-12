@@ -22,6 +22,7 @@ import notificationsRouter from "./notifications";
 import chatRouter from "./chat";
 import openaiRouter from "./openai";
 import activitiesRouter from "./activities";
+import rentalExtensionsRouter from "./rental-extensions";
 
 const router: IRouter = Router();
 
@@ -48,5 +49,6 @@ router.use(notificationsRouter);
 router.use(chatRouter);
 router.use(openaiRouter);
 router.use(activitiesRouter);
+router.use(rentalExtensionsRouter);
 
 export default router;

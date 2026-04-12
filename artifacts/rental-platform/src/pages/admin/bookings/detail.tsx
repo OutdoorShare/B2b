@@ -11,7 +11,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { Link, useLocation } from "wouter";
-import { ArrowLeft, User, Phone, Mail, Calendar, Package, StickyNote, ShieldAlert, Pencil, FileSignature, FileText, ChevronDown, ChevronUp, Download, Camera, CheckCircle2, Loader2, ExternalLink, ImageIcon, Clock, ShieldCheck, ShieldX, Shield, AlertCircle, Copy, Send, UserCheck, Lock, LockOpen, DollarSign, PackageCheck, ScanSearch, MailCheck, Link2, MailX, RefreshCw, CreditCard } from "lucide-react";
+import { ArrowLeft, User, Phone, Mail, Calendar, Package, StickyNote, ShieldAlert, Pencil, FileSignature, FileText, ChevronDown, ChevronUp, Download, Camera, CheckCircle2, Loader2, ExternalLink, ImageIcon, Clock, ShieldCheck, ShieldX, Shield, AlertCircle, Copy, Send, UserCheck, Lock, LockOpen, DollarSign, PackageCheck, ScanSearch, MailCheck, Link2, MailX, RefreshCw, CreditCard, CalendarPlus, CalendarCheck, CalendarX, XCircle } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { QRCodeSVG } from "qrcode.react";
@@ -112,6 +112,10 @@ export default function AdminBookingDetail() {
   const [showPickupWarning, setShowPickupWarning] = useState(false);
   const [pickupWarningInPersonUrl, setPickupWarningInPersonUrl] = useState<string | null>(null);
   const [pickupWarningFetchingUrl, setPickupWarningFetchingUrl] = useState(false);
+  const [extensionRequests, setExtensionRequests] = useState<any[]>([]);
+  const [extensionLoading, setExtensionLoading] = useState<number | null>(null);
+  const [showDenyDialog, setShowDenyDialog] = useState<number | null>(null);
+  const [denyReason, setDenyReason] = useState("");
 
   type VerifData = {
     found: boolean;
@@ -140,6 +144,50 @@ export default function AdminBookingDetail() {
       .then(data => setVerifData(data))
       .catch(() => {});
   }, [booking?.customerEmail]);
+
+  // Fetch extension requests whenever booking loads
+  const fetchExtensions = useCallback(async () => {
+    if (!id) return;
+    const session = getAdminSession();
+    const headers: Record<string, string> = {};
+    if (session?.token) headers["x-admin-token"] = session.token;
+    try {
+      const res = await fetch(`${BASE}/api/bookings/${id}/extension-requests`, { headers });
+      if (res.ok) setExtensionRequests(await res.json());
+    } catch {}
+  }, [id, BASE]);
+
+  useEffect(() => { if (booking?.id) fetchExtensions(); }, [booking?.id, fetchExtensions]);
+
+  async function handleExtensionAction(extId: number, action: "approve" | "deny", reason?: string) {
+    setExtensionLoading(extId);
+    const session = getAdminSession();
+    const headers: Record<string, string> = { "Content-Type": "application/json" };
+    if (session?.token) headers["x-admin-token"] = session.token;
+    try {
+      const res = await fetch(`${BASE}/api/admin/extension-requests/${extId}/${action}`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify({ denialReason: reason }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        toast({ title: "Error", description: data.error ?? "Failed", variant: "destructive" });
+        return;
+      }
+      if (action === "approve") {
+        toast({ title: "Extension approved!", description: `Return date updated to ${data.newEndDate}.` });
+        fetchBooking();
+      } else {
+        toast({ title: "Extension declined" });
+      }
+      setShowDenyDialog(null);
+      setDenyReason("");
+      await fetchExtensions();
+    } finally {
+      setExtensionLoading(null);
+    }
+  }
 
   if (isLoading) return <div className="p-8">Loading booking details...</div>;
   if (!booking) return <div className="p-8">Booking not found</div>;
@@ -1517,6 +1565,130 @@ export default function AdminBookingDetail() {
             </Card>
           )}
 
+          {/* ── Rental Extension Requests ── */}
+          {extensionRequests.length > 0 && (
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle className="flex items-center gap-2 text-base">
+                  <CalendarPlus className="w-5 h-5 text-sky-600" />
+                  Extension Requests
+                  {extensionRequests.some(e => e.status === "pending") && (
+                    <Badge className="ml-auto bg-amber-100 text-amber-800 border-amber-300">
+                      {extensionRequests.filter(e => e.status === "pending").length} Pending
+                    </Badge>
+                  )}
+                </CardTitle>
+                <CardDescription className="text-xs">
+                  Renter requested to extend their rental period. Approving will charge the additional amount to their card on file.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                {extensionRequests.map(ext => (
+                  <div
+                    key={ext.id}
+                    className={`rounded-xl border p-3 space-y-2.5 ${
+                      ext.status === "pending"
+                        ? "border-amber-300 bg-amber-50"
+                        : ext.status === "approved"
+                          ? "border-green-200 bg-green-50"
+                          : "border-red-200 bg-red-50/60"
+                    }`}
+                  >
+                    {/* Header row */}
+                    <div className="flex items-center gap-2 flex-wrap">
+                      {ext.status === "pending" && <Badge className="bg-amber-200 text-amber-900 border-0 text-xs">Pending</Badge>}
+                      {ext.status === "approved" && <Badge className="bg-green-100 text-green-800 border-green-300 text-xs"><CalendarCheck className="w-3 h-3 mr-1 inline" />Approved</Badge>}
+                      {ext.status === "denied" && <Badge className="bg-red-100 text-red-800 border-red-300 text-xs"><CalendarX className="w-3 h-3 mr-1 inline" />Declined</Badge>}
+                      <span className="text-xs text-muted-foreground ml-auto">
+                        Requested {format(new Date(ext.requestedAt), "MMM d, h:mm a")}
+                      </span>
+                    </div>
+
+                    {/* Date change */}
+                    <div className="grid grid-cols-3 gap-2 text-sm">
+                      <div>
+                        <div className="text-xs text-muted-foreground mb-0.5">Original Return</div>
+                        <div className="font-medium">{ext.originalEndDate}</div>
+                      </div>
+                      <div className="flex items-center justify-center">
+                        <span className="text-muted-foreground text-xs">→</span>
+                      </div>
+                      <div>
+                        <div className="text-xs text-muted-foreground mb-0.5">Requested Return</div>
+                        <div className="font-semibold text-sky-700">{ext.requestedEndDate}</div>
+                      </div>
+                    </div>
+
+                    {/* Amounts */}
+                    <div className="flex items-center gap-4 text-sm">
+                      <div>
+                        <span className="text-muted-foreground text-xs">Extra days: </span>
+                        <span className="font-medium">{ext.additionalDays}</span>
+                      </div>
+                      <div>
+                        <span className="text-muted-foreground text-xs">Additional charge: </span>
+                        <span className="font-semibold text-sky-700">${parseFloat(String(ext.additionalAmount)).toFixed(2)}</span>
+                      </div>
+                    </div>
+
+                    {/* Optional note */}
+                    {ext.requestNote && (
+                      <div className="bg-white/70 rounded-lg px-3 py-2 border border-current/10">
+                        <p className="text-xs text-muted-foreground mb-0.5 font-medium uppercase tracking-wide">Renter's note</p>
+                        <p className="text-xs text-foreground leading-relaxed">{ext.requestNote}</p>
+                      </div>
+                    )}
+
+                    {/* Denial reason (if denied) */}
+                    {ext.status === "denied" && ext.denialReason && (
+                      <div className="bg-white/70 rounded-lg px-3 py-2 border border-red-200">
+                        <p className="text-xs text-red-700 font-medium mb-0.5 uppercase tracking-wide">Reason given</p>
+                        <p className="text-xs text-red-800 leading-relaxed">{ext.denialReason}</p>
+                      </div>
+                    )}
+
+                    {/* Payment info (if approved) */}
+                    {ext.status === "approved" && ext.stripePaymentIntentId && (
+                      <div className="flex items-center gap-1.5 text-xs text-green-700 bg-white/70 rounded-lg px-3 py-2 border border-green-200">
+                        <CreditCard className="w-3 h-3 shrink-0" />
+                        <span>Payment charged — PI: <span className="font-mono">{ext.stripePaymentIntentId.slice(0, 16)}…</span></span>
+                      </div>
+                    )}
+
+                    {/* Action buttons for pending */}
+                    {ext.status === "pending" && (
+                      <div className="flex gap-2 pt-1">
+                        <Button
+                          size="sm"
+                          className="flex-1 gap-1.5 bg-green-600 hover:bg-green-700 text-white"
+                          onClick={() => handleExtensionAction(ext.id, "approve")}
+                          disabled={extensionLoading !== null}
+                        >
+                          {extensionLoading === ext.id ? (
+                            <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                          ) : (
+                            <CalendarCheck className="w-3.5 h-3.5" />
+                          )}
+                          Approve & Charge ${parseFloat(String(ext.additionalAmount)).toFixed(2)}
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="flex-1 gap-1.5 border-red-300 text-red-700 hover:bg-red-50"
+                          onClick={() => { setShowDenyDialog(ext.id); setDenyReason(""); }}
+                          disabled={extensionLoading !== null}
+                        >
+                          <CalendarX className="w-3.5 h-3.5" />
+                          Decline
+                        </Button>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </CardContent>
+            </Card>
+          )}
+
           {/* ── Email Activity Log ── */}
           {(() => {
             const events: { type: string; sentAt: string; toEmail?: string }[] =
@@ -1808,6 +1980,46 @@ export default function AdminBookingDetail() {
         </div>
       </div>
     </div>
+
+      {/* ── Deny Extension Dialog ── */}
+      <Dialog open={showDenyDialog !== null} onOpenChange={open => { if (!open) { setShowDenyDialog(null); setDenyReason(""); } }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-red-700">
+              <CalendarX className="w-5 h-5 shrink-0" />
+              Decline Extension Request
+            </DialogTitle>
+            <DialogDescription className="text-sm text-muted-foreground pt-1">
+              Optionally provide a reason — this will be included in the email sent to the renter.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3 py-1">
+            <Label className="text-sm font-medium">Reason (optional)</Label>
+            <Textarea
+              placeholder="e.g. Equipment is already booked for those dates by another renter."
+              value={denyReason}
+              onChange={e => setDenyReason(e.target.value)}
+              className="resize-none"
+              rows={3}
+            />
+          </div>
+          <DialogFooter className="gap-2">
+            <Button variant="ghost" size="sm" onClick={() => { setShowDenyDialog(null); setDenyReason(""); }}>
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              size="sm"
+              className="gap-1.5"
+              onClick={() => showDenyDialog !== null && handleExtensionAction(showDenyDialog, "deny", denyReason)}
+              disabled={extensionLoading !== null}
+            >
+              {extensionLoading !== null ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <XCircle className="w-3.5 h-3.5" />}
+              Confirm Decline
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* ── Pickup Warning Dialog — before-photos missing ──────────────────── */}
       <Dialog open={showPickupWarning} onOpenChange={open => { if (!open) setShowPickupWarning(false); }}>
