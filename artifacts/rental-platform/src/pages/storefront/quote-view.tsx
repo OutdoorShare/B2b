@@ -379,12 +379,8 @@ export default function StorefrontQuoteView() {
               <div className="absolute bottom-0 left-8 w-16 h-16 rounded-full opacity-10 bg-white" />
 
               <div className="relative px-6 py-7">
-                <p className="text-white/70 text-xs font-bold uppercase tracking-widest mb-1">Your quote is ready</p>
-                <p className="font-black text-white text-2xl leading-tight mb-1">Ready to lock it in?</p>
-                <p className="text-white/75 text-sm mb-5">
-                  Rental total: <span className="text-white font-black text-base">${totalPrice.toFixed(2)}</span>
-                  <span className="opacity-70 ml-1.5 text-xs">+ deposit &amp; fees at checkout</span>
-                </p>
+                <p className="text-white/70 text-xs font-bold uppercase tracking-widest mb-1">Your adventure awaits</p>
+                <p className="font-black text-white text-2xl leading-tight mb-5">Time to get out there.</p>
 
                 {/* Step nudge */}
                 <p className="text-white/60 text-xs font-semibold mb-2 flex items-center gap-1">
