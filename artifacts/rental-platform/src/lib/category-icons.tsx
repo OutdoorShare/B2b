@@ -73,23 +73,51 @@ export const ATVIcon = svgIcon(
 
 export const UTVIcon = svgIcon(
   <>
-    {/* Rear wheel */}
-    <circle cx="50" cy="48" r="12" />
-    <circle cx="50" cy="48" r="5" fill="white" opacity="0.25" />
-    {/* Front wheel */}
-    <circle cx="14" cy="48" r="12" />
-    <circle cx="14" cy="48" r="5" fill="white" opacity="0.25" />
-    {/* Body/cab floor */}
-    <rect x="12" y="36" width="40" height="12" rx="2" />
-    {/* Roll cage - front upright */}
-    <rect x="14" y="12" width="5" height="26" rx="2" />
-    {/* Roll cage - rear upright */}
-    <rect x="45" y="12" width="5" height="26" rx="2" />
-    {/* Roll cage - top crossbar */}
-    <rect x="14" y="12" width="36" height="5" rx="2" />
-    {/* Seats (visible through cage) */}
-    <rect x="20" y="32" width="10" height="7" rx="1" fill="white" opacity="0.22" />
-    <rect x="34" y="32" width="10" height="7" rx="1" fill="white" opacity="0.22" />
+    {/* Rear wheel — large knobby off-road tire */}
+    <circle cx="49" cy="47" r="13" />
+    <circle cx="49" cy="47" r="5.5" fill="white" opacity="0.28" />
+    {/* Rear wheel spokes */}
+    <rect x="48" y="36" width="2" height="7" rx="1" fill="white" opacity="0.25" />
+    <rect x="48" y="51" width="2" height="7" rx="1" fill="white" opacity="0.25" />
+    <rect x="38" y="46" width="7" height="2" rx="1" fill="white" opacity="0.25" />
+    <rect x="53" y="46" width="7" height="2" rx="1" fill="white" opacity="0.25" />
+
+    {/* Front wheel — same size */}
+    <circle cx="15" cy="47" r="13" />
+    <circle cx="15" cy="47" r="5.5" fill="white" opacity="0.28" />
+    {/* Front wheel spokes */}
+    <rect x="14" y="36" width="2" height="7" rx="1" fill="white" opacity="0.25" />
+    <rect x="14" y="51" width="2" height="7" rx="1" fill="white" opacity="0.25" />
+    <rect x="4" y="46" width="7" height="2" rx="1" fill="white" opacity="0.25" />
+    <rect x="19" y="46" width="7" height="2" rx="1" fill="white" opacity="0.25" />
+
+    {/* Chassis / frame rail connecting the two wheels */}
+    <rect x="11" y="40" width="42" height="5" rx="2" />
+
+    {/* Low flat body cab area */}
+    <rect x="13" y="30" width="38" height="12" rx="2" />
+
+    {/* Front nose / grille — angled forward */}
+    <path d="M13 30 L7 40 L13 40 Z" />
+
+    {/* Rear cargo bed bump */}
+    <rect x="44" y="22" width="7" height="9" rx="1.5" />
+
+    {/* Roll cage — THIN front upright (clearly open frame) */}
+    <rect x="15" y="13" width="3" height="19" rx="1.5" />
+
+    {/* Roll cage — THIN rear upright */}
+    <rect x="46" y="13" width="3" height="19" rx="1.5" />
+
+    {/* Roll cage — top rail */}
+    <rect x="15" y="13" width="34" height="3" rx="1.5" />
+
+    {/* Windshield (small angled element at front) */}
+    <path d="M19 30 L22 17 L26 17 L23 30 Z" fill="white" opacity="0.22" />
+
+    {/* Two side-by-side seats visible inside cab */}
+    <rect x="26" y="26" width="8" height="5" rx="1" fill="white" opacity="0.28" />
+    <rect x="36" y="26" width="8" height="5" rx="1" fill="white" opacity="0.28" />
   </>
 );
 
