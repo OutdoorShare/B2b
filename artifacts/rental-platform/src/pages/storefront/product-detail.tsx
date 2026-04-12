@@ -283,6 +283,7 @@ export default function StorefrontProductDetail() {
                   src={listing.imageUrls[activeImage]}
                   alt={listing.title}
                   className="w-full h-full object-cover"
+                  onError={(e) => { e.currentTarget.style.display = 'none'; }}
                 />
               ) : (
                 <div className="w-full h-full flex items-center justify-center text-muted-foreground">

@@ -246,6 +246,7 @@ export default function StorefrontHome() {
   const { slug } = useParams<{ slug: string }>();
   const sfBase = slug ? `/${slug}` : "";
   const [search, setSearch] = useState("");
+  const [coverFailed, setCoverFailed] = useState(false);
   const [activeCategory, setActiveCategory] = useState<number | null>(null);
   const [activeCategorySlug, setActiveCategorySlug] = useState<string | null>(null);
   const [priceRange, setPriceRange] = useState([0, 500]);
@@ -303,10 +304,10 @@ export default function StorefrontHome() {
 
       {/* ── HERO ─────────────────────────────────────────────── */}
       <section className="relative w-full flex flex-col items-center justify-center overflow-hidden" style={{ minHeight: "520px" }}>
-        {(profile as any)?.coverImageUrl ? (
+        {(profile as any)?.coverImageUrl && !coverFailed ? (
           <div className="absolute inset-0 z-0">
             <div className="absolute inset-0 bg-black/55 z-10" />
-            <img src={(profile as any).coverImageUrl} alt="Cover" className="w-full h-full object-cover" />
+            <img src={(profile as any).coverImageUrl} alt="Cover" className="w-full h-full object-cover" onError={() => setCoverFailed(true)} />
           </div>
         ) : (
           <div className="absolute inset-0 z-0 bg-gradient-to-br from-slate-900 via-primary/80 to-slate-900" />
@@ -531,7 +532,7 @@ export default function StorefrontHome() {
                     {/* ── Image ── */}
                     <div className={`${isSolo ? "aspect-[16/9]" : "aspect-[4/3]"} bg-muted relative overflow-hidden`}>
                       {listing.imageUrls?.[0] ? (
-                        <img src={listing.imageUrls[0]} alt={listing.title} className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105" />
+                        <img src={listing.imageUrls[0]} alt={listing.title} className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105" onError={(e) => { e.currentTarget.style.display = 'none'; }} />
                       ) : (
                         <div className="w-full h-full flex items-center justify-center bg-muted">
                           <Car className="w-12 h-12 opacity-20 text-muted-foreground" />
@@ -807,10 +808,9 @@ export default function StorefrontHome() {
           <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
             <div>
               {(profile as any)?.logoUrl ? (
-                <img src={(profile as any).logoUrl} alt={businessName} className="h-8 object-contain mb-2" />
-              ) : (
-                <p className="font-black text-lg tracking-tight">{businessName}</p>
-              )}
+                <img src={(profile as any).logoUrl} alt={businessName} className="h-8 object-contain mb-2" onError={(e) => { e.currentTarget.style.display = 'none'; e.currentTarget.nextElementSibling?.removeAttribute('style'); }} />
+              ) : null}
+              <p className="font-black text-lg tracking-tight" style={(profile as any)?.logoUrl ? { display: 'none' } : undefined}>{businessName}</p>
               {(profile as any)?.location && (
                 <p className="text-xs text-muted-foreground flex items-center gap-1 mt-1">
                   <MapPin className="w-3 h-3" />{(profile as any).location}

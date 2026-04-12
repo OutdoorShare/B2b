@@ -181,6 +181,7 @@ export function StorefrontLayout({ children }: { children: React.ReactNode }) {
   const base = slug ? `/${slug}` : "";
 
   const [customer, setCustomer] = useState<CustomerSession | null>(null);
+  const [logoFailed, setLogoFailed] = useState(false);
   useEffect(() => { setCustomer(loadCustomerSession()); }, []);
 
   const handleLogout = () => {
@@ -375,11 +376,12 @@ export function StorefrontLayout({ children }: { children: React.ReactNode }) {
         <div className="container mx-auto px-4 h-16 flex items-center justify-between">
           {/* Logo / name */}
           <Link href={base || "/"} className="flex items-center gap-2.5 min-w-0">
-            {profile?.logoUrl ? (
+            {profile?.logoUrl && !logoFailed ? (
               <img
                 src={profile.logoUrl}
                 alt={profile.name}
                 className="h-8 object-contain shrink-0"
+                onError={() => setLogoFailed(true)}
               />
             ) : (
               <Mountain className="w-6 h-6 shrink-0" style={{ color: accentColor }} />
@@ -489,8 +491,8 @@ export function StorefrontLayout({ children }: { children: React.ReactNode }) {
         <div className="container mx-auto px-4">
           <div className="flex flex-col md:flex-row items-center justify-between gap-6">
             <div className="flex items-center gap-2.5">
-              {profile?.logoUrl ? (
-                <img src={profile.logoUrl} alt={profile.name} className="h-7 object-contain opacity-80" />
+              {profile?.logoUrl && !logoFailed ? (
+                <img src={profile.logoUrl} alt={profile.name} className="h-7 object-contain opacity-80" onError={() => setLogoFailed(true)} />
               ) : (
                 <Mountain className="w-5 h-5 text-white/60" />
               )}
