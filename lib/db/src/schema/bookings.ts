@@ -61,6 +61,8 @@ export const bookingsTable = pgTable("bookings", {
   // Incomplete-steps alert flags — set true once the timed alert is sent
   incompleteStepsAlertSent: boolean("incomplete_steps_alert_sent").default(false),
   overdueIncompleteAlertSent: boolean("overdue_incomplete_alert_sent").default(false),
+  // 36-hour claim window — set true once the "window closing" warning is sent to admin
+  claimWindowAlertSent: boolean("claim_window_alert_sent").default(false),
   // ── Split / delayed payment plan ────────────────────────────────────────────
   // When a tenant offers split-payment, the customer pays a deposit at booking
   // time and the remaining balance is automatically charged later.

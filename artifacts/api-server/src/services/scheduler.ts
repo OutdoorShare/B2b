@@ -13,8 +13,9 @@ import {
   businessProfileTable,
   tenantsTable,
   customersTable,
+  claimsTable,
 } from "@workspace/db/schema";
-import { eq, and, isNull, or, sql } from "drizzle-orm";
+import { eq, and, isNull, or, sql, inArray, notInArray } from "drizzle-orm";
 import { randomBytes } from "crypto";
 import {
   sendPrePickupReminderRenterEmail,
@@ -24,6 +25,7 @@ import {
   sendIncompleteStepsRenterEmail,
   sendIncompleteStepsAdminEmail,
   sendSplitPaymentChargedEmail,
+  sendClaimWindowClosingAdminEmail,
 } from "./gmail";
 import { createNotification } from "./notifications";
 import { getStripeForTenant } from "./stripe";
@@ -714,6 +716,173 @@ async function autoChargeRemainingBalances() {
   }
 }
 
+// ── 8. 36-hour claim window — "closing soon" alert (fires at ~30 hrs) ─────────
+//
+// After a booking is returned (or its end date has passed), the company admin
+// has 36 hours to file a damage claim before the deposit hold is released.
+// This job fires once per booking when ~6 hours remain in that window
+// (~30 hours after the window start) to give the admin a final heads-up.
+//
+// Window start = returnCompletedAt if set, otherwise midnight of endDate.
+// We fire the alert when window start is between 29 and 35 hours ago
+// (centre on 32 hrs so we don't miss a 15-minute cycle).
+async function alertClaimWindowClosingSoon() {
+  const now = new Date();
+  const alert29hAgo = new Date(now.getTime() - 29 * 60 * 60 * 1000).toISOString();
+  const alert35hAgo = new Date(now.getTime() - 35 * 60 * 60 * 1000).toISOString();
+
+  const bookings = await db.select().from(bookingsTable).where(
+    and(
+      sql`${bookingsTable.depositHoldStatus} = 'authorized'`,
+      sql`${bookingsTable.status} NOT IN ('cancelled')`,
+      sql`coalesce(${bookingsTable.claimWindowAlertSent}, false) = false`,
+      // Window start: returnCompletedAt if set, else endDate cast to timestamp
+      sql`COALESCE(
+            ${bookingsTable.returnCompletedAt},
+            (${bookingsTable.endDate}::date + interval '1 day')
+          ) BETWEEN ${alert35hAgo}::timestamptz AND ${alert29hAgo}::timestamptz`,
+    )
+  );
+
+  for (const booking of bookings) {
+    try {
+      // Mark immediately to avoid duplicate sends
+      await db.update(bookingsTable)
+        .set({ claimWindowAlertSent: true, updatedAt: new Date() })
+        .where(eq(bookingsTable.id, booking.id));
+
+      // Skip if an active claim already exists
+      const activeClaims = await db.select({ id: claimsTable.id }).from(claimsTable).where(
+        and(
+          eq(claimsTable.bookingId, booking.id),
+          inArray(claimsTable.status, ["open", "reviewing"]),
+        )
+      );
+      if (activeClaims.length > 0) {
+        console.log(`[scheduler] Claim window alert skipped for booking #${booking.id} — active claim exists`);
+        continue;
+      }
+
+      const ctx = await getContext(booking.tenantId);
+      if (!ctx.adminEmail) continue;
+
+      const listingTitle = await getListingTitle(booking.listingId);
+      const [listing] = await db.select({ depositAmount: listingsTable.depositAmount })
+        .from(listingsTable).where(eq(listingsTable.id, booking.listingId));
+      const depositAmt = listing?.depositAmount ? parseFloat(String(listing.depositAmount)).toFixed(2) : "0.00";
+
+      // Determine window start and hours remaining
+      const windowStart = booking.returnCompletedAt
+        ? booking.returnCompletedAt.getTime()
+        : new Date(booking.endDate + "T00:00:00Z").getTime() + 24 * 60 * 60 * 1000;
+      const windowEnd = windowStart + 36 * 60 * 60 * 1000;
+      const hoursRemaining = Math.max(1, Math.round((windowEnd - now.getTime()) / (60 * 60 * 1000)));
+
+      await sendClaimWindowClosingAdminEmail({
+        adminEmail: ctx.adminEmail,
+        customerName: booking.customerName,
+        bookingId: booking.id,
+        listingTitle,
+        endDate: booking.endDate,
+        hoursRemaining,
+        depositAmount: depositAmt,
+        companyName: ctx.companyName,
+        tenantSlug: ctx.slug,
+      });
+
+      // In-app notification
+      if (booking.tenantId) {
+        createNotification({
+          tenantId: booking.tenantId,
+          targetType: "admin",
+          type: "action_required",
+          title: "Claim window closing soon",
+          body: `~${hoursRemaining} hours left to file a damage claim for ${booking.customerName}'s return of ${listingTitle}. Deposit releases automatically after 36 hours.`,
+          actionUrl: `/bookings/${booking.id}`,
+          isActionRequired: true,
+          relatedId: booking.id,
+        }).catch(() => {});
+      }
+
+      console.log(`[scheduler] Claim window closing alert sent for booking #${booking.id} (~${hoursRemaining}h left)`);
+    } catch (err: any) {
+      console.warn(`[scheduler] Claim window alert FAILED for booking #${booking.id}:`, err?.message);
+      await db.update(bookingsTable)
+        .set({ claimWindowAlertSent: false, updatedAt: new Date() })
+        .where(eq(bookingsTable.id, booking.id)).catch(() => {});
+    }
+  }
+}
+
+// ── 9. 36-hour claim window — auto-release deposits ────────────────────────────
+//
+// If 36 hours have passed since the booking was returned (or its end date
+// passed) and there is still an authorized hold with no active damage claim,
+// automatically cancel the hold (release the deposit back to the renter).
+async function autoReleaseDepositsAfterClaimWindow() {
+  const now = new Date();
+  const cutoff36h = new Date(now.getTime() - 36 * 60 * 60 * 1000).toISOString();
+
+  const bookings = await db.select().from(bookingsTable).where(
+    and(
+      sql`${bookingsTable.depositHoldStatus} = 'authorized'`,
+      sql`${bookingsTable.status} NOT IN ('cancelled')`,
+      // Window start: returnCompletedAt if set, else midnight after endDate
+      sql`COALESCE(
+            ${bookingsTable.returnCompletedAt},
+            (${bookingsTable.endDate}::date + interval '1 day')
+          ) <= ${cutoff36h}::timestamptz`,
+    )
+  );
+
+  for (const booking of bookings) {
+    try {
+      // Skip if there is an active (open or reviewing) damage claim
+      const activeClaims = await db.select({ id: claimsTable.id }).from(claimsTable).where(
+        and(
+          eq(claimsTable.bookingId, booking.id),
+          inArray(claimsTable.status, ["open", "reviewing"]),
+        )
+      );
+      if (activeClaims.length > 0) {
+        console.log(`[scheduler] Auto-release skipped for booking #${booking.id} — active claim exists`);
+        continue;
+      }
+
+      const [tenant] = await db.select().from(tenantsTable)
+        .where(eq(tenantsTable.id, booking.tenantId!));
+      if (!tenant || !booking.depositHoldIntentId) continue;
+
+      const stripeClient = getStripeForTenant(!!tenant.testMode);
+      await stripeClient.paymentIntents.cancel(booking.depositHoldIntentId);
+
+      await db.update(bookingsTable)
+        .set({ depositHoldStatus: "released", updatedAt: new Date() })
+        .where(eq(bookingsTable.id, booking.id));
+
+      console.log(`[scheduler] Auto-released deposit hold for booking #${booking.id} (36-hour window expired)`);
+
+      // In-app notification for admin
+      const ctx = await getContext(booking.tenantId);
+      const listingTitle = await getListingTitle(booking.listingId);
+      if (booking.tenantId) {
+        createNotification({
+          tenantId: booking.tenantId,
+          targetType: "admin",
+          type: "status_update",
+          title: "Security deposit released",
+          body: `The deposit hold for ${booking.customerName}'s rental of ${listingTitle} was automatically released after the 36-hour claim window expired.`,
+          actionUrl: `/bookings/${booking.id}`,
+          isActionRequired: false,
+          relatedId: booking.id,
+        }).catch(() => {});
+      }
+    } catch (err: any) {
+      console.warn(`[scheduler] Auto-release FAILED for booking #${booking.id}:`, err?.message);
+    }
+  }
+}
+
 // ── Main scheduler loop ────────────────────────────────────────────────────────
 async function runSchedulerCycle() {
   try {
@@ -724,6 +893,8 @@ async function runSchedulerCycle() {
     await alertIncompleteStepsApproaching();
     await alertIncompleteStepsOverdue();
     await autoChargeRemainingBalances();
+    await alertClaimWindowClosingSoon();
+    await autoReleaseDepositsAfterClaimWindow();
   } catch (err: any) {
     console.warn("[scheduler] Cycle error:", err?.message);
   }

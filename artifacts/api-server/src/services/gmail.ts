@@ -335,6 +335,64 @@ function infoTable(rows: { label: string; value: string; mono?: boolean; rawHtml
   </table>`;
 }
 
+// ── 36-hour claim window closing — admin warning ──────────────────────────────
+export async function sendClaimWindowClosingAdminEmail(opts: {
+  adminEmail: string;
+  customerName: string;
+  bookingId: number;
+  listingTitle: string;
+  endDate: string;
+  hoursRemaining: number;
+  depositAmount: string;
+  companyName: string;
+  tenantSlug: string;
+}): Promise<void> {
+  const { adminEmail, customerName, bookingId, listingTitle, endDate, hoursRemaining, depositAmount, companyName, tenantSlug } = opts;
+  const bookingUrl = `${getAppUrl()}/${tenantSlug}/admin/bookings/${bookingId}`;
+  const subject = `[${companyName}] ⏰ ${hoursRemaining}h left to file a damage claim — Booking #${bookingId}`;
+  const preheader = `The 36-hour claim window closes in ~${hoursRemaining} hours. Review ${esc(listingTitle)} and file a claim if needed.`;
+
+  const body = `
+    <p style="margin:0 0 8px;font-size:18px;font-weight:700;color:${BRAND_DARK};">Claim window closing soon</p>
+    <p style="margin:0 0 20px;font-size:15px;color:#374151;line-height:1.6;">
+      You have approximately <strong>${hoursRemaining} hours</strong> left to file a damage claim for the booking below.
+      After this window expires, the security deposit hold will be automatically released back to the renter.
+    </p>
+    <div style="background:#fffbeb;border:2px solid #fde68a;border-radius:8px;padding:16px 18px;margin:0 0 24px;">
+      <p style="margin:0 0 6px;font-size:14px;font-weight:700;color:#92400e;">⏰ Action may be required</p>
+      <p style="margin:0;font-size:13px;color:#78350f;line-height:1.6;">
+        If there was any damage, missing items, excessive cleaning required, or policy violations during this rental,
+        open the booking now and submit a claim before the window closes.
+        Once the deposit is released, you will no longer be able to recover funds from this hold.
+      </p>
+    </div>
+    ${infoTable([
+      { label: "Booking #",    value: `#${bookingId}`, mono: true },
+      { label: "Customer",     value: customerName },
+      { label: "Equipment",    value: listingTitle },
+      { label: "Return Date",  value: endDate },
+      { label: "Deposit Hold", value: `$${depositAmount}` },
+    ])}
+    ${ctaButton("Review Booking & File Claim →", bookingUrl, "#f59e0b")}
+    <p style="margin:0;font-size:13px;color:#9ca3af;text-align:center;">
+      If everything is fine, no action is needed — the deposit will release automatically.
+    </p>
+  `;
+
+  const html = emailShell({
+    preheader,
+    badgeLabel: "Claim Window Closing",
+    badgeColor: "#f59e0b",
+    body,
+    companyNameOverride: companyName,
+  });
+  const gmail = await getUncachableGmailClient();
+  await gmail.users.messages.send({
+    userId: "me",
+    requestBody: { raw: makeRawEmail(adminEmail, subject, html, PLATFORM_FROM) },
+  });
+}
+
 // ── Blast / manual message email ──────────────────────────────────────────────
 export async function sendBlastEmail(opts: {
   toEmail: string;
