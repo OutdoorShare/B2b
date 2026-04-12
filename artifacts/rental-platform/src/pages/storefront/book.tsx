@@ -492,6 +492,13 @@ const isInsideIframe = (() => {
   try { return window.self !== window.top; } catch { return true; }
 })();
 
+// Detect HTTP — Stripe's PaymentElement requires HTTPS to load card fields.
+const isHttp = typeof window !== "undefined" && window.location.protocol === "http:";
+// Build the HTTPS equivalent URL (works for Replit dev proxy and production).
+const httpsUrl = typeof window !== "undefined"
+  ? window.location.href.replace(/^http:\/\//, "https://")
+  : "";
+
 // Suppress Stripe's internal "(unknown runtime error)" from being shown as a
 // Vite development overlay. This error can bubble up as an uncaught window
 // error even when our try/catch handles it; the overlay is pure noise.
@@ -519,6 +526,35 @@ function StripePaymentForm({ onSuccess, customerEmail, testMode }: { onSuccess: 
     const t = setTimeout(() => setElementReady(true), 6000);
     return () => clearTimeout(t);
   }, []);
+
+  // If on HTTP, Stripe's card iframes won't initialize. Show instructions to open via HTTPS.
+  if (isHttp) {
+    // isLocalhost: the dev server is on localhost; the public HTTPS URL is via Replit proxy.
+    const isLocalhost = window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1";
+    return (
+      <div className="rounded-xl border-2 border-dashed border-amber-300 bg-amber-50 px-5 py-6 text-center space-y-3">
+        <ShieldCheck className="w-8 h-8 text-amber-500 mx-auto" />
+        <p className="text-sm font-semibold text-amber-900">Secure connection required for payment</p>
+        <p className="text-xs text-amber-700">
+          Stripe's card form requires HTTPS. You're currently on an HTTP connection.
+        </p>
+        {isLocalhost ? (
+          <p className="text-xs text-amber-800 bg-amber-100 rounded-lg px-3 py-2">
+            In Replit: click the <strong>"Open in new tab" ↗</strong> button in the preview pane to open the app over HTTPS, then navigate to this booking page.
+          </p>
+        ) : (
+          <a
+            href={httpsUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-2 mt-1 bg-amber-600 text-white text-sm font-bold px-5 py-2.5 rounded-xl hover:bg-amber-700 transition-colors"
+          >
+            <ShieldCheck className="w-4 h-4" /> Open secure booking page
+          </a>
+        )}
+      </div>
+    );
+  }
 
   // If embedded in an iframe, Stripe.js will throw "(unknown runtime error)" due to
   // PCI-compliance cross-origin restrictions. Show a direct link instead.
