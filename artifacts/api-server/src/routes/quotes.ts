@@ -88,7 +88,7 @@ router.get("/public/quotes/:id", async (req, res) => {
     // Fetch company name for display
     const [profileRow] = quote.tenantId
       ? await db
-          .select({ name: businessProfileTable.name, email: businessProfileTable.email, outboundEmail: businessProfileTable.outboundEmail })
+          .select({ name: businessProfileTable.name, email: businessProfileTable.email, outboundEmail: businessProfileTable.outboundEmail, logoUrl: businessProfileTable.logoUrl })
           .from(businessProfileTable)
           .where(eq(businessProfileTable.tenantId, quote.tenantId))
       : [];
@@ -118,6 +118,7 @@ router.get("/public/quotes/:id", async (req, res) => {
       ...formatQuote(quote),
       companyName: profileRow?.name ?? null,
       companyEmail: profileRow?.outboundEmail ?? profileRow?.email ?? null,
+      companyLogoUrl: profileRow?.logoUrl ?? null,
       listingAvailable,
     });
   } catch (err) {

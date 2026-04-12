@@ -1171,7 +1171,7 @@ export async function sendAdminPickupReminderEmail(opts: {
       </p>
     </div>
 
-    ${ctaButton("View Booking in Dashboard", adminBookingsUrl, BRAND_DARK)}
+    ${ctaButton("View Booking in Dashboard", adminBookingsUrl, BRAND_GREEN)}
 
     <p style="margin:0;font-size:13px;color:#9ca3af;text-align:center;">
       ${footerNote}
@@ -1291,7 +1291,7 @@ export async function sendPickupPhotosAdminAlertEmail(opts: {
       <p style="margin:0;font-size:14px;color:#166534;line-height:1.6;">${depositNote}</p>
     </div>` : ""}
 
-    ${ctaButton("View Booking", bookingUrl, BRAND_DARK)}
+    ${ctaButton("View Booking", bookingUrl, BRAND_GREEN)}
 
     <p style="margin:0;font-size:13px;color:#9ca3af;text-align:center;">
       This is an automated alert sent when a renter completes their pickup photo documentation.
@@ -1529,7 +1529,7 @@ export async function sendAdminBookingContactEmail(opts: {
   const html = emailShell({
     preheader: `${esc(customerName)} is confirmed for ${esc(listingTitle)} — ${startDate} to ${endDate}.`,
     badgeLabel: "Booking Confirmed",
-    badgeColor: BRAND_DARK,
+    badgeColor: BRAND_GREEN,
     body,
   });
 
@@ -1593,7 +1593,7 @@ export async function sendPrePickupReminderRenterEmail(opts: {
       <p style="margin:10px 0 0;font-size:12px;color:#92400e;">A link to the photo portal will be in your confirmation or available in your booking page.</p>
     </div>
 
-    ${bookingUrl ? ctaButton("View Your Booking", bookingUrl, BRAND_DARK) : ""}
+    ${bookingUrl ? ctaButton("View Your Booking", bookingUrl, BRAND_GREEN) : ""}
     <p style="margin:0;font-size:13px;color:#9ca3af;text-align:center;">Questions? Reply to this email — <strong>${esc(companyName)}</strong> will get back to you.</p>
   `;
 
@@ -1654,7 +1654,7 @@ export async function sendPrePickupReminderAdminEmail(opts: {
       </ol>
     </div>
 
-    ${ctaButton("Open Booking in Dashboard", adminBookingUrl, BRAND_DARK)}
+    ${ctaButton("Open Booking in Dashboard", adminBookingUrl, BRAND_GREEN)}
     <p style="margin:0;font-size:13px;color:#9ca3af;text-align:center;">This is an automated reminder sent ~12 hours before every pickup.</p>
   `;
 
@@ -1718,7 +1718,7 @@ export async function sendReturnReminderRenterEmail(opts: {
       </p>
     </div>
 
-    ${bookingUrl ? ctaButton("View Your Booking", bookingUrl, "#1d4ed8") : ""}
+    ${bookingUrl ? ctaButton("View Your Booking", bookingUrl, BRAND_GREEN) : ""}
     <p style="margin:0;font-size:13px;color:#9ca3af;text-align:center;">Questions about your return? Reply to this email — <strong>${esc(companyName)}</strong> will help.</p>
   `;
 
