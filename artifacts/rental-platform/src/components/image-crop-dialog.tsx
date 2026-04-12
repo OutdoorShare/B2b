@@ -143,13 +143,24 @@ export function ImageCropDialog({ files, onDone, uploadFn, onCancel, aspect = 4 
       canvas.width  = OUTPUT_W;
       canvas.height = OUTPUT_H;
       const ctx = canvas.getContext("2d")!;
-      const img = new Image();
-      await new Promise<void>(res => { img.onload = () => res(); img.src = imgSrc; });
+
+      // Use createImageBitmap with imageOrientation:'from-image' so EXIF rotation
+      // is baked in before drawing to canvas. Falls back to a plain Image if
+      // the option is unsupported (older browsers).
+      let source: ImageBitmap | HTMLImageElement;
+      try {
+        source = await createImageBitmap(currentFile, { imageOrientation: "from-image" } as any);
+      } catch {
+        const img = new Image();
+        await new Promise<void>(res => { img.onload = () => res(); img.src = imgSrc; });
+        source = img;
+      }
+
       const srcX = -offset.x / scale;
       const srcY = -offset.y / scale;
       const srcW = DISPLAY_W / scale;
       const srcH = DISPLAY_H / scale;
-      ctx.drawImage(img, srcX, srcY, srcW, srcH, 0, 0, OUTPUT_W, OUTPUT_H);
+      ctx.drawImage(source as any, srcX, srcY, srcW, srcH, 0, 0, OUTPUT_W, OUTPUT_H);
       const isPng = currentFile.type === "image/png";
       const mimeType = isPng ? "image/png" : "image/jpeg";
       const ext = isPng ? ".png" : ".jpg";
