@@ -4581,9 +4581,17 @@ export default function StorefrontBook() {
                         </div>
                       )}
                       {bundleItems.map(item => (
-                        <div key={item.listingId} className="flex justify-between text-muted-foreground">
-                          <span className="truncate mr-2">{item.title}{item.qty > 1 ? ` ×${item.qty}` : ""}</span>
-                          <span>+${item.subtotal.toFixed(2)}</span>
+                        <div key={item.listingId} className="flex items-center justify-between text-muted-foreground group">
+                          <span className="truncate mr-2 flex-1">{item.title}{item.qty > 1 ? ` ×${item.qty}` : ""}</span>
+                          <span className="shrink-0">+${item.subtotal.toFixed(2)}</span>
+                          <button
+                            type="button"
+                            onClick={() => setBundleItems(prev => prev.filter(i => i.listingId !== item.listingId))}
+                            className="ml-2 shrink-0 text-muted-foreground/40 hover:text-destructive transition-colors opacity-0 group-hover:opacity-100"
+                            title={`Remove ${item.title}`}
+                          >
+                            <X className="w-3 h-3" />
+                          </button>
                         </div>
                       ))}
                       {bundleDiscountAmount > 0 && (
