@@ -363,8 +363,8 @@ export default function AdminKiosk() {
       </header>
 
       <main className="flex-1 flex overflow-hidden">
-        {/* Sidebar Categories — only shown when there are more than 5 listings */}
-        {!isLoading && (listings?.length ?? 0) > 5 && (
+        {/* Sidebar Categories — shown whenever categories exist */}
+        {categories && categories.length > 0 && (
           <aside className="w-64 border-r bg-card shrink-0 overflow-y-auto p-4 space-y-2">
             <button
               onClick={() => setActiveCategory(null)}
@@ -374,7 +374,7 @@ export default function AdminKiosk() {
             >
               All Listings
             </button>
-            {categories?.filter((cat, i, arr) => arr.findIndex(c => c.id === cat.id) === i).map(cat => (
+            {categories.filter((cat, i, arr) => arr.findIndex(c => c.id === cat.id) === i).map(cat => (
               <button
                 key={cat.id}
                 onClick={() => setActiveCategory(cat.id)}
