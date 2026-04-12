@@ -181,15 +181,13 @@ export async function seedDemoTenant() {
       .limit(1);
     if (!tenant) return; // demo tenant doesn't exist yet — nothing to seed
 
-    // Identity fields pinned on every restart — preserves company name/logo for the demo.
-    // Colors are intentionally excluded so admins can demo the branding customization feature.
+    // Identity fields pinned on every restart — preserves company name/tagline/description for the demo.
+    // logoUrl, coverImageUrl, and colors are intentionally excluded so admins can demo branding customization.
     const pinnedIdentity = {
-      name:          "OutdoorShare Demo",
-      tagline:       "Rent Smarter. Explore More.",
-      description:   "Experience the full OutdoorShare rental platform live. This is an interactive demo site.",
-      logoUrl:       "/outdoorshare-logo.png",
-      coverImageUrl: (null as string | null),
-      updatedAt:     new Date(),
+      name:        "OutdoorShare Demo",
+      tagline:     "Rent Smarter. Explore More.",
+      description: "Experience the full OutdoorShare rental platform live. This is an interactive demo site.",
+      updatedAt:   new Date(),
     };
 
     // Color defaults only applied when creating the profile for the first time.
