@@ -1,18 +1,13 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
 import { ZoomIn, ZoomOut, RotateCcw, ChevronRight, X } from "lucide-react";
 
-// ── Constants ─────────────────────────────────────────────────────────────────
-const DISPLAY_W = 480;  // crop frame display width (px)
-
 // ── Types ─────────────────────────────────────────────────────────────────────
 interface Props {
-  /** Queue of File objects to crop one by one */
   files: File[];
   onDone: (uploaded: string[]) => void;
-  /** Called with each blob to perform the actual upload — returns the URL */
   uploadFn: (blob: Blob, filename: string) => Promise<string>;
   onCancel?: () => void;
   /** Crop aspect ratio width/height. Default 4/3. Use 1 for square logos. */
@@ -23,10 +18,10 @@ interface Props {
 
 // ── Component ─────────────────────────────────────────────────────────────────
 export function ImageCropDialog({ files, onDone, uploadFn, onCancel, aspect = 4 / 3, outputWidth = 1200 }: Props) {
-  const ASPECT    = aspect;
-  const DISPLAY_H = Math.round(DISPLAY_W / ASPECT);
-  const OUTPUT_W  = outputWidth;
-  const OUTPUT_H  = Math.round(OUTPUT_W / ASPECT);
+  const ASPECT   = aspect;
+  const OUTPUT_W = outputWidth;
+  const OUTPUT_H = Math.round(OUTPUT_W / ASPECT);
+
   const [queueIdx, setQueueIdx]     = useState(0);
   const [imgSrc, setImgSrc]         = useState<string>("");
   const [naturalW, setNaturalW]     = useState(0);
@@ -37,29 +32,40 @@ export function ImageCropDialog({ files, onDone, uploadFn, onCancel, aspect = 4 
   const [collected, setCollected]   = useState<string[]>([]);
   const [processing, setProcessing] = useState(false);
 
-  const dragRef = useRef({ startX: 0, startY: 0, ox: 0, oy: 0 });
+  // Actual rendered container dimensions (updated by ResizeObserver)
+  const [frameW, setFrameW] = useState(0);
+  const frameH = frameW > 0 ? Math.round(frameW / ASPECT) : 0;
+
+  const containerRef = useRef<HTMLDivElement>(null);
+  const dragRef      = useRef({ startX: 0, startY: 0, ox: 0, oy: 0 });
+
+  // ── Measure actual container size ────────────────────────────────────────────
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    const measure = () => {
+      const { width } = el.getBoundingClientRect();
+      if (width > 0) setFrameW(Math.round(width));
+    };
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
 
   const currentFile = files[queueIdx];
 
-  // Min scale = image must cover the full crop frame (object-cover behaviour)
-  const minScale = useMemo(() => {
-    if (!naturalW || !naturalH) return 1;
-    return Math.max(DISPLAY_W / naturalW, DISPLAY_H / naturalH);
-  }, [naturalW, naturalH]);
-
-  const maxScale = useMemo(() => minScale * 3, [minScale]);
-
-  // Clamp offset so image always fills the frame
-  const clamp = useCallback((ox: number, oy: number, sc: number) => {
-    const sw = naturalW * sc;
-    const sh = naturalH * sc;
+  // ── Clamp helper (always uses latest frame / natural dims passed explicitly) ─
+  const clampXY = useCallback((ox: number, oy: number, sc: number, nw: number, nh: number, fw: number, fh: number) => {
+    const sw = nw * sc;
+    const sh = nh * sc;
     return {
-      x: Math.min(0, Math.max(DISPLAY_W - sw, ox)),
-      y: Math.min(0, Math.max(DISPLAY_H - sh, oy)),
+      x: Math.min(0, Math.max(fw - sw, ox)),
+      y: Math.min(0, Math.max(fh - sh, oy)),
     };
-  }, [naturalW, naturalH]);
+  }, []);
 
-  // Load new file into the cropper
+  // ── Load new file into the cropper ───────────────────────────────────────────
   useEffect(() => {
     if (!currentFile) return;
     const url = URL.createObjectURL(currentFile);
@@ -71,14 +77,39 @@ export function ImageCropDialog({ files, onDone, uploadFn, onCancel, aspect = 4 
     return () => URL.revokeObjectURL(url);
   }, [currentFile]);
 
+  // ── Re-center when frameW becomes available (or changes) ─────────────────────
+  // Also fires after naturalW/H are set by handleImgLoad
+  const didCenterRef = useRef(false);
+  useEffect(() => {
+    if (!naturalW || !naturalH || !frameW || !frameH) return;
+    const sc = Math.max(frameW / naturalW, frameH / naturalH);
+    const ox = (frameW - naturalW * sc) / 2;
+    const oy = (frameH - naturalH * sc) / 2;
+    setScale(sc);
+    setOffset(clampXY(ox, oy, sc, naturalW, naturalH, frameW, frameH));
+    didCenterRef.current = true;
+  }, [naturalW, naturalH, frameW, frameH, clampXY]);
+
   const handleImgLoad = (e: React.SyntheticEvent<HTMLImageElement>) => {
     const { naturalWidth: nw, naturalHeight: nh } = e.currentTarget;
     setNaturalW(nw);
     setNaturalH(nh);
-    const sc = Math.max(DISPLAY_W / nw, DISPLAY_H / nh);
-    setScale(sc);
-    setOffset(clamp((DISPLAY_W - nw * sc) / 2, (DISPLAY_H - nh * sc) / 2, sc));
+    // The useEffect above will fire once naturalW/H update and handle centering.
+    // If frameW is already known, compute immediately with fresh values to avoid a flash.
+    if (frameW && frameH) {
+      const sc = Math.max(frameW / nw, frameH / nh);
+      const ox = (frameW - nw * sc) / 2;
+      const oy = (frameH - nh * sc) / 2;
+      setScale(sc);
+      setOffset(clampXY(ox, oy, sc, nw, nh, frameW, frameH));
+    }
   };
+
+  // ── Derived zoom bounds ───────────────────────────────────────────────────────
+  const minScale = (naturalW && naturalH && frameW && frameH)
+    ? Math.max(frameW / naturalW, frameH / naturalH)
+    : 1;
+  const maxScale = minScale * 3;
 
   // ── Drag (mouse) ─────────────────────────────────────────────────────────────
   const onMouseDown = (e: React.MouseEvent) => {
@@ -90,8 +121,11 @@ export function ImageCropDialog({ files, onDone, uploadFn, onCancel, aspect = 4 
     if (!dragging) return;
     const dx = e.clientX - dragRef.current.startX;
     const dy = e.clientY - dragRef.current.startY;
-    setOffset(clamp(dragRef.current.ox + dx, dragRef.current.oy + dy, scale));
-  }, [dragging, scale, clamp]);
+    setOffset(prev => clampXY(
+      dragRef.current.ox + dx, dragRef.current.oy + dy,
+      scale, naturalW, naturalH, frameW, frameH
+    ));
+  }, [dragging, scale, naturalW, naturalH, frameW, frameH, clampXY]);
   const onMouseUp = () => setDragging(false);
 
   // ── Drag (touch) ─────────────────────────────────────────────────────────────
@@ -105,27 +139,31 @@ export function ImageCropDialog({ files, onDone, uploadFn, onCancel, aspect = 4 
     const t = e.touches[0];
     const dx = t.clientX - dragRef.current.startX;
     const dy = t.clientY - dragRef.current.startY;
-    setOffset(clamp(dragRef.current.ox + dx, dragRef.current.oy + dy, scale));
-  }, [dragging, scale, clamp]);
+    setOffset(() => clampXY(
+      dragRef.current.ox + dx, dragRef.current.oy + dy,
+      scale, naturalW, naturalH, frameW, frameH
+    ));
+  }, [dragging, scale, naturalW, naturalH, frameW, frameH, clampXY]);
   const onTouchEnd = () => setDragging(false);
 
   // ── Zoom ─────────────────────────────────────────────────────────────────────
-  const handleZoom = (newScale: number) => {
+  const handleZoom = useCallback((newScale: number) => {
     const sc = Math.max(minScale, Math.min(maxScale, newScale));
-    // Zoom toward center of frame
-    const cx = DISPLAY_W / 2;
-    const cy = DISPLAY_H / 2;
+    const cx = frameW / 2;
+    const cy = frameH / 2;
     const ratio = sc / scale;
     const newOx = cx - ratio * (cx - offset.x);
     const newOy = cy - ratio * (cy - offset.y);
     setScale(sc);
-    setOffset(clamp(newOx, newOy, sc));
-  };
+    setOffset(clampXY(newOx, newOy, sc, naturalW, naturalH, frameW, frameH));
+  }, [scale, offset, minScale, maxScale, naturalW, naturalH, frameW, frameH, clampXY]);
 
   const handleReset = () => {
     const sc = minScale;
+    const ox = (frameW - naturalW * sc) / 2;
+    const oy = (frameH - naturalH * sc) / 2;
     setScale(sc);
-    setOffset(clamp((DISPLAY_W - naturalW * sc) / 2, (DISPLAY_H - naturalH * sc) / 2, sc));
+    setOffset(clampXY(ox, oy, sc, naturalW, naturalH, frameW, frameH));
   };
 
   // ── Wheel zoom ───────────────────────────────────────────────────────────────
@@ -134,9 +172,9 @@ export function ImageCropDialog({ files, onDone, uploadFn, onCancel, aspect = 4 
     handleZoom(scale * (e.deltaY < 0 ? 1.08 : 0.92));
   };
 
-  // ── Crop & upload ────────────────────────────────────────────────────────────
+  // ── Crop & upload ─────────────────────────────────────────────────────────────
   const doCrop = useCallback(async () => {
-    if (!naturalW || !naturalH || !imgSrc) return;
+    if (!naturalW || !naturalH || !imgSrc || !frameW || !frameH) return;
     setProcessing(true);
     try {
       const canvas = document.createElement("canvas");
@@ -145,8 +183,7 @@ export function ImageCropDialog({ files, onDone, uploadFn, onCancel, aspect = 4 
       const ctx = canvas.getContext("2d")!;
 
       // Use createImageBitmap with imageOrientation:'from-image' so EXIF rotation
-      // is baked in before drawing to canvas. Falls back to a plain Image if
-      // the option is unsupported (older browsers).
+      // is baked in before drawing to canvas.
       let source: ImageBitmap | HTMLImageElement;
       try {
         source = await createImageBitmap(currentFile, { imageOrientation: "from-image" } as any);
@@ -156,11 +193,15 @@ export function ImageCropDialog({ files, onDone, uploadFn, onCancel, aspect = 4 
         source = img;
       }
 
+      // Convert CSS-pixel offset back to source-image pixel coordinates.
+      // offset is in CSS pixels relative to the frame. scale is CSS pixels per source pixel.
       const srcX = -offset.x / scale;
       const srcY = -offset.y / scale;
-      const srcW = DISPLAY_W / scale;
-      const srcH = DISPLAY_H / scale;
+      const srcW = frameW / scale;
+      const srcH = frameH / scale;
+
       ctx.drawImage(source as any, srcX, srcY, srcW, srcH, 0, 0, OUTPUT_W, OUTPUT_H);
+
       const isPng = currentFile.type === "image/png";
       const mimeType = isPng ? "image/png" : "image/jpeg";
       const ext = isPng ? ".png" : ".jpg";
@@ -174,7 +215,7 @@ export function ImageCropDialog({ files, onDone, uploadFn, onCancel, aspect = 4 
     } finally {
       setProcessing(false);
     }
-  }, [naturalW, naturalH, imgSrc, offset, scale, currentFile, collected, uploadFn]);
+  }, [naturalW, naturalH, imgSrc, offset, scale, frameW, frameH, currentFile, collected, uploadFn]);
 
   const skipFile = () => advance(collected);
 
@@ -190,7 +231,9 @@ export function ImageCropDialog({ files, onDone, uploadFn, onCancel, aspect = 4 
 
   if (!currentFile) return null;
 
-  const zoomPct = Math.round(((scale - minScale) / Math.max(0.0001, maxScale - minScale)) * 100);
+  const zoomPct = minScale >= maxScale
+    ? 0
+    : Math.round(((scale - minScale) / (maxScale - minScale)) * 100);
 
   return (
     <Dialog open onOpenChange={open => { if (!open) onCancel?.(); }}>
@@ -218,13 +261,11 @@ export function ImageCropDialog({ files, onDone, uploadFn, onCancel, aspect = 4 
 
         {/* ── Crop canvas ── */}
         <div
-          className="relative select-none mx-auto"
+          ref={containerRef}
+          className="relative select-none w-full"
           style={{
-            width: DISPLAY_W,
-            maxWidth: "100%",
             aspectRatio: `${ASPECT}`,
-            background:
-              "repeating-conic-gradient(#b0b0b0 0% 25%, #e8e8e8 0% 50%) 0 0 / 20px 20px",
+            background: "repeating-conic-gradient(#b0b0b0 0% 25%, #e8e8e8 0% 50%) 0 0 / 20px 20px",
           }}
         >
           <div
@@ -239,7 +280,7 @@ export function ImageCropDialog({ files, onDone, uploadFn, onCancel, aspect = 4 
             onTouchEnd={onTouchEnd}
             onWheel={onWheel}
           >
-            {imgSrc && (
+            {imgSrc && frameW > 0 && (
               <img
                 src={imgSrc}
                 onLoad={handleImgLoad}
@@ -250,6 +291,7 @@ export function ImageCropDialog({ files, onDone, uploadFn, onCancel, aspect = 4 
                   top: offset.y,
                   width: naturalW * scale,
                   height: naturalH * scale,
+                  imageRendering: "auto",
                 }}
               />
             )}
@@ -298,7 +340,7 @@ export function ImageCropDialog({ files, onDone, uploadFn, onCancel, aspect = 4 
           <Button
             type="button"
             onClick={doCrop}
-            disabled={processing || !naturalW}
+            disabled={processing || !naturalW || !frameW}
             className="flex-1 gap-1.5"
           >
             {processing ? (
