@@ -482,4 +482,143 @@ router.post("/admin/extension-requests/:id/deny", async (req: Request, res: Resp
   }
 });
 
+// ── POST /api/admin/bookings/:id/extend ────────────────────────────────────────
+// Admin directly extends a booking return date (no renter request needed).
+router.post("/admin/bookings/:id/extend", async (req: Request, res: Response) => {
+  try {
+    if (!req.tenantId) return res.status(401).json({ error: "Unauthorized" });
+
+    const bookingId = Number(req.params.id);
+    const { newEndDate } = req.body;
+
+    if (!newEndDate) return res.status(400).json({ error: "newEndDate is required" });
+
+    const [booking] = await db.select().from(bookingsTable)
+      .where(and(eq(bookingsTable.id, bookingId), eq(bookingsTable.tenantId, req.tenantId)));
+    if (!booking) return res.status(404).json({ error: "Booking not found" });
+
+    if (!["confirmed", "active"].includes(booking.status)) {
+      return res.status(400).json({ error: "Can only extend confirmed or active bookings" });
+    }
+    if (newEndDate <= booking.endDate) {
+      return res.status(400).json({ error: "New end date must be after the current end date" });
+    }
+
+    // Availability check
+    const availability = await checkExtensionAvailability(
+      booking.listingId,
+      req.tenantId,
+      bookingId,
+      booking.endDate,
+      newEndDate,
+    );
+    if (!availability.available) {
+      return res.status(409).json({ error: availability.reason });
+    }
+
+    const [listing] = await db.select({ pricePerDay: listingsTable.pricePerDay, title: listingsTable.title })
+      .from(listingsTable).where(eq(listingsTable.id, booking.listingId));
+    const additionalDays = daysBetween(booking.endDate, newEndDate);
+    const additionalAmount = (parseFloat(String(listing?.pricePerDay ?? "0")) * additionalDays * (booking.quantity ?? 1)).toFixed(2);
+
+    const [tenant] = await db.select().from(tenantsTable).where(eq(tenantsTable.id, req.tenantId));
+    const [biz] = await db.select({ name: businessProfileTable.name })
+      .from(businessProfileTable).where(eq(businessProfileTable.tenantId, req.tenantId));
+    const companyName = biz?.name ?? tenant?.slug ?? "Your Rental Company";
+    const tenantSlug = tenant?.slug ?? "";
+
+    const additionalAmountCents = Math.round(parseFloat(additionalAmount) * 100);
+    let stripePaymentIntentId: string | null = null;
+    let stripePaymentStatus = "n/a";
+
+    if (additionalAmountCents >= 50 && booking.stripePaymentIntentId) {
+      try {
+        const stripeClient = getStripeForTenant(!!tenant?.testMode);
+        const originalPi = await stripeClient.paymentIntents.retrieve(booking.stripePaymentIntentId);
+        if (originalPi.payment_method) {
+          const extensionPi = await stripeClient.paymentIntents.create({
+            amount: additionalAmountCents,
+            currency: "usd",
+            payment_method: String(originalPi.payment_method),
+            confirm: true,
+            off_session: true,
+            description: `Admin extension (${additionalDays}d) — Booking #${booking.id} (${listing?.title ?? ""})`,
+            metadata: {
+              booking_id: String(booking.id),
+              tenant_id: String(req.tenantId),
+              type: "admin_extension",
+              additional_days: String(additionalDays),
+            },
+            ...(tenant?.stripeAccountId ? {
+              transfer_data: { destination: tenant.stripeAccountId },
+              application_fee_amount: Math.round(additionalAmountCents * 0.1),
+            } : {}),
+          });
+          stripePaymentIntentId = extensionPi.id;
+          stripePaymentStatus = extensionPi.status;
+        }
+      } catch (stripeErr: any) {
+        console.warn("[admin-extend] Stripe charge failed:", stripeErr?.message);
+        return res.status(402).json({ error: `Payment failed: ${stripeErr?.message}` });
+      }
+    }
+
+    // Create an approved extension record (admin-initiated)
+    const [ext] = await db.insert(rentalExtensionsTable).values({
+      bookingId,
+      tenantId: req.tenantId,
+      originalEndDate: booking.endDate,
+      requestedEndDate: newEndDate,
+      additionalDays,
+      additionalAmount,
+      status: "approved",
+      requestNote: "Admin-initiated extension",
+      stripePaymentIntentId,
+      stripePaymentStatus,
+      respondedAt: new Date(),
+    }).returning();
+
+    // Update booking end date
+    await db.update(bookingsTable).set({
+      endDate: newEndDate,
+      claimWindowAlertSent: false,
+      updatedAt: new Date(),
+    }).where(eq(bookingsTable.id, bookingId));
+
+    // Email renter
+    const smtpCreds = await getTenantSmtpCreds(req.tenantId);
+    const brand = await getTenantBrand(req.tenantId);
+    await withSmtpCreds(smtpCreds, () => withBrand(brand, () =>
+      sendExtensionApprovedRenterEmail({
+        toEmail: booking.customerEmail,
+        customerName: booking.customerName,
+        bookingId: booking.id,
+        listingTitle: listing?.title ?? "your rental",
+        originalEndDate: booking.endDate,
+        newEndDate,
+        additionalDays,
+        additionalAmount: parseFloat(additionalAmount).toFixed(2),
+        companyName,
+        bookingUrl: `${buildAppUrl()}/${tenantSlug}/my-bookings/${booking.id}`,
+      })
+    )).catch(e => console.warn("[admin-extend] Email failed:", e?.message));
+
+    createNotification({
+      tenantId: req.tenantId,
+      targetType: "renter",
+      type: "status_update",
+      title: "Your rental has been extended",
+      body: `Your return date has been updated to ${newEndDate}.`,
+      actionUrl: `/${tenantSlug}/my-bookings/${booking.id}`,
+      isActionRequired: false,
+      relatedId: booking.id,
+    }).catch(() => {});
+
+    res.json({ success: true, newEndDate, additionalDays, additionalAmount, extension: ext });
+  } catch (err: any) {
+    console.error("[admin-extend] error:", err);
+    res.status(500).json({ error: "Failed to extend booking" });
+  }
+});
+
 export default router;

@@ -156,7 +156,7 @@ export default function MyBookingDetail() {
 
   // Extension request state
   const [extensionRequests, setExtensionRequests] = useState<any[]>([]);
-  const [showExtensionForm, setShowExtensionForm] = useState(false);
+  const [showExtensionForm, setShowExtensionForm] = useState(true);
   const [extRequestedDate, setExtRequestedDate] = useState("");
   const [extNote, setExtNote] = useState("");
   const [extSubmitting, setExtSubmitting] = useState(false);
@@ -1310,9 +1310,10 @@ export default function MyBookingDetail() {
             </div>
             {extensionRequests.length === 0 && !showExtensionForm && (
               <button
-                className="text-xs font-semibold text-sky-700 hover:text-sky-900 underline underline-offset-2"
+                className="inline-flex items-center gap-1.5 rounded-lg bg-sky-600 hover:bg-sky-700 text-white text-xs font-semibold px-3 py-1.5 transition-colors"
                 onClick={() => setShowExtensionForm(true)}
               >
+                <CalendarPlus className="w-3.5 h-3.5" />
                 Request extension
               </button>
             )}
@@ -1376,10 +1377,11 @@ export default function MyBookingDetail() {
               {/* Allow new request if all resolved (no pending) */}
               {!extensionRequests.some(e => e.status === "pending") && !showExtensionForm && (
                 <button
-                  className="text-xs font-semibold text-sky-700 hover:text-sky-900 underline underline-offset-2"
+                  className="inline-flex items-center gap-1.5 rounded-lg bg-sky-600 hover:bg-sky-700 text-white text-xs font-semibold px-3 py-1.5 transition-colors"
                   onClick={() => setShowExtensionForm(true)}
                 >
-                  + Request another extension
+                  <CalendarPlus className="w-3.5 h-3.5" />
+                  Request another extension
                 </button>
               )}
             </div>

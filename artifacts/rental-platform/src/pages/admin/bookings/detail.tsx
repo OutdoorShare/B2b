@@ -116,6 +116,9 @@ export default function AdminBookingDetail() {
   const [extensionLoading, setExtensionLoading] = useState<number | null>(null);
   const [showDenyDialog, setShowDenyDialog] = useState<number | null>(null);
   const [denyReason, setDenyReason] = useState("");
+  const [showAdminExtendForm, setShowAdminExtendForm] = useState(false);
+  const [adminExtendDate, setAdminExtendDate] = useState("");
+  const [adminExtendSubmitting, setAdminExtendSubmitting] = useState(false);
 
   type VerifData = {
     found: boolean;
@@ -186,6 +189,29 @@ export default function AdminBookingDetail() {
       await fetchExtensions();
     } finally {
       setExtensionLoading(null);
+    }
+  }
+
+  async function handleAdminExtend() {
+    if (!adminExtendDate || adminExtendDate <= booking?.endDate) return;
+    setAdminExtendSubmitting(true);
+    try {
+      const res = await fetch(`${BASE}/api/admin/bookings/${id}/extend`, {
+        method: "POST",
+        headers: adminHeaders(),
+        body: JSON.stringify({ newEndDate: adminExtendDate }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Failed to extend booking");
+      toast({ title: "Booking extended!", description: `New return date: ${adminExtendDate}.` });
+      setShowAdminExtendForm(false);
+      setAdminExtendDate("");
+      fetchBooking();
+      fetchExtensions();
+    } catch (e: any) {
+      toast({ title: "Extension failed", description: e.message, variant: "destructive" });
+    } finally {
+      setAdminExtendSubmitting(false);
     }
   }
 
@@ -1566,23 +1592,89 @@ export default function AdminBookingDetail() {
           )}
 
           {/* ── Rental Extension Requests ── */}
-          {extensionRequests.length > 0 && (
+          {(["confirmed", "active"].includes(booking?.status) || extensionRequests.length > 0) && (
             <Card>
               <CardHeader className="pb-3">
                 <CardTitle className="flex items-center gap-2 text-base">
                   <CalendarPlus className="w-5 h-5 text-sky-600" />
                   Extension Requests
                   {extensionRequests.some(e => e.status === "pending") && (
-                    <Badge className="ml-auto bg-amber-100 text-amber-800 border-amber-300">
+                    <Badge className="bg-amber-100 text-amber-800 border-amber-300">
                       {extensionRequests.filter(e => e.status === "pending").length} Pending
                     </Badge>
                   )}
+                  {["confirmed", "active"].includes(booking?.status) && !showAdminExtendForm && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="ml-auto gap-1.5 text-sky-700 border-sky-300 hover:bg-sky-50 text-xs h-7 px-2.5"
+                      onClick={() => { setShowAdminExtendForm(true); setAdminExtendDate(""); }}
+                    >
+                      <CalendarPlus className="w-3.5 h-3.5" /> Extend Booking
+                    </Button>
+                  )}
                 </CardTitle>
                 <CardDescription className="text-xs">
-                  Renter requested to extend their rental period. Approving will charge the additional amount to their card on file.
+                  Review renter extension requests or directly extend the return date on behalf of the renter.
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-3">
+                {/* ── Admin-initiated extend form ── */}
+                {showAdminExtendForm && (
+                  <div className="rounded-xl border border-sky-200 bg-sky-50 p-4 space-y-3">
+                    <p className="text-sm font-semibold text-sky-800 flex items-center gap-1.5">
+                      <CalendarPlus className="w-4 h-4" /> Extend Return Date
+                    </p>
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-medium text-sky-700">New return date</label>
+                      <Input
+                        type="date"
+                        value={adminExtendDate}
+                        min={booking?.endDate}
+                        onChange={e => setAdminExtendDate(e.target.value)}
+                        className="bg-white border-sky-200 text-sky-900 h-9 text-sm"
+                      />
+                      <p className="text-[11px] text-muted-foreground">Current return: <strong>{booking?.endDate}</strong></p>
+                    </div>
+                    {adminExtendDate && adminExtendDate > booking?.endDate && (() => {
+                      const days = Math.round(Math.abs(new Date(adminExtendDate).getTime() - new Date(booking?.endDate).getTime()) / (1000 * 60 * 60 * 24));
+                      const pricePerDay = parseFloat(String(booking?.pricePerDay ?? "0"));
+                      const est = (pricePerDay * days * (booking?.quantity ?? 1)).toFixed(2);
+                      return (
+                        <div className="flex items-center gap-2 rounded-lg bg-white border border-sky-200 px-3 py-2 text-xs text-sky-800">
+                          <CreditCard className="w-3.5 h-3.5 shrink-0" />
+                          <span>+{days} day{days !== 1 ? "s" : ""} · estimated additional charge to renter: <strong>${est}</strong></span>
+                        </div>
+                      );
+                    })()}
+                    <div className="flex gap-2 pt-1">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="flex-1"
+                        onClick={() => { setShowAdminExtendForm(false); setAdminExtendDate(""); }}
+                        disabled={adminExtendSubmitting}
+                      >
+                        Cancel
+                      </Button>
+                      <Button
+                        size="sm"
+                        className="flex-1 gap-1.5 bg-sky-600 hover:bg-sky-700 text-white"
+                        onClick={handleAdminExtend}
+                        disabled={adminExtendSubmitting || !adminExtendDate || adminExtendDate <= booking?.endDate}
+                      >
+                        {adminExtendSubmitting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <CalendarCheck className="w-3.5 h-3.5" />}
+                        Extend & Charge Renter
+                      </Button>
+                    </div>
+                  </div>
+                )}
+
+                {/* ── Empty state ── */}
+                {extensionRequests.length === 0 && !showAdminExtendForm && (
+                  <p className="text-sm text-muted-foreground text-center py-2">No extension requests yet. Use "Extend Booking" above to add extra days.</p>
+                )}
+
                 {extensionRequests.map(ext => (
                   <div
                     key={ext.id}
