@@ -859,6 +859,183 @@ export default function AdminBookingDetail() {
             </CardContent>
           </Card>
 
+          {/* ── Rental Extension Requests ── */}
+          {(["confirmed", "active"].includes(booking?.status) || extensionRequests.length > 0) && (
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle className="flex items-center gap-2 text-base">
+                  <CalendarPlus className="w-5 h-5 text-sky-600" />
+                  Extension Requests
+                  {extensionRequests.some(e => e.status === "pending") && (
+                    <Badge className="bg-amber-100 text-amber-800 border-amber-300">
+                      {extensionRequests.filter(e => e.status === "pending").length} Pending
+                    </Badge>
+                  )}
+                  {["confirmed", "active"].includes(booking?.status) && !showAdminExtendForm && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="ml-auto gap-1.5 text-sky-700 border-sky-300 hover:bg-sky-50 text-xs h-7 px-2.5"
+                      onClick={() => { setShowAdminExtendForm(true); setAdminExtendDate(""); }}
+                    >
+                      <CalendarPlus className="w-3.5 h-3.5" /> Extend Booking
+                    </Button>
+                  )}
+                </CardTitle>
+                <CardDescription className="text-xs">
+                  Review renter extension requests or directly extend the return date on behalf of the renter.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                {/* ── Admin-initiated extend form ── */}
+                {showAdminExtendForm && (
+                  <div className="rounded-xl border border-sky-200 bg-sky-50 p-4 space-y-3">
+                    <p className="text-sm font-semibold text-sky-800 flex items-center gap-1.5">
+                      <CalendarPlus className="w-4 h-4" /> Extend Return Date
+                    </p>
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-medium text-sky-700">New return date</label>
+                      <Input
+                        type="date"
+                        value={adminExtendDate}
+                        min={booking?.endDate}
+                        onChange={e => setAdminExtendDate(e.target.value)}
+                        className="bg-white border-sky-200 text-sky-900 h-9 text-sm"
+                      />
+                      <p className="text-[11px] text-muted-foreground">Current return: <strong>{booking?.endDate}</strong></p>
+                    </div>
+                    {adminExtendDate && adminExtendDate > booking?.endDate && (() => {
+                      const days = Math.round(Math.abs(new Date(adminExtendDate).getTime() - new Date(booking?.endDate).getTime()) / (1000 * 60 * 60 * 24));
+                      const pricePerDay = parseFloat(String(booking?.pricePerDay ?? "0"));
+                      const est = (pricePerDay * days * (booking?.quantity ?? 1)).toFixed(2);
+                      return (
+                        <div className="flex items-center gap-2 rounded-lg bg-white border border-sky-200 px-3 py-2 text-xs text-sky-800">
+                          <CreditCard className="w-3.5 h-3.5 shrink-0" />
+                          <span>+{days} day{days !== 1 ? "s" : ""} · estimated additional charge to renter: <strong>${est}</strong></span>
+                        </div>
+                      );
+                    })()}
+                    <div className="flex gap-2 pt-1">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="flex-1"
+                        onClick={() => { setShowAdminExtendForm(false); setAdminExtendDate(""); }}
+                        disabled={adminExtendSubmitting}
+                      >
+                        Cancel
+                      </Button>
+                      <Button
+                        size="sm"
+                        className="flex-1 gap-1.5 bg-sky-600 hover:bg-sky-700 text-white"
+                        onClick={handleAdminExtend}
+                        disabled={adminExtendSubmitting || !adminExtendDate || adminExtendDate <= booking?.endDate}
+                      >
+                        {adminExtendSubmitting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <CalendarCheck className="w-3.5 h-3.5" />}
+                        Extend & Charge Renter
+                      </Button>
+                    </div>
+                  </div>
+                )}
+
+                {/* ── Empty state ── */}
+                {extensionRequests.length === 0 && !showAdminExtendForm && (
+                  <p className="text-sm text-muted-foreground text-center py-2">No extension requests yet. Use "Extend Booking" above to add extra days.</p>
+                )}
+
+                {extensionRequests.map(ext => (
+                  <div
+                    key={ext.id}
+                    className={`rounded-xl border p-3 space-y-2.5 ${
+                      ext.status === "pending"
+                        ? "border-amber-300 bg-amber-50"
+                        : ext.status === "approved"
+                          ? "border-green-200 bg-green-50"
+                          : "border-red-200 bg-red-50/60"
+                    }`}
+                  >
+                    <div className="flex items-center gap-2 flex-wrap">
+                      {ext.status === "pending" && <Badge className="bg-amber-200 text-amber-900 border-0 text-xs">Pending</Badge>}
+                      {ext.status === "approved" && <Badge className="bg-green-100 text-green-800 border-green-300 text-xs"><CalendarCheck className="w-3 h-3 mr-1 inline" />Approved</Badge>}
+                      {ext.status === "denied" && <Badge className="bg-red-100 text-red-800 border-red-300 text-xs"><CalendarX className="w-3 h-3 mr-1 inline" />Declined</Badge>}
+                      <span className="text-xs text-muted-foreground ml-auto">
+                        Requested {format(new Date(ext.requestedAt), "MMM d, h:mm a")}
+                      </span>
+                    </div>
+                    <div className="grid grid-cols-3 gap-2 text-sm">
+                      <div>
+                        <div className="text-xs text-muted-foreground mb-0.5">Original Return</div>
+                        <div className="font-medium">{ext.originalEndDate}</div>
+                      </div>
+                      <div className="flex items-center justify-center">
+                        <span className="text-muted-foreground text-xs">→</span>
+                      </div>
+                      <div>
+                        <div className="text-xs text-muted-foreground mb-0.5">Requested Return</div>
+                        <div className="font-semibold text-sky-700">{ext.requestedEndDate}</div>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-4 text-sm">
+                      <div>
+                        <span className="text-muted-foreground text-xs">Extra days: </span>
+                        <span className="font-medium">{ext.additionalDays}</span>
+                      </div>
+                      <div>
+                        <span className="text-muted-foreground text-xs">Additional charge: </span>
+                        <span className="font-semibold text-sky-700">${parseFloat(String(ext.additionalAmount)).toFixed(2)}</span>
+                      </div>
+                    </div>
+                    {ext.requestNote && (
+                      <div className="bg-white/70 rounded-lg px-3 py-2 border border-current/10">
+                        <p className="text-xs text-muted-foreground mb-0.5 font-medium uppercase tracking-wide">Renter's note</p>
+                        <p className="text-xs text-foreground leading-relaxed">{ext.requestNote}</p>
+                      </div>
+                    )}
+                    {ext.status === "denied" && ext.denialReason && (
+                      <div className="bg-white/70 rounded-lg px-3 py-2 border border-red-200">
+                        <p className="text-xs text-red-700 font-medium mb-0.5 uppercase tracking-wide">Reason given</p>
+                        <p className="text-xs text-red-800 leading-relaxed">{ext.denialReason}</p>
+                      </div>
+                    )}
+                    {ext.status === "approved" && ext.stripePaymentIntentId && (
+                      <div className="flex items-center gap-1.5 text-xs text-green-700 bg-white/70 rounded-lg px-3 py-2 border border-green-200">
+                        <CreditCard className="w-3 h-3 shrink-0" />
+                        <span>Payment charged — PI: <span className="font-mono">{ext.stripePaymentIntentId.slice(0, 16)}…</span></span>
+                      </div>
+                    )}
+                    {ext.status === "pending" && (
+                      <div className="flex gap-2 pt-1">
+                        <Button
+                          size="sm"
+                          className="flex-1 gap-1.5 bg-green-600 hover:bg-green-700 text-white"
+                          onClick={() => handleExtensionAction(ext.id, "approve")}
+                          disabled={extensionLoading !== null}
+                        >
+                          {extensionLoading === ext.id ? (
+                            <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                          ) : (
+                            <CalendarCheck className="w-3.5 h-3.5" />
+                          )}
+                          Approve & Charge ${parseFloat(String(ext.additionalAmount)).toFixed(2)}
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="flex-1 gap-1.5 border-red-300 text-red-700 hover:bg-red-50"
+                          onClick={() => { setShowDenyDialog(ext.id); setDenyReason(""); }}
+                          disabled={extensionLoading !== null}
+                        >
+                          <CalendarX className="w-3.5 h-3.5" />
+                          Decline
+                        </Button>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </CardContent>
+            </Card>
+          )}
+
           {/* Signed Agreement */}
           {(booking as any).agreementSignerName && (
             <Card>
@@ -1587,196 +1764,6 @@ export default function AdminBookingDetail() {
                     <span>Full deposit charged upfront (5+ day rental). No further action needed — funds will be returned manually if no damage.</span>
                   </div>
                 )}
-              </CardContent>
-            </Card>
-          )}
-
-          {/* ── Rental Extension Requests ── */}
-          {(["confirmed", "active"].includes(booking?.status) || extensionRequests.length > 0) && (
-            <Card>
-              <CardHeader className="pb-3">
-                <CardTitle className="flex items-center gap-2 text-base">
-                  <CalendarPlus className="w-5 h-5 text-sky-600" />
-                  Extension Requests
-                  {extensionRequests.some(e => e.status === "pending") && (
-                    <Badge className="bg-amber-100 text-amber-800 border-amber-300">
-                      {extensionRequests.filter(e => e.status === "pending").length} Pending
-                    </Badge>
-                  )}
-                  {["confirmed", "active"].includes(booking?.status) && !showAdminExtendForm && (
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="ml-auto gap-1.5 text-sky-700 border-sky-300 hover:bg-sky-50 text-xs h-7 px-2.5"
-                      onClick={() => { setShowAdminExtendForm(true); setAdminExtendDate(""); }}
-                    >
-                      <CalendarPlus className="w-3.5 h-3.5" /> Extend Booking
-                    </Button>
-                  )}
-                </CardTitle>
-                <CardDescription className="text-xs">
-                  Review renter extension requests or directly extend the return date on behalf of the renter.
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                {/* ── Admin-initiated extend form ── */}
-                {showAdminExtendForm && (
-                  <div className="rounded-xl border border-sky-200 bg-sky-50 p-4 space-y-3">
-                    <p className="text-sm font-semibold text-sky-800 flex items-center gap-1.5">
-                      <CalendarPlus className="w-4 h-4" /> Extend Return Date
-                    </p>
-                    <div className="space-y-1.5">
-                      <label className="text-xs font-medium text-sky-700">New return date</label>
-                      <Input
-                        type="date"
-                        value={adminExtendDate}
-                        min={booking?.endDate}
-                        onChange={e => setAdminExtendDate(e.target.value)}
-                        className="bg-white border-sky-200 text-sky-900 h-9 text-sm"
-                      />
-                      <p className="text-[11px] text-muted-foreground">Current return: <strong>{booking?.endDate}</strong></p>
-                    </div>
-                    {adminExtendDate && adminExtendDate > booking?.endDate && (() => {
-                      const days = Math.round(Math.abs(new Date(adminExtendDate).getTime() - new Date(booking?.endDate).getTime()) / (1000 * 60 * 60 * 24));
-                      const pricePerDay = parseFloat(String(booking?.pricePerDay ?? "0"));
-                      const est = (pricePerDay * days * (booking?.quantity ?? 1)).toFixed(2);
-                      return (
-                        <div className="flex items-center gap-2 rounded-lg bg-white border border-sky-200 px-3 py-2 text-xs text-sky-800">
-                          <CreditCard className="w-3.5 h-3.5 shrink-0" />
-                          <span>+{days} day{days !== 1 ? "s" : ""} · estimated additional charge to renter: <strong>${est}</strong></span>
-                        </div>
-                      );
-                    })()}
-                    <div className="flex gap-2 pt-1">
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        className="flex-1"
-                        onClick={() => { setShowAdminExtendForm(false); setAdminExtendDate(""); }}
-                        disabled={adminExtendSubmitting}
-                      >
-                        Cancel
-                      </Button>
-                      <Button
-                        size="sm"
-                        className="flex-1 gap-1.5 bg-sky-600 hover:bg-sky-700 text-white"
-                        onClick={handleAdminExtend}
-                        disabled={adminExtendSubmitting || !adminExtendDate || adminExtendDate <= booking?.endDate}
-                      >
-                        {adminExtendSubmitting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <CalendarCheck className="w-3.5 h-3.5" />}
-                        Extend & Charge Renter
-                      </Button>
-                    </div>
-                  </div>
-                )}
-
-                {/* ── Empty state ── */}
-                {extensionRequests.length === 0 && !showAdminExtendForm && (
-                  <p className="text-sm text-muted-foreground text-center py-2">No extension requests yet. Use "Extend Booking" above to add extra days.</p>
-                )}
-
-                {extensionRequests.map(ext => (
-                  <div
-                    key={ext.id}
-                    className={`rounded-xl border p-3 space-y-2.5 ${
-                      ext.status === "pending"
-                        ? "border-amber-300 bg-amber-50"
-                        : ext.status === "approved"
-                          ? "border-green-200 bg-green-50"
-                          : "border-red-200 bg-red-50/60"
-                    }`}
-                  >
-                    {/* Header row */}
-                    <div className="flex items-center gap-2 flex-wrap">
-                      {ext.status === "pending" && <Badge className="bg-amber-200 text-amber-900 border-0 text-xs">Pending</Badge>}
-                      {ext.status === "approved" && <Badge className="bg-green-100 text-green-800 border-green-300 text-xs"><CalendarCheck className="w-3 h-3 mr-1 inline" />Approved</Badge>}
-                      {ext.status === "denied" && <Badge className="bg-red-100 text-red-800 border-red-300 text-xs"><CalendarX className="w-3 h-3 mr-1 inline" />Declined</Badge>}
-                      <span className="text-xs text-muted-foreground ml-auto">
-                        Requested {format(new Date(ext.requestedAt), "MMM d, h:mm a")}
-                      </span>
-                    </div>
-
-                    {/* Date change */}
-                    <div className="grid grid-cols-3 gap-2 text-sm">
-                      <div>
-                        <div className="text-xs text-muted-foreground mb-0.5">Original Return</div>
-                        <div className="font-medium">{ext.originalEndDate}</div>
-                      </div>
-                      <div className="flex items-center justify-center">
-                        <span className="text-muted-foreground text-xs">→</span>
-                      </div>
-                      <div>
-                        <div className="text-xs text-muted-foreground mb-0.5">Requested Return</div>
-                        <div className="font-semibold text-sky-700">{ext.requestedEndDate}</div>
-                      </div>
-                    </div>
-
-                    {/* Amounts */}
-                    <div className="flex items-center gap-4 text-sm">
-                      <div>
-                        <span className="text-muted-foreground text-xs">Extra days: </span>
-                        <span className="font-medium">{ext.additionalDays}</span>
-                      </div>
-                      <div>
-                        <span className="text-muted-foreground text-xs">Additional charge: </span>
-                        <span className="font-semibold text-sky-700">${parseFloat(String(ext.additionalAmount)).toFixed(2)}</span>
-                      </div>
-                    </div>
-
-                    {/* Optional note */}
-                    {ext.requestNote && (
-                      <div className="bg-white/70 rounded-lg px-3 py-2 border border-current/10">
-                        <p className="text-xs text-muted-foreground mb-0.5 font-medium uppercase tracking-wide">Renter's note</p>
-                        <p className="text-xs text-foreground leading-relaxed">{ext.requestNote}</p>
-                      </div>
-                    )}
-
-                    {/* Denial reason (if denied) */}
-                    {ext.status === "denied" && ext.denialReason && (
-                      <div className="bg-white/70 rounded-lg px-3 py-2 border border-red-200">
-                        <p className="text-xs text-red-700 font-medium mb-0.5 uppercase tracking-wide">Reason given</p>
-                        <p className="text-xs text-red-800 leading-relaxed">{ext.denialReason}</p>
-                      </div>
-                    )}
-
-                    {/* Payment info (if approved) */}
-                    {ext.status === "approved" && ext.stripePaymentIntentId && (
-                      <div className="flex items-center gap-1.5 text-xs text-green-700 bg-white/70 rounded-lg px-3 py-2 border border-green-200">
-                        <CreditCard className="w-3 h-3 shrink-0" />
-                        <span>Payment charged — PI: <span className="font-mono">{ext.stripePaymentIntentId.slice(0, 16)}…</span></span>
-                      </div>
-                    )}
-
-                    {/* Action buttons for pending */}
-                    {ext.status === "pending" && (
-                      <div className="flex gap-2 pt-1">
-                        <Button
-                          size="sm"
-                          className="flex-1 gap-1.5 bg-green-600 hover:bg-green-700 text-white"
-                          onClick={() => handleExtensionAction(ext.id, "approve")}
-                          disabled={extensionLoading !== null}
-                        >
-                          {extensionLoading === ext.id ? (
-                            <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                          ) : (
-                            <CalendarCheck className="w-3.5 h-3.5" />
-                          )}
-                          Approve & Charge ${parseFloat(String(ext.additionalAmount)).toFixed(2)}
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          className="flex-1 gap-1.5 border-red-300 text-red-700 hover:bg-red-50"
-                          onClick={() => { setShowDenyDialog(ext.id); setDenyReason(""); }}
-                          disabled={extensionLoading !== null}
-                        >
-                          <CalendarX className="w-3.5 h-3.5" />
-                          Decline
-                        </Button>
-                      </div>
-                    )}
-                  </div>
-                ))}
               </CardContent>
             </Card>
           )}
