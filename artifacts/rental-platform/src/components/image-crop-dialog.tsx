@@ -150,10 +150,13 @@ export function ImageCropDialog({ files, onDone, uploadFn, onCancel, aspect = 4 
       const srcW = DISPLAY_W / scale;
       const srcH = DISPLAY_H / scale;
       ctx.drawImage(img, srcX, srcY, srcW, srcH, 0, 0, OUTPUT_W, OUTPUT_H);
+      const isPng = currentFile.type === "image/png";
+      const mimeType = isPng ? "image/png" : "image/jpeg";
+      const ext = isPng ? ".png" : ".jpg";
       const blob = await new Promise<Blob>((res, rej) =>
-        canvas.toBlob(b => b ? res(b) : rej(new Error("canvas toBlob failed")), "image/jpeg", 0.92)
+        canvas.toBlob(b => b ? res(b) : rej(new Error("canvas toBlob failed")), mimeType, 0.95)
       );
-      const url = await uploadFn(blob, currentFile.name.replace(/\.[^.]+$/, ".jpg"));
+      const url = await uploadFn(blob, currentFile.name.replace(/\.[^.]+$/, ext));
       advance([...collected, url]);
     } catch {
       advance(collected);
@@ -203,7 +206,16 @@ export function ImageCropDialog({ files, onDone, uploadFn, onCancel, aspect = 4 
         </DialogHeader>
 
         {/* ── Crop canvas ── */}
-        <div className="relative bg-black select-none mx-auto" style={{ width: DISPLAY_W, maxWidth: "100%", aspectRatio: `${ASPECT}` }}>
+        <div
+          className="relative select-none mx-auto"
+          style={{
+            width: DISPLAY_W,
+            maxWidth: "100%",
+            aspectRatio: `${ASPECT}`,
+            background:
+              "repeating-conic-gradient(#b0b0b0 0% 25%, #e8e8e8 0% 50%) 0 0 / 20px 20px",
+          }}
+        >
           <div
             className="absolute inset-0 overflow-hidden"
             style={{ cursor: dragging ? "grabbing" : "grab", touchAction: "none" }}
