@@ -706,20 +706,46 @@ router.post("/bookings/:id/sign-agreement-public", async (req, res) => {
       updatedAt: new Date(),
     }).where(eq(bookingsTable.id, bookingId));
 
-    // Best-effort PDF generation
+    // Generate PDF with full context — same as the admin booking flow.
     try {
-      if (agreementText && agreementSignerName) {
+      const textForPdf = agreementText ?? booking.agreementText ?? "";
+      const signerForPdf = (agreementSignerName ?? booking.agreementSignerName ?? "").trim();
+      if (textForPdf && signerForPdf) {
+        // Fetch listing + business profile for PDF header/body context.
+        const [listing] = booking.listingId
+          ? await db.select({ title: listingsTable.title, productId: listingsTable.productId })
+              .from(listingsTable).where(eq(listingsTable.id, booking.listingId)).limit(1)
+          : [null];
+        const [biz] = booking.tenantId
+          ? await db.select({ businessName: businessProfileTable.businessName })
+              .from(businessProfileTable).where(eq(businessProfileTable.tenantId, booking.tenantId)).limit(1)
+          : [null];
+        let productSerial: string | null = null;
+        let productEstimatedValue: string | null = null;
+        if (listing?.productId) {
+          const [prod] = await db.select({ serialNumber: productsTable.serialNumber, estimatedValue: productsTable.estimatedValue })
+            .from(productsTable).where(eq(productsTable.id, listing.productId)).limit(1);
+          if (prod) { productSerial = prod.serialNumber ?? null; productEstimatedValue = prod.estimatedValue ?? null; }
+        }
         const pdfFilename = await generateAgreementPdf({
           bookingId,
-          agreementText,
-          signerName: agreementSignerName.trim(),
+          companyName: biz?.businessName ?? "Rental Company",
+          customerName: booking.customerName ?? "Customer",
+          customerEmail: booking.customerEmail ?? "",
+          listingTitle: listing?.title ?? "Rental",
+          startDate: booking.startDate ?? "",
+          endDate: booking.endDate ?? "",
+          agreementText: textForPdf,
+          signerName: signerForPdf,
           signedAt,
           signatureDataUrl: agreementSignatureDataUrl,
+          serialNumber: productSerial,
+          estimatedValue: productEstimatedValue,
         });
         await db.update(bookingsTable).set({ agreementPdfPath: pdfFilename, updatedAt: new Date() }).where(eq(bookingsTable.id, bookingId));
       }
     } catch (pdfErr: any) {
-      console.warn("[sign-agreement-public] PDF gen failed:", pdfErr.message);
+      req.log.error(pdfErr, "[sign-agreement-public] PDF gen failed");
     }
 
     res.json({ ok: true });

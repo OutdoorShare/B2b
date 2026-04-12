@@ -1216,9 +1216,25 @@ export default function MyBookingDetail() {
               </a>
             </div>
           ) : (
-            <div className="flex items-center gap-1.5 text-xs text-green-600/70 bg-white/60 rounded-lg px-3 py-2 border border-green-100">
-              <FileText className="w-3.5 h-3.5 shrink-0" />
-              <span>PDF copy is being processed and will be available shortly.</span>
+            <div className="flex gap-2 pt-1">
+              <a
+                href={`${BASE}/api/bookings/${booking.id}/agreement-pdf`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex-1 inline-flex items-center justify-center gap-2 text-sm font-semibold text-green-700 hover:text-green-900 bg-white border border-green-300 rounded-xl px-4 py-2.5 transition-colors hover:bg-green-50 shadow-sm"
+              >
+                <FileText className="w-4 h-4" />
+                View Agreement PDF
+                <ExternalLink className="w-3.5 h-3.5 opacity-60" />
+              </a>
+              <a
+                href={`${BASE}/api/bookings/${booking.id}/agreement-pdf?download=1`}
+                download={`rental-agreement-${booking.id}.pdf`}
+                className="inline-flex items-center justify-center gap-1.5 text-sm font-medium text-green-600 hover:text-green-800 bg-white border border-green-200 rounded-xl px-3.5 py-2.5 transition-colors hover:bg-green-50 shadow-sm"
+                title="Download PDF"
+              >
+                <Download className="w-4 h-4" />
+              </a>
             </div>
           )}
 

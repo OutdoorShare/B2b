@@ -5,7 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
   CheckCircle, AlertCircle, Loader2, ChevronRight, PenLine,
-  RotateCcw, ShieldCheck, Calendar, Bike
+  RotateCcw, ShieldCheck, Calendar, Bike, FileText, Download
 } from "lucide-react";
 import { loadStripe } from "@stripe/stripe-js";
 
@@ -511,6 +511,16 @@ export default function BookingComplete() {
             <p className="text-xs text-slate-400">
               Watch your email for pickup instructions closer to your rental date.
             </p>
+            <a
+              href={`${BASE}/api/bookings/${booking.id}/agreement-pdf`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center justify-center gap-2 w-full rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-2.5 text-sm font-medium text-emerald-700 hover:bg-emerald-100 transition-colors"
+            >
+              <FileText className="w-4 h-4" />
+              Download Signed Agreement PDF
+              <Download className="w-3.5 h-3.5 opacity-70" />
+            </a>
             <Button
               variant="outline"
               className="w-full"
