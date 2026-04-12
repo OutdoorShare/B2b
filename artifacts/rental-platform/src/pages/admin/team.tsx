@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import { getAdminSession } from "@/lib/admin-nav";
+import { getAdminSession, getAdminSlug } from "@/lib/admin-nav";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -14,7 +14,8 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle
 } from "@/components/ui/alert-dialog";
 import { useToast } from "@/hooks/use-toast";
-import { Users, Plus, Pencil, Trash2, ShieldCheck, UserCheck, UserX, MailCheck, RefreshCw, Clock } from "lucide-react";
+import { Users, Plus, Pencil, Trash2, ShieldCheck, UserCheck, UserX, MailCheck, RefreshCw, Clock, Zap, Star, ArrowRight } from "lucide-react";
+import { useLocation } from "wouter";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
@@ -43,9 +44,11 @@ const defaultForm = { name: "", email: "", role: "staff" as Role, notes: "", sta
 
 export default function AdminTeam() {
   const { toast } = useToast();
+  const [, setLocation] = useLocation();
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [loading, setLoading] = useState(true);
   const [showDialog, setShowDialog] = useState(false);
+  const [showUpsell, setShowUpsell] = useState(false);
   const [editingUser, setEditingUser] = useState<AdminUser | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<AdminUser | null>(null);
   const [form, setForm] = useState(defaultForm);
@@ -97,7 +100,15 @@ export default function AdminTeam() {
       if (editingUser) body.status = form.status;
       const res = await fetch(url, { method, headers: { "Content-Type": "application/json", ...adminToken() }, body: JSON.stringify(body) });
       const data = await res.json();
-      if (!res.ok) { setError(data.error || "Failed to save"); return; }
+      if (!res.ok) {
+        if (data.planLimit) {
+          setShowDialog(false);
+          setShowUpsell(true);
+          return;
+        }
+        setError(data.error || "Failed to save");
+        return;
+      }
       toast({ title: editingUser ? "Team member updated" : "Invite sent! They'll receive an email to set their password." });
       setShowDialog(false);
       await fetchUsers();
@@ -334,6 +345,72 @@ export default function AdminTeam() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Plan limit upsell modal */}
+      <Dialog open={showUpsell} onOpenChange={setShowUpsell}>
+        <DialogContent className="sm:max-w-md p-0 overflow-hidden gap-0">
+          {/* Header */}
+          <div className="px-6 pt-6 pb-4 bg-gradient-to-br from-slate-900 to-slate-800 text-white relative overflow-hidden">
+            <div className="absolute -top-6 -right-6 w-28 h-28 rounded-full bg-white/5" />
+            <div className="relative">
+              <div className="flex items-center gap-2 mb-3">
+                <div className="w-8 h-8 rounded-lg bg-amber-400/20 flex items-center justify-center">
+                  <Zap className="w-4 h-4 text-amber-400" />
+                </div>
+                <span className="text-xs font-bold uppercase tracking-widest text-slate-400">Team member limit reached</span>
+              </div>
+              <h2 className="text-xl font-black leading-tight">Half Throttle includes 2 team members</h2>
+              <p className="text-sm text-slate-400 mt-1">Upgrade to Full Throttle for unlimited team members — plus lower fees and more powerful tools.</p>
+            </div>
+          </div>
+
+          {/* Plan comparison */}
+          <div className="px-6 py-5 space-y-3">
+            {/* Current plan */}
+            <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Zap className="w-4 h-4 text-slate-400" />
+                <div>
+                  <p className="text-sm font-bold text-slate-600">Half Throttle</p>
+                  <p className="text-xs text-slate-400">Free · 2 team members · 15% fee</p>
+                </div>
+              </div>
+              <span className="text-xs font-bold px-2 py-1 rounded-full bg-slate-200 text-slate-500">Current</span>
+            </div>
+
+            {/* Upgrade plan */}
+            <div className="rounded-xl border-2 border-sky-300 bg-sky-50 px-4 py-3 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Star className="w-4 h-4 text-sky-500" />
+                <div>
+                  <p className="text-sm font-black text-sky-800">Full Throttle</p>
+                  <p className="text-xs text-sky-600">$895/year · Unlimited team members · As low as 7% fee</p>
+                </div>
+              </div>
+              <span className="text-xs font-bold px-2 py-1 rounded-full bg-sky-200 text-sky-700">Recommended</span>
+            </div>
+          </div>
+
+          <div className="px-6 pb-6 flex flex-col gap-2">
+            <Button
+              className="w-full font-bold gap-2"
+              style={{ background: "linear-gradient(135deg, #29b4d4, #1e9ab8)" }}
+              onClick={() => {
+                setShowUpsell(false);
+                const slug = getAdminSlug();
+                setLocation(`/${slug}/admin/billing`);
+              }}
+            >
+              <Star className="w-4 h-4" />
+              Upgrade to Full Throttle
+              <ArrowRight className="w-4 h-4 ml-auto" />
+            </Button>
+            <Button variant="ghost" size="sm" className="text-muted-foreground w-full" onClick={() => setShowUpsell(false)}>
+              Maybe later
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

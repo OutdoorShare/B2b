@@ -58,6 +58,7 @@ const PLANS = [
     badge: "Most Popular",
     features: [
       "Everything in Half Throttle",
+      "Unlimited team members",
       "Tiered commissions — as low as 7%",
       "CRM tools & customer management",
       "AI answering agent (Roamio)",

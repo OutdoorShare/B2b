@@ -546,6 +546,7 @@ export default function GetStartedPage() {
               <ul className="space-y-3 mb-6 flex-1">
                 {[
                   "Everything in Half Throttle",
+                  "Unlimited team members",
                   "Protection plan on every rental",
                   "Tiered commissions — as low as 7%",
                   "CRM tools",

@@ -1,11 +1,13 @@
 import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
 import { adminUsersTable, tenantsTable, businessProfileTable } from "@workspace/db/schema";
-import { eq, and } from "drizzle-orm";
+import { eq, and, count } from "drizzle-orm";
 import { scrypt, randomBytes, timingSafeEqual } from "crypto";
 import { promisify } from "util";
 import { requireAdminToken } from "../middleware/admin-auth";
 import { sendStaffInviteEmail } from "../services/gmail";
+
+const STARTER_TEAM_LIMIT = 2;
 
 const APP_URL =
   process.env.APP_URL ||
@@ -267,6 +269,19 @@ router.post("/admin/team", requireAdminToken as any, async (req, res) => {
     if (!name || !email) { res.status(400).json({ error: "Name and email are required" }); return; }
 
     const tenantId = req.tenantId!;
+
+    // Enforce team member limit for starter (Half Throttle) plan
+    const [tenant] = await db.select({ plan: tenantsTable.plan }).from(tenantsTable).where(eq(tenantsTable.id, tenantId)).limit(1);
+    if (tenant?.plan === "starter" || !tenant?.plan) {
+      const [{ value: memberCount }] = await db.select({ value: count() }).from(adminUsersTable).where(eq(adminUsersTable.tenantId, tenantId));
+      if (memberCount >= STARTER_TEAM_LIMIT) {
+        res.status(403).json({
+          error: `The Half Throttle plan includes up to ${STARTER_TEAM_LIMIT} team members. Upgrade to Full Throttle for unlimited team members.`,
+          planLimit: true,
+        });
+        return;
+      }
+    }
     const inviteToken = randomBytes(32).toString("hex");
     const inviteExpiresAt = new Date(Date.now() + 48 * 60 * 60 * 1000);
 
