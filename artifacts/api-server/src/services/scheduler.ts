@@ -814,11 +814,15 @@ async function alertClaimWindowClosingSoon() {
   }
 }
 
-// ── 9. 36-hour claim window — auto-release deposits ────────────────────────────
+// ── 9. 36-hour claim window — auto-release OR auto-capture deposits ────────────
 //
-// If 36 hours have passed since the booking was returned (or its end date
-// passed) and there is still an authorized hold with no active damage claim,
-// automatically cancel the hold (release the deposit back to the renter).
+// After 36 hours since return:
+//   • NO active claim  → cancel the hold (release deposit back to renter)
+//   • Active claim exists → capture the full hold immediately (charge the renter)
+//
+// Note: when a claim is first filed the claims route also attempts an immediate
+// capture.  This job serves as a safety net for any booking where the initial
+// capture failed or was skipped (e.g. deposit wasn't yet authorized at claim time).
 async function autoReleaseDepositsAfterClaimWindow() {
   const now = new Date();
   const cutoff36h = new Date(now.getTime() - 36 * 60 * 60 * 1000).toISOString();
@@ -837,48 +841,68 @@ async function autoReleaseDepositsAfterClaimWindow() {
 
   for (const booking of bookings) {
     try {
-      // Skip if there is an active (open or reviewing) damage claim
+      const [tenant] = await db.select().from(tenantsTable)
+        .where(eq(tenantsTable.id, booking.tenantId!));
+      if (!tenant || !booking.depositHoldIntentId) continue;
+
+      const stripeClient = getStripeForTenant(!!tenant.testMode);
+      const listingTitle = await getListingTitle(booking.listingId);
+
+      // Check for any active (open or reviewing) damage claim
       const activeClaims = await db.select({ id: claimsTable.id }).from(claimsTable).where(
         and(
           eq(claimsTable.bookingId, booking.id),
           inArray(claimsTable.status, ["open", "reviewing"]),
         )
       );
+
       if (activeClaims.length > 0) {
-        console.log(`[scheduler] Auto-release skipped for booking #${booking.id} — active claim exists`);
-        continue;
-      }
+        // ── Active claim: capture the deposit hold immediately ──────────────
+        const captured = await stripeClient.paymentIntents.capture(booking.depositHoldIntentId);
 
-      const [tenant] = await db.select().from(tenantsTable)
-        .where(eq(tenantsTable.id, booking.tenantId!));
-      if (!tenant || !booking.depositHoldIntentId) continue;
+        await db.update(bookingsTable)
+          .set({ depositHoldStatus: "captured", updatedAt: new Date() })
+          .where(eq(bookingsTable.id, booking.id));
 
-      const stripeClient = getStripeForTenant(!!tenant.testMode);
-      await stripeClient.paymentIntents.cancel(booking.depositHoldIntentId);
+        console.log(`[scheduler] Deposit captured for booking #${booking.id} — active claim exists (36-hour window)`);
 
-      await db.update(bookingsTable)
-        .set({ depositHoldStatus: "released", updatedAt: new Date() })
-        .where(eq(bookingsTable.id, booking.id));
+        if (booking.tenantId) {
+          createNotification({
+            tenantId: booking.tenantId,
+            targetType: "admin",
+            type: "action_required",
+            title: "Security deposit charged",
+            body: `The $${((captured.amount_received ?? captured.amount) / 100).toFixed(2)} deposit for ${booking.customerName}'s rental of ${listingTitle} was automatically charged due to an open damage claim.`,
+            actionUrl: `/bookings/${booking.id}`,
+            isActionRequired: true,
+            relatedId: booking.id,
+          }).catch(() => {});
+        }
+      } else {
+        // ── No claim: release the hold back to the renter ──────────────────
+        await stripeClient.paymentIntents.cancel(booking.depositHoldIntentId);
 
-      console.log(`[scheduler] Auto-released deposit hold for booking #${booking.id} (36-hour window expired)`);
+        await db.update(bookingsTable)
+          .set({ depositHoldStatus: "released", updatedAt: new Date() })
+          .where(eq(bookingsTable.id, booking.id));
 
-      // In-app notification for admin
-      const ctx = await getContext(booking.tenantId);
-      const listingTitle = await getListingTitle(booking.listingId);
-      if (booking.tenantId) {
-        createNotification({
-          tenantId: booking.tenantId,
-          targetType: "admin",
-          type: "status_update",
-          title: "Security deposit released",
-          body: `The deposit hold for ${booking.customerName}'s rental of ${listingTitle} was automatically released after the 36-hour claim window expired.`,
-          actionUrl: `/bookings/${booking.id}`,
-          isActionRequired: false,
-          relatedId: booking.id,
-        }).catch(() => {});
+        console.log(`[scheduler] Auto-released deposit hold for booking #${booking.id} (36-hour window expired, no claim)`);
+
+        if (booking.tenantId) {
+          createNotification({
+            tenantId: booking.tenantId,
+            targetType: "admin",
+            type: "status_update",
+            title: "Security deposit released",
+            body: `The deposit hold for ${booking.customerName}'s rental of ${listingTitle} was automatically released — no damage claim was filed within the 36-hour window.`,
+            actionUrl: `/bookings/${booking.id}`,
+            isActionRequired: false,
+            relatedId: booking.id,
+          }).catch(() => {});
+        }
       }
     } catch (err: any) {
-      console.warn(`[scheduler] Auto-release FAILED for booking #${booking.id}:`, err?.message);
+      console.warn(`[scheduler] Auto-release/capture FAILED for booking #${booking.id}:`, err?.message);
     }
   }
 }
