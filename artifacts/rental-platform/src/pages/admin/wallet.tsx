@@ -56,6 +56,7 @@ type WalletData = {
   payouts: { id: string; amount: number; currency: string; status: string; arrivalDate: string; description?: string | null }[];
   transactions: { id: number; customerName: string; listingTitle: string; startDate: string; endDate: string; gross: number; platformFee: number; net: number; status: string; paymentMethod: string; createdAt: string }[];
   feePercent: number;
+  stripeError?: string | null;
 };
 
 function payoutStatusBadge(s: string) {
@@ -245,6 +246,19 @@ export default function AdminWallet() {
               </div>
             </CardContent>
           </Card>
+        </div>
+      )}
+
+      {/* Stripe error notice — when connected but balance unavailable */}
+      {data?.connected && data.stripeError && !data.balance && (
+        <div className="flex items-start gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
+          <AlertCircle className="h-4 w-4 text-slate-500 mt-0.5 shrink-0" />
+          <div>
+            <p className="text-sm font-semibold text-slate-700">Balance unavailable right now</p>
+            <p className="text-xs text-slate-500 mt-0.5">
+              Your Stripe account is linked but we couldn't retrieve live balance data at this time. Your transaction history below is always accurate. Try refreshing in a moment.
+            </p>
+          </div>
         </div>
       )}
 

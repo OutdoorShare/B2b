@@ -218,25 +218,34 @@ router.get("/stripe/wallet", requireAdminAuth, async (req, res) => {
       });
     }
 
-    // Fetch Stripe balance + recent payouts
-    const [balance, payoutsResp] = await Promise.all([
-      walletStripe.balance.retrieve({ stripeAccount: tenant.stripeAccountId }),
-      walletStripe.payouts.list({ limit: 20 }, { stripeAccount: tenant.stripeAccountId }),
-    ]);
+    // Fetch Stripe balance + recent payouts — non-fatal: if Stripe is unreachable
+    // or the account is in a bad state, still return DB transactions.
+    let stripeBalance: { available: number; pending: number; currency: string } | null = null;
+    let payouts: ReturnType<typeof Array.prototype.map> = [];
+    let stripeError: string | null = null;
 
-    const available = balance.available.reduce((sum, b) => sum + b.amount, 0) / 100;
-    const pending = balance.pending.reduce((sum, b) => sum + b.amount, 0) / 100;
+    try {
+      const [balance, payoutsResp] = await Promise.all([
+        walletStripe.balance.retrieve({ stripeAccount: tenant.stripeAccountId }),
+        walletStripe.payouts.list({ limit: 20 }, { stripeAccount: tenant.stripeAccountId }),
+      ]);
+      const available = balance.available.reduce((sum, b) => sum + b.amount, 0) / 100;
+      const pending = balance.pending.reduce((sum, b) => sum + b.amount, 0) / 100;
+      stripeBalance = { available, pending, currency: balance.available[0]?.currency?.toUpperCase() ?? "USD" };
+      payouts = payoutsResp.data.map(p => ({
+        id: p.id,
+        amount: p.amount / 100,
+        currency: p.currency.toUpperCase(),
+        status: p.status,
+        arrivalDate: new Date(p.arrival_date * 1000).toISOString(),
+        description: p.description,
+      }));
+    } catch (stripeErr: any) {
+      console.warn("[stripe/wallet] Stripe balance fetch failed (non-fatal):", stripeErr.message);
+      stripeError = stripeErr.message ?? "Unable to reach Stripe";
+    }
 
-    const payouts = payoutsResp.data.map(p => ({
-      id: p.id,
-      amount: p.amount / 100,
-      currency: p.currency.toUpperCase(),
-      status: p.status,
-      arrivalDate: new Date(p.arrival_date * 1000).toISOString(),
-      description: p.description,
-    }));
-
-    res.json({ connected: true, testMode: isTestMode, balance: { available, pending, currency: balance.available[0]?.currency?.toUpperCase() ?? "USD" }, payouts, transactions, feePercent });
+    res.json({ connected: true, testMode: isTestMode, balance: stripeBalance, payouts, transactions, feePercent, stripeError });
   } catch (e: any) {
     console.error("[stripe/wallet]", e.message);
     res.status(500).json({ error: e.message });
