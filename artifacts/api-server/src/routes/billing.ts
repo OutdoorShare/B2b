@@ -28,10 +28,9 @@ router.get("/billing/status", requireAdmin, async (req, res) => {
 
     const isBlocked = tenant.status === "suspended";
 
-    const PLAN_FEE: Record<string, number> = { starter: 15, professional: 7, enterprise: 7 };
     res.json({
       plan: tenant.plan,
-      feePercent: parseFloat(tenant.platformFeePercent ?? String(PLAN_FEE[tenant.plan ?? "starter"] ?? 15)),
+      feePercent: parseFloat(tenant.platformFeePercent ?? "10"),
       status: tenant.status,
       trialActive: false,
       trialExpired: false,

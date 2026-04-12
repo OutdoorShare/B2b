@@ -22,7 +22,7 @@ export function getStripeForTenant(testMode: boolean): Stripe {
   return testMode ? getTestStripe() : stripe;
 }
 
-export const PLATFORM_FEE_PERCENT = 0.05; // 5% platform fee
+export const PLATFORM_FEE_PERCENT = 0.10; // 10% platform fee (default)
 
 export function getStripe() {
   return stripe;

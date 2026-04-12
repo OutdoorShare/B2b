@@ -587,7 +587,7 @@ export default function SuperAdminTenants() {
                   <p>· Booking platform with custom branding</p>
                   <p>· OutdoorShare Marketplace listing</p>
                   <p>· Automated bookings & payments</p>
-                  <p>· 15% platform fee per booking — no monthly charge</p>
+                  <p>· 10% platform fee per booking — no monthly charge</p>
                 </div>
               </div>
               <DialogFooter className="gap-2">

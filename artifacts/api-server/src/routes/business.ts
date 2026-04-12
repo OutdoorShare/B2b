@@ -76,11 +76,10 @@ router.get("/business", async (req, res) => {
     const p = profiles[0];
     const { senderPassword: _sp, ...pSafe } = p;
     // Expose the platform fee percent so the storefront can compute pass-through amounts.
-    // Starter (Half Throttle) defaults to 10%; paid plans default to 5% when not explicitly set.
-    const starterDefault = tenantRow[0]?.plan === "starter" ? 10 : PLATFORM_FEE_PERCENT * 100;
+    // Default is 10% (PLATFORM_FEE_PERCENT); superadmin can set a custom rate per tenant.
     const tenantFeePercent = tenantRow[0]?.platformFeePercent != null
       ? parseFloat(tenantRow[0].platformFeePercent)
-      : starterDefault;
+      : PLATFORM_FEE_PERCENT * 100;
     res.json({
       ...pSafe,
       senderPasswordSet: !!p.senderPassword,

@@ -50,7 +50,7 @@ function AccountTab({ tenant, tenantId, onSaved }: { tenant: Tenant; tenantId: n
   const { toast } = useToast();
   const [saving, setSaving] = useState(false);
   const [showPw, setShowPw] = useState(false);
-  const [form, setForm] = useState({ name: tenant.name, email: tenant.email, plan: tenant.plan, status: tenant.status, maxListings: String(tenant.maxListings), contactName: tenant.contactName ?? "", phone: tenant.phone ?? "", notes: tenant.notes ?? "", password: "", platformFeePercent: tenant.platformFeePercent != null ? String(tenant.platformFeePercent) : "5.00", testMode: !!tenant.testMode, trialEndsAt: tenant.trialEndsAt ?? null });
+  const [form, setForm] = useState({ name: tenant.name, email: tenant.email, plan: tenant.plan, status: tenant.status, maxListings: String(tenant.maxListings), contactName: tenant.contactName ?? "", phone: tenant.phone ?? "", notes: tenant.notes ?? "", password: "", platformFeePercent: tenant.platformFeePercent != null ? String(tenant.platformFeePercent) : "10.00", testMode: !!tenant.testMode, trialEndsAt: tenant.trialEndsAt ?? null });
   const set = (k: string, v: string) => setForm(f => ({ ...f, [k]: v }));
 
   const save = async () => {

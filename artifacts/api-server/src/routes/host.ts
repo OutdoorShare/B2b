@@ -113,7 +113,7 @@ router.post("/host/become", async (req, res) => {
         isHost: true,
         hostCustomerId: customerId,
         maxListings: 20,
-        platformFeePercent: "20", // OutdoorShare keeps 20% of rental subtotal + full protection fee
+        platformFeePercent: "10", // OutdoorShare keeps 10% by default; superadmin can adjust per tenant
       })
       .returning();
 
@@ -650,7 +650,7 @@ router.get("/host/stripe/status", requireHostAuth, async (req, res) => {
       payoutsEnabled,
       accountId: tenant.stripeAccountId,
       balance,
-      feePercent: parseFloat(tenant.platformFeePercent ?? "20"),
+      feePercent: parseFloat(tenant.platformFeePercent ?? "10"),
     });
   } catch (e: any) {
     req.log.error(e, "[host/stripe/status]");

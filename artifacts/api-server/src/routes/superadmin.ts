@@ -712,7 +712,7 @@ router.get("/superadmin/tenants/:id/analytics", requireSuperAdmin, async (req, r
     const [tenant] = await db.select().from(tenantsTable).where(eq(tenantsTable.id, tenantId)).limit(1);
     if (!tenant) return res.status(404).json({ error: "Tenant not found" });
 
-    const feePercent = tenant.platformFeePercent ? parseFloat(tenant.platformFeePercent) : 5;
+    const feePercent = tenant.platformFeePercent ? parseFloat(tenant.platformFeePercent) : 10;
 
     // All non-cancelled bookings for this tenant
     const bookings = await db
