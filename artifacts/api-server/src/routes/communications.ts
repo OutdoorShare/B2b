@@ -4,6 +4,7 @@ import { bookingsTable, messageLogs, automationSettings, businessProfileTable } 
 import { eq, and, gt, desc } from "drizzle-orm";
 import { sendBlastEmail, withSmtpCreds, withBrand } from "../services/gmail";
 import { getTenantSmtpCreds, getTenantBrand } from "../services/smtp-helper";
+import { sendSms, smsConfigured } from "../services/sms";
 
 const router: IRouter = Router();
 
@@ -142,9 +143,11 @@ router.post("/communications/send", async (req, res) => {
 
     const logs = [];
     const emailChannel = channel === "email" || channel === "both" || !channel;
+    const smsChannel = channel === "sms" || channel === "both";
 
     for (const r of recipients) {
-      let status: "sent" | "failed" | "simulated" = "simulated";
+      let emailStatus: "sent" | "failed" | "simulated" = "simulated";
+      let smsStatus: "sent" | "failed" | "simulated" = "simulated";
       let errorMsg: string | undefined;
 
       // Attempt real email delivery
@@ -160,13 +163,34 @@ router.post("/communications/send", async (req, res) => {
             logoUrl: brand?.logoUrl ?? null,
             primaryColor: brand?.primaryColor ?? null,
           })));
-          status = "sent";
+          emailStatus = "sent";
         } catch (emailErr: any) {
           req.log.warn({ emailErr }, "Failed to send blast email (logging anyway)");
-          status = "failed";
+          emailStatus = "failed";
           errorMsg = emailErr?.message;
         }
       }
+
+      // Attempt SMS delivery
+      if (smsChannel && r.phone) {
+        const smsResult = await sendSms(r.phone, body);
+        if (smsResult.success) {
+          smsStatus = "sent";
+        } else if ((smsResult as any).simulated) {
+          smsStatus = "simulated";
+        } else {
+          smsStatus = "failed";
+          if (!errorMsg) errorMsg = smsResult.error;
+        }
+      }
+
+      // Overall status: sent if at least one channel succeeded
+      const status: "sent" | "failed" | "simulated" =
+        emailStatus === "sent" || smsStatus === "sent"
+          ? "sent"
+          : emailStatus === "failed" || smsStatus === "failed"
+          ? "failed"
+          : "simulated";
 
       const [log] = await db
         .insert(messageLogs)
@@ -254,7 +278,9 @@ router.post("/communications/send-automation", async (req, res) => {
 
     // Attempt real email delivery for email channel
     const [smtpCreds, brand] = await Promise.all([getTenantSmtpCreds(req.tenantId), getTenantBrand(effectiveTenantId)]);
-    let status: "sent" | "failed" | "simulated" = "simulated";
+    let emailStatus: "sent" | "failed" | "simulated" = "simulated";
+    let smsDeliveryStatus: "sent" | "failed" | "simulated" = "simulated";
+
     if (automation.emailEnabled && booking.customerEmail) {
       try {
         await withBrand(brand, () => withSmtpCreds(smtpCreds, () => sendBlastEmail({
@@ -267,12 +293,25 @@ router.post("/communications/send-automation", async (req, res) => {
           logoUrl: brand?.logoUrl ?? null,
           primaryColor: brand?.primaryColor ?? null,
         })));
-        status = "sent";
+        emailStatus = "sent";
       } catch (emailErr) {
         req.log.warn({ emailErr }, "Failed to send automation email (logging anyway)");
-        status = "failed";
+        emailStatus = "failed";
       }
     }
+
+    // Attempt SMS delivery
+    if (automation.smsEnabled && booking.customerPhone) {
+      const smsResult = await sendSms(booking.customerPhone, body);
+      smsDeliveryStatus = smsResult.success ? "sent" : (smsResult as any).simulated ? "simulated" : "failed";
+    }
+
+    const status: "sent" | "failed" | "simulated" =
+      emailStatus === "sent" || smsDeliveryStatus === "sent"
+        ? "sent"
+        : emailStatus === "failed" || smsDeliveryStatus === "failed"
+        ? "failed"
+        : "simulated";
 
     const [log] = await db
       .insert(messageLogs)
@@ -297,7 +336,11 @@ router.post("/communications/send-automation", async (req, res) => {
   }
 });
 
-// GET /api/communications/logs
+// GET /api/communications/sms-status — reports whether SMS delivery is enabled
+router.get("/communications/sms-status", (_req, res) => {
+  res.json({ configured: smsConfigured() });
+});
+
 router.get("/communications/logs", async (req, res) => {
   try {
     const where = req.tenantId ? eq(messageLogs.tenantId, req.tenantId) : undefined;

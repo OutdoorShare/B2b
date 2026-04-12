@@ -92,8 +92,15 @@ export default function CommunicationsPage() {
   const [logs, setLogs] = useState<MessageLog[]>([]);
   const [loadingLogs, setLoadingLogs] = useState(false);
 
+  // SMS provider status
+  const [smsReady, setSmsReady] = useState<boolean | null>(null);
+
   useEffect(() => {
     fetchRenters();
+    fetch(`${BASE}/api/communications/sms-status`, { headers: adminHeaders() })
+      .then(r => r.json())
+      .then(d => setSmsReady(d.configured === true))
+      .catch(() => setSmsReady(false));
   }, [filter]);
 
   useEffect(() => {
@@ -373,7 +380,7 @@ export default function CommunicationsPage() {
                 </h2>
 
                 {/* Channel toggle */}
-                <div className="flex gap-2">
+                <div className="flex gap-2 flex-wrap items-center">
                   {(["email", "sms", "both"] as Channel[]).map(c => (
                     <button
                       key={c}
@@ -387,7 +394,30 @@ export default function CommunicationsPage() {
                       {c === "email" ? "Email" : c === "sms" ? "SMS" : "Both"}
                     </button>
                   ))}
+                  {smsReady === true && (
+                    <span className="flex items-center gap-1 text-[11px] font-semibold text-green-600 ml-1">
+                      <CheckCircle2 className="w-3.5 h-3.5" /> SMS ready
+                    </span>
+                  )}
                 </div>
+
+                {/* SMS not configured notice */}
+                {(channel === "sms" || channel === "both") && smsReady === false && (
+                  <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 space-y-1">
+                    <p className="text-xs font-bold text-amber-800 flex items-center gap-1.5">
+                      <MessageSquare className="w-3.5 h-3.5" /> SMS not yet connected
+                    </p>
+                    <p className="text-xs text-amber-700">
+                      To deliver real text messages, add your Twilio credentials as secrets:
+                    </p>
+                    <ul className="text-[11px] text-amber-700 space-y-0.5 pl-3 list-disc">
+                      <li><code className="font-mono bg-amber-100 px-1 rounded">TWILIO_ACCOUNT_SID</code></li>
+                      <li><code className="font-mono bg-amber-100 px-1 rounded">TWILIO_AUTH_TOKEN</code></li>
+                      <li><code className="font-mono bg-amber-100 px-1 rounded">TWILIO_FROM_NUMBER</code> — your Twilio phone number (e.g. +15551234567)</li>
+                    </ul>
+                    <p className="text-[11px] text-amber-600">Messages will be logged as simulated until credentials are added. Get a free number at twilio.com.</p>
+                  </div>
+                )}
 
                 {(channel === "email" || channel === "both") && (
                   <div className="space-y-1.5">
@@ -449,6 +479,22 @@ export default function CommunicationsPage() {
         {tab === "automations" && (
           <div className="space-y-4">
             <p className="text-sm text-muted-foreground">Automatically send messages when a booking changes phase. Edit templates with placeholders like <code className="bg-gray-100 px-1 rounded text-xs">{"{{customerName}}"}</code>, <code className="bg-gray-100 px-1 rounded text-xs">{"{{startDate}}"}</code>, <code className="bg-gray-100 px-1 rounded text-xs">{"{{endDate}}"}</code>, <code className="bg-gray-100 px-1 rounded text-xs">{"{{totalPrice}}"}</code>.</p>
+
+            {smsReady === false && (
+              <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 flex items-start gap-3">
+                <MessageSquare className="w-4 h-4 text-amber-600 mt-0.5 shrink-0" />
+                <div className="space-y-1">
+                  <p className="text-xs font-bold text-amber-800">SMS delivery is not yet active</p>
+                  <p className="text-xs text-amber-700">SMS toggles work, but messages won't be delivered until you add your Twilio credentials as secrets: <code className="font-mono bg-amber-100 px-1 rounded">TWILIO_ACCOUNT_SID</code>, <code className="font-mono bg-amber-100 px-1 rounded">TWILIO_AUTH_TOKEN</code>, <code className="font-mono bg-amber-100 px-1 rounded">TWILIO_FROM_NUMBER</code>. Get a free number at <strong>twilio.com</strong>.</p>
+                </div>
+              </div>
+            )}
+            {smsReady === true && (
+              <div className="rounded-xl border border-green-200 bg-green-50 px-4 py-3 flex items-center gap-3">
+                <CheckCircle2 className="w-4 h-4 text-green-600 shrink-0" />
+                <p className="text-xs font-semibold text-green-800">SMS delivery is active — text messages will be sent when the SMS toggle is enabled on an automation.</p>
+              </div>
+            )}
 
             {loadingAutomations ? (
               <div className="py-8 text-center space-y-2">
