@@ -462,9 +462,7 @@ function Router() {
       </Route>
 
       {/* Storefront Routes — tenant-specific via slug prefix */}
-      <Route path="/:slug">
-        <SlugGuard><StorefrontLayout><StorefrontHome /></StorefrontLayout></SlugGuard>
-      </Route>
+      {/* NOTE: /:slug must come LAST so specific sub-routes match first */}
       <Route path="/:slug/listings/:id">
         <SlugGuard><StorefrontLayout><StorefrontProductDetail /></StorefrontLayout></SlugGuard>
       </Route>
@@ -494,6 +492,9 @@ function Router() {
       </Route>
       <Route path="/:slug/contact-card/:id">
         <ContactCardView />
+      </Route>
+      <Route path="/:slug">
+        <SlugGuard><StorefrontLayout><StorefrontHome /></StorefrontLayout></SlugGuard>
       </Route>
 
       {/* Root → SaaS marketing landing */}
