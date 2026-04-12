@@ -11,6 +11,8 @@ import {
   IdCard, Mountain, Sparkles, Send, MailCheck, CalendarPlus, CalendarCheck, CalendarX, ChevronDown
 } from "lucide-react";
 import { format, differenceInDays, startOfDay, parseISO, subHours } from "date-fns";
+import { loadStripe } from "@stripe/stripe-js";
+import { Elements, CardElement, useStripe, useElements } from "@stripe/react-stripe-js";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
@@ -126,6 +128,76 @@ function useConfetti(active: boolean) {
   }, [active]);
 }
 
+// ── Pay Now Card Form (runs inside Stripe Elements provider) ─────────────────
+function PayCardForm({ bookingId, customerEmail, clientSecret, amount, onSuccess, onCancel }: {
+  bookingId: string;
+  customerEmail: string;
+  clientSecret: string;
+  amount: string;
+  onSuccess: () => void;
+  onCancel: () => void;
+}) {
+  const stripe = useStripe();
+  const elements = useElements();
+  const [paying, setPaying] = useState(false);
+  const [error, setError] = useState("");
+
+  const handlePay = async () => {
+    if (!stripe || !elements) return;
+    setError("");
+    setPaying(true);
+    try {
+      const card = elements.getElement(CardElement);
+      if (!card) { setError("Card input not ready."); setPaying(false); return; }
+      const { error: stripeErr, paymentIntent } = await stripe.confirmCardPayment(clientSecret, {
+        payment_method: { card },
+      });
+      if (stripeErr) {
+        setError(stripeErr.message ?? "Payment failed. Please check your card and try again.");
+        setPaying(false);
+        return;
+      }
+      if (paymentIntent?.status === "succeeded") {
+        // Confirm on server, notify admin
+        await fetch(`${BASE}/api/stripe/split-payment-confirm/${bookingId}`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ customerEmail, paymentIntentId: paymentIntent.id }),
+        });
+        onSuccess();
+      } else {
+        setError("Payment could not be completed. Please try again.");
+        setPaying(false);
+      }
+    } catch (e: any) {
+      setError(e.message ?? "Payment failed.");
+      setPaying(false);
+    }
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="border border-gray-200 rounded-xl px-4 py-3 bg-white">
+        <CardElement options={{
+          style: { base: { fontSize: "15px", color: "#1a2332", fontFamily: "inherit", "::placeholder": { color: "#9ca3af" } } },
+          hidePostalCode: false,
+        }} />
+      </div>
+      {error && <p className="text-red-600 text-sm font-medium">{error}</p>}
+      <button
+        onClick={handlePay}
+        disabled={paying}
+        className="w-full rounded-xl bg-[#3ab549] hover:bg-[#2d9138] disabled:opacity-60 text-white font-bold py-3 text-sm transition-colors flex items-center justify-center gap-2"
+      >
+        {paying ? <><Loader2 className="w-4 h-4 animate-spin" /> Processing…</> : `Pay $${amount}`}
+      </button>
+      <button onClick={onCancel} disabled={paying} className="w-full text-center text-sm text-gray-500 hover:text-gray-700 underline">
+        Cancel
+      </button>
+    </div>
+  );
+}
+
 export default function MyBookingDetail() {
   const { slug, id } = useParams<{ slug: string; id: string }>();
   const [, setLocation] = useLocation();
@@ -161,6 +233,51 @@ export default function MyBookingDetail() {
   const [extNote, setExtNote] = useState("");
   const [extSubmitting, setExtSubmitting] = useState(false);
   const [extError, setExtError] = useState("");
+
+  // Pay Now (self-pay remaining balance) state
+  const [payModalOpen, setPayModalOpen] = useState(false);
+  const [payClientSecret, setPayClientSecret] = useState<string | null>(null);
+  const [payStripeKey, setPayStripeKey] = useState<string | null>(null);
+  const [payAmount, setPayAmount] = useState<string>("0.00");
+  const [payIntentId, setPayIntentId] = useState<string | null>(null);
+  const [payInitializing, setPayInitializing] = useState(false);
+  const [paySuccess, setPaySuccess] = useState(false);
+
+  const openPayNow = useCallback(async () => {
+    if (!session || !booking) return;
+    setPayInitializing(true);
+    try {
+      const res = await fetch(`${BASE}/api/stripe/split-payment-intent/${booking.id}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ customerEmail: session.email }),
+      });
+      const data = await res.json();
+      if (!res.ok) { alert(data.error ?? "Failed to initialize payment."); return; }
+      setPayClientSecret(data.clientSecret);
+      setPayStripeKey(data.stripePublishableKey);
+      setPayAmount(data.amount);
+      setPayIntentId(data.paymentIntentId);
+      setPayModalOpen(true);
+    } catch {
+      alert("Failed to initialize payment. Please try again.");
+    } finally {
+      setPayInitializing(false);
+    }
+  }, [session, booking]);
+
+  const handlePaySuccess = useCallback(() => {
+    setPayModalOpen(false);
+    setPaySuccess(true);
+    setPayClientSecret(null);
+    // Reload booking to update the UI (balance disappears)
+    if (session) {
+      fetch(`${BASE}/api/bookings/${id}?customerEmail=${encodeURIComponent(session.email)}`)
+        .then(r => r.json())
+        .then(data => { if (!data.error) setBooking(data); })
+        .catch(() => {});
+    }
+  }, [session, id]);
 
   useEffect(() => {
     if (!booking) return;
@@ -461,12 +578,13 @@ export default function MyBookingDetail() {
               </p>
             </div>
             {(booking as any).splitRemainingStatus === "failed" && (
-              <a
-                href={`mailto:${booking.tenantSlug ? "" : "us"}`}
-                className="block w-full text-center rounded-xl bg-red-600 hover:bg-red-700 text-white font-bold py-2.5 text-sm transition-colors"
+              <button
+                onClick={openPayNow}
+                disabled={payInitializing}
+                className="flex w-full items-center justify-center gap-2 rounded-xl bg-red-600 hover:bg-red-700 disabled:opacity-60 text-white font-bold py-2.5 text-sm transition-colors"
               >
-                Contact Us to Resolve
-              </a>
+                {payInitializing ? <><Loader2 className="w-4 h-4 animate-spin" /> Loading…</> : <><CreditCard className="w-4 h-4" /> Pay Now</>}
+              </button>
             )}
           </div>
         </div>
@@ -1483,6 +1601,48 @@ export default function MyBookingDetail() {
           </Link>
         )}
       </div>
+
+      {/* ── Pay Now Modal ── */}
+      {payModalOpen && payClientSecret && payStripeKey && session && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 space-y-5">
+            {paySuccess ? (
+              <div className="text-center space-y-3 py-4">
+                <CheckCircle2 className="w-12 h-12 text-green-500 mx-auto" />
+                <p className="text-lg font-bold text-gray-900">Payment Successful!</p>
+                <p className="text-sm text-gray-600">Your remaining balance has been paid. Your booking is fully confirmed.</p>
+                <button onClick={() => { setPayModalOpen(false); setPaySuccess(false); }}
+                  className="w-full rounded-xl bg-[#3ab549] hover:bg-[#2d9138] text-white font-bold py-2.5 text-sm mt-2">
+                  Done
+                </button>
+              </div>
+            ) : (
+              <>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-base font-bold text-gray-900">Pay Remaining Balance</p>
+                    <p className="text-2xl font-black text-[#3ab549] mt-0.5">${payAmount}</p>
+                  </div>
+                  <button onClick={() => setPayModalOpen(false)} className="text-gray-400 hover:text-gray-600 p-1 rounded-lg">
+                    <XIcon className="w-5 h-5" />
+                  </button>
+                </div>
+                <p className="text-sm text-gray-500">Enter your card details below to complete your payment.</p>
+                <Elements stripe={loadStripe(payStripeKey)} options={{ clientSecret: payClientSecret }}>
+                  <PayCardForm
+                    bookingId={String(booking.id)}
+                    customerEmail={session.email}
+                    clientSecret={payClientSecret}
+                    amount={payAmount}
+                    onSuccess={handlePaySuccess}
+                    onCancel={() => setPayModalOpen(false)}
+                  />
+                </Elements>
+              </>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

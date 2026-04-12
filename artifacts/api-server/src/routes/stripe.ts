@@ -3,7 +3,7 @@ import { db } from "@workspace/db";
 import { tenantsTable, bookingsTable, customersTable, listingsTable, businessProfileTable } from "@workspace/db/schema";
 import { eq, desc, and, or, sql } from "drizzle-orm";
 import { stripe, getStripeForTenant, PLATFORM_FEE_PERCENT } from "../services/stripe";
-import { sendStripeRestrictedAlertEmail, sendPaymentRequestEmail, sendPaymentFailedRenterEmail, sendPaymentFailedAdminEmail } from "../services/gmail";
+import { sendStripeRestrictedAlertEmail, sendPaymentRequestEmail, sendPaymentFailedRenterEmail, sendPaymentFailedAdminEmail, sendSplitPaymentChargedEmail, sendSplitPaymentSelfPaidAdminEmail } from "../services/gmail";
 import { triggerAvailablePayout, sweepPendingPayouts } from "../services/payouts";
 import type { Request } from "express";
 
@@ -1455,6 +1455,175 @@ router.post("/stripe/charge-remaining/:bookingId", requireAdminAuth, async (req,
       splitRemainingStatus: "failed", updatedAt: new Date(),
     }).where(eq(bookingsTable.id, Number(req.params.bookingId))).catch(() => {});
     res.status(400).json({ error: e.message || "Charge failed." });
+  }
+});
+
+// ── Customer self-pay: create payment intent for remaining split-payment balance ─
+// No admin auth — customer provides their email to verify ownership.
+router.post("/stripe/split-payment-intent/:bookingId", async (req, res) => {
+  try {
+    const bookingId = Number(req.params.bookingId);
+    const customerEmail = (req.body?.customerEmail ?? "").trim().toLowerCase();
+    if (!customerEmail) { res.status(400).json({ error: "customerEmail is required" }); return; }
+
+    const [booking] = await db.select().from(bookingsTable).where(eq(bookingsTable.id, bookingId));
+    if (!booking) { res.status(404).json({ error: "Booking not found" }); return; }
+    if (booking.customerEmail.toLowerCase() !== customerEmail) {
+      res.status(403).json({ error: "Access denied" }); return;
+    }
+    if (!booking.paymentPlanEnabled) {
+      res.status(400).json({ error: "This booking does not use a payment plan." }); return;
+    }
+    if (booking.splitRemainingStatus === "charged") {
+      res.status(400).json({ error: "Remaining balance has already been paid." }); return;
+    }
+    if (booking.splitRemainingStatus === "waived") {
+      res.status(400).json({ error: "Remaining balance was waived." }); return;
+    }
+
+    const remainingCents = Math.round(parseFloat(String(booking.splitRemainingAmount ?? "0")) * 100);
+    if (remainingCents < 50) {
+      res.status(400).json({ error: "Remaining balance is too small to charge." }); return;
+    }
+
+    const [tenant] = await db.select().from(tenantsTable).where(eq(tenantsTable.id, booking.tenantId));
+    if (!tenant) { res.status(404).json({ error: "Tenant not found" }); return; }
+
+    const isTestMode = !!tenant.testMode;
+    const stripeClient = getStripeForTenant(isTestMode);
+
+    const feePercent = tenant.platformFeePercent != null
+      ? parseFloat(tenant.platformFeePercent) / 100
+      : PLATFORM_FEE_PERCENT;
+    const totalPriceCents = Math.round(parseFloat(String(booking.totalPrice ?? "0")) * 100);
+    const ppFeeTotalCents = Math.round(parseFloat(String(booking.protectionPlanFee ?? "0")) * 100);
+    let platformFeeAmount: number;
+    if (tenant.isHost && ppFeeTotalCents > 0 && totalPriceCents > 0) {
+      const proportion = Math.min(remainingCents / totalPriceCents, 1);
+      const ppFeeInCharge = Math.round(ppFeeTotalCents * proportion);
+      const rentalInCharge = remainingCents - ppFeeInCharge;
+      platformFeeAmount = Math.round(rentalInCharge * feePercent) + ppFeeInCharge;
+    } else {
+      platformFeeAmount = Math.round(remainingCents * feePercent);
+    }
+    const tenantConnected = !isTestMode && !!(tenant.stripeAccountId && tenant.stripeChargesEnabled);
+
+    const intentParams: any = {
+      amount: remainingCents,
+      currency: "usd",
+      description: `Remaining balance — Booking #${booking.id} — ${tenant.name}${isTestMode ? " [TEST]" : ""}`,
+      metadata: {
+        tenant_id: String(booking.tenantId),
+        booking_id: String(booking.id),
+        charge_type: "split_payment_self_pay",
+        test_mode: isTestMode ? "true" : "false",
+      },
+    };
+    if (tenantConnected) {
+      intentParams.transfer_data = { destination: tenant.stripeAccountId };
+      intentParams.application_fee_amount = platformFeeAmount;
+    }
+
+    const pi = await stripeClient.paymentIntents.create(intentParams);
+
+    const publishableKey = isTestMode
+      ? (process.env.STRIPE_TEST_PUBLISHABLE_KEY ?? process.env.STRIPE_PUBLISHABLE_KEY)
+      : process.env.STRIPE_PUBLISHABLE_KEY;
+
+    res.json({
+      clientSecret: pi.client_secret,
+      paymentIntentId: pi.id,
+      stripePublishableKey: publishableKey,
+      amount: (remainingCents / 100).toFixed(2),
+      testMode: isTestMode,
+    });
+  } catch (e: any) {
+    console.error("[stripe/split-payment-intent]", e.message);
+    res.status(500).json({ error: e.message || "Failed to create payment intent." });
+  }
+});
+
+// ── Customer self-pay: confirm successful payment + notify admin ───────────────
+router.post("/stripe/split-payment-confirm/:bookingId", async (req, res) => {
+  try {
+    const bookingId = Number(req.params.bookingId);
+    const { customerEmail: rawEmail, paymentIntentId } = req.body ?? {};
+    const customerEmail = (rawEmail ?? "").trim().toLowerCase();
+    if (!customerEmail || !paymentIntentId) {
+      res.status(400).json({ error: "customerEmail and paymentIntentId are required" }); return;
+    }
+
+    const [booking] = await db.select().from(bookingsTable).where(eq(bookingsTable.id, bookingId));
+    if (!booking) { res.status(404).json({ error: "Booking not found" }); return; }
+    if (booking.customerEmail.toLowerCase() !== customerEmail) {
+      res.status(403).json({ error: "Access denied" }); return;
+    }
+
+    const [tenant] = await db.select().from(tenantsTable).where(eq(tenantsTable.id, booking.tenantId));
+    if (!tenant) { res.status(404).json({ error: "Tenant not found" }); return; }
+
+    const isTestMode = !!tenant.testMode;
+    const stripeClient = getStripeForTenant(isTestMode);
+    const pi = await stripeClient.paymentIntents.retrieve(paymentIntentId);
+    if (pi.status !== "succeeded") {
+      res.status(400).json({ error: `Payment not confirmed (status: ${pi.status})` }); return;
+    }
+
+    const remainingCents = pi.amount;
+    const amountPaid = (remainingCents / 100).toFixed(2);
+
+    await db.update(bookingsTable).set({
+      splitRemainingStatus: "charged",
+      splitRemainingIntentId: pi.id,
+      splitRemainingChargedAt: new Date(),
+      updatedAt: new Date(),
+    }).where(eq(bookingsTable.id, booking.id));
+
+    // Send notifications — best-effort, non-blocking
+    (async () => {
+      try {
+        const [listingRow] = booking.listingId
+          ? await db.select({ title: listingsTable.title }).from(listingsTable).where(eq(listingsTable.id, booking.listingId!))
+          : [{ title: "Rental" }];
+        const listingTitle = listingRow?.title ?? "Rental";
+        const appUrl = process.env.APP_URL ?? "https://myoutdoorshare.com";
+        const bookingUrl = `${appUrl}/${tenant.slug}/admin/bookings/${booking.id}`;
+
+        // Email renter: balance charged confirmation
+        await sendSplitPaymentChargedEmail({
+          customerName: booking.customerName,
+          customerEmail: booking.customerEmail,
+          bookingId: booking.id,
+          listingTitle,
+          amountCharged: amountPaid,
+          companyName: tenant.name,
+          adminEmail: tenant.email ?? undefined,
+        });
+
+        // Email admin: customer paid
+        if (tenant.email) {
+          await sendSplitPaymentSelfPaidAdminEmail({
+            adminEmail: tenant.email,
+            customerName: booking.customerName,
+            customerEmail: booking.customerEmail,
+            bookingId: booking.id,
+            listingTitle,
+            startDate: booking.startDate,
+            endDate: booking.endDate,
+            amountPaid,
+            companyName: tenant.name,
+            bookingUrl,
+          });
+        }
+      } catch (emailErr: any) {
+        console.warn("[stripe/split-payment-confirm] email error:", emailErr.message);
+      }
+    })();
+
+    res.json({ success: true, amountPaid });
+  } catch (e: any) {
+    console.error("[stripe/split-payment-confirm]", e.message);
+    res.status(500).json({ error: e.message || "Failed to confirm payment." });
   }
 });
 

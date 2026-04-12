@@ -3010,6 +3010,50 @@ export async function sendPaymentFailedAdminEmail(opts: {
   });
 }
 
+// ── Split payment — customer self-paid remaining balance ─────────────────────
+export async function sendSplitPaymentSelfPaidAdminEmail(opts: {
+  adminEmail: string;
+  customerName: string;
+  customerEmail: string;
+  bookingId: number;
+  listingTitle: string;
+  startDate: string;
+  endDate: string;
+  amountPaid: string;
+  companyName: string;
+  bookingUrl?: string;
+}): Promise<void> {
+  const { adminEmail, customerName, customerEmail, bookingId, listingTitle, startDate, endDate, amountPaid, companyName, bookingUrl } = opts;
+  const subject = `[OutdoorShare] ✅ Remaining balance paid — Booking #${bookingId} (${customerName})`;
+
+  const body = `
+    <p style="margin:0 0 8px;font-size:18px;font-weight:700;color:#166534;">Customer paid their remaining balance</p>
+    <p style="margin:0 0 20px;font-size:15px;color:#374151;line-height:1.6;">
+      ${esc(customerName)} just paid the remaining balance for their booking. No further action is needed — the booking is fully paid.
+    </p>
+    ${infoTable([
+      { label: "Booking #",  value: `#${bookingId}`, mono: true },
+      { label: "Customer",   value: `${customerName} (${customerEmail})` },
+      { label: "Rental",     value: listingTitle },
+      { label: "Dates",      value: `${startDate} → ${endDate}` },
+      { label: "Amount",     value: `$${amountPaid}` },
+    ])}
+    <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:14px 18px;margin:20px 0;">
+      <p style="margin:0;font-size:13px;color:#166534;font-weight:600;">
+        ✅ Booking #${bookingId} is now fully paid.
+      </p>
+    </div>
+    ${bookingUrl ? ctaButton("View Booking →", bookingUrl, BRAND_GREEN) : ""}
+  `;
+
+  const html = emailShell({ preheader: `Remaining balance of $${amountPaid} paid for booking #${bookingId} — ${customerName}`, badgeLabel: "Balance Paid", badgeColor: BRAND_GREEN, body });
+  const gmail = await getUncachableGmailClient();
+  await gmail.users.messages.send({
+    userId: "me",
+    requestBody: { raw: makeRawEmail(adminEmail, subject, html) },
+  });
+}
+
 // ── Feedback notification (platform superadmins) ───────────────────────────────
 export async function sendFeedbackNotification(opts: {
   toEmail: string;
