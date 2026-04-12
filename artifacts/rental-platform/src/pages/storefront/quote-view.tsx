@@ -385,14 +385,22 @@ export default function StorefrontQuoteView() {
                   Rental total: <span className="text-white font-black text-base">${totalPrice.toFixed(2)}</span>
                   <span className="opacity-70 ml-1.5 text-xs">+ deposit &amp; fees at checkout</span>
                 </p>
+
+                {/* Step nudge */}
+                <p className="text-white/60 text-xs font-semibold mb-2 flex items-center gap-1">
+                  <span className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-white/20 text-white text-[10px] font-black shrink-0">1</span>
+                  Tap the button below to continue
+                </p>
+
                 <Button
                   size="lg"
-                  className="bg-white hover:bg-gray-50 font-black px-7 rounded-xl shadow-sm w-full sm:w-auto text-base"
-                  style={{ color: BRAND_GREEN }}
+                  className="w-full font-black text-base rounded-xl shadow-lg transition-all duration-150 hover:brightness-110 hover:shadow-xl active:scale-[0.98] flex items-center justify-center gap-2 py-4"
+                  style={{ background: "#1a2332", color: "#ffffff", border: "none" }}
                   onClick={handleBookNow}
                 >
-                  <CreditCard className="w-4 h-4 mr-2" />
+                  <CreditCard className="w-5 h-5 shrink-0" />
                   Book &amp; Pay Now
+                  <svg className="w-4 h-4 shrink-0 ml-1" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M13.5 4.5 21 12m0 0-7.5 7.5M21 12H3"/></svg>
                 </Button>
               </div>
             </div>
