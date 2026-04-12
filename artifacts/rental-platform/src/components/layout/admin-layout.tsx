@@ -192,14 +192,24 @@ export function AdminLayout({ children }: { children: React.ReactNode }) {
 
     const origTitle = document.title;
 
+    const BRAND_ICON = "/favicon-180.png?v=3";
     if (companyLogoUrl) {
-      setFavicon(companyLogoUrl);
-      setLink('link[rel="shortcut icon"]',    companyLogoUrl);
-      setLink('link[rel="apple-touch-icon"]', companyLogoUrl);
-      setMeta('meta[name="msapplication-TileImage"]', companyLogoUrl);
-      setMeta('meta[property="og:image"]',            companyLogoUrl);
-      setMeta('meta[property="og:image:secure_url"]', companyLogoUrl);
-      setMeta('meta[name="twitter:image"]',           companyLogoUrl);
+      const img = new Image();
+      img.onload = () => {
+        setFavicon(companyLogoUrl);
+        setLink('link[rel="shortcut icon"]',    companyLogoUrl);
+        setLink('link[rel="apple-touch-icon"]', companyLogoUrl);
+        setMeta('meta[name="msapplication-TileImage"]', companyLogoUrl);
+        setMeta('meta[property="og:image"]',            companyLogoUrl);
+        setMeta('meta[property="og:image:secure_url"]', companyLogoUrl);
+        setMeta('meta[name="twitter:image"]',           companyLogoUrl);
+      };
+      img.onerror = () => {
+        setFavicon(BRAND_ICON);
+        setLink('link[rel="shortcut icon"]',    BRAND_ICON);
+        setLink('link[rel="apple-touch-icon"]', BRAND_ICON);
+      };
+      img.src = companyLogoUrl;
     }
     if (companyName) {
       const adminTitle = `${companyName} — Admin Dashboard`;

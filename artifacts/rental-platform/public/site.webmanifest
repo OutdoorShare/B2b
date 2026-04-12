@@ -9,14 +9,20 @@
   "orientation": "portrait-primary",
   "icons": [
     {
-      "src": "/outdoorshare-logo.png",
-      "sizes": "192x192",
+      "src": "/favicon-32.png?v=3",
+      "sizes": "32x32",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/favicon-180.png?v=3",
+      "sizes": "180x180",
       "type": "image/png",
       "purpose": "any maskable"
     },
     {
       "src": "/outdoorshare-logo.png",
-      "sizes": "512x512",
+      "sizes": "256x256",
       "type": "image/png",
       "purpose": "any"
     }

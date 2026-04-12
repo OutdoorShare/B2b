@@ -236,7 +236,8 @@ export function StorefrontLayout({ children }: { children: React.ReactNode }) {
     const title       = `${companyName} — Rental Booking`;
     const description = desc || tagline || `Book rentals from ${companyName} online.`;
     const toAbsolute  = (u: string) => u.startsWith("http") ? u : `${window.location.origin}${u.startsWith("/") ? "" : "/"}${u}`;
-    const image       = toAbsolute(logoUrl || "/outdoorshare-logo.png");
+    const BRAND_ICON  = "/favicon-180.png?v=3";
+    const image       = toAbsolute(logoUrl || BRAND_ICON);
     const url         = window.location.href;
 
     // ── helpers ───────────────────────────────────────────────────────
@@ -257,6 +258,11 @@ export function StorefrontLayout({ children }: { children: React.ReactNode }) {
       }
       link.href = href;
     };
+    const applyIcons = (iconUrl: string) => {
+      setFavicon(iconUrl);
+      setLink('link[rel="shortcut icon"]',    iconUrl);
+      setLink('link[rel="apple-touch-icon"]', iconUrl);
+    };
 
     // ── save originals for cleanup ────────────────────────────────────
     const origTitle = document.title;
@@ -264,10 +270,15 @@ export function StorefrontLayout({ children }: { children: React.ReactNode }) {
     // ── apply tenant branding ─────────────────────────────────────────
     document.title = title;
 
-    // All favicon / app-icon links
-    setFavicon(image);
-    setLink('link[rel="shortcut icon"]',    image);
-    setLink('link[rel="apple-touch-icon"]', image);
+    // Verify logo loads before using it; fall back to branded icon if broken
+    if (logoUrl) {
+      const testImg = new Image();
+      testImg.onload  = () => applyIcons(image);
+      testImg.onerror = () => applyIcons(toAbsolute(BRAND_ICON));
+      testImg.src = image;
+    } else {
+      applyIcons(toAbsolute(BRAND_ICON));
+    }
 
     // Primary SEO meta
     setMeta('meta[name="description"]',                  "content", description);
