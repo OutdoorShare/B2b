@@ -178,49 +178,6 @@ export default function AdminAnalytics() {
             </CardContent>
           </Card>
 
-          {/* Platform Fee */}
-          <Card className="border-0 shadow-sm ring-1 ring-border">
-            <CardContent className="p-5">
-              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-widest mb-3">
-                Platform Fee
-                {summary?.passPlatformFeeToCustomer
-                  ? " · Passed to renters"
-                  : ` · ${summary?.platformFeePercent ?? 0}%`}
-              </p>
-              {summary?.passPlatformFeeToCustomer ? (
-                <>
-                  <p className="text-3xl font-extrabold tracking-tight text-muted-foreground">$0.00</p>
-                  <p className="text-[11px] text-muted-foreground mt-2 font-medium">Renters pay this on checkout</p>
-                </>
-              ) : (
-                <>
-                  <p className="text-3xl font-extrabold tracking-tight text-rose-500">
-                    -${(summary?.platformFeeTotal ?? 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                  </p>
-                  <div className="mt-3">
-                    <div className="flex items-center justify-between text-[11px] text-muted-foreground mb-1">
-                      <span>Keep rate</span>
-                      <span className="font-semibold text-foreground">
-                        {summary?.totalRevenue > 0
-                          ? (((summary.netEarnings ?? 0) / summary.totalRevenue) * 100).toFixed(1)
-                          : 100}%
-                      </span>
-                    </div>
-                    <div className="w-full h-1.5 rounded-full bg-muted overflow-hidden">
-                      <div
-                        className="h-full rounded-full bg-emerald-500"
-                        style={{
-                          width: `${summary?.totalRevenue > 0
-                            ? (((summary.netEarnings ?? 0) / summary.totalRevenue) * 100).toFixed(1)
-                            : 100}%`
-                        }}
-                      />
-                    </div>
-                  </div>
-                </>
-              )}
-            </CardContent>
-          </Card>
         </div>
       )}
 

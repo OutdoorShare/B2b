@@ -146,7 +146,6 @@ export default function AdminWallet() {
   };
 
   const totalGross = data?.transactions.reduce((s, t) => s + t.gross, 0) ?? 0;
-  const totalFees = data?.transactions.reduce((s, t) => s + t.platformFee, 0) ?? 0;
   const totalNet = data?.transactions.reduce((s, t) => s + t.net, 0) ?? 0;
 
   return (
@@ -295,14 +294,10 @@ export default function AdminWallet() {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="grid grid-cols-3 gap-4 text-center">
+            <div className="grid grid-cols-2 gap-4 text-center">
               <div className="rounded-lg bg-slate-50 p-4">
                 <p className="text-xs text-muted-foreground mb-1">Gross Revenue</p>
                 <p className="text-xl font-bold">{fmt(totalGross)}</p>
-              </div>
-              <div className="rounded-lg bg-red-50 p-4">
-                <p className="text-xs text-muted-foreground mb-1">Platform Fees</p>
-                <p className="text-xl font-bold text-red-600">−{fmt(totalFees)}</p>
               </div>
               <div className="rounded-lg bg-emerald-50 p-4">
                 <p className="text-xs text-muted-foreground mb-1">Your Earnings</p>
@@ -341,7 +336,6 @@ export default function AdminWallet() {
                     <th className="text-left px-4 py-3 font-medium">Rental Period</th>
                     <th className="text-left px-4 py-3 font-medium">Payment</th>
                     <th className="text-right px-4 py-3 font-medium">Gross</th>
-                    <th className="text-right px-4 py-3 font-medium">Platform Fee</th>
                     <th className="text-right px-4 py-3 font-medium text-emerald-700">Your Earnings</th>
                   </tr>
                 </thead>
@@ -356,7 +350,6 @@ export default function AdminWallet() {
                       </td>
                       <td className="px-4 py-3">{paymentMethodBadge(t.paymentMethod)}</td>
                       <td className="px-4 py-3 text-right">{fmt(t.gross)}</td>
-                      <td className="px-4 py-3 text-right text-red-600">−{fmt(t.platformFee)}</td>
                       <td className="px-4 py-3 text-right font-semibold text-emerald-600">{fmt(t.net)}</td>
                     </tr>
                   ))}
@@ -365,7 +358,6 @@ export default function AdminWallet() {
                   <tr className="border-t bg-slate-50 font-semibold text-sm">
                     <td colSpan={5} className="px-4 py-3 text-muted-foreground">Totals ({data?.transactions.length} transactions)</td>
                     <td className="px-4 py-3 text-right">{fmt(totalGross)}</td>
-                    <td className="px-4 py-3 text-right text-red-600">−{fmt(totalFees)}</td>
                     <td className="px-4 py-3 text-right text-emerald-600">{fmt(totalNet)}</td>
                   </tr>
                 </tfoot>
