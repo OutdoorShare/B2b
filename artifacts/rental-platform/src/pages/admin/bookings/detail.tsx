@@ -14,6 +14,7 @@ import { Link, useLocation } from "wouter";
 import { ArrowLeft, User, Phone, Mail, Calendar, Package, StickyNote, ShieldAlert, Pencil, FileSignature, FileText, ChevronDown, ChevronUp, Download, Camera, CheckCircle2, Loader2, ExternalLink, ImageIcon, Clock, ShieldCheck, ShieldX, Shield, AlertCircle, Copy, Send, UserCheck, Lock, LockOpen, DollarSign, PackageCheck, ScanSearch, MailCheck, Link2, MailX, RefreshCw, CreditCard, CalendarPlus, CalendarCheck, CalendarX, XCircle } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { QRCodeSVG } from "qrcode.react";
 import { format, differenceInDays, startOfDay } from "date-fns";
 
@@ -641,8 +642,8 @@ export default function AdminBookingDetail() {
         );
       })()}
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        <div className="lg:col-span-2 space-y-8">
+      <div className="grid grid-cols-1 lg:grid-cols-5 gap-8">
+        <div className="lg:col-span-3 space-y-8">
           {/* Customer Info */}
           <Card>
             <CardHeader>
@@ -1156,9 +1157,17 @@ export default function AdminBookingDetail() {
           )}
         </div>
 
-        {/* Right Column: Payment + Pickup Photos */}
-        <div className="lg:col-span-1 space-y-8">
+        {/* Right Column: Tabbed sidebar */}
+        <div className="lg:col-span-2 sticky top-6 self-start">
+          <Tabs defaultValue="checklist" className="w-full">
+            <TabsList className="w-full mb-4 grid grid-cols-3">
+              <TabsTrigger value="checklist" className="text-xs font-semibold">Checklist</TabsTrigger>
+              <TabsTrigger value="inspection" className="text-xs font-semibold">Inspection</TabsTrigger>
+              <TabsTrigger value="history" className="text-xs font-semibold">History</TabsTrigger>
+            </TabsList>
 
+            {/* ── TAB: Checklist ── */}
+            <TabsContent value="checklist" className="space-y-6 mt-0">
           {/* ── Unified Rental Task Card — confirmed / active / completed ── */}
           {['confirmed', 'active', 'completed'].includes(booking.status) && (() => {
             const isConfirmed  = booking.status === 'confirmed';
@@ -1548,6 +1557,17 @@ export default function AdminBookingDetail() {
             );
           })()}
 
+          {/* Empty state for pending/cancelled */}
+          {!['confirmed', 'active', 'completed'].includes(booking.status) && (
+            <div className="flex flex-col items-center justify-center py-12 text-center text-muted-foreground gap-3">
+              <PackageCheck className="w-10 h-10 opacity-30" />
+              <p className="text-sm font-medium">Checklist available after confirming the booking.</p>
+            </div>
+          )}
+            </TabsContent>
+
+            {/* ── TAB: Inspection & Deposit ── */}
+            <TabsContent value="inspection" className="space-y-6 mt-0">
           {/* ── AI Return Inspection Card ── */}
           {['active', 'completed'].includes(booking.status) && (() => {
             const beforePhotos: string[] = (booking as any).pickupPhotos ?? [];
@@ -1767,7 +1787,10 @@ export default function AdminBookingDetail() {
               </CardContent>
             </Card>
           )}
+            </TabsContent>
 
+            {/* ── TAB: History & Payments ── */}
+            <TabsContent value="history" className="space-y-6 mt-0">
           {/* ── Email Activity Log ── */}
           {(() => {
             const events: { type: string; sentAt: string; toEmail?: string }[] =
@@ -2056,6 +2079,9 @@ export default function AdminBookingDetail() {
               )}
             </CardContent>
           </Card>
+            </TabsContent>
+
+          </Tabs>
         </div>
       </div>
     </div>
