@@ -2827,3 +2827,71 @@ export async function sendPaymentFailedAdminEmail(opts: {
     requestBody: { raw: makeRawEmail(adminEmail, subject, html) },
   });
 }
+
+// ── Feedback notification (platform superadmins) ───────────────────────────────
+export async function sendFeedbackNotification(opts: {
+  toEmail: string;
+  toName: string;
+  feedbackId: number;
+  submitterName: string;
+  submitterEmail: string;
+  submitterType: "renter" | "admin";
+  subject: string | null;
+  message: string;
+  rating: number | null;
+  tenantName: string | null;
+  tenantSlug: string | null;
+}): Promise<void> {
+  const {
+    toEmail, toName, feedbackId,
+    submitterName, submitterEmail, submitterType,
+    subject, message, rating, tenantName, tenantSlug,
+  } = opts;
+
+  const emailSubject = `[OutdoorShare] New feedback from ${submitterName}`;
+  const preheader = subject ? `"${subject}" — ${submitterName}` : `New ${submitterType} feedback — ${submitterName}`;
+
+  const ratingHtml = rating
+    ? `<p style="margin:0 0 4px;font-size:13px;color:#6b7280;font-weight:600;text-transform:uppercase;letter-spacing:1px;">Rating</p>
+       <p style="margin:0 0 20px;font-size:20px;">${"⭐".repeat(rating)} (${rating}/5)</p>`
+    : "";
+
+  const fields: { label: string; value: string; mono?: boolean }[] = [
+    { label: "Feedback #", value: `#${feedbackId}`, mono: true },
+    { label: "From",       value: `${submitterName} (${submitterEmail})` },
+    { label: "Type",       value: submitterType === "admin" ? "Tenant Admin" : "Renter" },
+  ];
+  if (tenantName) fields.push({ label: "Tenant", value: tenantSlug ? `${tenantName} (${tenantSlug})` : tenantName });
+  if (subject)    fields.push({ label: "Subject", value: subject });
+
+  const portalUrl = `${getAppUrl()}/superadmin/feedback`;
+
+  const body = `
+    <p style="margin:0 0 8px;font-size:18px;font-weight:700;color:${BRAND_DARK};">New feedback received</p>
+    <p style="margin:0 0 24px;font-size:15px;color:#374151;line-height:1.6;">
+      Hi ${esc(toName)}, a new feedback submission has arrived on the platform.
+    </p>
+    ${infoTable(fields)}
+    ${ratingHtml}
+    <p style="margin:20px 0 8px;font-size:13px;color:#6b7280;font-weight:600;text-transform:uppercase;letter-spacing:1px;">Message</p>
+    <div style="background:#f8faf8;border-left:4px solid ${BRAND_GREEN};padding:14px 18px;border-radius:0 8px 8px 0;margin-bottom:28px;">
+      <p style="margin:0;font-size:15px;color:#374151;line-height:1.6;white-space:pre-wrap;">${esc(message)}</p>
+    </div>
+    ${ctaButton("View in Superadmin Portal →", portalUrl)}
+  `;
+
+  const html = emailShell({
+    preheader,
+    badgeLabel: "New Feedback",
+    badgeColor: BRAND_GREEN,
+    body,
+    logoUrlOverride: null,
+    companyNameOverride: "OutdoorShare",
+  });
+
+  const gmail = await getGmailClientDirect();
+  await gmail.users.messages.send({
+    userId: "me",
+    requestBody: { raw: makeRawEmail(toEmail, emailSubject, html) },
+  });
+}

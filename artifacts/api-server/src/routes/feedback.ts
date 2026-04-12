@@ -1,6 +1,7 @@
 import { Router, type Request, type Response } from "express";
 import { db, feedbackTable, superadminUsersTable } from "@workspace/db";
 import { desc, eq } from "drizzle-orm";
+import { sendFeedbackNotification } from "../services/gmail";
 
 const router = Router();
 
@@ -45,6 +46,36 @@ router.post("/feedback", async (req: Request, res: Response) => {
     }).returning();
 
     res.json({ success: true, id: row.id });
+
+    // Fire-and-forget: notify all active superadmins via email
+    (async () => {
+      try {
+        const admins = await db
+          .select({ name: superadminUsersTable.name, email: superadminUsersTable.email })
+          .from(superadminUsersTable)
+          .where(eq(superadminUsersTable.status, "active"));
+
+        await Promise.allSettled(
+          admins.map(admin =>
+            sendFeedbackNotification({
+              toEmail: admin.email,
+              toName: admin.name,
+              feedbackId: row.id,
+              submitterName: row.submitterName,
+              submitterEmail: row.submitterEmail,
+              submitterType: row.submitterType as "renter" | "admin",
+              subject: row.subject,
+              message: row.message,
+              rating: row.rating,
+              tenantName: row.tenantName,
+              tenantSlug: row.tenantSlug,
+            })
+          )
+        );
+      } catch (emailErr) {
+        console.error("[feedback] Email notification error:", emailErr);
+      }
+    })();
   } catch (err) {
     console.error("[feedback] POST error:", err);
     res.status(500).json({ error: "Failed to submit feedback" });
