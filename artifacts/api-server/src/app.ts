@@ -6,7 +6,7 @@ import { rateLimit } from "express-rate-limit";
 import pinoHttp from "pino-http";
 import path from "path";
 import router from "./routes";
-import uploadRouter from "./routes/upload";
+import uploadRouter, { downloadFromGCS } from "./routes/upload";
 import stripeRouter from "./routes/stripe";
 import billingRouter from "./routes/billing";
 import promoCodesRouter from "./routes/promo-codes";
@@ -80,6 +80,7 @@ const ALLOWED_ORIGIN_PATTERNS = [
   /^https?:\/\/.*\.replit\.dev$/,
   /^https?:\/\/.*\.replit\.app$/,
   /^https?:\/\/.*\.myoutdoorshare\.com$/,
+  /^https?:\/\/(www\.)?outdoorshare\.rent$/,
 ];
 
 // Extra origins from env (space-separated), e.g. ALLOWED_ORIGINS="https://custom.com"
@@ -108,9 +109,20 @@ app.use("/api/billing/webhook", express.raw({ type: "application/json" }));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-const uploadsDir = path.resolve(process.cwd(), "uploads");
-app.use("/uploads", express.static(uploadsDir));
-app.use("/api/uploads", express.static(uploadsDir));
+// Serve uploaded images from GCS (replaces local express.static)
+async function serveUpload(req: express.Request, res: express.Response) {
+  const filename = (req.params as any).filename || "";
+  const result = await downloadFromGCS(filename);
+  if (!result) {
+    res.status(404).json({ error: "Not found" });
+    return;
+  }
+  res.setHeader("Content-Type", result.contentType);
+  res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
+  result.stream.pipe(res);
+}
+app.get("/uploads/:filename", serveUpload);
+app.get("/api/uploads/:filename", serveUpload);
 
 captureUnhandledErrors();
 

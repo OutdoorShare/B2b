@@ -3,6 +3,7 @@ import fs from "fs";
 import path from "path";
 import multer from "multer";
 import { randomBytes } from "crypto";
+import { uploadBufferToGCS, downloadFromGCS } from "./upload";
 import { db } from "@workspace/db";
 import { bookingsTable, listingsTable, businessProfileTable, tenantsTable, contactCardsTable, customersTable, productsTable, quotesTable } from "@workspace/db/schema";
 import { eq, and, gte, lte, isNull, or, sql } from "drizzle-orm";
@@ -111,21 +112,25 @@ async function triggerDepositAtPickup(
 
 const UPLOADS_DIR_BOOKINGS = path.resolve(process.cwd(), "uploads");
 
-// Multer for pickup photo uploads (stored in same uploads dir)
+// Multer for pickup photo uploads (in-memory, then written to GCS)
 const pickupUpload = multer({
-  storage: multer.diskStorage({
-    destination: (_req, _file, cb) => cb(null, UPLOADS_DIR_BOOKINGS),
-    filename: (_req, file, cb) => {
-      const ext = path.extname(file.originalname).toLowerCase() || ".jpg";
-      cb(null, `pickup_${randomBytes(10).toString("hex")}${ext}`);
-    },
-  }),
+  storage: multer.memoryStorage(),
   limits: { fileSize: 10 * 1024 * 1024 },
   fileFilter: (_req, file, cb) => {
     if (file.mimetype.startsWith("image/")) cb(null, true);
     else cb(new Error("Only image files allowed"));
   },
 });
+
+// Upload multiple photo buffers to GCS and return /api/uploads/... URLs
+async function uploadPhotosToGCS(files: Express.Multer.File[], prefix: string): Promise<string[]> {
+  return Promise.all(files.map(async (f) => {
+    const ext = path.extname(f.originalname).toLowerCase() || ".jpg";
+    const filename = `${prefix}_${randomBytes(10).toString("hex")}${ext}`;
+    await uploadBufferToGCS(f.buffer, filename, f.mimetype);
+    return `/api/uploads/${filename}`;
+  }));
+}
 
 const router: IRouter = Router();
 
@@ -1459,7 +1464,7 @@ router.post("/bookings/:id/before-photos", pickupUpload.array("photos", 15), asy
 
     const isFirstCompletion = !booking.pickupCompletedAt;
     const existingPhotos: string[] = booking.pickupPhotos ? JSON.parse(booking.pickupPhotos) : [];
-    const newPhotoUrls = files.map(f => `/api/uploads/${f.filename}`);
+    const newPhotoUrls = await uploadPhotosToGCS(files, "pickup");
     const allPhotos = [...existingPhotos, ...newPhotoUrls];
 
     await db.update(bookingsTable).set({
@@ -1584,7 +1589,7 @@ router.post("/pickup/:token/photos", pickupUpload.array("photos", 20), async (re
 
     const isFirstCompletion = !booking.pickupCompletedAt;
     const existingPhotos: string[] = booking.pickupPhotos ? JSON.parse(booking.pickupPhotos) : [];
-    const newPhotoUrls = files.map(f => `/api/uploads/${f.filename}`);
+    const newPhotoUrls = await uploadPhotosToGCS(files, "pickup");
     const allPhotos = [...existingPhotos, ...newPhotoUrls];
 
     await db.update(bookingsTable).set({
@@ -1786,7 +1791,7 @@ router.post("/return/:token/photos", pickupUpload.array("photos", 20), async (re
     if (!files || files.length === 0) { res.status(400).json({ error: "No photos uploaded" }); return; }
 
     const existing: string[] = booking.returnPhotos ? JSON.parse(booking.returnPhotos) : [];
-    const newUrls = files.map(f => `/api/uploads/${f.filename}`);
+    const newUrls = await uploadPhotosToGCS(files, "return");
     const allPhotos = [...existing, ...newUrls];
 
     await db.update(bookingsTable).set({
@@ -1854,27 +1859,29 @@ router.post("/bookings/:id/inspect", async (req, res) => {
       res.status(400).json({ error: "No photos available for inspection" }); return;
     }
 
-    // Helper: read a photo (from disk if local path, or from the before-photos stored in uploads/)
-    const toBase64 = (photoPath: string): { base64: string; mime: string } | null => {
+    // Helper: read a photo from GCS by URL path
+    const toBase64 = async (photoPath: string): Promise<{ base64: string; mime: string } | null> => {
       try {
-        // Local path: /api/uploads/filename.jpg → uploads/filename.jpg
-        const relative = path.basename(photoPath.replace(/^\/api\/uploads\//, ""));
-        const filePath = path.resolve(UPLOADS_DIR_BOOKINGS, relative);
-        if (!filePath.startsWith(path.resolve(UPLOADS_DIR_BOOKINGS) + path.sep)) return null;
-        if (!fs.existsSync(filePath)) return null;
-        const buf = fs.readFileSync(filePath);
-        const ext = path.extname(filePath).toLowerCase().replace(".", "");
-        const mimeMap: Record<string, string> = { jpg: "image/jpeg", jpeg: "image/jpeg", png: "image/png", webp: "image/webp", heic: "image/heic" };
-        const mime = mimeMap[ext] ?? "image/jpeg";
+        const filename = path.basename(photoPath.replace(/^\/api\/uploads\//, ""));
+        const result = await downloadFromGCS(filename);
+        if (!result) return null;
+        const chunks: Buffer[] = [];
+        await new Promise<void>((resolve, reject) => {
+          result.stream.on("data", (chunk: Buffer) => chunks.push(chunk));
+          result.stream.on("end", resolve);
+          result.stream.on("error", reject);
+        });
+        const buf = Buffer.concat(chunks);
+        const mime = result.contentType || "image/jpeg";
         return { base64: buf.toString("base64"), mime };
       } catch { return null; }
     };
 
     // Build vision content array
-    const buildImageContent = (photos: string[], label: string): any[] => {
+    const buildImageContent = async (photos: string[], label: string): Promise<any[]> => {
       const items: any[] = [{ type: "text", text: `--- ${label} ---` }];
       for (const p of photos.slice(0, 5)) {
-        const img = toBase64(p);
+        const img = await toBase64(p);
         if (img) {
           items.push({ type: "image_url", image_url: { url: `data:${img.mime};base64,${img.base64}`, detail: "low" } });
         }
@@ -1882,10 +1889,15 @@ router.post("/bookings/:id/inspect", async (req, res) => {
       return items;
     };
 
+    const [beforeContent, afterContent] = await Promise.all([
+      buildImageContent(beforePhotos, "BEFORE photos (at pickup)"),
+      buildImageContent(afterPhotos, "AFTER photos (at return)"),
+    ]);
+
     const content: any[] = [
       { type: "text", text: "Please compare the BEFORE and AFTER images of this rental equipment and identify any new damage or issues introduced during the rental." },
-      ...buildImageContent(beforePhotos, "BEFORE photos (at pickup)"),
-      ...buildImageContent(afterPhotos, "AFTER photos (at return)"),
+      ...beforeContent,
+      ...afterContent,
       { type: "text", text: "Return ONLY valid JSON as specified in your system prompt." },
     ];
 
