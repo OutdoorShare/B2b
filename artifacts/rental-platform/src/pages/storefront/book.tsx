@@ -1336,24 +1336,53 @@ export default function StorefrontBook() {
   // Fee applies only to the rental portion (excluding protection plan fee,
   // which flows 100% to OutdoorShare regardless of mode).
   const bpRaw = businessProfile as any;
-  const rentalAfterDiscounts = Math.max(0, afterPromo - platformProtectionFee);
-  const effectiveFeePercent = bpRaw?.platformFeePercent != null
-    ? parseFloat(String(bpRaw.platformFeePercent))
-    : 10;
-  // Resolve fee mode: prefer new feeMode field, fall back to legacy boolean
-  const feeMode: FeeMode = (bpRaw?.feeMode as FeeMode | undefined) ?? feeModeFromLegacy(!!bpRaw?.passPlatformFeeToCustomer);
-  const feeSplitCustPct = bpRaw?.feeSplitCustomerPercent != null ? parseFloat(String(bpRaw.feeSplitCustomerPercent)) : 50;
-  const feeSplitOpPct = bpRaw?.feeSplitOperatorPercent != null ? parseFloat(String(bpRaw.feeSplitOperatorPercent)) : 50;
-  const feePricing = calculateBookingPricing({
-    subtotal: rentalAfterDiscounts,
-    feeMode,
-    platformFeePercent: effectiveFeePercent,
-    splitCustomerPercent: feeSplitCustPct,
-    splitOperatorPercent: feeSplitOpPct,
-  });
+  const rentalAfterDiscounts = Math.max(0, isFinite(afterPromo - platformProtectionFee) ? afterPromo - platformProtectionFee : 0);
+  const effectiveFeePercent = (() => {
+    const raw = bpRaw?.platformFeePercent != null ? parseFloat(String(bpRaw.platformFeePercent)) : 10;
+    return isFinite(raw) && raw >= 0 ? raw : 10;
+  })();
+  // Resolve fee mode: prefer new feeMode field, fall back to legacy boolean, never undefined
+  const VALID_MODES: FeeMode[] = ["pass_to_customer", "absorb", "split"];
+  const rawFeeMode = bpRaw?.feeMode;
+  const feeMode: FeeMode = (rawFeeMode && VALID_MODES.includes(rawFeeMode))
+    ? rawFeeMode
+    : feeModeFromLegacy(!!bpRaw?.passPlatformFeeToCustomer);
+  const feeSplitCustPct = (() => {
+    const v = bpRaw?.feeSplitCustomerPercent != null ? parseFloat(String(bpRaw.feeSplitCustomerPercent)) : 50;
+    return isFinite(v) ? v : 50;
+  })();
+  const feeSplitOpPct = (() => {
+    const v = bpRaw?.feeSplitOperatorPercent != null ? parseFloat(String(bpRaw.feeSplitOperatorPercent)) : 50;
+    return isFinite(v) ? v : 50;
+  })();
+  // Wrapped in try/catch so a corrupted business profile never crashes the page
+  const feePricing = (() => {
+    try {
+      return calculateBookingPricing({
+        subtotal: rentalAfterDiscounts,
+        feeMode,
+        platformFeePercent: effectiveFeePercent,
+        splitCustomerPercent: feeSplitCustPct,
+        splitOperatorPercent: feeSplitOpPct,
+      });
+    } catch (err) {
+      console.error("[book] calculateBookingPricing failed, using zero-fee fallback:", err);
+      return {
+        subtotal: rentalAfterDiscounts,
+        totalPlatformFee: 0,
+        customerFee: 0,
+        operatorFee: 0,
+        customerTotal: rentalAfterDiscounts,
+        operatorPayout: rentalAfterDiscounts,
+        platformRevenue: 0,
+        feeMode: "absorb" as FeeMode,
+        platformFeePercent: effectiveFeePercent,
+      };
+    }
+  })();
   // serviceFee = what the customer sees as an added fee line (0 when operator absorbs)
-  const serviceFee = feePricing.customerFee;
-  const discountedTotal = Math.max(0.50, afterPromo + serviceFee);
+  const serviceFee = isFinite(feePricing.customerFee) ? feePricing.customerFee : 0;
+  const discountedTotal = Math.max(0.50, isFinite(afterPromo + serviceFee) ? afterPromo + serviceFee : 0.50);
 
   // ── Payment plan / split deposit ──────────────────────────────────────────
   const bp = bpRaw;

@@ -27,24 +27,29 @@ function roundMoney(value: number): number {
 }
 
 export function calculateBookingPricing(input: BookingPricingInput): BookingPricingResult {
-  const subtotal = roundMoney(input.subtotal);
-  const totalPlatformFee = roundMoney(subtotal * input.platformFeePercent / 100);
+  // Coerce all numeric inputs to prevent NaN propagation
+  const rawSubtotal = typeof input.subtotal === "number" && isFinite(input.subtotal) ? input.subtotal : 0;
+  const subtotal = roundMoney(rawSubtotal);
+  const rawFeePercent = typeof input.platformFeePercent === "number" && isFinite(input.platformFeePercent) ? input.platformFeePercent : 10;
+  const totalPlatformFee = roundMoney(subtotal * rawFeePercent / 100);
+
+  // Sanitize feeMode — default to "absorb" for any unknown/invalid value
+  const validModes: FeeMode[] = ["pass_to_customer", "absorb", "split"];
+  const resolvedMode: FeeMode = validModes.includes(input.feeMode as FeeMode) ? input.feeMode : "absorb";
 
   let customerFee = 0;
   let operatorFee = 0;
 
-  if (input.feeMode === "pass_to_customer") {
+  if (resolvedMode === "pass_to_customer") {
     customerFee = totalPlatformFee;
     operatorFee = 0;
-  } else if (input.feeMode === "absorb") {
+  } else if (resolvedMode === "absorb") {
     customerFee = 0;
     operatorFee = totalPlatformFee;
-  } else if (input.feeMode === "split") {
-    const cPct = input.splitCustomerPercent ?? 50;
+  } else if (resolvedMode === "split") {
+    const cPct = typeof input.splitCustomerPercent === "number" && isFinite(input.splitCustomerPercent) ? input.splitCustomerPercent : 50;
     customerFee = roundMoney(totalPlatformFee * cPct / 100);
     operatorFee = roundMoney(totalPlatformFee - customerFee);
-  } else {
-    throw new Error(`Invalid fee mode: ${input.feeMode}`);
   }
 
   const customerTotal = roundMoney(subtotal + customerFee);

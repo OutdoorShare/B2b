@@ -58,8 +58,23 @@ test("rounding: subtotal=99.99, fee=7.5%", () => {
   assert.ok(Math.abs(r.totalPlatformFee - (r.customerFee + r.operatorFee)) <= 0.01, "fee sum within 1 cent of totalPlatformFee");
 });
 
-test("throws on invalid mode", () => {
-  assert.throws(() => {
-    calculateBookingPricing({ subtotal: 100, feeMode: "invalid" as any, platformFeePercent: 10 });
-  }, /Invalid fee mode/);
+test("invalid mode falls back to absorb (never throws)", () => {
+  const r = calculateBookingPricing({ subtotal: 100, feeMode: "invalid" as any, platformFeePercent: 10 });
+  assert.equal(r.feeMode, "absorb", "falls back to absorb");
+  assert.equal(r.customerFee, 0, "absorb = customer pays nothing extra");
+  assert.equal(r.operatorFee, 10, "absorb = operator pays the fee");
+  assert.equal(r.customerTotal, 100);
+  assert.equal(r.operatorPayout, 90);
+});
+
+test("NaN subtotal coerces to 0", () => {
+  const r = calculateBookingPricing({ subtotal: NaN, feeMode: "absorb", platformFeePercent: 10 });
+  assert.equal(r.subtotal, 0);
+  assert.equal(r.totalPlatformFee, 0);
+  assert.equal(r.customerTotal, 0);
+});
+
+test("NaN platformFeePercent uses 10% default", () => {
+  const r = calculateBookingPricing({ subtotal: 100, feeMode: "absorb", platformFeePercent: NaN });
+  assert.equal(r.totalPlatformFee, 10);
 });

@@ -9,6 +9,7 @@ import { setExtraHeadersGetter } from "@workspace/api-client-react";
 import { AdminLayout } from "@/components/layout/admin-layout";
 import { StorefrontLayout } from "@/components/layout/storefront-layout";
 import { ThemeProvider } from "@/components/theme-provider";
+import { RouteErrorBoundary, BookingErrorBoundary } from "@/components/route-error-boundary";
 
 // Pages
 import StorefrontHome from "@/pages/storefront/home";
@@ -464,37 +465,37 @@ function Router() {
       {/* Storefront Routes — tenant-specific via slug prefix */}
       {/* NOTE: /:slug must come LAST so specific sub-routes match first */}
       <Route path="/:slug/listings/:id">
-        <SlugGuard><StorefrontLayout><StorefrontProductDetail /></StorefrontLayout></SlugGuard>
+        <SlugGuard><StorefrontLayout><RouteErrorBoundary><StorefrontProductDetail /></RouteErrorBoundary></StorefrontLayout></SlugGuard>
       </Route>
       <Route path="/:slug/book">
-        <SlugGuard><StorefrontLayout><StorefrontBook /></StorefrontLayout></SlugGuard>
+        <SlugGuard><StorefrontLayout><BookingErrorBoundary><StorefrontBook /></BookingErrorBoundary></StorefrontLayout></SlugGuard>
       </Route>
       <Route path="/:slug/booking-complete">
-        <BookingComplete />
+        <RouteErrorBoundary><BookingComplete /></RouteErrorBoundary>
       </Route>
       <Route path="/:slug/login">
-        <SlugGuard><StorefrontLayout><StorefrontLogin /></StorefrontLayout></SlugGuard>
+        <SlugGuard><StorefrontLayout><RouteErrorBoundary><StorefrontLogin /></RouteErrorBoundary></StorefrontLayout></SlugGuard>
       </Route>
       <Route path="/:slug/set-password">
-        <SlugGuard><StorefrontLayout><StorefrontSetPassword /></StorefrontLayout></SlugGuard>
+        <SlugGuard><StorefrontLayout><RouteErrorBoundary><StorefrontSetPassword /></RouteErrorBoundary></StorefrontLayout></SlugGuard>
       </Route>
       <Route path="/:slug/my-bookings/:id">
-        <SlugGuard><StorefrontLayout><StorefrontMyBookingDetail /></StorefrontLayout></SlugGuard>
+        <SlugGuard><StorefrontLayout><RouteErrorBoundary><StorefrontMyBookingDetail /></RouteErrorBoundary></StorefrontLayout></SlugGuard>
       </Route>
       <Route path="/:slug/my-bookings">
-        <SlugGuard><StorefrontLayout><StorefrontMyBookings /></StorefrontLayout></SlugGuard>
+        <SlugGuard><StorefrontLayout><RouteErrorBoundary><StorefrontMyBookings /></RouteErrorBoundary></StorefrontLayout></SlugGuard>
       </Route>
       <Route path="/:slug/my-claims">
-        <SlugGuard><StorefrontLayout><StorefrontMyClaims /></StorefrontLayout></SlugGuard>
+        <SlugGuard><StorefrontLayout><RouteErrorBoundary><StorefrontMyClaims /></RouteErrorBoundary></StorefrontLayout></SlugGuard>
       </Route>
       <Route path="/:slug/profile">
-        <SlugGuard><StorefrontLayout><StorefrontProfile /></StorefrontLayout></SlugGuard>
+        <SlugGuard><StorefrontLayout><RouteErrorBoundary><StorefrontProfile /></RouteErrorBoundary></StorefrontLayout></SlugGuard>
       </Route>
       <Route path="/:slug/contact-card/:id">
-        <ContactCardView />
+        <RouteErrorBoundary><ContactCardView /></RouteErrorBoundary>
       </Route>
       <Route path="/:slug">
-        <SlugGuard><StorefrontLayout><StorefrontHome /></StorefrontLayout></SlugGuard>
+        <SlugGuard><StorefrontLayout><RouteErrorBoundary><StorefrontHome /></RouteErrorBoundary></StorefrontLayout></SlugGuard>
       </Route>
 
       {/* Root → SaaS marketing landing */}
@@ -517,17 +518,19 @@ function ScrollToTop() {
 
 function App() {
   return (
-    <QueryClientProvider client={queryClient}>
-      <TooltipProvider>
-        <ThemeProvider>
-          <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
-            <ScrollToTop />
-            <Router />
-          </WouterRouter>
-          <Toaster />
-        </ThemeProvider>
-      </TooltipProvider>
-    </QueryClientProvider>
+    <RouteErrorBoundary fallbackMessage="The application encountered an unexpected error. Please refresh the page.">
+      <QueryClientProvider client={queryClient}>
+        <TooltipProvider>
+          <ThemeProvider>
+            <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
+              <ScrollToTop />
+              <Router />
+            </WouterRouter>
+            <Toaster />
+          </ThemeProvider>
+        </TooltipProvider>
+      </QueryClientProvider>
+    </RouteErrorBoundary>
   );
 }
 
