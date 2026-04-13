@@ -1,14 +1,15 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import {
   FileSignature, Save, Loader2, CheckCircle, AlertCircle,
-  Info, Trash2, RefreshCw, Upload, FileText, X,
+  Info, Trash2, Upload, FileText, X, ChevronDown, ChevronUp,
+  Type, Hash, Calendar, User, Building2, DollarSign, Users,
 } from "lucide-react";
+
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
 function adminHeaders(): HeadersInit {
@@ -33,27 +34,60 @@ async function apiFetch(path: string, opts?: RequestInit) {
   return text ? JSON.parse(text) : null;
 }
 
-const TOKEN_HELPERS = [
-  { token: "{{first_name}}",        label: "First Name" },
-  { token: "{{last_name}}",         label: "Last Name" },
-  { token: "{{full_name}}",         label: "Full Name" },
-  { token: "{{email}}",             label: "Email" },
-  { token: "{{phone}}",             label: "Phone" },
-  { token: "{{booking_id}}",        label: "Booking #" },
-  { token: "{{listing_name}}",      label: "Listing" },
-  { token: "{{start_date}}",        label: "Start Date" },
-  { token: "{{end_date}}",          label: "End Date" },
-  { token: "{{company_name}}",      label: "Company" },
-  { token: "{{additional_riders}}", label: "Riders" },
-  { token: "{{minors}}",            label: "Minors" },
-  { token: "{{today}}",             label: "Today's Date" },
-  { token: "{{total_price}}",       label: "Total Price" },
-  { token: "{{signed_at}}",         label: "Signed At" },
+const TOKEN_GROUPS = [
+  {
+    label: "Renter",
+    icon: User,
+    color: "text-violet-600 bg-violet-50 border-violet-200 hover:bg-violet-100",
+    tokens: [
+      { token: "{{first_name}}", label: "First Name" },
+      { token: "{{last_name}}", label: "Last Name" },
+      { token: "{{full_name}}", label: "Full Name" },
+      { token: "{{email}}", label: "Email" },
+      { token: "{{phone}}", label: "Phone" },
+    ],
+  },
+  {
+    label: "Booking",
+    icon: Hash,
+    color: "text-blue-600 bg-blue-50 border-blue-200 hover:bg-blue-100",
+    tokens: [
+      { token: "{{booking_id}}", label: "Booking #" },
+      { token: "{{listing_name}}", label: "Listing" },
+      { token: "{{total_price}}", label: "Total Price" },
+    ],
+  },
+  {
+    label: "Dates",
+    icon: Calendar,
+    color: "text-amber-600 bg-amber-50 border-amber-200 hover:bg-amber-100",
+    tokens: [
+      { token: "{{start_date}}", label: "Start Date" },
+      { token: "{{end_date}}", label: "End Date" },
+      { token: "{{today}}", label: "Today's Date" },
+      { token: "{{signed_at}}", label: "Signed At" },
+    ],
+  },
+  {
+    label: "Business",
+    icon: Building2,
+    color: "text-emerald-600 bg-emerald-50 border-emerald-200 hover:bg-emerald-100",
+    tokens: [
+      { token: "{{company_name}}", label: "Company" },
+    ],
+  },
+  {
+    label: "Riders",
+    icon: Users,
+    color: "text-rose-600 bg-rose-50 border-rose-200 hover:bg-rose-100",
+    tokens: [
+      { token: "{{additional_riders}}", label: "Riders" },
+      { token: "{{minors}}", label: "Minors" },
+    ],
+  },
 ];
 
-const DEFAULT_CONTENT = `RENTAL AGREEMENT
-
-This Rental Agreement ("Agreement") is entered into as of {{today}} between {{company_name}} ("Company") and {{full_name}} ("Renter").
+const DEFAULT_CONTENT = `This Rental Agreement ("Agreement") is entered into as of {{today}} between {{company_name}} ("Company") and {{full_name}} ("Renter").
 
 1. RENTAL DETAILS
 The Renter agrees to rent {{listing_name}} for the period from {{start_date}} to {{end_date}}. The total rental fee is {{total_price}}.
@@ -105,19 +139,23 @@ export default function ContractBuilder() {
   const [saved, setSaved]       = useState(false);
   const [error, setError]       = useState("");
 
-  // Mode: "template" (editor) or "upload_pdf"
   const [mode, setMode] = useState<"template" | "upload_pdf">("template");
 
-  // Template fields
   const [title, setTitle]                     = useState("Rental Agreement");
   const [content, setContent]                 = useState(DEFAULT_CONTENT);
   const [checkboxLabel, setCheckboxLabel]     = useState("I have read and agree to the rental terms and conditions");
   const [includePlatform, setIncludePlatform] = useState(true);
+  const [settingsOpen, setSettingsOpen]       = useState(false);
 
-  // PDF upload state
-  const fileInputRef           = useRef<HTMLInputElement>(null);
-  const [pdfFile, setPdfFile]  = useState<File | null>(null);
+  const fileInputRef              = useRef<HTMLInputElement>(null);
+  const textareaRef               = useRef<HTMLTextAreaElement>(null);
+  const [pdfFile, setPdfFile]     = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
+
+  const wordCount = useMemo(() => {
+    const words = content.trim().split(/\s+/).filter(Boolean);
+    return words.length;
+  }, [content]);
 
   useEffect(() => {
     (async () => {
@@ -131,16 +169,16 @@ export default function ContractBuilder() {
           setIncludePlatform(data.includeOutdoorShareAgreements !== false);
           if (data.contractType === "uploaded_pdf") setMode("upload_pdf");
         }
-      } catch { /* no contract yet — use defaults */ }
+      } catch { /* no contract yet */ }
       finally { setLoading(false); }
     })();
   }, []);
 
   const insertToken = (token: string) => {
-    const ta = document.getElementById("contract-content") as HTMLTextAreaElement | null;
+    const ta = textareaRef.current;
     if (!ta) { setContent(prev => prev + " " + token); return; }
     const start = ta.selectionStart ?? content.length;
-    const end   = ta.selectionEnd ?? content.length;
+    const end   = ta.selectionEnd   ?? content.length;
     const next  = content.slice(0, start) + token + content.slice(end);
     setContent(next);
     requestAnimationFrame(() => {
@@ -219,247 +257,334 @@ export default function ContractBuilder() {
   }
 
   return (
-    <div className="p-6 max-w-4xl mx-auto space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
+    <div className="flex flex-col h-full min-h-screen bg-slate-100">
+
+      {/* ── Top bar ──────────────────────────────────────────────────────── */}
+      <div className="bg-white border-b border-slate-200 px-6 py-3 flex items-center justify-between shrink-0">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-emerald-50 border border-emerald-100 flex items-center justify-center">
-            <FileSignature className="w-5 h-5 text-emerald-600" />
+          <div className="w-8 h-8 rounded-lg bg-emerald-50 border border-emerald-100 flex items-center justify-center">
+            <FileSignature className="w-4 h-4 text-emerald-600" />
           </div>
           <div>
-            <h1 className="text-xl font-bold text-slate-900">Rental Contract Builder</h1>
-            <p className="text-sm text-slate-500">Create the agreement your renters sign at checkout</p>
+            <h1 className="text-sm font-semibold text-slate-900 leading-none">Contract Builder</h1>
+            <p className="text-xs text-slate-400 mt-0.5">Create the agreement your renters sign at checkout</p>
           </div>
         </div>
+
         <div className="flex items-center gap-2">
           {contract && (
-            <Badge variant="outline" className="text-xs text-slate-500 border-slate-200">
-              Version {contract.version}
+            <Badge variant="outline" className="text-xs text-slate-400 border-slate-200">
+              v{contract.version}
             </Badge>
           )}
+
+          {/* Mode toggle */}
+          <div className="flex gap-0.5 bg-slate-100 p-0.5 rounded-lg">
+            <button
+              type="button"
+              onClick={() => setMode("template")}
+              className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all flex items-center gap-1.5 ${
+                mode === "template" ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-700"
+              }`}
+            >
+              <Type className="w-3 h-3" /> Build Template
+            </button>
+            <button
+              type="button"
+              onClick={() => setMode("upload_pdf")}
+              className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all flex items-center gap-1.5 ${
+                mode === "upload_pdf" ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-700"
+              }`}
+            >
+              <Upload className="w-3 h-3" /> Upload PDF
+            </button>
+          </div>
+
           {contract && (
-            <Button variant="ghost" size="sm" className="text-red-500 hover:text-red-700 hover:bg-red-50" onClick={handleDelete} disabled={deleting}>
+            <button
+              type="button"
+              onClick={handleDelete}
+              disabled={deleting}
+              className="p-1.5 rounded-lg text-slate-400 hover:text-red-500 hover:bg-red-50 transition-colors"
+              title="Remove contract"
+            >
               {deleting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
-            </Button>
+            </button>
           )}
         </div>
       </div>
 
-      {/* Status */}
-      {!contract && (
-        <div className="flex items-start gap-3 bg-amber-50 border border-amber-200 rounded-xl p-4">
-          <Info className="w-4 h-4 text-amber-500 shrink-0 mt-0.5" />
-          <p className="text-sm text-amber-800">
-            You don't have a contract yet. Use the template below to get started, then save it.
-            Renters will see your contract as a checkbox they must agree to before signing.
-          </p>
-        </div>
-      )}
-
-      {error && (
-        <div className="flex items-start gap-3 bg-red-50 border border-red-200 rounded-xl p-4">
-          <AlertCircle className="w-4 h-4 text-red-500 shrink-0 mt-0.5" />
-          <p className="text-sm text-red-700">{error}</p>
-        </div>
-      )}
-
-      {/* Mode toggle */}
-      <div className="flex gap-1 bg-slate-100 p-1 rounded-xl w-fit">
-        <button
-          type="button"
-          onClick={() => setMode("template")}
-          className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
-            mode === "template"
-              ? "bg-white text-slate-900 shadow-sm"
-              : "text-slate-500 hover:text-slate-700"
-          }`}
-        >
-          <span className="flex items-center gap-2"><RefreshCw className="w-3.5 h-3.5" /> Build Template</span>
-        </button>
-        <button
-          type="button"
-          onClick={() => setMode("upload_pdf")}
-          className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
-            mode === "upload_pdf"
-              ? "bg-white text-slate-900 shadow-sm"
-              : "text-slate-500 hover:text-slate-700"
-          }`}
-        >
-          <span className="flex items-center gap-2"><Upload className="w-3.5 h-3.5" /> Upload PDF</span>
-        </button>
-      </div>
-
-      {/* ── Template mode ─────────────────────────────────────────────────── */}
-      {mode === "template" && (
-        <>
-          {/* Token helpers */}
-          <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 space-y-3">
-            <div className="flex items-center gap-2">
-              <RefreshCw className="w-4 h-4 text-slate-400" />
-              <p className="text-sm font-medium text-slate-700">Template Tokens</p>
-              <span className="text-xs text-slate-500">Click to insert at cursor</span>
+      {/* ── Alerts ───────────────────────────────────────────────────────── */}
+      {(!contract || error) && (
+        <div className="px-6 pt-3 space-y-2 shrink-0">
+          {!contract && (
+            <div className="flex items-start gap-3 bg-amber-50 border border-amber-200 rounded-xl p-3">
+              <Info className="w-4 h-4 text-amber-500 shrink-0 mt-0.5" />
+              <p className="text-xs text-amber-800">
+                No contract yet. Use the editor below to get started, then save.
+                Renters will see your contract as a checkbox they must agree to before signing.
+              </p>
             </div>
-            <div className="flex flex-wrap gap-1.5">
-              {TOKEN_HELPERS.map(t => (
-                <button
-                  key={t.token}
-                  type="button"
-                  onClick={() => insertToken(t.token)}
-                  className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-white border border-slate-200 text-xs text-slate-600 hover:border-emerald-300 hover:text-emerald-700 hover:bg-emerald-50 transition-colors font-mono"
-                >
-                  {t.token}
-                </button>
-              ))}
+          )}
+          {error && (
+            <div className="flex items-start gap-3 bg-red-50 border border-red-200 rounded-xl p-3">
+              <AlertCircle className="w-4 h-4 text-red-500 shrink-0 mt-0.5" />
+              <p className="text-xs text-red-700">{error}</p>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── TEMPLATE MODE ────────────────────────────────────────────────── */}
+      {mode === "template" && (
+        <div className="flex flex-col flex-1 overflow-hidden">
+
+          {/* Token ribbon */}
+          <div className="bg-white border-b border-slate-200 px-6 py-2 shrink-0">
+            <div className="flex items-start gap-5 flex-wrap">
+              {TOKEN_GROUPS.map(group => {
+                const Icon = group.icon;
+                return (
+                  <div key={group.label} className="flex items-center gap-1.5 flex-wrap">
+                    <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider flex items-center gap-1 mr-0.5">
+                      <Icon className="w-3 h-3" /> {group.label}
+                    </span>
+                    {group.tokens.map(t => (
+                      <button
+                        key={t.token}
+                        type="button"
+                        onClick={() => insertToken(t.token)}
+                        title={`Insert ${t.token}`}
+                        className={`inline-flex items-center px-2 py-0.5 rounded-md border text-[11px] font-medium transition-colors ${group.color}`}
+                      >
+                        {t.label}
+                      </button>
+                    ))}
+                  </div>
+                );
+              })}
             </div>
           </div>
 
-          {/* Contract fields */}
-          <div className="bg-white border border-slate-200 rounded-2xl p-6 space-y-5">
-            <div className="space-y-1.5">
-              <Label htmlFor="contract-title">Agreement Title</Label>
-              <Input id="contract-title" value={title} onChange={e => setTitle(e.target.value)} placeholder="Rental Agreement" />
-            </div>
+          {/* Document canvas */}
+          <div className="flex-1 overflow-y-auto py-8 px-6 flex justify-center">
+            <div
+              className="w-full max-w-[780px] bg-white rounded-sm shadow-[0_2px_8px_rgba(0,0,0,0.12),0_0_0_1px_rgba(0,0,0,0.04)] flex flex-col"
+              style={{ minHeight: 900 }}
+            >
+              {/* Document header / title area */}
+              <div className="px-16 pt-14 pb-6 border-b border-slate-100">
+                <input
+                  type="text"
+                  value={title}
+                  onChange={e => setTitle(e.target.value)}
+                  className="w-full text-2xl font-bold text-slate-900 placeholder-slate-300 bg-transparent border-none outline-none focus:outline-none tracking-tight"
+                  placeholder="Agreement Title"
+                  style={{ fontFamily: "'Georgia', 'Times New Roman', serif" }}
+                />
+                {contract?.updatedAt && (
+                  <p className="text-xs text-slate-400 mt-2">
+                    Last saved {new Date(contract.updatedAt).toLocaleString()}
+                  </p>
+                )}
+              </div>
 
-            <div className="space-y-1.5">
-              <Label htmlFor="contract-content">Agreement Text</Label>
-              <Textarea
-                id="contract-content"
-                value={content}
-                onChange={e => setContent(e.target.value)}
-                className="min-h-[400px] font-mono text-sm resize-y"
-                placeholder="Enter your full rental agreement text here…"
-              />
-              <p className="text-xs text-slate-400">
-                Use <code className="bg-slate-100 px-1 rounded text-slate-600">{`{{token}}`}</code> placeholders to auto-fill renter and booking data.
-                Supports <code className="bg-slate-100 px-1 rounded text-slate-600">{"{{#each riders}}"}</code> loops.
-              </p>
-            </div>
-
-            <div className="space-y-1.5">
-              <Label htmlFor="checkbox-label">Renter Checkbox Label</Label>
-              <Input
-                id="checkbox-label"
-                value={checkboxLabel}
-                onChange={e => setCheckboxLabel(e.target.value)}
-                placeholder="I have read and agree to the rental terms and conditions"
-              />
-              <p className="text-xs text-slate-400">This is the exact text the renter sees next to the checkbox they must check before signing.</p>
-            </div>
-
-            <div className="flex items-start gap-4 p-4 bg-slate-50 rounded-xl border border-slate-200">
-              <Switch id="include-platform" checked={includePlatform} onCheckedChange={setIncludePlatform} />
-              <div>
-                <Label htmlFor="include-platform" className="cursor-pointer">Include OutdoorShare platform agreements</Label>
-                <p className="text-xs text-slate-500 mt-1">
-                  When enabled, renters also accept OutdoorShare's Terms of Service and any other active platform agreements in addition to your contract.
-                  Disable only if you have your own insurance arrangement and have been approved by OutdoorShare.
-                </p>
+              {/* Body text area */}
+              <div className="flex-1 px-16 py-10">
+                <textarea
+                  ref={textareaRef}
+                  id="contract-content"
+                  value={content}
+                  onChange={e => setContent(e.target.value)}
+                  placeholder="Start typing your agreement…"
+                  className="w-full h-full min-h-[640px] bg-transparent border-none outline-none resize-none text-slate-800 placeholder-slate-300"
+                  style={{
+                    fontFamily: "'Georgia', 'Times New Roman', serif",
+                    fontSize: "14.5px",
+                    lineHeight: "1.9",
+                    letterSpacing: "0.01em",
+                  }}
+                  spellCheck
+                />
               </div>
             </div>
           </div>
 
-          {/* Save */}
-          <div className="flex items-center justify-between">
-            {contract?.updatedAt && <p className="text-xs text-slate-400">Last saved: {new Date(contract.updatedAt).toLocaleString()}</p>}
-            <div className="ml-auto flex items-center gap-3">
-              {saved && <span className="text-sm text-emerald-600 flex items-center gap-1.5"><CheckCircle className="w-4 h-4" /> Saved!</span>}
-              <Button onClick={handleSave} disabled={saving || !title.trim() || !content.trim()} style={{ backgroundColor: "#3ab549" }} className="text-white">
+          {/* Settings drawer (collapsible) */}
+          <div className="bg-white border-t border-slate-200 shrink-0">
+            <button
+              type="button"
+              onClick={() => setSettingsOpen(v => !v)}
+              className="w-full flex items-center justify-between px-6 py-3 text-sm font-medium text-slate-600 hover:text-slate-900 hover:bg-slate-50 transition-colors"
+            >
+              <span className="flex items-center gap-2">
+                <DollarSign className="w-4 h-4 text-slate-400" />
+                Agreement settings — checkbox label &amp; platform policy
+              </span>
+              {settingsOpen ? <ChevronDown className="w-4 h-4 text-slate-400" /> : <ChevronUp className="w-4 h-4 text-slate-400" />}
+            </button>
+
+            {settingsOpen && (
+              <div className="px-6 pb-5 grid grid-cols-1 md:grid-cols-2 gap-5 border-t border-slate-100">
+                <div className="space-y-1.5 pt-4">
+                  <Label htmlFor="checkbox-label" className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
+                    Renter Checkbox Label
+                  </Label>
+                  <Input
+                    id="checkbox-label"
+                    value={checkboxLabel}
+                    onChange={e => setCheckboxLabel(e.target.value)}
+                    placeholder="I have read and agree to the rental terms and conditions"
+                    className="text-sm"
+                  />
+                  <p className="text-xs text-slate-400">The exact text shown next to the checkbox renters must check before signing.</p>
+                </div>
+
+                <div className="flex items-start gap-3 pt-5">
+                  <Switch id="include-platform" checked={includePlatform} onCheckedChange={setIncludePlatform} />
+                  <div>
+                    <Label htmlFor="include-platform" className="cursor-pointer text-sm font-medium text-slate-700">
+                      Include OutdoorShare platform agreements
+                    </Label>
+                    <p className="text-xs text-slate-400 mt-1">
+                      Renters also accept OutdoorShare's Terms of Service alongside your contract.
+                      Disable only with prior approval.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Status bar / save */}
+          <div className="bg-white border-t border-slate-200 px-6 py-2.5 flex items-center justify-between shrink-0">
+            <p className="text-xs text-slate-400">
+              {wordCount.toLocaleString()} {wordCount === 1 ? "word" : "words"}
+              {content.length > 0 && <> · {content.length.toLocaleString()} characters</>}
+            </p>
+            <div className="flex items-center gap-3">
+              {saved && (
+                <span className="text-xs text-emerald-600 flex items-center gap-1.5">
+                  <CheckCircle className="w-3.5 h-3.5" /> Saved
+                </span>
+              )}
+              <Button
+                onClick={handleSave}
+                disabled={saving || !title.trim() || !content.trim()}
+                size="sm"
+                style={{ backgroundColor: "#3ab549" }}
+                className="text-white text-xs px-4"
+              >
                 {saving
-                  ? <span className="flex items-center gap-2"><Loader2 className="w-4 h-4 animate-spin" /> Saving…</span>
-                  : <span className="flex items-center gap-2"><Save className="w-4 h-4" /> Save Contract</span>}
+                  ? <span className="flex items-center gap-1.5"><Loader2 className="w-3.5 h-3.5 animate-spin" /> Saving…</span>
+                  : <span className="flex items-center gap-1.5"><Save className="w-3.5 h-3.5" /> Save Contract</span>}
               </Button>
             </div>
           </div>
-        </>
+        </div>
       )}
 
-      {/* ── Upload PDF mode ────────────────────────────────────────────────── */}
+      {/* ── UPLOAD PDF MODE ──────────────────────────────────────────────── */}
       {mode === "upload_pdf" && (
-        <div className="space-y-5">
-          <div className="flex items-start gap-3 bg-blue-50 border border-blue-200 rounded-xl p-4">
-            <Info className="w-4 h-4 text-blue-500 shrink-0 mt-0.5" />
-            <p className="text-sm text-blue-800">
-              Upload your own PDF contract. It will be included as-is in the final signed document alongside any
-              OutdoorShare platform agreements. The renter must check the checkbox below and sign before their
-              booking is confirmed.
-            </p>
-          </div>
+        <div className="flex-1 overflow-y-auto py-8 px-6 flex justify-center">
+          <div className="w-full max-w-[640px] space-y-5">
 
-          {/* Current uploaded PDF status */}
-          {contract?.contractType === "uploaded_pdf" && !pdfFile && (
-            <div className="flex items-center gap-3 bg-emerald-50 border border-emerald-200 rounded-xl p-4">
-              <FileText className="w-5 h-5 text-emerald-600 shrink-0" />
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium text-emerald-800">PDF contract active — {contract.title}</p>
-                <p className="text-xs text-emerald-600 mt-0.5">Version {contract.version} · Saved {new Date(contract.updatedAt).toLocaleDateString()}</p>
-              </div>
-              <Badge className="bg-emerald-100 text-emerald-700 border-emerald-200">Active</Badge>
-            </div>
-          )}
-
-          {/* File picker */}
-          <div className="bg-white border border-slate-200 rounded-2xl p-6 space-y-5">
-            <div className="space-y-1.5">
-              <Label>Agreement Title</Label>
-              <Input value={title} onChange={e => setTitle(e.target.value)} placeholder="Rental Agreement" />
+            <div className="flex items-start gap-3 bg-blue-50 border border-blue-200 rounded-xl p-4">
+              <Info className="w-4 h-4 text-blue-500 shrink-0 mt-0.5" />
+              <p className="text-sm text-blue-800">
+                Upload your own PDF contract. It will be shown as-is in the final signed document alongside any
+                OutdoorShare platform agreements. The renter must check the box and sign before their booking confirms.
+              </p>
             </div>
 
-            <div>
-              <Label className="mb-2 block">PDF File</Label>
-              {pdfFile ? (
-                <div className="flex items-center gap-3 p-3 bg-slate-50 border border-slate-200 rounded-xl">
-                  <FileText className="w-5 h-5 text-slate-500 shrink-0" />
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-slate-700 truncate">{pdfFile.name}</p>
-                    <p className="text-xs text-slate-400">{(pdfFile.size / 1024).toFixed(1)} KB</p>
-                  </div>
-                  <button type="button" onClick={() => setPdfFile(null)} className="text-slate-400 hover:text-red-500 transition-colors">
-                    <X className="w-4 h-4" />
-                  </button>
+            {contract?.contractType === "uploaded_pdf" && !pdfFile && (
+              <div className="flex items-center gap-3 bg-emerald-50 border border-emerald-200 rounded-xl p-4">
+                <FileText className="w-5 h-5 text-emerald-600 shrink-0" />
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium text-emerald-800">{contract.title}</p>
+                  <p className="text-xs text-emerald-600 mt-0.5">
+                    Version {contract.version} · Saved {new Date(contract.updatedAt).toLocaleDateString()}
+                  </p>
                 </div>
-              ) : (
-                <button
-                  type="button"
-                  onClick={() => fileInputRef.current?.click()}
-                  className="w-full flex flex-col items-center gap-2 p-8 border-2 border-dashed border-slate-200 rounded-xl hover:border-emerald-400 hover:bg-emerald-50/50 transition-colors text-slate-400 hover:text-emerald-600"
-                >
-                  <Upload className="w-7 h-7" />
-                  <span className="text-sm font-medium">Click to select PDF</span>
-                  <span className="text-xs">Max 20 MB</span>
-                </button>
-              )}
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept="application/pdf"
-                className="hidden"
-                onChange={e => { const f = e.target.files?.[0]; if (f) setPdfFile(f); e.target.value = ""; }}
-              />
-            </div>
+                <Badge className="bg-emerald-100 text-emerald-700 border-emerald-200 shrink-0">Active</Badge>
+              </div>
+            )}
 
-            <div className="space-y-1.5">
-              <Label htmlFor="pdf-checkbox-label">Renter Checkbox Label</Label>
-              <Input
-                id="pdf-checkbox-label"
-                value={checkboxLabel}
-                onChange={e => setCheckboxLabel(e.target.value)}
-                placeholder="I have read and agree to the attached rental agreement"
-              />
-            </div>
+            <div className="bg-white border border-slate-200 rounded-2xl p-6 space-y-5 shadow-sm">
+              <div className="space-y-1.5">
+                <Label className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Agreement Title</Label>
+                <Input value={title} onChange={e => setTitle(e.target.value)} placeholder="Rental Agreement" />
+              </div>
 
-            <div className="flex items-start gap-4 p-4 bg-slate-50 rounded-xl border border-slate-200">
-              <Switch id="include-platform-pdf" checked={includePlatform} onCheckedChange={setIncludePlatform} />
               <div>
-                <Label htmlFor="include-platform-pdf" className="cursor-pointer">Include OutdoorShare platform agreements</Label>
-                <p className="text-xs text-slate-500 mt-1">Your PDF will be combined with OutdoorShare's platform agreements in the final signed document.</p>
+                <Label className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2 block">PDF File</Label>
+                {pdfFile ? (
+                  <div className="flex items-center gap-3 p-3 bg-slate-50 border border-slate-200 rounded-xl">
+                    <FileText className="w-5 h-5 text-slate-500 shrink-0" />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-slate-700 truncate">{pdfFile.name}</p>
+                      <p className="text-xs text-slate-400">{(pdfFile.size / 1024).toFixed(1)} KB</p>
+                    </div>
+                    <button type="button" onClick={() => setPdfFile(null)} className="text-slate-400 hover:text-red-500 transition-colors">
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => fileInputRef.current?.click()}
+                    className="w-full flex flex-col items-center gap-3 p-10 border-2 border-dashed border-slate-200 rounded-xl hover:border-emerald-400 hover:bg-emerald-50/40 transition-colors text-slate-400 hover:text-emerald-600"
+                  >
+                    <Upload className="w-8 h-8" />
+                    <div className="text-center">
+                      <p className="text-sm font-medium">Click to select a PDF</p>
+                      <p className="text-xs mt-0.5">Max 20 MB</p>
+                    </div>
+                  </button>
+                )}
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="application/pdf"
+                  className="hidden"
+                  onChange={e => { const f = e.target.files?.[0]; if (f) setPdfFile(f); e.target.value = ""; }}
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <Label htmlFor="pdf-checkbox-label" className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
+                  Renter Checkbox Label
+                </Label>
+                <Input
+                  id="pdf-checkbox-label"
+                  value={checkboxLabel}
+                  onChange={e => setCheckboxLabel(e.target.value)}
+                  placeholder="I have read and agree to the attached rental agreement"
+                />
+              </div>
+
+              <div className="flex items-start gap-3 p-4 bg-slate-50 rounded-xl border border-slate-200">
+                <Switch id="include-platform-pdf" checked={includePlatform} onCheckedChange={setIncludePlatform} />
+                <div>
+                  <Label htmlFor="include-platform-pdf" className="cursor-pointer text-sm font-medium text-slate-700">
+                    Include OutdoorShare platform agreements
+                  </Label>
+                  <p className="text-xs text-slate-400 mt-1">
+                    Your PDF will be combined with OutdoorShare's platform agreements in the final signed document.
+                  </p>
+                </div>
               </div>
             </div>
-          </div>
 
-          <div className="flex items-center justify-between">
-            <div />
-            <div className="flex items-center gap-3">
-              {saved && <span className="text-sm text-emerald-600 flex items-center gap-1.5"><CheckCircle className="w-4 h-4" /> Uploaded!</span>}
+            <div className="flex items-center justify-end gap-3 pb-8">
+              {saved && (
+                <span className="text-sm text-emerald-600 flex items-center gap-1.5">
+                  <CheckCircle className="w-4 h-4" /> Uploaded!
+                </span>
+              )}
+              {error && (
+                <span className="text-sm text-red-500">{error}</span>
+              )}
               <Button
                 onClick={handlePdfUpload}
                 disabled={uploading || !pdfFile}
