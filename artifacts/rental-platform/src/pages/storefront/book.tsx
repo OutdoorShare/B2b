@@ -32,8 +32,24 @@ import { Elements, PaymentElement, useStripe, useElements } from "@stripe/react-
 import { QRCodeSVG } from "qrcode.react";
 import { calculateBookingPricing, normalizeFeeMode, feeModeFromLegacy, type FeeMode } from "@/lib/pricing";
 
-const liveStripePromise = loadStripe(import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY ?? "");
-const testStripePromise = loadStripe(import.meta.env.VITE_STRIPE_TEST_PUBLISHABLE_KEY ?? "");
+// Stable cache: ensures loadStripe(sameKey) always returns the SAME Promise reference.
+// This is critical — passing a new Promise object to <Elements stripe={}> causes it to
+// re-initialize, unmounting PaymentElement mid-load and preventing onReady from firing.
+const _stripePromiseCache = new Map<string, ReturnType<typeof loadStripe>>();
+function getStripePromise(key: string): ReturnType<typeof loadStripe> {
+  if (!key) return Promise.resolve(null);
+  if (!_stripePromiseCache.has(key)) {
+    _stripePromiseCache.set(key, loadStripe(key));
+  }
+  return _stripePromiseCache.get(key)!;
+}
+
+const liveStripePromise = import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY
+  ? getStripePromise(import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY)
+  : Promise.resolve(null);
+const testStripePromise = import.meta.env.VITE_STRIPE_TEST_PUBLISHABLE_KEY
+  ? getStripePromise(import.meta.env.VITE_STRIPE_TEST_PUBLISHABLE_KEY)
+  : Promise.resolve(null);
 
 // Generate 30-minute time slots from 6:00 AM to 10:00 PM
 const TIME_OPTIONS: string[] = [];
@@ -518,26 +534,32 @@ function StripePaymentForm({ onSuccess, customerEmail, testMode }: { onSuccess: 
   const elements = useElements();
   const [paying, setPaying] = useState(false);
   // elementReady is ONLY set true by the PaymentElement's own onReady callback — never by a timer.
-  // This prevents enabling the submit button before the PaymentElement iframe has actually mounted.
   const [elementReady, setElementReady] = useState(false);
-  const [loadSlow, setLoadSlow] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [loadTimedOut, setLoadTimedOut] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const { toast } = useToast();
 
-  // After 12 seconds, show a "taking longer than expected" hint — but do NOT enable the button.
-  // Fixes: old 6-second fallback would enable Pay before PaymentElement mounted, causing
-  // "elements should have a mounted Payment Element" Stripe SDK error on submit.
-  useEffect(() => {
-    const t = setTimeout(() => setLoadSlow(true), 12000);
-    return () => clearTimeout(t);
-  }, []);
-
-  // ── Dev/test diagnostics (only in non-production builds) ──────────────────
+  // Dev-mode init log — fires whenever the Stripe state chain changes.
+  // Lets us see exactly which step fails (stripe null? elements null? onReady never fires?).
   useEffect(() => {
     if (import.meta.env.PROD) return;
     const keyType = testMode ? "TEST" : "LIVE";
-    console.info(`[Stripe] mode=${keyType} stripe=${!!stripe} elements=${!!elements} ready=${elementReady}`);
-  }, [stripe, elements, elementReady, testMode]);
+    console.info(`[Stripe:init] mode=${keyType} stripe=${!!stripe} elements=${!!elements} ready=${elementReady} loadError=${loadError}`);
+  }, [stripe, elements, elementReady, testMode, loadError]);
+
+  // Hard timeout — if PaymentElement doesn't fire onReady within 25 s, show an actionable error.
+  // The "loading slow" hint approach didn't give users a path to recovery.
+  useEffect(() => {
+    if (elementReady || loadError) return;
+    const t = setTimeout(() => {
+      if (!elementReady) {
+        console.warn("[Stripe:init] PaymentElement did not fire onReady within 25 s — showing timeout error");
+        setLoadTimedOut(true);
+      }
+    }, 25000);
+    return () => clearTimeout(t);
+  }, [elementReady, loadError]);
 
   // If on HTTP, Stripe's card iframes won't initialize. Show instructions to open via HTTPS.
   if (isHttp) {
@@ -644,25 +666,51 @@ function StripePaymentForm({ onSuccess, customerEmail, testMode }: { onSuccess: 
     }
   };
 
+  // Load error or timeout — show a clear, actionable error instead of an infinite spinner.
+  const formLoadFailed = !!(loadError || loadTimedOut);
+
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
+      {/* PaymentElement must be visible (non-zero size) while loading — Stripe's iframe
+          needs a visible container to initialize. Don't hide it with height:0 or opacity:0. */}
       <PaymentElement
-        options={{ layout: "tabs", wallets: { applePay: "auto", googlePay: "auto", ...(testMode ? { link: "never" } : {}) } }}
-        onReady={() => { setElementReady(true); setLoadSlow(false); }}
+        options={{ layout: "tabs", wallets: { applePay: "auto", googlePay: "auto" } }}
+        onReady={() => {
+          console.info("[Stripe:init] PaymentElement onReady fired ✓");
+          setElementReady(true);
+          setLoadTimedOut(false);
+        }}
+        onLoadError={(err) => {
+          const msg = (err as any)?.error?.message ?? "Unknown error";
+          console.error("[Stripe:init] PaymentElement onLoadError:", err);
+          setLoadError(`Secure payment form failed to load: ${msg}`);
+        }}
       />
-      {!elementReady && !error && (
-        <div className="flex flex-col items-center gap-1.5 py-1">
-          <div className="flex items-center gap-2 text-muted-foreground text-sm">
-            <Loader2 className="w-3.5 h-3.5 animate-spin" />
-            {loadSlow ? "Still loading secure payment fields…" : "Loading secure payment form…"}
-          </div>
-          {loadSlow && (
-            <p className="text-xs text-muted-foreground text-center">
-              Taking longer than expected. Please check your connection or{" "}
-              <button type="button" className="underline text-primary" onClick={() => window.location.reload()}>refresh the page</button>.
+      {/* Spinner shown below the PaymentElement while it initializes. */}
+      {!elementReady && (
+        formLoadFailed ? (
+          <div className="rounded-xl border border-destructive/30 bg-destructive/5 px-5 py-5 space-y-3 text-center">
+            <AlertTriangle className="w-6 h-6 text-destructive mx-auto" />
+            <p className="text-sm font-semibold text-destructive">
+              {loadError ?? "We couldn't load the secure payment form."}
             </p>
-          )}
-        </div>
+            <p className="text-xs text-muted-foreground">
+              Please check your connection and try again, or use a different browser.
+            </p>
+            <button
+              type="button"
+              className="text-sm font-semibold text-primary underline underline-offset-2"
+              onClick={() => window.location.reload()}
+            >
+              Refresh and retry
+            </button>
+          </div>
+        ) : (
+          <div className="flex items-center gap-2 text-muted-foreground text-sm py-1">
+            <Loader2 className="w-3.5 h-3.5 animate-spin" />
+            Loading secure payment form…
+          </div>
+        )
       )}
       {error && (
         <div className="flex items-center gap-2 text-destructive text-sm bg-destructive/10 rounded-lg px-4 py-3">
@@ -670,10 +718,8 @@ function StripePaymentForm({ onSuccess, customerEmail, testMode }: { onSuccess: 
           {error}
         </div>
       )}
-      {/* Button is disabled until stripe, elements, AND elementReady are all true.
-          elementReady is set ONLY by PaymentElement's onReady callback — never by a timer.
-          This prevents the "elements should have a mounted Payment Element" Stripe SDK error. */}
-      <Button type="submit" size="lg" className="w-full h-13 text-base font-bold rounded-xl" disabled={paying || !stripe || !elements || !elementReady}>
+      {/* Button is disabled until stripe, elements, AND elementReady are all true. */}
+      <Button type="submit" size="lg" className="w-full h-13 text-base font-bold rounded-xl" disabled={paying || !stripe || !elements || !elementReady || formLoadFailed}>
         {paying ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Processing…</> : <><ShieldCheck className="w-4 h-4 mr-2" />Pay & Book</>}
       </Button>
       <p className="text-center text-xs text-muted-foreground">
@@ -1275,21 +1321,22 @@ export default function StorefrontBook() {
 
   // When quantity changes, invalidate any in-progress payment intent so it
   // gets re-created with the correct (updated) total.
+  // NOTE: do NOT reset stripeInstance — it is stable per publishable key and
+  // resetting it causes Elements to remount, breaking PaymentElement initialization.
   useEffect(() => {
     if (paymentConfirmed) return; // already paid — don't reset
     if (!clientSecret) return;    // no intent yet — nothing to reset
     setClientSecret(null);
-    setStripeInstance(null);
     setShowStripeForm(false);
     intentFiredRef.current = false;
   }, [selectedQuantity]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // When the user toggles payment plan, reset the intent to use the new amount
+  // When the user toggles payment plan, reset the intent to use the new amount.
+  // NOTE: do NOT reset stripeInstance — see above comment.
   useEffect(() => {
     if (paymentConfirmed) return;
     if (!clientSecret && !intentFiredRef.current) return; // not started yet
     setClientSecret(null);
-    setStripeInstance(null);
     setShowStripeForm(false);
     intentFiredRef.current = false;
   }, [usePaymentPlan]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -1679,12 +1726,18 @@ export default function StorefrontBook() {
           return;
         }
         const data = await res.json();
-        // Load the exact Stripe instance for this payment intent's key to avoid
-        // a live↔test mismatch when isTestMode switches after first render.
+        // Use the stable-cached getStripePromise() so <Elements stripe={}> always receives
+        // the SAME Promise reference for the same key. A changing Promise reference causes
+        // Elements to re-initialize and PaymentElement to unmount mid-load (onReady never fires).
         if (data.stripePublishableKey) {
-          setStripeInstance(loadStripe(data.stripePublishableKey));
+          setStripeInstance(getStripePromise(data.stripePublishableKey));
         } else {
           setStripeInstance(data.testMode ? testStripePromise : liveStripePromise);
+        }
+        if (!import.meta.env.PROD) {
+          console.info(
+            `[Stripe:init] clientSecret received ✓ testMode=${data.testMode} key=${(data.stripePublishableKey ?? "").slice(0, 20)}... intentId=${data.paymentIntentId}`
+          );
         }
         setClientSecret(data.clientSecret);
         setPaymentIntentId(data.paymentIntentId);
