@@ -1,7 +1,7 @@
 import { Router } from "express";
 import multer from "multer";
 import { db, operatorContractsTable } from "@workspace/db";
-import { adminUsersTable, tenantsTable } from "@workspace/db/schema";
+import { adminUsersTable, tenantsTable, platformAgreementsTable } from "@workspace/db/schema";
 import { eq, and, desc } from "drizzle-orm";
 import { objectStorageClient } from "../lib/objectStorage";
 
@@ -65,6 +65,30 @@ router.get("/contracts", async (req, res) => {
   } catch (err) {
     req.log.error(err);
     res.status(500).json({ error: "Failed to fetch contracts" });
+  }
+});
+
+// ── GET /contracts/platform-agreements — active OutdoorShare documents for admin preview ──
+router.get("/contracts/platform-agreements", async (req, res) => {
+  try {
+    if (!req.tenantId) { res.status(401).json({ error: "Not authenticated" }); return; }
+    const rows = await db
+      .select({
+        id:           platformAgreementsTable.id,
+        title:        platformAgreementsTable.title,
+        content:      platformAgreementsTable.content,
+        checkboxLabel: platformAgreementsTable.checkboxLabel,
+        isRequired:   platformAgreementsTable.isRequired,
+        sortOrder:    platformAgreementsTable.sortOrder,
+        version:      platformAgreementsTable.version,
+      })
+      .from(platformAgreementsTable)
+      .where(and(eq(platformAgreementsTable.isActive, true), eq(platformAgreementsTable.isRequired, true)))
+      .orderBy(platformAgreementsTable.sortOrder);
+    res.json(rows);
+  } catch (err) {
+    req.log.error(err);
+    res.status(500).json({ error: "Failed to fetch platform agreements" });
   }
 });
 
