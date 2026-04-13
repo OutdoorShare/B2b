@@ -30,6 +30,7 @@ import { differenceInDays, format, addDays, eachDayOfInterval, parseISO, isBefor
 import { loadStripe } from "@stripe/stripe-js";
 import { Elements, PaymentElement, useStripe, useElements } from "@stripe/react-stripe-js";
 import { QRCodeSVG } from "qrcode.react";
+import { calculateBookingPricing, feeModeFromLegacy, type FeeMode } from "@/lib/pricing";
 
 const liveStripePromise = loadStripe(import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY ?? "");
 const testStripePromise = loadStripe(import.meta.env.VITE_STRIPE_TEST_PUBLISHABLE_KEY ?? "");
@@ -1331,28 +1332,27 @@ export default function StorefrontBook() {
   const promoDiscount = appliedPromo ? Math.min(appliedPromo.discountAmount, total) : 0;
   const afterPromo = total - promoDiscount;
 
-  // ── Service fee pass-through ──────────────────────────────────────────────
-  // When the company has opted to pass the OutdoorShare service fee to the customer,
-  // add it on top of the rental (excluding the protection plan fee, which already
-  // goes 100% to OutdoorShare and is not subject to the percentage split).
+  // ── Platform fee calculation (using central pricing calculator) ─────────────
+  // Fee applies only to the rental portion (excluding protection plan fee,
+  // which flows 100% to OutdoorShare regardless of mode).
   const bpRaw = businessProfile as any;
-  const passThrough = !!bpRaw?.passPlatformFeeToCustomer;
-  const feeType: "percent" | "fixed" = bpRaw?.passPlatformFeeType ?? "percent";
-  // Fee applies only to the rental portion (excluding protection plan fee)
   const rentalAfterDiscounts = Math.max(0, afterPromo - platformProtectionFee);
-  let serviceFee = 0;
-  if (passThrough) {
-    if (feeType === "fixed") {
-      serviceFee = bpRaw?.passPlatformFeeFixed != null ? parseFloat(String(bpRaw.passPlatformFeeFixed)) : 0;
-    } else {
-      // Use the admin-configured pass-through rate if set; otherwise fall back to
-      // the platform's actual fee for this tenant (both returned by GET /api/business).
-      const effectiveFeePercent = bpRaw?.passPlatformFeePercent != null
-        ? parseFloat(String(bpRaw.passPlatformFeePercent))
-        : (bpRaw?.platformFeePercent != null ? parseFloat(String(bpRaw.platformFeePercent)) : 10);
-      serviceFee = rentalAfterDiscounts * (effectiveFeePercent / 100);
-    }
-  }
+  const effectiveFeePercent = bpRaw?.platformFeePercent != null
+    ? parseFloat(String(bpRaw.platformFeePercent))
+    : 10;
+  // Resolve fee mode: prefer new feeMode field, fall back to legacy boolean
+  const feeMode: FeeMode = (bpRaw?.feeMode as FeeMode | undefined) ?? feeModeFromLegacy(!!bpRaw?.passPlatformFeeToCustomer);
+  const feeSplitCustPct = bpRaw?.feeSplitCustomerPercent != null ? parseFloat(String(bpRaw.feeSplitCustomerPercent)) : 50;
+  const feeSplitOpPct = bpRaw?.feeSplitOperatorPercent != null ? parseFloat(String(bpRaw.feeSplitOperatorPercent)) : 50;
+  const feePricing = calculateBookingPricing({
+    subtotal: rentalAfterDiscounts,
+    feeMode,
+    platformFeePercent: effectiveFeePercent,
+    splitCustomerPercent: feeSplitCustPct,
+    splitOperatorPercent: feeSplitOpPct,
+  });
+  // serviceFee = what the customer sees as an added fee line (0 when operator absorbs)
+  const serviceFee = feePricing.customerFee;
   const discountedTotal = Math.max(0.50, afterPromo + serviceFee);
 
   // ── Payment plan / split deposit ──────────────────────────────────────────
@@ -1845,6 +1845,7 @@ export default function StorefrontBook() {
           depositPaid: totalDeposit > 0 ? String(totalDeposit) : undefined,
           protectionPlanFee: platformProtectionFee > 0 ? String(platformProtectionFee) : undefined,
           protectionPlanDeclined: (protectionIsOptional && protectionDeclined) || addonProtectionDeclined ? true : undefined,
+          bookingPricing: feePricing,
           // Payment plan (split deposit)
           ...(usePaymentPlan && planEnabled ? {
             paymentPlanEnabled: true,
@@ -2365,8 +2366,10 @@ export default function StorefrontBook() {
                     {serviceFee > 0 && (
                       <div className="px-4 py-3 flex items-center justify-between text-sm text-muted-foreground">
                         <span className="flex items-center gap-1.5">
-                          <span>Service fee</span>
-                          <span className="text-xs bg-muted rounded-full px-1.5 py-0.5">{effectiveFeePercent}%</span>
+                          <span>{feeMode === "split" ? "Service fee (your share)" : "Service fee"}</span>
+                          <span className="text-xs bg-muted rounded-full px-1.5 py-0.5">
+                            {feeMode === "split" ? `${feeSplitCustPct}% of ${effectiveFeePercent}%` : `${effectiveFeePercent}%`}
+                          </span>
                         </span>
                         <span>+${serviceFee.toFixed(2)}</span>
                       </div>
@@ -4622,7 +4625,11 @@ export default function StorefrontBook() {
                       )}
                       {serviceFee > 0 && (
                         <div className="flex justify-between text-sm text-muted-foreground">
-                          <span>Service fee ({effectiveFeePercent}%)</span>
+                          <span>
+                            {feeMode === "split"
+                              ? `Service fee (your share — ${feeSplitCustPct}% of ${effectiveFeePercent}%)`
+                              : `Service fee (${effectiveFeePercent}%)`}
+                          </span>
                           <span>+${serviceFee.toFixed(2)}</span>
                         </div>
                       )}

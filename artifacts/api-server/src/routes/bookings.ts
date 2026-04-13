@@ -313,8 +313,11 @@ router.post("/bookings", async (req, res) => {
       splitRemainingDueDate: reqSplitDueDate,
       protectionPlanDeclined: reqProtectionPlanDeclined,
       quoteId: reqQuoteId,
+      bookingPricing: reqBookingPricing,
       ...restBody
     } = body;
+
+    const bookingPricingJson = reqBookingPricing ? JSON.stringify(reqBookingPricing) : null;
     const quoteId = reqQuoteId ? Number(reqQuoteId) : null;
     const assignedUnitIds = Array.isArray(rawUnitIds) && rawUnitIds.length > 0 ? JSON.stringify(rawUnitIds) : null;
     // Set agreementSignedAt server-side when the customer provides their signature
@@ -362,6 +365,7 @@ router.post("/bookings", async (req, res) => {
       ruleInitials: ruleInitialsJson ?? null,
       protectionPlanFee: protectionPlanFee > 0 ? String(protectionPlanFee) : null,
       protectionPlanDeclined: !!reqProtectionPlanDeclined,
+      bookingPricing: bookingPricingJson,
       // Split payment plan fields
       ...(usingSplitPayment ? {
         paymentPlanEnabled: true,

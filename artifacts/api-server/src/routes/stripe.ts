@@ -3,6 +3,7 @@ import { db } from "@workspace/db";
 import { tenantsTable, bookingsTable, customersTable, listingsTable, businessProfileTable } from "@workspace/db/schema";
 import { eq, desc, and, or, sql } from "drizzle-orm";
 import { stripe, getStripeForTenant, PLATFORM_FEE_PERCENT } from "../services/stripe";
+import { calculateBookingPricing, feeModeFromLegacy, type FeeMode } from "../lib/pricing";
 import { sendStripeRestrictedAlertEmail, sendPaymentRequestEmail, sendPaymentFailedRenterEmail, sendPaymentFailedAdminEmail, sendSplitPaymentChargedEmail, sendSplitPaymentSelfPaidAdminEmail } from "../services/gmail";
 import { triggerAvailablePayout, sweepPendingPayouts } from "../services/payouts";
 import type { Request } from "express";

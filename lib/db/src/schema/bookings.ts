@@ -75,6 +75,8 @@ export const bookingsTable = pgTable("bookings", {
   }),
   splitRemainingIntentId: text("split_remaining_intent_id"),
   splitRemainingChargedAt: timestamp("split_remaining_charged_at"),
+  // Immutable pricing snapshot captured at booking time — JSON of BookingPricingResult
+  bookingPricing: text("booking_pricing"),
   // Email activity log — JSON array of {type, sentAt, toEmail?}
   emailEvents: text("email_events"),
   // Renter-triggered admin review reminder — timestamp of last nudge sent

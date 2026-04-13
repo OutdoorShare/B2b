@@ -55,6 +55,13 @@ export const businessProfileTable = pgTable("business_profile", {
   passPlatformFeePercent: decimal("pass_platform_fee_percent", { precision: 5, scale: 2 }),
   // Flat dollar amount when type="fixed". NULL = not in use.
   passPlatformFeeFixed: decimal("pass_platform_fee_fixed", { precision: 8, scale: 2 }),
+  // ── Fee mode (replaces passPlatformFeeToCustomer for new tenants) ─────────
+  // pass_to_customer: customer pays full platform fee on top of rental price
+  // absorb: operator's payout is reduced by the platform fee
+  // split: customer pays splitCustomerPercent of fee, operator absorbs the rest
+  feeMode: text("fee_mode", { enum: ["pass_to_customer", "absorb", "split"] }).notNull().default("absorb"),
+  feeSplitCustomerPercent: decimal("fee_split_customer_percent", { precision: 5, scale: 2 }).default("50"),
+  feeSplitOperatorPercent: decimal("fee_split_operator_percent", { precision: 5, scale: 2 }).default("50"),
   // When true, renters may opt out of the platform protection plan at checkout.
   // Admin must acknowledge the insurance-risk warning to enable this.
   protectionPlanOptional: boolean("protection_plan_optional").notNull().default(false),

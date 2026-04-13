@@ -1,0 +1,113 @@
+We have a production-only blocker: when a renter clicks Book Now, the app shows a blank white page. Please treat this as a high-priority frontend crash and debug systematically.
+
+What I need you to do:
+
+1. Reproduce in production
+
+* Open the live site
+* Click Book Now
+* Inspect browser Console and Network
+* Capture the exact console error and failing request, if any
+
+2. Add defensive logging immediately
+   Add temporary logs around the Book Now click handler, route transition, booking page load, and pricing/session creation:
+
+* selected listing id
+* listing data present or not
+* feeSettings present or not
+* calculated pricing output
+* API response status
+* any thrown error
+
+3. Check for the most likely causes
+   A. Booking page render crash from null/undefined data
+
+* Guard all listing fields
+* Guard images, pricing, renter/user, feeSettings, availability
+* No component should hard crash if a field is missing
+
+B. Missing production env vars
+Check all production env vars used by booking flow:
+
+* API base URL
+* payment keys
+* public frontend env vars
+* auth/session values
+  Log whether required vars exist at app startup and server startup
+
+C. Legacy data missing new fee fields
+Some production listings may not yet have:
+
+* feeSettings.mode
+* platformFeePercent
+* splitCustomerPercent
+* splitOperatorPercent
+  Add safe defaults:
+* mode = pass_to_customer
+* platformFeePercent = existing default fee
+  Never assume feeSettings exists
+
+D. Pricing calculator returning NaN or throwing
+Make calculator fully defensive:
+
+* coerce numeric inputs
+* validate mode
+* default missing values safely
+* never allow NaN into UI
+* return a safe fallback or surface an inline error state
+
+E. Booking route chunk/load issue
+Check for:
+
+* Loading chunk failed
+* dynamic import failure
+* asset 404s
+* routing mismatch in production build
+
+4. Add proper UI fallbacks
+   A blank white page is unacceptable.
+   Implement:
+
+* route-level error boundary
+* booking widget error state
+* checkout page error card
+* fallback message like:
+  "We hit an error loading this booking. Please refresh or try again."
+  Include a retry button.
+
+5. Verify API failure handling
+   If checkout/session creation fails:
+
+* do not crash the page
+* show inline error
+* log server response body
+* handle 4xx/5xx gracefully
+
+6. Inspect old assumptions
+   Search for any code that assumes:
+
+* listing always exists
+* feeSettings always exists
+* price is always a number
+* user/session already loaded
+* checkout session always returns success
+
+7. Report back with:
+
+* exact root cause
+* files changed
+* exact fix
+* whether issue was frontend, backend, env, or data-related
+* any production data migration required
+
+Likely root cause candidates:
+
+* missing production env var
+* old listing missing fee settings
+* unhandled exception in booking page render
+* checkout session API failure with no error UI
+* chunk load failure after deploy
+
+Important:
+Do not stop at “works locally.”
+I need the production root cause fixed and verified end-to-end as a renter.
