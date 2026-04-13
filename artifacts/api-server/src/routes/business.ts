@@ -5,6 +5,7 @@ import { eq, ne, and } from "drizzle-orm";
 import { PLATFORM_FEE_PERCENT } from "../services/stripe";
 import { requireTenant } from "../middleware/admin-auth";
 import { encrypt, isEncrypted } from "../lib/crypto";
+import { normalizeFeeMode } from "../lib/pricing";
 
 const RESERVED_SLUGS = new Set(["admin", "superadmin", "get-started", "signup", "demo", "api"]);
 // Slugs that must never be auto-rewritten by the name→slug sync (e.g. platform demo sites)
@@ -189,7 +190,7 @@ router.put("/business", requireTenant as any, async (req, res) => {
       ...(passPlatformFeeType        !== undefined && { passPlatformFeeType }),
       ...(passPlatformFeePercent     !== undefined && { passPlatformFeePercent: passPlatformFeePercent !== null ? String(passPlatformFeePercent) : null }),
       ...(passPlatformFeeFixed       !== undefined && { passPlatformFeeFixed: passPlatformFeeFixed !== null ? String(passPlatformFeeFixed) : null }),
-      ...(feeMode                    !== undefined && { feeMode }),
+      ...(feeMode !== undefined && feeMode !== "" && { feeMode: normalizeFeeMode(feeMode) }),
       ...(feeSplitCustomerPercent    !== undefined && { feeSplitCustomerPercent: feeSplitCustomerPercent !== null ? String(feeSplitCustomerPercent) : null }),
       ...(feeSplitOperatorPercent    !== undefined && { feeSplitOperatorPercent: feeSplitOperatorPercent !== null ? String(feeSplitOperatorPercent) : null }),
       ...(protectionPlanOptional     !== undefined && { protectionPlanOptional }),
