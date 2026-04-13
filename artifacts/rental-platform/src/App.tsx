@@ -518,7 +518,7 @@ function ScrollToTop() {
 
 function App() {
   return (
-    <RouteErrorBoundary fallbackMessage="The application encountered an unexpected error. Please refresh the page.">
+    <RouteErrorBoundary>
       <QueryClientProvider client={queryClient}>
         <TooltipProvider>
           <ThemeProvider>
