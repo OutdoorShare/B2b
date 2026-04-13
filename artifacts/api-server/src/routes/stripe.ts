@@ -377,11 +377,13 @@ router.post("/stripe/payment-intent", async (req, res) => {
       receipt_email: (customerEmail && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(customerEmail)) ? customerEmail : undefined,
       // Enable all available payment methods (Apple Pay, Google Pay, cards, etc.)
       automatic_payment_methods: { enabled: true, allow_redirects: "never" },
-      // Save cards for future off-session use (deposit hold/charge at pickup).
-      // Scoped to card only so Apple Pay / Google Pay can still appear.
-      payment_method_options: {
-        card: { setup_future_usage: "off_session" },
-      },
+      // Top-level setup_future_usage is REQUIRED by Stripe when a Customer Session has
+      // payment_method_save=enabled. Without it Stripe throws:
+      // "You must provide setup_future_usage on the PaymentIntent when setting
+      //  payment_method_save=enabled in the Customer Session."
+      // "off_session" is correct for rental bookings — we charge cards after the
+      // rental period for deposits, damage holds, and remaining balances.
+      setup_future_usage: "off_session",
       // Non-instant bookings: authorize only — capture when admin confirms
       ...(!instantBooking ? { capture_method: "manual" } : {}),
       description: `Rental booking — ${tenant.name}${isTestMode ? " [TEST MODE]" : ""}`,
@@ -413,7 +415,9 @@ router.post("/stripe/payment-intent", async (req, res) => {
 
     // Idempotency key: deterministic per (tenant, email, amount, listing) so retries
     // return the same intent instead of creating duplicates.
-    const idempotencyKey = `pi_${tenant.id}_${(customerEmail ?? "anon").replace(/[^a-z0-9@._-]/gi, "")}_${amountCents}_${bookingMeta?.listing_id ?? "none"}`;
+    // v2: bumped because PaymentIntent params changed (added top-level setup_future_usage).
+    // Stripe rejects idempotency-key reuse if the params differ from the original request.
+    const idempotencyKey = `pi_v2_${tenant.id}_${(customerEmail ?? "anon").replace(/[^a-z0-9@._-]/gi, "")}_${amountCents}_${bookingMeta?.listing_id ?? "none"}`;
 
     let intent;
     try {

@@ -1,0 +1,72 @@
+We now have the exact Stripe test-mode root cause.
+
+Exact error:
+`You must provide setup_future_usage on the PaymentIntent when setting payment_method_save=enabled in the Customer Session. Set setup_future_usage on the PaymentIntent to specify how payment methods should be saved for future use.`
+
+This means our Stripe integration is creating a Customer Session with payment method saving enabled, but the related PaymentIntent does not include `setup_future_usage`.
+
+Please fix this in the Stripe payment creation flow.
+
+## Required fix
+
+When creating the PaymentIntent for this checkout flow, if `payment_method_save=enabled` is being used in the Customer Session, then the PaymentIntent must include:
+
+* `setup_future_usage: "off_session"`
+  or, if appropriate for this flow,
+* `setup_future_usage: "on_session"`
+
+Most likely for rental bookings, use:
+
+* `setup_future_usage: "off_session"`
+
+Please confirm which one is appropriate for our product, but do not leave it unset.
+
+## Alternative fix
+
+If we do NOT actually need saved payment methods in the dev/demo/test booking flow, then disable payment method saving in the Customer Session instead of enabling it.
+
+In other words, make the two sides consistent:
+
+* either enable saving and set `setup_future_usage`
+* or do not enable saving at all
+
+## What I need you to inspect
+
+Please check the exact backend code that creates:
+
+1. the PaymentIntent
+2. the Customer Session
+3. the Elements/checkout session config
+
+I need confirmation of:
+
+* where `payment_method_save=enabled` is being set
+* where the PaymentIntent is being created
+* whether `setup_future_usage` is currently missing
+* exact file(s) changed to fix it
+
+## Dev/demo scope
+
+This is happening in Stripe test mode for demo/dev environments.
+
+Please fix the dev/demo Stripe flow without breaking live production.
+
+If live production uses the same code path, make the fix there too in a safe way.
+
+## After the fix
+
+Please verify all of the following:
+
+1. secure payment form loads in test mode
+2. test card entry works
+3. payment submits successfully
+4. booking completes successfully
+5. no raw Stripe integration errors are shown to the renter
+
+## Report back with:
+
+* exact file changed
+* whether you added `setup_future_usage`
+* which value you used (`off_session` or `on_session`)
+* whether payment method saving remains enabled or was disabled
+* proof test checkout now works end-to-end
