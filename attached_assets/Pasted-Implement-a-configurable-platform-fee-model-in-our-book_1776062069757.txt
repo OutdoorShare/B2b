@@ -1,0 +1,323 @@
+Implement a configurable platform-fee model in our booking flow with 3 modes:
+
+1. Pass fees to customer
+2. Absorb fees
+3. Split fees
+
+Goal:
+Operators must be able to choose how platform fees are handled per listing or product, and all pricing must calculate correctly in the storefront, checkout, booking summary, admin dashboard, and payouts.
+
+Core requirements
+
+Add a new fee configuration object to each bookable listing/product:
+
+feeSettings = {
+mode: "pass_to_customer" | "absorb" | "split",
+platformFeeType: "percentage",
+platformFeePercent: number,
+splitCustomerPercent?: number,
+splitOperatorPercent?: number
+}
+
+Assumptions:
+
+* Start with percentage-based platform fees only
+* platformFeePercent is the total platform fee rate
+* For split mode:
+
+  * splitCustomerPercent + splitOperatorPercent must equal 100
+  * Example: platformFeePercent = 10, splitCustomerPercent = 40, splitOperatorPercent = 60
+  * Customer pays 4% of subtotal
+  * Operator absorbs 6% of subtotal
+
+Behavior by mode
+
+1. pass_to_customer
+
+* Customer pays subtotal + customer-facing platform fee
+* Operator receives full subtotal, minus payment processor fees if those are handled separately
+* Platform revenue = full platform fee
+
+Formula:
+
+* subtotal = base booking amount before platform fee
+* platformFee = subtotal * platformFeePercent / 100
+* customerTotal = subtotal + platformFee
+* operatorGrossRevenue = subtotal
+* platformRevenue = platformFee
+
+2. absorb
+
+* Customer pays subtotal only
+* Operator payout is reduced by the platform fee
+* Platform revenue comes out of operator earnings
+
+Formula:
+
+* subtotal = base booking amount
+* platformFee = subtotal * platformFeePercent / 100
+* customerTotal = subtotal
+* operatorGrossRevenue = subtotal - platformFee
+* platformRevenue = platformFee
+
+3. split
+
+* Part of fee is charged to customer, part is absorbed by operator
+* Total platform revenue must still equal subtotal * platformFeePercent / 100
+
+Formula:
+
+* subtotal = base booking amount
+* totalPlatformFee = subtotal * platformFeePercent / 100
+* customerFee = totalPlatformFee * splitCustomerPercent / 100
+* operatorFee = totalPlatformFee * splitOperatorPercent / 100
+* customerTotal = subtotal + customerFee
+* operatorGrossRevenue = subtotal - operatorFee
+* platformRevenue = customerFee + operatorFee
+
+Validation rules
+
+* platformFeePercent must be >= 0
+* split mode requires splitCustomerPercent and splitOperatorPercent
+* splitCustomerPercent + splitOperatorPercent must equal 100
+* No negative totals or payouts
+* Round currency safely to 2 decimals using a single shared money utility
+* Do not duplicate fee math across components; use one central pricing calculator
+
+Need a central pricing calculator
+
+Create a shared function like:
+
+calculateBookingPricing({
+subtotal,
+feeMode,
+platformFeePercent,
+splitCustomerPercent,
+splitOperatorPercent
+}) => {
+subtotal,
+totalPlatformFee,
+customerFee,
+operatorFee,
+customerTotal,
+operatorPayout,
+platformRevenue
+}
+
+Important:
+
+* This function must be the single source of truth
+* Use it everywhere:
+
+  * product page
+  * checkout
+  * booking confirmation
+  * admin panel
+  * payout reporting
+  * invoices/receipts
+
+Pseudo logic:
+
+function roundMoney(value) {
+return Math.round((value + Number.EPSILON) * 100) / 100;
+}
+
+function calculateBookingPricing(input) {
+const subtotal = roundMoney(input.subtotal);
+const totalPlatformFee = roundMoney(
+subtotal * input.platformFeePercent / 100
+);
+
+let customerFee = 0;
+let operatorFee = 0;
+
+if (input.feeMode === "pass_to_customer") {
+customerFee = totalPlatformFee;
+operatorFee = 0;
+} else if (input.feeMode === "absorb") {
+customerFee = 0;
+operatorFee = totalPlatformFee;
+} else if (input.feeMode === "split") {
+customerFee = roundMoney(
+totalPlatformFee * input.splitCustomerPercent / 100
+);
+operatorFee = roundMoney(totalPlatformFee - customerFee);
+} else {
+throw new Error("Invalid fee mode");
+}
+
+const customerTotal = roundMoney(subtotal + customerFee);
+const operatorPayout = roundMoney(subtotal - operatorFee);
+const platformRevenue = roundMoney(customerFee + operatorFee);
+
+return {
+subtotal,
+totalPlatformFee,
+customerFee,
+operatorFee,
+customerTotal,
+operatorPayout,
+platformRevenue
+};
+}
+
+UI changes
+
+Operator settings UI
+Add a fee handling selector in operator/admin settings or per listing:
+
+* Pass fees to customer
+* Absorb fees
+* Split fees
+
+If split is selected:
+
+* Show two percentage fields or a slider:
+
+  * Customer share %
+  * Operator share %
+* Auto-validate total = 100
+
+Helpful labels:
+
+* Pass fees to customer: "Customers pay the platform fee at checkout"
+* Absorb fees: "You cover the platform fee"
+* Split fees: "Part is paid by customer, part is deducted from your payout"
+
+Storefront and checkout UI
+
+* If pass_to_customer:
+
+  * Show subtotal
+  * Show service/platform fee
+  * Show total
+* If absorb:
+
+  * Do not show extra fee to customer
+  * Show only final total
+* If split:
+
+  * Show subtotal
+  * Show customer service/platform fee portion
+  * Show total
+
+Operator dashboard UI
+Always show:
+
+* booking subtotal
+* customer paid
+* operator payout
+* platform revenue
+* fee mode used
+
+Data model updates
+Update booking records to store a snapshot of the pricing breakdown at time of booking.
+Do not recalculate old bookings from current listing settings.
+
+Each booking should store:
+bookingPricing = {
+subtotal: number,
+feeMode: string,
+platformFeePercent: number,
+totalPlatformFee: number,
+customerFee: number,
+operatorFee: number,
+customerTotal: number,
+operatorPayout: number,
+platformRevenue: number,
+splitCustomerPercent?: number,
+splitOperatorPercent?: number
+}
+
+This is important so historical bookings remain correct even if fee settings change later.
+
+Backend requirements
+
+* Validate fee settings server-side
+* Recalculate pricing on the server before creating the payment intent/session
+* Never trust client-side fee totals
+* Save exact pricing snapshot to booking record
+* Use same shared logic or mirrored server utility
+* Ensure payout/export/reporting uses saved booking pricing snapshot
+
+Testing requirements
+
+Add unit tests for calculateBookingPricing with at least these cases:
+
+Pass fees to customer
+
+* subtotal: 100
+* fee: 10%
+  Expected:
+* totalPlatformFee: 10
+* customerFee: 10
+* operatorFee: 0
+* customerTotal: 110
+* operatorPayout: 100
+* platformRevenue: 10
+
+Absorb fees
+
+* subtotal: 100
+* fee: 10%
+  Expected:
+* totalPlatformFee: 10
+* customerFee: 0
+* operatorFee: 10
+* customerTotal: 100
+* operatorPayout: 90
+* platformRevenue: 10
+
+Split fees 50/50
+
+* subtotal: 100
+* fee: 10%
+  Expected:
+* totalPlatformFee: 10
+* customerFee: 5
+* operatorFee: 5
+* customerTotal: 105
+* operatorPayout: 95
+* platformRevenue: 10
+
+Split fees 40/60
+
+* subtotal: 100
+* fee: 10%
+  Expected:
+* totalPlatformFee: 10
+* customerFee: 4
+* operatorFee: 6
+* customerTotal: 104
+* operatorPayout: 94
+* platformRevenue: 10
+
+Rounding case
+
+* subtotal: 99.99
+* fee: 7.5%
+* verify totals stay consistent and platformRevenue equals customerFee + operatorFee after rounding
+
+Acceptance criteria
+
+* Operator can configure fee mode without code changes
+* Checkout totals display correctly for all 3 modes
+* Operator payout displays correctly for all 3 modes
+* Platform revenue is always calculated correctly
+* Booking stores immutable pricing snapshot
+* Shared calculator is used everywhere
+* Tests pass
+* No duplicated fee logic in frontend components
+
+Also clean up any old hardcoded assumptions like:
+
+* always adding fee to customer total
+* always subtracting fee from operator payout
+* using inconsistent fee formulas in different components
+
+After implementation, provide:
+
+1. list of files changed
+2. summary of logic changes
+3. test results
+4. any migration notes if existing listings need default fee settings
