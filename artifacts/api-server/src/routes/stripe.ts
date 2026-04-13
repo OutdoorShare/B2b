@@ -2,7 +2,7 @@ import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
 import { tenantsTable, bookingsTable, customersTable, listingsTable, businessProfileTable } from "@workspace/db/schema";
 import { eq, desc, and, or, sql } from "drizzle-orm";
-import { stripe, getStripeForTenant, PLATFORM_FEE_PERCENT } from "../services/stripe";
+import { stripe, getStripeForTenant, PLATFORM_FEE_PERCENT, validateStripeCents, toStripeAmount } from "../services/stripe";
 import { calculateBookingPricing, feeModeFromLegacy, type FeeMode } from "../lib/pricing";
 import { sendStripeRestrictedAlertEmail, sendPaymentRequestEmail, sendPaymentFailedRenterEmail, sendPaymentFailedAdminEmail, sendSplitPaymentChargedEmail, sendSplitPaymentSelfPaidAdminEmail } from "../services/gmail";
 import { triggerAvailablePayout, sweepPendingPayouts } from "../services/payouts";
@@ -273,9 +273,18 @@ router.get("/stripe/connect/check/:slug", async (req, res) => {
 // If tenant has NOT connected → funds sit on OutdoorShare platform until they do.
 router.post("/stripe/payment-intent", async (req, res) => {
   try {
-    const { tenantSlug, amountCents, customerEmail, customerName, bookingMeta, customerId, protectionFeeCents, passthroughFeeCents, customFeesCents } = req.body ?? {};
-    console.log(`[payment-intent] slug="${tenantSlug}" amount=${amountCents} body-keys=${Object.keys(req.body ?? {}).join(",")}`);
-    if (!tenantSlug || !amountCents || amountCents < 50) {
+    const { tenantSlug, amountCents: rawAmountCents, customerEmail, customerName, bookingMeta, customerId, protectionFeeCents, passthroughFeeCents, customFeesCents } = req.body ?? {};
+    console.log(`[payment-intent] slug="${tenantSlug}" amount=${rawAmountCents} body-keys=${Object.keys(req.body ?? {}).join(",")}`);
+
+    // Validate the amount is a legitimate integer cents value before touching Stripe
+    let amountCents: number;
+    try {
+      amountCents = validateStripeCents(rawAmountCents, "amountCents");
+    } catch {
+      res.status(400).json({ error: "amountCents must be a non-negative integer" });
+      return;
+    }
+    if (!tenantSlug || amountCents < 50) {
       res.status(400).json({ error: "tenantSlug and amountCents (min 50) required" });
       return;
     }
@@ -322,11 +331,12 @@ router.post("/stripe/payment-intent", async (req, res) => {
     // In test mode, don't route to tenant's connected account (test ≠ live accounts)
     const tenantConnected = !isTestMode && !!(tenant.stripeAccountId && tenant.stripeChargesEnabled);
 
-    // Lookup instant booking setting — determines whether to authorize-only or capture immediately
-    const [bizProfile] = await db.select({ instantBooking: businessProfileTable.instantBooking })
+    // Lookup instant booking setting and fee mode — determines whether to authorize-only or capture immediately
+    const [bizProfile] = await db.select({ instantBooking: businessProfileTable.instantBooking, feeMode: businessProfileTable.feeMode })
       .from(businessProfileTable)
       .where(eq(businessProfileTable.tenantId, tenant.id));
     const instantBooking = bizProfile?.instantBooking ?? false;
+    const feeMode = bizProfile?.feeMode ?? "pass_to_customer";
 
     // ── Attach or create a Stripe Customer so the card is saved for future use ──
     let stripeCustomerId: string | undefined;
@@ -381,6 +391,12 @@ router.post("/stripe/payment-intent", async (req, res) => {
         customer_name: customerName ?? "",
         platform_fee_cents: String(platformFeeAmount),
         transfer_amount_cents: String(transferAmount),
+        rental_base_cents: String(rentalBase),
+        protection_fee_cents: String(ppCents),
+        passthrough_fee_cents: String(passthroughCents),
+        custom_fees_cents: String(customSubtotal),
+        fee_mode: feeMode,
+        renter_id: customerId ? String(customerId) : "",
         test_mode: isTestMode ? "true" : "false",
         ...(bookingMeta ?? {}),
       },
@@ -636,10 +652,20 @@ router.post("/stripe/webhook", async (req, res) => {
     switch (event.type) {
       case "payment_intent.succeeded": {
         const pi = event.data.object;
+        // Extract the charge ID from the PI (available as latest_charge on the PI object)
+        const chargeId = typeof pi.latest_charge === "string"
+          ? pi.latest_charge
+          : (pi.latest_charge as any)?.id ?? null;
+
         await db.update(bookingsTable).set({
           stripePaymentStatus: "paid",
+          // Advance the booking from pending/pending_payment → confirmed
+          status: "confirmed",
+          ...(chargeId ? { stripeChargeId: chargeId } : {}),
           updatedAt: new Date(),
         }).where(eq(bookingsTable.stripePaymentIntentId, pi.id));
+
+        console.log(`[webhook] payment_intent.succeeded pi=${pi.id} charge=${chargeId ?? "none"} → booking confirmed`);
 
         // For PIs routed via transfer_data, funds land on the connected account automatically.
         // Trigger an immediate payout so the balance doesn't sit waiting for the default schedule.
@@ -662,8 +688,11 @@ router.post("/stripe/webhook", async (req, res) => {
       }
       case "payment_intent.payment_failed": {
         const pi = event.data.object;
+        const lastErr = (pi.last_payment_error as any)?.message ?? "Payment failed";
+        console.log(`[webhook] payment_intent.payment_failed pi=${pi.id} reason="${lastErr}"`);
         const [updatedBooking] = await db.update(bookingsTable).set({
           stripePaymentStatus: "failed",
+          status: "payment_failed",
           updatedAt: new Date(),
         }).where(eq(bookingsTable.stripePaymentIntentId, pi.id)).returning();
 
@@ -733,6 +762,31 @@ router.post("/stripe/webhook", async (req, res) => {
           }).where(eq(bookingsTable.id, Number(bookingId)));
           console.log(`[webhook] checkout.session.completed → booking #${bookingId} confirmed, pi=${piId}`);
         }
+        break;
+      }
+      case "charge.refunded": {
+        const charge = event.data.object;
+        const piId = typeof charge.payment_intent === "string"
+          ? charge.payment_intent
+          : (charge.payment_intent as any)?.id ?? null;
+        if (!piId) break;
+
+        // Total refunded on this charge (Stripe tracks cumulative refunds)
+        const refundedCents = charge.amount_refunded ?? 0;
+        const refundedDollars = (refundedCents / 100).toFixed(2);
+        // Most recent refund ID
+        const latestRefundId = (charge.refunds as any)?.data?.[0]?.id ?? null;
+        const fullyRefunded = charge.refunded === true;
+
+        await db.update(bookingsTable).set({
+          stripePaymentStatus: fullyRefunded ? "refunded" : "partially_refunded",
+          stripeRefundId: latestRefundId ?? undefined,
+          stripeRefundedAt: new Date(),
+          stripeRefundAmount: refundedDollars,
+          updatedAt: new Date(),
+        }).where(eq(bookingsTable.stripePaymentIntentId, piId));
+
+        console.log(`[webhook] charge.refunded pi=${piId} charge=${charge.id} refunded=${refundedCents}¢ full=${fullyRefunded}`);
         break;
       }
       case "account.updated": {

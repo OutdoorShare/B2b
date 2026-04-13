@@ -352,6 +352,13 @@ router.post("/bookings", async (req, res) => {
       autoConfirm = biz?.instantBooking ?? false;
     }
 
+    // Determine initial booking status:
+    // • autoConfirm (kiosk / instant booking) → confirmed
+    // • PI provided but not auto-confirmed     → pending_payment (waiting for Stripe webhook)
+    // • No PI (admin/phone/walkin)             → pending (awaiting admin review)
+    const hasPi = !!restBody.stripePaymentIntentId;
+    const initialStatus = autoConfirm ? "confirmed" : hasPi ? "pending_payment" : "pending";
+
     const [created] = await db.insert(bookingsTable).values({
       ...restBody,
       tenantId: req.tenantId ?? null,
@@ -374,7 +381,7 @@ router.post("/bookings", async (req, res) => {
         splitRemainingDueDate,
         splitRemainingStatus: "pending" as const,
       } : {}),
-      ...(autoConfirm ? { status: "confirmed" } : {}),
+      status: initialStatus as any,
       // Online bookings are unseen by admin until they open them
       seenByAdmin: restBody.source === "online" ? false : true,
       seenByRenter: true,

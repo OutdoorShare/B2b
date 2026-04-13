@@ -1,6 +1,7 @@
 import { strict as assert } from "node:assert";
 import { test } from "node:test";
 import { calculateBookingPricing, normalizeFeeMode } from "./pricing.js";
+import { toStripeAmount, validateStripeCents } from "../services/stripe.js";
 
 test("pass_to_customer: subtotal=100, fee=10%", () => {
   const r = calculateBookingPricing({ subtotal: 100, feeMode: "pass_to_customer", platformFeePercent: 10 });
@@ -105,4 +106,55 @@ test("normalizeFeeMode: empty string, null, undefined all return pass_to_custome
   assert.equal(normalizeFeeMode(null), "pass_to_customer");
   assert.equal(normalizeFeeMode(undefined), "pass_to_customer");
   assert.equal(normalizeFeeMode("anything_else"), "pass_to_customer");
+});
+
+// ── toStripeAmount tests ──────────────────────────────────────────────────────
+
+test("toStripeAmount: whole dollar amounts convert to exact cents", () => {
+  assert.equal(toStripeAmount(1), 100);
+  assert.equal(toStripeAmount(10), 1000);
+  assert.equal(toStripeAmount(0), 0);
+  assert.equal(toStripeAmount(9.99), 999);
+  assert.equal(toStripeAmount(100), 10000);
+});
+
+test("toStripeAmount: rounds fractional cents correctly", () => {
+  // 1.006 * 100 = 100.6 → rounds to 101
+  assert.equal(toStripeAmount(1.006), 101);
+  // 1.504 * 100 = 150.4 → rounds to 150
+  assert.equal(toStripeAmount(1.504), 150);
+  // 99.999 * 100 = 9999.9 → rounds to 10000
+  assert.equal(toStripeAmount(99.999), 10000);
+});
+
+test("toStripeAmount: throws on negative amount", () => {
+  assert.throws(() => toStripeAmount(-1), /invalid input/);
+});
+
+test("toStripeAmount: throws on NaN", () => {
+  assert.throws(() => toStripeAmount(NaN), /invalid input/);
+});
+
+test("toStripeAmount: throws on Infinity", () => {
+  assert.throws(() => toStripeAmount(Infinity), /invalid input/);
+});
+
+// ── validateStripeCents tests ─────────────────────────────────────────────────
+
+test("validateStripeCents: valid integer passes through", () => {
+  assert.equal(validateStripeCents(500), 500);
+  assert.equal(validateStripeCents(0), 0);
+  assert.equal(validateStripeCents("1000"), 1000);
+});
+
+test("validateStripeCents: throws on float", () => {
+  assert.throws(() => validateStripeCents(9.5), /non-negative integer/);
+});
+
+test("validateStripeCents: throws on negative", () => {
+  assert.throws(() => validateStripeCents(-50), /non-negative integer/);
+});
+
+test("validateStripeCents: throws on NaN string", () => {
+  assert.throws(() => validateStripeCents("abc"), /non-negative integer/);
 });

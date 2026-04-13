@@ -907,6 +907,32 @@ async function autoReleaseDepositsAfterClaimWindow() {
   }
 }
 
+// ── Stale pending_payment booking expiry ──────────────────────────────────────
+// Bookings stuck in pending_payment for >24 hours have almost certainly failed
+// (the Stripe PI either expired or the customer abandoned checkout).
+// Move them to cancelled so they don't pollute the admin queue.
+async function cancelStalePaymentPendingBookings() {
+  const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000); // 24 hours ago
+  try {
+    const stale = await db
+      .update(bookingsTable)
+      .set({ status: "cancelled", adminNotes: "Auto-cancelled: payment not received within 24 hours.", updatedAt: new Date() })
+      .where(
+        and(
+          eq(bookingsTable.status, "pending_payment" as any),
+          sql`${bookingsTable.createdAt} < ${cutoff}`
+        )
+      )
+      .returning({ id: bookingsTable.id });
+
+    if (stale.length > 0) {
+      console.log(`[scheduler] Cancelled ${stale.length} stale pending_payment booking(s): ${stale.map(b => b.id).join(", ")}`);
+    }
+  } catch (err: any) {
+    console.warn("[scheduler] cancelStalePaymentPendingBookings error:", err?.message);
+  }
+}
+
 // ── Main scheduler loop ────────────────────────────────────────────────────────
 async function runSchedulerCycle() {
   try {
@@ -919,6 +945,7 @@ async function runSchedulerCycle() {
     await autoChargeRemainingBalances();
     await alertClaimWindowClosingSoon();
     await autoReleaseDepositsAfterClaimWindow();
+    await cancelStalePaymentPendingBookings();
   } catch (err: any) {
     console.warn("[scheduler] Cycle error:", err?.message);
   }
