@@ -1,4 +1,5 @@
 import { Component, type ErrorInfo, type ReactNode } from "react";
+import { useLocation, useParams, useSearch } from "wouter";
 import { AlertTriangle, RefreshCw, ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
@@ -9,21 +10,29 @@ function logBoundaryError(
   error: Error,
   errorInfo: ErrorInfo | null,
 ) {
-  const slug = (() => {
+  const path = window.location.pathname;
+  const search = window.location.search;
+
+  const parts = (() => {
+    try { return path.split("/").filter(Boolean); }
+    catch { return []; }
+  })();
+
+  const slug = parts[0] ?? "(unknown)";
+
+  const listingId = (() => {
     try {
-      const parts = window.location.pathname.split("/").filter(Boolean);
-      return parts[0] ?? "(unknown)";
-    } catch {
-      return "(unknown)";
-    }
+      return new URLSearchParams(search).get("listingId") ?? null;
+    } catch { return null; }
   })();
 
   const payload = {
     boundary: boundaryName,
     timestamp: new Date().toISOString(),
     environment: import.meta.env.MODE,
-    route: window.location.pathname + window.location.search,
+    route: path + search,
     slug,
+    listingId,
     errorMessage: error.message,
     errorName: error.name,
     componentStack: errorInfo?.componentStack?.trim() ?? null,
@@ -33,6 +42,8 @@ function logBoundaryError(
 }
 
 // ─── RouteErrorBoundary ────────────────────────────────────────────────────────
+// resetKeys — when any key changes the boundary clears itself automatically,
+// so users are never stuck in an error state after navigating.
 
 interface RouteErrorBoundaryState {
   hasError: boolean;
@@ -42,6 +53,7 @@ interface RouteErrorBoundaryState {
 
 interface RouteErrorBoundaryProps {
   children: ReactNode;
+  resetKeys?: string[];
 }
 
 export class RouteErrorBoundary extends Component<
@@ -60,6 +72,15 @@ export class RouteErrorBoundary extends Component<
   componentDidCatch(error: Error, errorInfo: ErrorInfo) {
     this.setState({ errorInfo });
     logBoundaryError("RouteErrorBoundary", error, errorInfo);
+  }
+
+  componentDidUpdate(prevProps: RouteErrorBoundaryProps) {
+    if (!this.state.hasError) return;
+    const prev = (prevProps.resetKeys ?? []).join("|");
+    const next = (this.props.resetKeys ?? []).join("|");
+    if (prev !== next) {
+      this.setState({ hasError: false, error: null, errorInfo: null });
+    }
   }
 
   handleRetry = () => {
@@ -126,6 +147,7 @@ interface BookingErrorBoundaryState {
 
 interface BookingErrorBoundaryProps {
   children: ReactNode;
+  resetKeys?: string[];
 }
 
 export class BookingErrorBoundary extends Component<
@@ -146,13 +168,22 @@ export class BookingErrorBoundary extends Component<
     logBoundaryError("BookingErrorBoundary", error, errorInfo);
   }
 
+  componentDidUpdate(prevProps: BookingErrorBoundaryProps) {
+    if (!this.state.hasError) return;
+    const prev = (prevProps.resetKeys ?? []).join("|");
+    const next = (this.props.resetKeys ?? []).join("|");
+    if (prev !== next) {
+      this.setState({ hasError: false, error: null, errorInfo: null });
+    }
+  }
+
   handleRetry = () => {
     this.setState({ hasError: false, error: null, errorInfo: null });
   };
 
   handleBackToListing = () => {
     try {
-      // URL pattern: /:slug/book  → navigate to /:slug
+      // URL pattern: /:slug/book?listingId=N  → navigate to /:slug
       const parts = window.location.pathname.split("/").filter(Boolean);
       const base = import.meta.env.BASE_URL.replace(/\/$/, "");
       const slug = parts[0] ?? "";
@@ -218,4 +249,37 @@ export class BookingErrorBoundary extends Component<
       </div>
     );
   }
+}
+
+// ─── Functional wrappers — inject route context as resetKeys ──────────────────
+// Class components can't call hooks, so these thin functional wrappers read the
+// current location/params/search and pass them as resetKeys.  When the user
+// navigates to a different route, slug, or listing the boundary resets
+// automatically without requiring a page reload.
+
+export function RouteErrorBoundaryWithReset({ children }: { children: ReactNode }) {
+  const [location] = useLocation();
+  const params = useParams<{ slug?: string; id?: string }>();
+  const resetKeys = [location, params.slug ?? "", params.id ?? ""];
+  return (
+    <RouteErrorBoundary resetKeys={resetKeys}>
+      {children}
+    </RouteErrorBoundary>
+  );
+}
+
+export function BookingErrorBoundaryWithReset({ children }: { children: ReactNode }) {
+  const [location] = useLocation();
+  const params = useParams<{ slug?: string }>();
+  const search = useSearch();
+  const listingId = (() => {
+    try { return new URLSearchParams(search).get("listingId") ?? ""; }
+    catch { return ""; }
+  })();
+  const resetKeys = [location, params.slug ?? "", listingId];
+  return (
+    <BookingErrorBoundary resetKeys={resetKeys}>
+      {children}
+    </BookingErrorBoundary>
+  );
 }

@@ -9,7 +9,11 @@ import { setExtraHeadersGetter } from "@workspace/api-client-react";
 import { AdminLayout } from "@/components/layout/admin-layout";
 import { StorefrontLayout } from "@/components/layout/storefront-layout";
 import { ThemeProvider } from "@/components/theme-provider";
-import { RouteErrorBoundary, BookingErrorBoundary } from "@/components/route-error-boundary";
+import {
+  RouteErrorBoundary,
+  RouteErrorBoundaryWithReset,
+  BookingErrorBoundaryWithReset,
+} from "@/components/route-error-boundary";
 
 // Pages
 import StorefrontHome from "@/pages/storefront/home";
@@ -465,37 +469,37 @@ function Router() {
       {/* Storefront Routes — tenant-specific via slug prefix */}
       {/* NOTE: /:slug must come LAST so specific sub-routes match first */}
       <Route path="/:slug/listings/:id">
-        <SlugGuard><StorefrontLayout><RouteErrorBoundary><StorefrontProductDetail /></RouteErrorBoundary></StorefrontLayout></SlugGuard>
+        <SlugGuard><StorefrontLayout><RouteErrorBoundaryWithReset><StorefrontProductDetail /></RouteErrorBoundaryWithReset></StorefrontLayout></SlugGuard>
       </Route>
       <Route path="/:slug/book">
-        <SlugGuard><StorefrontLayout><BookingErrorBoundary><StorefrontBook /></BookingErrorBoundary></StorefrontLayout></SlugGuard>
+        <SlugGuard><StorefrontLayout><BookingErrorBoundaryWithReset><StorefrontBook /></BookingErrorBoundaryWithReset></StorefrontLayout></SlugGuard>
       </Route>
       <Route path="/:slug/booking-complete">
-        <RouteErrorBoundary><BookingComplete /></RouteErrorBoundary>
+        <RouteErrorBoundaryWithReset><BookingComplete /></RouteErrorBoundaryWithReset>
       </Route>
       <Route path="/:slug/login">
-        <SlugGuard><StorefrontLayout><RouteErrorBoundary><StorefrontLogin /></RouteErrorBoundary></StorefrontLayout></SlugGuard>
+        <SlugGuard><StorefrontLayout><RouteErrorBoundaryWithReset><StorefrontLogin /></RouteErrorBoundaryWithReset></StorefrontLayout></SlugGuard>
       </Route>
       <Route path="/:slug/set-password">
-        <SlugGuard><StorefrontLayout><RouteErrorBoundary><StorefrontSetPassword /></RouteErrorBoundary></StorefrontLayout></SlugGuard>
+        <SlugGuard><StorefrontLayout><RouteErrorBoundaryWithReset><StorefrontSetPassword /></RouteErrorBoundaryWithReset></StorefrontLayout></SlugGuard>
       </Route>
       <Route path="/:slug/my-bookings/:id">
-        <SlugGuard><StorefrontLayout><RouteErrorBoundary><StorefrontMyBookingDetail /></RouteErrorBoundary></StorefrontLayout></SlugGuard>
+        <SlugGuard><StorefrontLayout><RouteErrorBoundaryWithReset><StorefrontMyBookingDetail /></RouteErrorBoundaryWithReset></StorefrontLayout></SlugGuard>
       </Route>
       <Route path="/:slug/my-bookings">
-        <SlugGuard><StorefrontLayout><RouteErrorBoundary><StorefrontMyBookings /></RouteErrorBoundary></StorefrontLayout></SlugGuard>
+        <SlugGuard><StorefrontLayout><RouteErrorBoundaryWithReset><StorefrontMyBookings /></RouteErrorBoundaryWithReset></StorefrontLayout></SlugGuard>
       </Route>
       <Route path="/:slug/my-claims">
-        <SlugGuard><StorefrontLayout><RouteErrorBoundary><StorefrontMyClaims /></RouteErrorBoundary></StorefrontLayout></SlugGuard>
+        <SlugGuard><StorefrontLayout><RouteErrorBoundaryWithReset><StorefrontMyClaims /></RouteErrorBoundaryWithReset></StorefrontLayout></SlugGuard>
       </Route>
       <Route path="/:slug/profile">
-        <SlugGuard><StorefrontLayout><RouteErrorBoundary><StorefrontProfile /></RouteErrorBoundary></StorefrontLayout></SlugGuard>
+        <SlugGuard><StorefrontLayout><RouteErrorBoundaryWithReset><StorefrontProfile /></RouteErrorBoundaryWithReset></StorefrontLayout></SlugGuard>
       </Route>
       <Route path="/:slug/contact-card/:id">
-        <RouteErrorBoundary><ContactCardView /></RouteErrorBoundary>
+        <RouteErrorBoundaryWithReset><ContactCardView /></RouteErrorBoundaryWithReset>
       </Route>
       <Route path="/:slug">
-        <SlugGuard><StorefrontLayout><RouteErrorBoundary><StorefrontHome /></RouteErrorBoundary></StorefrontLayout></SlugGuard>
+        <SlugGuard><StorefrontLayout><RouteErrorBoundaryWithReset><StorefrontHome /></RouteErrorBoundaryWithReset></StorefrontLayout></SlugGuard>
       </Route>
 
       {/* Root → SaaS marketing landing */}
