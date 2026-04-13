@@ -2,7 +2,7 @@ export type FeeMode = "pass_to_customer" | "absorb" | "split";
 
 export interface BookingPricingInput {
   subtotal: number;
-  feeMode: FeeMode;
+  feeMode: FeeMode | string | null | undefined;
   platformFeePercent: number;
   splitCustomerPercent?: number;
   splitOperatorPercent?: number;
@@ -26,16 +26,30 @@ function roundMoney(value: number): number {
   return Math.round((value + Number.EPSILON) * 100) / 100;
 }
 
+/**
+ * Normalize any incoming fee mode value to a valid FeeMode.
+ * Invalid values (empty string, null, undefined, unknown strings) fall back to
+ * "pass_to_customer" — the safest visible default for production data issues.
+ */
+export function normalizeFeeMode(mode: unknown): FeeMode {
+  if (
+    mode === "pass_to_customer" ||
+    mode === "absorb" ||
+    mode === "split"
+  ) {
+    return mode;
+  }
+  return "pass_to_customer";
+}
+
 export function calculateBookingPricing(input: BookingPricingInput): BookingPricingResult {
-  // Coerce all numeric inputs to prevent NaN propagation
+  const resolvedMode = normalizeFeeMode(input.feeMode);
+
   const rawSubtotal = typeof input.subtotal === "number" && isFinite(input.subtotal) ? input.subtotal : 0;
   const subtotal = roundMoney(rawSubtotal);
+
   const rawFeePercent = typeof input.platformFeePercent === "number" && isFinite(input.platformFeePercent) ? input.platformFeePercent : 10;
   const totalPlatformFee = roundMoney(subtotal * rawFeePercent / 100);
-
-  // Sanitize feeMode — default to "absorb" for any unknown/invalid value
-  const validModes: FeeMode[] = ["pass_to_customer", "absorb", "split"];
-  const resolvedMode: FeeMode = validModes.includes(input.feeMode as FeeMode) ? input.feeMode : "absorb";
 
   let customerFee = 0;
   let operatorFee = 0;
@@ -47,8 +61,8 @@ export function calculateBookingPricing(input: BookingPricingInput): BookingPric
     customerFee = 0;
     operatorFee = totalPlatformFee;
   } else if (resolvedMode === "split") {
-    const cPct = typeof input.splitCustomerPercent === "number" && isFinite(input.splitCustomerPercent) ? input.splitCustomerPercent : 50;
-    customerFee = roundMoney(totalPlatformFee * cPct / 100);
+    const rawCPct = typeof input.splitCustomerPercent === "number" && isFinite(input.splitCustomerPercent) ? input.splitCustomerPercent : 50;
+    customerFee = roundMoney(totalPlatformFee * rawCPct / 100);
     operatorFee = roundMoney(totalPlatformFee - customerFee);
   }
 
@@ -64,11 +78,11 @@ export function calculateBookingPricing(input: BookingPricingInput): BookingPric
     customerTotal,
     operatorPayout,
     platformRevenue,
-    feeMode: input.feeMode,
-    platformFeePercent: input.platformFeePercent,
-    ...(input.feeMode === "split" ? {
-      splitCustomerPercent: input.splitCustomerPercent ?? 50,
-      splitOperatorPercent: input.splitOperatorPercent ?? 50,
+    feeMode: resolvedMode,
+    platformFeePercent: rawFeePercent,
+    ...(resolvedMode === "split" ? {
+      splitCustomerPercent: typeof input.splitCustomerPercent === "number" && isFinite(input.splitCustomerPercent) ? input.splitCustomerPercent : 50,
+      splitOperatorPercent: typeof input.splitOperatorPercent === "number" && isFinite(input.splitOperatorPercent) ? input.splitOperatorPercent : 50,
     } : {}),
   };
 }

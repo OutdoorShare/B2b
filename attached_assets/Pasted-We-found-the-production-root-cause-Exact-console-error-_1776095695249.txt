@@ -1,0 +1,74 @@
+We found the production root cause.
+
+Exact console error:
+Uncaught Error: Invalid fee mode:
+at calculateBookingPricing (pricing.ts:47)
+at StorefrontBook (book.tsx:1347)
+at renderWithHooks (react-dom.development.js)
+
+Root cause:
+The booking page is calling calculateBookingPricing with an empty fee mode string ("") in production. That causes the calculator to throw during render, which crashes the Book Now page and creates the white screen.
+
+Please fix this in 2 places:
+
+1. pricing.ts
+   Make calculateBookingPricing defensive.
+   It should never throw for missing or invalid fee modes coming from legacy or bad production data.
+   Normalize invalid values to "pass_to_customer".
+
+Add something like:
+
+type FeeMode = "pass_to_customer" | "absorb" | "split";
+
+function normalizeFeeMode(mode: unknown): FeeMode {
+if (
+mode === "pass_to_customer" ||
+mode === "absorb" ||
+mode === "split"
+) {
+return mode;
+}
+return "pass_to_customer";
+}
+
+Then use normalized feeMode inside calculateBookingPricing instead of throwing on invalid input.
+
+Also coerce all numeric values safely:
+
+* subtotal
+* platformFeePercent
+* splitCustomerPercent
+* splitOperatorPercent
+
+No NaN values should ever reach the UI.
+
+2. book.tsx
+   At the StorefrontBook call site around line 1347, stop passing empty string for feeMode.
+   Use safe defaults from listing data:
+
+const feeSettings = listing?.feeSettings ?? {};
+
+calculateBookingPricing({
+subtotal: ...,
+feeMode: feeSettings.mode || "pass_to_customer",
+platformFeePercent: feeSettings.platformFeePercent ?? 0,
+splitCustomerPercent: feeSettings.splitCustomerPercent ?? 50,
+splitOperatorPercent: feeSettings.splitOperatorPercent ?? 50,
+});
+
+Also inspect the listing data shape in production and confirm why feeSettings.mode is blank:
+
+* missing on legacy listings
+* empty string in DB
+* mapping bug
+* wrong field name
+
+Need from you after fix:
+
+1. exact root cause of why fee mode was blank
+2. exact files changed
+3. confirmation this was tested in live production
+4. proof Book Now now loads correctly for renter flow
+5. whether old listings require a data backfill
+
+This is not just a UI issue. It is a production data/default handling issue.

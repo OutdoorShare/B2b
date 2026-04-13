@@ -30,7 +30,7 @@ import { differenceInDays, format, addDays, eachDayOfInterval, parseISO, isBefor
 import { loadStripe } from "@stripe/stripe-js";
 import { Elements, PaymentElement, useStripe, useElements } from "@stripe/react-stripe-js";
 import { QRCodeSVG } from "qrcode.react";
-import { calculateBookingPricing, feeModeFromLegacy, type FeeMode } from "@/lib/pricing";
+import { calculateBookingPricing, normalizeFeeMode, feeModeFromLegacy, type FeeMode } from "@/lib/pricing";
 
 const liveStripePromise = loadStripe(import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY ?? "");
 const testStripePromise = loadStripe(import.meta.env.VITE_STRIPE_TEST_PUBLISHABLE_KEY ?? "");
@@ -1341,21 +1341,22 @@ export default function StorefrontBook() {
     const raw = bpRaw?.platformFeePercent != null ? parseFloat(String(bpRaw.platformFeePercent)) : 10;
     return isFinite(raw) && raw >= 0 ? raw : 10;
   })();
-  // Resolve fee mode: prefer new feeMode field, fall back to legacy boolean, never undefined
-  const VALID_MODES: FeeMode[] = ["pass_to_customer", "absorb", "split"];
-  const rawFeeMode = bpRaw?.feeMode;
-  const feeMode: FeeMode = (rawFeeMode && VALID_MODES.includes(rawFeeMode))
-    ? rawFeeMode
-    : feeModeFromLegacy(!!bpRaw?.passPlatformFeeToCustomer);
+  // Resolve fee mode using normalizeFeeMode — handles "", null, undefined, and unknown values.
+  // Uses || (not ??) so empty string from production DB is treated as missing and normalized.
+  // Falls back to legacy passPlatformFeeToCustomer boolean if feeMode is blank/invalid.
+  const feeSettings = bpRaw ?? {};
+  const rawFeeMode = feeSettings.feeMode || feeModeFromLegacy(!!feeSettings.passPlatformFeeToCustomer);
+  const feeMode: FeeMode = normalizeFeeMode(rawFeeMode);
   const feeSplitCustPct = (() => {
-    const v = bpRaw?.feeSplitCustomerPercent != null ? parseFloat(String(bpRaw.feeSplitCustomerPercent)) : 50;
+    const v = feeSettings.feeSplitCustomerPercent != null ? parseFloat(String(feeSettings.feeSplitCustomerPercent)) : 50;
     return isFinite(v) ? v : 50;
   })();
   const feeSplitOpPct = (() => {
-    const v = bpRaw?.feeSplitOperatorPercent != null ? parseFloat(String(bpRaw.feeSplitOperatorPercent)) : 50;
+    const v = feeSettings.feeSplitOperatorPercent != null ? parseFloat(String(feeSettings.feeSplitOperatorPercent)) : 50;
     return isFinite(v) ? v : 50;
   })();
-  // Wrapped in try/catch so a corrupted business profile never crashes the page
+  // calculateBookingPricing is already fully defensive — normalizeFeeMode is called internally too.
+  // This outer try/catch is a belt-and-suspenders guard in case of future regressions.
   const feePricing = (() => {
     try {
       return calculateBookingPricing({
@@ -1375,7 +1376,7 @@ export default function StorefrontBook() {
         customerTotal: rentalAfterDiscounts,
         operatorPayout: rentalAfterDiscounts,
         platformRevenue: 0,
-        feeMode: "absorb" as FeeMode,
+        feeMode: "pass_to_customer" as FeeMode,
         platformFeePercent: effectiveFeePercent,
       };
     }
