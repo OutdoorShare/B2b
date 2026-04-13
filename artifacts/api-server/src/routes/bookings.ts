@@ -5,7 +5,7 @@ import multer from "multer";
 import { randomBytes } from "crypto";
 import { uploadBufferToGCS, downloadFromGCS } from "./upload";
 import { db } from "@workspace/db";
-import { bookingsTable, listingsTable, businessProfileTable, tenantsTable, contactCardsTable, customersTable, productsTable, quotesTable } from "@workspace/db/schema";
+import { bookingsTable, listingsTable, businessProfileTable, tenantsTable, contactCardsTable, customersTable, productsTable, quotesTable, platformProtectionPlansTable } from "@workspace/db/schema";
 import { eq, and, gte, lte, isNull, or, sql } from "drizzle-orm";
 import { generateAgreementPdf } from "../lib/generate-agreement-pdf";
 import {
@@ -274,8 +274,49 @@ router.post("/bookings", async (req, res) => {
       return sum + subtotal;
     }, 0);
 
-    // Platform protection plan fee (passed from frontend, already validated against the category)
-    const protectionPlanFee = body.protectionPlanFee ? parseFloat(body.protectionPlanFee) : 0;
+    // ── Server-side protection plan validation ────────────────────────────────
+    // Look up the canonical platform fee for this listing's category and cross-check
+    // what the client submitted. This prevents fee manipulation on optional plan opt-outs.
+    let protectionPlanFee = body.protectionPlanFee ? parseFloat(body.protectionPlanFee) : 0;
+    const reqProtDeclined = !!body.protectionPlanDeclined;
+    if (listing.categorySlug) {
+      try {
+        const [plan] = await db
+          .select()
+          .from(platformProtectionPlansTable)
+          .where(eq(platformProtectionPlansTable.categorySlug, listing.categorySlug));
+        if (plan && plan.enabled && parseFloat(plan.feeAmount) > 0) {
+          const canonicalFeePerDay = parseFloat(plan.feeAmount);
+          // Fetch tenant business profile to check if protection plan is optional
+          let planIsOptional = false;
+          if (req.tenantId) {
+            const [bp] = await db.select({ opt: businessProfileTable.protectionPlanOptional })
+              .from(businessProfileTable)
+              .where(eq(businessProfileTable.tenantId, req.tenantId));
+            planIsOptional = !!bp?.opt;
+          }
+          if (!planIsOptional && reqProtDeclined) {
+            // Required plan — client tried to decline it; reject the request
+            res.status(400).json({ error: "The protection plan is required for this rental and cannot be declined." });
+            return;
+          }
+          if (!reqProtDeclined) {
+            // Plan is not declined — override with server-computed amount to prevent manipulation
+            const canonicalTotal = canonicalFeePerDay * days * (body.quantity ?? 1);
+            // Allow up to 1-cent rounding tolerance
+            if (Math.abs(protectionPlanFee - canonicalTotal) > 0.02) {
+              protectionPlanFee = canonicalTotal;
+            }
+          } else {
+            // Plan was declined (and optional) — fee must be 0
+            protectionPlanFee = 0;
+          }
+        }
+      } catch (err) {
+        // Non-fatal: log and continue with client-submitted value
+        console.warn("[bookings] Protection plan validation skipped:", err);
+      }
+    }
 
     // Bundle items — additional listings included in this booking
     type BundleItem = { listingId: number; title: string; qty: number; pricePerDay: number; days: number; subtotal: number };

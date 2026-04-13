@@ -1,0 +1,130 @@
+We need to fix the checkout pricing logic and UX for the protection plan.
+
+Current issue:
+
+* The protection plan is affecting checkout behavior, but it is not clearly represented in the order summary breakdown.
+* This makes the total unclear and creates renter confusion.
+* Also, the optional vs required behavior is not working correctly.
+
+Expected business logic:
+
+1. The protection plan should always exist as a configurable offering on the rental.
+2. Admin/operator can choose whether the protection plan is:
+
+   * required
+   * optional
+
+Required behavior:
+
+* If protection plan is required:
+
+  * it is automatically included
+  * renter cannot remove it
+  * it must appear in the pricing breakdown as its own line item
+  * total due today must include it clearly
+
+Optional behavior:
+
+* If protection plan is optional:
+
+  * it should still be included by default at checkout
+  * renter must be able to opt out at this step
+  * if renter opts out, show a warning/confirmation message
+  * once opted out, remove it from the order summary and recalculate totals immediately
+  * if renter keeps it, show it as its own line item in the breakdown
+
+Important UX rule:
+
+* If something changes the amount charged today, it must always appear as a visible line item in the order summary.
+* No hidden pricing components.
+
+Order summary requirements:
+Please add a dedicated line item such as:
+
+* Protection plan: $X.XX
+
+Example structure:
+
+* Rental subtotal
+* Service fee
+* Protection plan
+* Total due today
+* Security deposit held at pickup
+
+Behavior rules:
+
+1. Required protection plan
+
+* Show line item:
+  Protection plan: $X.XX
+* No toggle or opt-out control
+* Optionally add small helper text:
+  "Required for this rental"
+
+2. Optional protection plan
+
+* Default state: included
+* Show line item:
+  Protection plan: $X.XX
+* Show control near checkout/order summary:
+  [x] Add protection plan
+* If user unchecks it:
+
+  * show warning like:
+    "You are removing protection coverage for this rental. You may be responsible for eligible damage or loss."
+  * require confirmation
+  * update breakdown and total immediately
+
+3. If optional and renter opts out
+
+* Remove protection plan line item from breakdown
+* Recalculate total due today
+* Persist selection through checkout/session creation
+* Save whether protection plan was accepted or declined on booking record
+
+Admin configuration requirements:
+Please make sure admin can configure:
+
+* protectionPlanEnabled: true/false
+* protectionPlanRequired: true/false
+* protectionPlanPrice or pricing rule
+
+Validation:
+
+* If protectionPlanRequired = true, renter cannot remove it
+* If protectionPlanRequired = false, renter can remove it
+* Optional should not behave like required
+
+Backend requirements:
+
+* Server must receive and validate whether protection plan is included
+* Do not trust client-only toggle state
+* Booking pricing snapshot must include:
+
+  * protectionPlanIncluded: boolean
+  * protectionPlanRequired: boolean
+  * protectionPlanAmount: number
+
+Stripe / checkout requirements:
+
+* If protection plan is included, it must be part of the server-side pricing calculation before Stripe session creation
+* If renter opts out and it is optional, it must not be charged
+* Stripe amount must always match visible order summary exactly
+
+UI acceptance criteria:
+
+* Protection plan always appears in breakdown when included
+* Optional plans can be removed at checkout
+* Required plans cannot be removed
+* Total updates immediately when toggled
+* No hidden charges
+* Booking record stores whether plan was accepted or declined
+
+Please also update the order summary labels so the renter can clearly distinguish:
+
+* Total due today
+* Security deposit held at pickup
+* Protection plan
+* Service fee
+
+I want the pricing to be fully transparent and editable where allowed.

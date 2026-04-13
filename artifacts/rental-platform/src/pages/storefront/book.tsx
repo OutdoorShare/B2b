@@ -844,6 +844,8 @@ export default function StorefrontBook() {
   } | null>(null);
   // Renter opt-out of protection plan (only allowed when company has enabled protectionPlanOptional)
   const [protectionDeclined, setProtectionDeclined] = useState(false);
+  // Controls the inline confirmation UI shown when renter tries to remove an optional plan
+  const [protectionOptOutPending, setProtectionOptOutPending] = useState(false);
 
   // Business-defined custom fees (mandatory line items on every booking)
   const [customFees, setCustomFees] = useState<Array<{ id: number; name: string; amount: string; priceType: string }>>([]);
@@ -1610,7 +1612,7 @@ export default function StorefrontBook() {
       customerName: name,
       bookingMeta: { listing_id: String(listingId) },
       customerId: session?.id ?? undefined,
-      protectionFeeCents: platformProtectionFee > 0 ? Math.round(platformProtectionFee * (dateRange?.days ?? 1) * 100) : undefined,
+      protectionFeeCents: platformProtectionFee > 0 ? Math.round(platformProtectionFee * 100) : undefined,
       passthroughFeeCents: serviceFee > 0 ? Math.round(serviceFee * 100) : undefined,
       customFeesCents: customFeesSubtotal > 0 ? Math.round(customFeesSubtotal * 100) : undefined,
     });
@@ -1875,7 +1877,12 @@ export default function StorefrontBook() {
           depositPaid: totalDeposit > 0 ? String(totalDeposit) : undefined,
           protectionPlanFee: platformProtectionFee > 0 ? String(platformProtectionFee) : undefined,
           protectionPlanDeclined: (protectionIsOptional && protectionDeclined) || addonProtectionDeclined ? true : undefined,
-          bookingPricing: feePricing,
+          bookingPricing: {
+            ...feePricing,
+            protectionPlanIncluded: platformProtectionFee > 0,
+            protectionPlanRequired: !protectionIsOptional && platformProtectionFeeBase > 0,
+            protectionPlanAmount: platformProtectionFee,
+          },
           // Payment plan (split deposit)
           ...(usePaymentPlan && planEnabled ? {
             paymentPlanEnabled: true,
@@ -2275,27 +2282,65 @@ export default function StorefrontBook() {
                             +${platformProtectionFeeBase.toFixed(2)}
                           </span>
                         </div>
-                        {/* Opt-out checkbox — only shown when company has made it optional */}
-                        {protectionIsOptional && (
-                          <label className="flex items-start gap-2 cursor-pointer pl-6">
-                            <input
-                              type="checkbox"
-                              className="mt-0.5"
-                              checked={protectionDeclined}
-                              onChange={e => setProtectionDeclined(e.target.checked)}
-                            />
-                            <span className="text-xs text-muted-foreground">I do not want the protection plan</span>
-                          </label>
+                        {/* Required badge — no opt-out when plan is required */}
+                        {!protectionIsOptional && (
+                          <p className="text-xs text-green-700 font-medium pl-6 flex items-center gap-1.5">
+                            <Lock className="w-3 h-3" /> Required for this rental
+                          </p>
                         )}
-                        {/* Warning shown when renter opts out */}
+                        {/* Opt-out control — only shown when company has made it optional */}
+                        {protectionIsOptional && !protectionDeclined && !protectionOptOutPending && (
+                          <button
+                            type="button"
+                            className="text-xs text-muted-foreground underline underline-offset-2 pl-6 hover:text-destructive transition-colors"
+                            onClick={() => setProtectionOptOutPending(true)}
+                          >
+                            Remove protection plan
+                          </button>
+                        )}
+                        {/* Inline confirmation — shown when renter clicks "Remove" */}
+                        {protectionIsOptional && protectionOptOutPending && !protectionDeclined && (
+                          <div className="ml-6 rounded-lg bg-amber-50 border border-amber-300 p-3 space-y-2">
+                            <p className="text-xs font-bold text-amber-800 flex items-center gap-1.5">
+                              <span>⚠️</span> Remove protection coverage?
+                            </p>
+                            <p className="text-xs text-amber-700">
+                              You will have <strong>no assistance from OutdoorShare</strong> in the event of damage, loss, or accidents and will not be able to submit a claim.
+                            </p>
+                            <div className="flex gap-2 pt-1">
+                              <button
+                                type="button"
+                                className="text-xs px-3 py-1.5 rounded-lg bg-red-600 text-white font-semibold hover:bg-red-700 transition-colors"
+                                onClick={() => { setProtectionDeclined(true); setProtectionOptOutPending(false); }}
+                              >
+                                Yes, remove it
+                              </button>
+                              <button
+                                type="button"
+                                className="text-xs px-3 py-1.5 rounded-lg border border-gray-300 text-gray-700 font-medium hover:bg-gray-50 transition-colors"
+                                onClick={() => setProtectionOptOutPending(false)}
+                              >
+                                Keep protection
+                              </button>
+                            </div>
+                          </div>
+                        )}
+                        {/* Post-decline state — show warning + undo link */}
                         {protectionIsOptional && protectionDeclined && (
                           <div className="ml-6 rounded-lg bg-red-50 border border-red-200 p-3 space-y-1">
                             <p className="text-xs font-bold text-red-700 flex items-center gap-1.5">
                               <span>⚠️</span> No OutdoorShare Protection
                             </p>
                             <p className="text-xs text-red-700">
-                              By declining the protection plan, you will have <strong>no assistance from OutdoorShare</strong> in the event of any accident, damage, or loss. You will <strong>not</strong> be able to submit a claim. You are fully responsible for any issues according to the signed rental agreement.
+                              By declining the protection plan, you will have <strong>no assistance from OutdoorShare</strong> in the event of any accident, damage, or loss. You will <strong>not</strong> be able to submit a claim.
                             </p>
+                            <button
+                              type="button"
+                              className="text-xs text-blue-600 underline underline-offset-2 mt-1"
+                              onClick={() => setProtectionDeclined(false)}
+                            >
+                              Add protection plan back
+                            </button>
                           </div>
                         )}
                       </div>
@@ -2405,7 +2450,7 @@ export default function StorefrontBook() {
                       </div>
                     )}
                     <div className="px-4 py-3 flex items-center justify-between font-bold text-base">
-                      <span>Total due</span>
+                      <span>Total due today</span>
                       <span>${discountedTotal.toFixed(2)}</span>
                     </div>
                   </div>
@@ -4568,7 +4613,8 @@ export default function StorefrontBook() {
                           </div>
                         ))}
                       {platformProtectionFeeBase > 0 && !protectionDeclined && (
-                        <div className="space-y-1">
+                        <div className="space-y-1.5">
+                          {/* Protection plan line item */}
                           <button
                             type="button"
                             onClick={() => setShowProtectionBreakdown(v => !v)}
@@ -4592,14 +4638,12 @@ export default function StorefrontBook() {
                           </button>
                           {showProtectionBreakdown && (
                             <div className="ml-4 space-y-1 border-l-2 border-blue-100 pl-3">
-                              {/* Primary listing */}
                               {primaryProtectionFeeBase > 0 && (
                                 <div className="flex justify-between text-xs text-blue-600">
                                   <span className="truncate mr-2">{listing?.title ?? "Primary"}</span>
                                   <span>${platformProtectionRate.toFixed(0)}/day × {days} = +${primaryProtectionFeeBase.toFixed(2)}</span>
                                 </div>
                               )}
-                              {/* Bundle items */}
                               {bundleProtectionBreakdown.filter(b => b.total > 0).map((b, idx) => (
                                 <div key={idx} className="flex justify-between text-xs text-blue-600">
                                   <span className="truncate mr-2">{b.title}</span>
@@ -4613,12 +4657,63 @@ export default function StorefrontBook() {
                               ${platformProtectionRate.toFixed(0)}/day × {days} day{days !== 1 ? "s" : ""}
                             </p>
                           )}
+                          {/* Required badge (no opt-out) */}
+                          {!protectionIsOptional && (
+                            <p className="text-xs text-green-700 font-medium ml-5 flex items-center gap-1">
+                              <Lock className="w-3 h-3" /> Required for this rental
+                            </p>
+                          )}
+                          {/* Optional: show "Remove" link or inline confirmation */}
+                          {protectionIsOptional && !protectionOptOutPending && (
+                            <button
+                              type="button"
+                              className="text-xs text-muted-foreground underline underline-offset-2 ml-5 hover:text-destructive transition-colors"
+                              onClick={() => setProtectionOptOutPending(true)}
+                            >
+                              Remove protection plan
+                            </button>
+                          )}
+                          {protectionIsOptional && protectionOptOutPending && (
+                            <div className="rounded-lg bg-amber-50 border border-amber-300 p-3 space-y-2">
+                              <p className="text-xs font-bold text-amber-800 flex items-center gap-1.5">
+                                <span>⚠️</span> Remove protection coverage?
+                              </p>
+                              <p className="text-xs text-amber-700">
+                                You will have <strong>no coverage from OutdoorShare</strong> in the event of damage, loss, or accidents and will not be able to submit a claim.
+                              </p>
+                              <div className="flex gap-2 pt-1">
+                                <button
+                                  type="button"
+                                  className="text-xs px-3 py-1.5 rounded-lg bg-red-600 text-white font-semibold hover:bg-red-700 transition-colors"
+                                  onClick={() => { setProtectionDeclined(true); setProtectionOptOutPending(false); }}
+                                >
+                                  Yes, remove it
+                                </button>
+                                <button
+                                  type="button"
+                                  className="text-xs px-3 py-1.5 rounded-lg border border-gray-300 text-gray-700 font-medium hover:bg-gray-50 transition-colors"
+                                  onClick={() => setProtectionOptOutPending(false)}
+                                >
+                                  Keep protection
+                                </button>
+                              </div>
+                            </div>
+                          )}
                         </div>
                       )}
                       {platformProtectionFeeBase > 0 && protectionDeclined && (
-                        <div className="flex justify-between text-muted-foreground line-through">
-                          <span>Protection Plan — declined</span>
-                          <span>—</span>
+                        <div className="space-y-1">
+                          <div className="flex justify-between text-muted-foreground">
+                            <span className="flex items-center gap-1.5 line-through">Protection Plan — declined</span>
+                            <span className="line-through">—</span>
+                          </div>
+                          <button
+                            type="button"
+                            className="text-xs text-blue-600 underline underline-offset-2 ml-0.5"
+                            onClick={() => setProtectionDeclined(false)}
+                          >
+                            Add protection plan back
+                          </button>
                         </div>
                       )}
                       {bundleItems.map(item => (
