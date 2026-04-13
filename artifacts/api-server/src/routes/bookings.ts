@@ -782,6 +782,10 @@ router.get("/bookings/:id/agreements-for-signing", async (req, res) => {
             checkboxLabel: operatorContractsTable.checkboxLabel,
             version: operatorContractsTable.version,
             includeOutdoorShareAgreements: operatorContractsTable.includeOutdoorShareAgreements,
+            contractType: operatorContractsTable.contractType,
+            content: operatorContractsTable.content,
+            uploadedPdfStorageKey: operatorContractsTable.uploadedPdfStorageKey,
+            uploadedFileName: operatorContractsTable.uploadedFileName,
           })
           .from(operatorContractsTable)
           .where(and(
@@ -817,12 +821,86 @@ router.get("/bookings/:id/agreements-for-signing", async (req, res) => {
             title: operatorContract.title,
             checkboxLabel: operatorContract.checkboxLabel,
             version: operatorContract.version,
+            contractType: operatorContract.contractType ?? "template",
+            content: operatorContract.contractType !== "uploaded_pdf" ? (operatorContract.content ?? "") : null,
+            hasPdf: operatorContract.contractType === "uploaded_pdf" && !!operatorContract.uploadedPdfStorageKey,
+            uploadedFileName: operatorContract.uploadedFileName ?? null,
           }
         : null,
     });
   } catch (err) {
     req.log.error(err);
     res.status(500).json({ error: "Failed to fetch agreements" });
+  }
+});
+
+// ── GET /bookings/:id/contract-pdf — public endpoint for renters to view the operator PDF ──
+// Auth: customerEmail query param must match the booking's email (same as agreements-for-signing)
+router.get("/bookings/:id/contract-pdf", async (req, res) => {
+  try {
+    const bookingId = Number(req.params.id);
+    const customerEmail = (req.query.customerEmail as string ?? "").trim().toLowerCase();
+    if (!customerEmail) { res.status(400).json({ error: "customerEmail required" }); return; }
+
+    const [booking] = await db
+      .select({ id: bookingsTable.id, customerEmail: bookingsTable.customerEmail, tenantId: bookingsTable.tenantId })
+      .from(bookingsTable)
+      .where(eq(bookingsTable.id, bookingId))
+      .limit(1);
+    if (!booking) { res.status(404).json({ error: "Booking not found" }); return; }
+    if ((booking.customerEmail ?? "").trim().toLowerCase() !== customerEmail) {
+      res.status(403).json({ error: "Email does not match booking" }); return;
+    }
+
+    const [contract] = booking.tenantId
+      ? await db
+          .select({
+            contractType: operatorContractsTable.contractType,
+            uploadedPdfStorageKey: operatorContractsTable.uploadedPdfStorageKey,
+            uploadedFileName: operatorContractsTable.uploadedFileName,
+          })
+          .from(operatorContractsTable)
+          .where(and(
+            eq(operatorContractsTable.tenantId, booking.tenantId),
+            eq(operatorContractsTable.isActive, true),
+          ))
+          .limit(1)
+      : [null];
+
+    if (!contract || contract.contractType !== "uploaded_pdf" || !contract.uploadedPdfStorageKey) {
+      res.status(404).json({ error: "No PDF contract on file for this rental" }); return;
+    }
+
+    const key = contract.uploadedPdfStorageKey;
+    const filename = contract.uploadedFileName ?? "rental-agreement.pdf";
+    const BUCKET_ID = process.env.DEFAULT_OBJECT_STORAGE_BUCKET_ID ?? "";
+
+    if (BUCKET_ID) {
+      try {
+        const { objectStorageClient } = await import("../lib/objectStorage");
+        const file = objectStorageClient.bucket(BUCKET_ID).file(key);
+        const [exists] = await file.exists();
+        if (exists) {
+          res.setHeader("Content-Type", "application/pdf");
+          res.setHeader("Content-Disposition", `inline; filename="${filename}"`);
+          res.setHeader("Cache-Control", "private, no-cache");
+          file.createReadStream().pipe(res);
+          return;
+        }
+      } catch { /* fall through */ }
+    }
+
+    const fs  = await import("fs");
+    const pth = await import("path");
+    const localPath = pth.resolve(process.cwd(), "uploads", key);
+    if (!fs.existsSync(localPath)) { res.status(404).json({ error: "PDF file not found" }); return; }
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader("Content-Disposition", `inline; filename="${filename}"`);
+    res.setHeader("Cache-Control", "private, no-cache");
+    fs.createReadStream(localPath).pipe(res);
+  } catch (err) {
+    req.log.error(err);
+    res.status(500).json({ error: "Failed to serve contract PDF" });
   }
 });
 
