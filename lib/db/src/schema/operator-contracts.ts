@@ -20,6 +20,8 @@ export const operatorContractsTable = pgTable("operator_contracts", {
   content: text("content").notNull().default(""),
   // For uploaded_pdf type — object-storage key for the uploaded PDF
   uploadedPdfStorageKey: text("uploaded_pdf_storage_key"),
+  uploadedFileName: text("uploaded_file_name"),
+  uploadedFileSizeBytes: integer("uploaded_file_size_bytes"),
   checkboxLabel: text("checkbox_label").notNull().default("I agree to the rental terms and conditions"),
   includeOutdoorShareAgreements: boolean("include_outdoorshare_agreements").notNull().default(true),
   version: integer("version").notNull().default(1),

@@ -1,0 +1,292 @@
+We need to fix the PDF upload experience in the admin contract/agreement area.
+
+Current issue:
+When an admin uploads a PDF contract in the admin portal, the document is not clearly viewable afterward and it is unclear where it went or whether it is actually attached to the agreement system.
+
+This needs to be fixed as both:
+
+1. a file upload/storage issue
+2. a UX clarity issue
+
+Goal:
+When an admin uploads a PDF contract, they should immediately see:
+
+* that the upload succeeded
+* the file name
+* the document preview or at least a clear “View PDF” action
+* where this contract is being used
+* whether it is active in the renter signing flow
+
+We need the upload experience to feel reliable and obvious.
+
+---
+
+## 1. After upload, show immediate confirmation
+
+Once a PDF is uploaded, show a success state with:
+
+* file name
+* upload timestamp
+* file size
+* uploaded by
+* document status:
+
+  * uploaded
+  * active
+  * inactive draft
+  * failed
+
+Example:
+
+Uploaded contract
+
+* File: rental-agreement.pdf
+* Uploaded: Apr 13, 2026 at 11:02 AM
+* Size: 248 KB
+* Status: Active
+
+Actions:
+
+* View PDF
+* Replace PDF
+* Remove PDF
+* Download PDF
+
+Right now the system feels like the file disappears after upload. That must stop.
+
+---
+
+## 2. Add PDF preview / viewer
+
+After upload, the admin must be able to view the uploaded PDF directly in the agreement UI.
+
+Preferred behavior:
+
+* inline PDF preview panel in the admin page
+  OR
+* a clear “Open PDF” / “View PDF” button that opens a modal or new tab
+
+At minimum:
+
+* show the first page preview thumbnail
+* provide a clear full document view action
+
+Do not make admins guess whether the document is stored correctly.
+
+---
+
+## 3. Make storage destination explicit
+
+The UI needs to clearly state what the uploaded PDF is being used for.
+
+For example:
+This PDF is being used as:
+
+* Operator custom contract
+* Included in renter agreement packet
+* Combined with OutdoorShare required agreements at signing
+
+or if inactive:
+
+* Uploaded, but not yet active in renter flow
+
+We need a visible usage label, not just a hidden file attachment.
+
+---
+
+## 4. Active vs draft contract state
+
+Please support contract states:
+
+* draft
+* active
+* archived
+
+Behavior:
+
+* Uploading a PDF should create a draft or active version depending on flow
+* The admin should always know which PDF is currently active
+* If a new PDF replaces an old one, show versioning/history
+
+Example:
+Current active contract:
+
+* rental-agreement-v3.pdf
+
+Previous versions:
+
+* rental-agreement-v2.pdf
+* rental-agreement-v1.pdf
+
+This will help prevent confusion and legal mistakes.
+
+---
+
+## 5. Version history
+
+Please add version history for uploaded contracts.
+
+For each version, show:
+
+* file name
+* uploaded by
+* uploaded at
+* status
+* view/download actions
+
+This is especially important for legal documents.
+
+---
+
+## 6. Upload processing states
+
+Please make upload state visible:
+
+* uploading...
+* processing...
+* ready
+* failed
+
+If processing fails, show a real error message:
+
+* unsupported file
+* file too large
+* PDF parse failed
+* storage failed
+
+Do not fail silently.
+
+---
+
+## 7. Data model clarity
+
+Please confirm and implement where uploaded contract PDFs are stored and referenced.
+
+I need a clear model like:
+
+* agreement record
+* agreement version
+* uploaded file reference
+* active version flag
+
+The admin UI should be reading from that source of truth and showing the currently linked PDF.
+
+Example:
+agreements
+agreement_versions
+files / uploads
+
+Each uploaded PDF should be associated with:
+
+* storefront/admin
+* agreement id
+* version id
+* active/draft status
+
+---
+
+## 8. UX improvements in the admin portal
+
+In the contract section, after upload, show a dedicated card like:
+
+Operator contract
+
+* Current file: rental-agreement.pdf
+* Status: Active
+* Used in renter agreement flow: Yes
+* Last updated: Apr 13, 2026
+* Uploaded by: Admin Name
+
+Buttons:
+
+* View PDF
+* Replace
+* Download
+* Remove
+* Preview renter experience
+
+That “Preview renter experience” button would be especially helpful.
+
+---
+
+## 9. Preview renter flow relationship
+
+The admin should be able to tell whether this uploaded PDF will actually be included in the final renter contract packet.
+
+Please add a visible note such as:
+
+This contract will be:
+
+* shown as part of the renter signing flow
+* auto-filled with renter/booking data if mappings exist
+* merged with OutdoorShare required agreements in the final signed PDF
+
+If the file is uploaded but not configured fully, show:
+
+* “Uploaded, but not yet mapped/configured for autofill”
+  or
+* “Uploaded as static appendix only”
+
+---
+
+## 10. Admin actions after upload
+
+After uploading a PDF, the admin should be able to:
+
+* View
+* Download
+* Replace
+* Remove
+* Mark active
+* Mark inactive/archive
+* Configure autofill mappings
+* Preview final output
+
+These actions should be obvious and live near the uploaded file card.
+
+---
+
+## 11. Technical requirements
+
+Please ensure:
+
+* uploaded PDF is actually persisted in storage
+* backend returns the saved file reference
+* frontend stores and renders the saved file metadata
+* agreement version is created/updated correctly
+* PDF preview URL is generated correctly
+* permissions are enforced so only the correct admin can view/manage it
+
+If using object storage, ensure signed URLs or public-safe preview URLs work correctly.
+
+---
+
+## 12. Acceptance criteria
+
+This feature is fixed when:
+
+* admin uploads a PDF and immediately sees confirmation
+* uploaded file name is visible
+* admin can view the PDF afterward
+* admin can tell whether the PDF is active and used in renter flow
+* uploaded contract does not “disappear”
+* version history is visible
+* upload/processing errors are visible
+* contract storage and UI state stay in sync
+
+---
+
+## 13. Deliverables
+
+Please send back:
+
+* exact files changed
+* where uploaded PDFs are stored
+* how agreement versions are linked to uploaded files
+* screenshots of:
+
+  * upload success state
+  * contract details card
+  * PDF preview/view action
+  * version history
+* confirmation that uploaded PDFs are now visible and traceable in admin UI
