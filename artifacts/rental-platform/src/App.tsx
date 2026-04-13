@@ -67,6 +67,7 @@ import AdminClaimsNew from "@/pages/admin/claims/new";
 import AdminTeam from "@/pages/admin/team";
 import AdminCommunications from "@/pages/admin/communications";
 import AdminWaivers from "@/pages/admin/waivers";
+import AdminContract from "@/pages/admin/contract";
 import AdminWallet from "@/pages/admin/wallet";
 import AdminBilling from "@/pages/admin/billing";
 import AdminPromoCodes from "@/pages/admin/promo-codes";
@@ -427,6 +428,9 @@ function Router() {
       </Route>
       <Route path="/:slug/admin/waivers">
         <AdminGuard><AdminLayout><AdminWaivers /></AdminLayout></AdminGuard>
+      </Route>
+      <Route path="/:slug/admin/contract">
+        <AdminGuard><AdminLayout><AdminContract /></AdminLayout></AdminGuard>
       </Route>
       <Route path="/:slug/admin/wallet">
         <AdminGuard><AdminLayout><AdminWallet /></AdminLayout></AdminGuard>

@@ -32,3 +32,5 @@ export * from "./rental-extensions";
 export * from "./activities";
 export * from "./messages";
 export * from "./favorites";
+export * from "./platform-agreements";
+export * from "./operator-contracts";

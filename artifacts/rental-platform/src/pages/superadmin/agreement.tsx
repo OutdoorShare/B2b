@@ -8,7 +8,8 @@ import {
   Info, CheckCircle2, Globe, Tag, Plus, Trash2, ChevronRight,
   Zap, UserCheck, FormInput, ToggleLeft, ToggleRight,
   Pencil, X, Hash, Calendar, AlignLeft, CheckSquare,
-  Maximize2, Minimize2,
+  Maximize2, Minimize2, Layers, Shield, ChevronUp, ChevronDown,
+  AlertCircle, Loader2,
 } from "lucide-react";
 import { format } from "date-fns";
 
@@ -712,6 +713,26 @@ type Category = { slug: string; name: string };
 type Override = { categorySlug: string; value: string; updatedAt: string | null };
 type ActiveSection = { kind: "global" } | { kind: "category"; slug: string; name: string };
 
+type PlatformAgreement = {
+  id: number;
+  title: string;
+  content: string;
+  checkboxLabel: string;
+  isRequired: boolean;
+  sortOrder: number;
+  version: number;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+};
+
+type PADraft = {
+  title: string;
+  content: string;
+  checkboxLabel: string;
+  isRequired: boolean;
+};
+
 // ── Main page ─────────────────────────────────────────────────────────────────
 export default function SuperAdminAgreementPage() {
   const { toast } = useToast();
@@ -734,6 +755,21 @@ export default function SuperAdminAgreementPage() {
   const [fieldsSaving, setFieldsSaving] = useState(false);
   const insertTokenRef = useRef<((token: string) => void) | null>(null);
 
+  // Tab state
+  const [tab, setTab] = useState<"templates" | "platform-agreements">("templates");
+
+  // Platform agreements
+  const [platformAgreements, setPlatformAgreements] = useState<PlatformAgreement[]>([]);
+  const [paLoading, setPaLoading] = useState(false);
+  const [paError, setPaError] = useState("");
+  const [showNewPA, setShowNewPA] = useState(false);
+  const [newPADraft, setNewPADraft] = useState<PADraft>({
+    title: "", content: "", checkboxLabel: "I agree to the terms and conditions", isRequired: true,
+  });
+  const [savingPA, setSavingPA] = useState(false);
+  const [editingPA, setEditingPA] = useState<number | null>(null);
+  const [editDraft, setEditDraft] = useState<PADraft>({ title: "", content: "", checkboxLabel: "", isRequired: true });
+
   useEffect(() => {
     Promise.all([
       apiFetch("superadmin/agreement"),
@@ -755,6 +791,75 @@ export default function SuperAdminAgreementPage() {
       })
       .finally(() => setLoading(false));
   }, []);
+
+  // ── Platform Agreements CRUD ──────────────────────────────────────────────
+  async function fetchPlatformAgreements() {
+    setPaLoading(true); setPaError("");
+    try {
+      const data = await apiFetch("superadmin/platform-agreements");
+      setPlatformAgreements(data ?? []);
+    } catch (e: any) {
+      setPaError(e.message ?? "Failed to load platform agreements");
+    } finally {
+      setPaLoading(false); }
+  }
+
+  useEffect(() => { if (tab === "platform-agreements") fetchPlatformAgreements(); }, [tab]);
+
+  async function createPlatformAgreement() {
+    if (!newPADraft.title.trim()) return;
+    setSavingPA(true); setPaError("");
+    try {
+      const data = await apiFetch("superadmin/platform-agreements", {
+        method: "POST", body: JSON.stringify(newPADraft),
+      });
+      setPlatformAgreements(prev => [...prev, data]);
+      setShowNewPA(false);
+      setNewPADraft({ title: "", content: "", checkboxLabel: "I agree to the terms and conditions", isRequired: true });
+      toast({ title: "Agreement created" });
+    } catch (e: any) {
+      setPaError(e.message ?? "Failed to create");
+    } finally { setSavingPA(false); }
+  }
+
+  async function updatePlatformAgreement(id: number) {
+    setSavingPA(true); setPaError("");
+    try {
+      const data = await apiFetch(`superadmin/platform-agreements/${id}`, {
+        method: "PATCH", body: JSON.stringify(editDraft),
+      });
+      setPlatformAgreements(prev => prev.map(p => p.id === id ? data : p));
+      setEditingPA(null);
+      toast({ title: "Agreement updated", description: `Version bumped to ${data.version}` });
+    } catch (e: any) {
+      setPaError(e.message ?? "Failed to update");
+    } finally { setSavingPA(false); }
+  }
+
+  async function deletePlatformAgreement(id: number) {
+    if (!confirm("Deactivate this platform agreement? It will no longer appear in the renter's signing flow.")) return;
+    try {
+      await apiFetch(`superadmin/platform-agreements/${id}`, { method: "DELETE" });
+      setPlatformAgreements(prev => prev.filter(p => p.id !== id));
+      toast({ title: "Agreement removed" });
+    } catch (e: any) {
+      toast({ title: "Failed to remove", description: e.message, variant: "destructive" });
+    }
+  }
+
+  async function movePlatformAgreement(id: number, direction: "up" | "down") {
+    const idx = platformAgreements.findIndex(p => p.id === id);
+    if (direction === "up" && idx === 0) return;
+    if (direction === "down" && idx === platformAgreements.length - 1) return;
+    const swapIdx = direction === "up" ? idx - 1 : idx + 1;
+    const reordered = [...platformAgreements];
+    [reordered[idx], reordered[swapIdx]] = [reordered[swapIdx], reordered[idx]];
+    const order = reordered.map((p, i) => ({ id: p.id, sortOrder: i * 10 }));
+    setPlatformAgreements(reordered.map((p, i) => ({ ...p, sortOrder: i * 10 })));
+    try {
+      await apiFetch("superadmin/platform-agreements/reorder", { method: "POST", body: JSON.stringify({ order }) });
+    } catch { fetchPlatformAgreements(); }
+  }
 
   async function saveContractFields(fields: ContractField[]) {
     setFieldsSaving(true);
@@ -841,10 +946,267 @@ export default function SuperAdminAgreementPage() {
         <FileText className="w-5 h-5 text-emerald-400" />
         <div>
           <h1 className="text-xl font-bold text-white">Rental Agreements</h1>
-          <p className="text-sm text-slate-400">Set a default agreement or override per category. Use field tokens to auto-fill booking data.</p>
+          <p className="text-sm text-slate-400">Manage platform agreements and category overrides shown to renters at checkout.</p>
         </div>
       </div>
 
+      {/* Tab switcher */}
+      <div className="flex gap-1 bg-slate-900 border border-slate-800 rounded-xl p-1 w-fit">
+        <button
+          onClick={() => setTab("templates")}
+          className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+            tab === "templates" ? "bg-slate-800 text-white" : "text-slate-400 hover:text-slate-200"
+          }`}
+        >
+          <FileText className="w-4 h-4" /> Agreement Templates
+        </button>
+        <button
+          onClick={() => setTab("platform-agreements")}
+          className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+            tab === "platform-agreements" ? "bg-emerald-600 text-white" : "text-slate-400 hover:text-slate-200"
+          }`}
+        >
+          <Shield className="w-4 h-4" /> Platform Agreements
+        </button>
+      </div>
+
+      {/* ── Platform Agreements Tab ── */}
+      {tab === "platform-agreements" && (
+        <div className="space-y-5">
+          <div className="flex items-start gap-3 bg-emerald-500/10 border border-emerald-500/20 rounded-xl p-4">
+            <Shield className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
+            <div className="text-sm text-slate-300 space-y-1">
+              <p className="font-medium text-emerald-300">Platform Agreements</p>
+              <p>
+                These documents appear as required checkboxes in every renter's signing flow, across all operators.
+                Each agreement is included in the combined PDF generated after signing.
+                Operators may opt out via their contract settings if they have their own insurance arrangement.
+              </p>
+            </div>
+          </div>
+
+          {paError && (
+            <div className="flex items-start gap-3 bg-red-500/10 border border-red-500/20 rounded-xl p-4">
+              <AlertCircle className="w-4 h-4 text-red-400 shrink-0 mt-0.5" />
+              <p className="text-sm text-red-300">{paError}</p>
+            </div>
+          )}
+
+          {/* Add new form */}
+          {showNewPA && (
+            <div className="bg-slate-900 border border-slate-700 rounded-2xl p-5 space-y-4">
+              <div className="flex items-center justify-between">
+                <p className="text-sm font-semibold text-white">New Platform Agreement</p>
+                <button onClick={() => setShowNewPA(false)} className="text-slate-500 hover:text-slate-300">
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-1.5 col-span-2">
+                  <label className="text-xs font-medium text-slate-400 uppercase tracking-wide">Title</label>
+                  <Input
+                    value={newPADraft.title}
+                    onChange={e => setNewPADraft(d => ({ ...d, title: e.target.value }))}
+                    placeholder="e.g. OutdoorShare Terms of Service"
+                    className="bg-slate-800 border-slate-700 text-white"
+                  />
+                </div>
+                <div className="space-y-1.5 col-span-2">
+                  <label className="text-xs font-medium text-slate-400 uppercase tracking-wide">Checkbox Label</label>
+                  <Input
+                    value={newPADraft.checkboxLabel}
+                    onChange={e => setNewPADraft(d => ({ ...d, checkboxLabel: e.target.value }))}
+                    placeholder="I agree to the OutdoorShare Terms of Service"
+                    className="bg-slate-800 border-slate-700 text-white"
+                  />
+                </div>
+                <div className="space-y-1.5 col-span-2">
+                  <label className="text-xs font-medium text-slate-400 uppercase tracking-wide">Full Content (shown in PDF)</label>
+                  <textarea
+                    value={newPADraft.content}
+                    onChange={e => setNewPADraft(d => ({ ...d, content: e.target.value }))}
+                    className="w-full min-h-[180px] rounded-xl bg-slate-800 border border-slate-700 text-slate-200 text-sm p-3 font-mono resize-y focus:outline-none focus:border-emerald-500"
+                    placeholder="Enter full agreement text here. Use {{tokens}} for booking data…"
+                  />
+                </div>
+                <div className="col-span-2 flex items-center gap-3">
+                  <input
+                    type="checkbox"
+                    id="new-pa-required"
+                    checked={newPADraft.isRequired}
+                    onChange={e => setNewPADraft(d => ({ ...d, isRequired: e.target.checked }))}
+                    className="w-4 h-4 accent-emerald-500"
+                  />
+                  <label htmlFor="new-pa-required" className="text-sm text-slate-300 cursor-pointer">
+                    Required — renter must check this to proceed
+                  </label>
+                </div>
+              </div>
+              <div className="flex justify-end gap-2">
+                <Button variant="ghost" size="sm" className="text-slate-400" onClick={() => setShowNewPA(false)}>
+                  Cancel
+                </Button>
+                <Button
+                  size="sm"
+                  className="bg-emerald-600 hover:bg-emerald-700 text-white"
+                  disabled={savingPA || !newPADraft.title.trim()}
+                  onClick={createPlatformAgreement}
+                >
+                  {savingPA ? <Loader2 className="w-4 h-4 animate-spin" /> : <><Save className="w-4 h-4 mr-1.5" /> Create Agreement</>}
+                </Button>
+              </div>
+            </div>
+          )}
+
+          {/* List */}
+          {paLoading ? (
+            <div className="flex items-center gap-3 text-slate-400 py-8 justify-center">
+              <Loader2 className="w-5 h-5 animate-spin" />
+              <span className="text-sm">Loading platform agreements…</span>
+            </div>
+          ) : platformAgreements.length === 0 ? (
+            <div className="text-center py-12 space-y-3">
+              <div className="w-14 h-14 rounded-2xl bg-slate-800 flex items-center justify-center mx-auto">
+                <Layers className="w-7 h-7 text-slate-600" />
+              </div>
+              <p className="text-slate-400 text-sm">No platform agreements yet. Add your first one below.</p>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {platformAgreements.map((pa, idx) => (
+                <div key={pa.id} className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden">
+                  {editingPA === pa.id ? (
+                    /* Edit form */
+                    <div className="p-5 space-y-4">
+                      <div className="flex items-center justify-between">
+                        <p className="text-sm font-semibold text-white">Editing: {pa.title}</p>
+                        <button onClick={() => setEditingPA(null)} className="text-slate-500 hover:text-slate-300">
+                          <X className="w-4 h-4" />
+                        </button>
+                      </div>
+                      <div className="space-y-1.5">
+                        <label className="text-xs font-medium text-slate-400 uppercase tracking-wide">Title</label>
+                        <Input
+                          value={editDraft.title}
+                          onChange={e => setEditDraft(d => ({ ...d, title: e.target.value }))}
+                          className="bg-slate-800 border-slate-700 text-white"
+                        />
+                      </div>
+                      <div className="space-y-1.5">
+                        <label className="text-xs font-medium text-slate-400 uppercase tracking-wide">Checkbox Label</label>
+                        <Input
+                          value={editDraft.checkboxLabel}
+                          onChange={e => setEditDraft(d => ({ ...d, checkboxLabel: e.target.value }))}
+                          className="bg-slate-800 border-slate-700 text-white"
+                        />
+                      </div>
+                      <div className="space-y-1.5">
+                        <label className="text-xs font-medium text-slate-400 uppercase tracking-wide">Full Content</label>
+                        <textarea
+                          value={editDraft.content}
+                          onChange={e => setEditDraft(d => ({ ...d, content: e.target.value }))}
+                          className="w-full min-h-[180px] rounded-xl bg-slate-800 border border-slate-700 text-slate-200 text-sm p-3 font-mono resize-y focus:outline-none focus:border-emerald-500"
+                        />
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <input
+                          type="checkbox"
+                          id={`edit-required-${pa.id}`}
+                          checked={editDraft.isRequired}
+                          onChange={e => setEditDraft(d => ({ ...d, isRequired: e.target.checked }))}
+                          className="w-4 h-4 accent-emerald-500"
+                        />
+                        <label htmlFor={`edit-required-${pa.id}`} className="text-sm text-slate-300 cursor-pointer">
+                          Required
+                        </label>
+                      </div>
+                      <div className="flex justify-end gap-2">
+                        <Button variant="ghost" size="sm" className="text-slate-400" onClick={() => setEditingPA(null)}>
+                          Cancel
+                        </Button>
+                        <Button
+                          size="sm"
+                          className="bg-emerald-600 hover:bg-emerald-700 text-white"
+                          disabled={savingPA}
+                          onClick={() => updatePlatformAgreement(pa.id)}
+                        >
+                          {savingPA ? <Loader2 className="w-4 h-4 animate-spin" /> : <><Save className="w-4 h-4 mr-1.5" /> Save Changes</>}
+                        </Button>
+                      </div>
+                    </div>
+                  ) : (
+                    /* View row */
+                    <div className="flex items-center gap-3 px-5 py-4">
+                      {/* Reorder buttons */}
+                      <div className="flex flex-col gap-0.5 shrink-0">
+                        <button
+                          onClick={() => movePlatformAgreement(pa.id, "up")}
+                          disabled={idx === 0}
+                          className="p-0.5 text-slate-600 hover:text-slate-400 disabled:opacity-20"
+                        >
+                          <ChevronUp className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          onClick={() => movePlatformAgreement(pa.id, "down")}
+                          disabled={idx === platformAgreements.length - 1}
+                          className="p-0.5 text-slate-600 hover:text-slate-400 disabled:opacity-20"
+                        >
+                          <ChevronDown className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2">
+                          <p className="text-sm font-semibold text-white truncate">{pa.title}</p>
+                          {pa.isRequired && (
+                            <span className="text-xs bg-emerald-500/20 text-emerald-400 px-1.5 py-0.5 rounded-full font-medium shrink-0">Required</span>
+                          )}
+                          <span className="text-xs text-slate-600 shrink-0">v{pa.version}</span>
+                        </div>
+                        <p className="text-xs text-slate-500 truncate mt-0.5">{pa.checkboxLabel}</p>
+                      </div>
+
+                      <div className="flex items-center gap-2 shrink-0">
+                        <Button
+                          variant="ghost" size="sm"
+                          className="text-slate-400 hover:text-white hover:bg-slate-700 h-8 w-8 p-0"
+                          onClick={() => {
+                            setEditingPA(pa.id);
+                            setEditDraft({ title: pa.title, content: pa.content, checkboxLabel: pa.checkboxLabel, isRequired: pa.isRequired });
+                          }}
+                        >
+                          <Edit3 className="w-3.5 h-3.5" />
+                        </Button>
+                        <Button
+                          variant="ghost" size="sm"
+                          className="text-red-400 hover:text-red-300 hover:bg-red-500/10 h-8 w-8 p-0"
+                          onClick={() => deletePlatformAgreement(pa.id)}
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+
+          {!showNewPA && (
+            <Button
+              variant="outline"
+              className="border-slate-700 text-slate-400 hover:text-white hover:bg-slate-800 gap-2"
+              onClick={() => setShowNewPA(true)}
+            >
+              <Plus className="w-4 h-4" /> Add Platform Agreement
+            </Button>
+          )}
+        </div>
+      )}
+
+      {/* ── Templates Tab ── */}
+      {tab === "templates" && (
+      <div className="contents">
       {/* How it works */}
       <div className="flex items-start gap-3 bg-blue-500/10 border border-blue-500/20 rounded-xl p-4">
         <Info className="w-4 h-4 text-blue-400 shrink-0 mt-0.5" />
@@ -948,6 +1310,7 @@ export default function SuperAdminAgreementPage() {
           />
         ) : null}
       </div>
+      </div>)}
     </div>
   );
 }

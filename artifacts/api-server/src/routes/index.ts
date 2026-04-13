@@ -23,6 +23,7 @@ import chatRouter from "./chat";
 import openaiRouter from "./openai";
 import activitiesRouter from "./activities";
 import rentalExtensionsRouter from "./rental-extensions";
+import contractsRouter from "./contracts";
 
 const router: IRouter = Router();
 
@@ -50,5 +51,6 @@ router.use(chatRouter);
 router.use(openaiRouter);
 router.use(activitiesRouter);
 router.use(rentalExtensionsRouter);
+router.use(contractsRouter);
 
 export default router;

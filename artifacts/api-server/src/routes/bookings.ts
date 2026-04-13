@@ -5,7 +5,7 @@ import multer from "multer";
 import { randomBytes } from "crypto";
 import { uploadBufferToGCS, downloadFromGCS } from "./upload";
 import { db } from "@workspace/db";
-import { bookingsTable, listingsTable, businessProfileTable, tenantsTable, contactCardsTable, customersTable, productsTable, quotesTable, platformProtectionPlansTable } from "@workspace/db/schema";
+import { bookingsTable, listingsTable, businessProfileTable, tenantsTable, contactCardsTable, customersTable, productsTable, quotesTable, platformProtectionPlansTable, listingRulesTable, platformAgreementsTable, operatorContractsTable } from "@workspace/db/schema";
 import { eq, and, gte, lte, isNull, or, sql } from "drizzle-orm";
 import { generateAgreementPdf } from "../lib/generate-agreement-pdf";
 import {
@@ -728,79 +728,305 @@ router.get("/bookings/:id", async (req, res) => {
   }
 });
 
+// ── GET /bookings/:id/agreements-for-signing — fetch agreements for renter ──
+// Public endpoint — authenticated by customerEmail query param.
+// Returns listing rules, platform agreements (if applicable), and operator contract.
+router.get("/bookings/:id/agreements-for-signing", async (req, res) => {
+  try {
+    const bookingId = Number(req.params.id);
+    const { customerEmail } = req.query as Record<string, string>;
+    if (!customerEmail) { res.status(400).json({ error: "customerEmail is required" }); return; }
+
+    const [booking] = await db.select().from(bookingsTable).where(eq(bookingsTable.id, bookingId));
+    if (!booking) { res.status(404).json({ error: "Booking not found" }); return; }
+    if ((booking.customerEmail ?? "").toLowerCase().trim() !== customerEmail.toLowerCase().trim()) {
+      res.status(403).json({ error: "Email does not match this booking" }); return;
+    }
+
+    // Listing rules for this booking's listing
+    const rules = booking.listingId
+      ? await db.select({
+          id: listingRulesTable.id,
+          title: listingRulesTable.title,
+          description: listingRulesTable.description,
+          fee: listingRulesTable.fee,
+        })
+          .from(listingRulesTable)
+          .where(and(
+            eq(listingRulesTable.listingId, booking.listingId),
+            eq(listingRulesTable.isActive, true),
+          ))
+          .orderBy(listingRulesTable.sortOrder)
+      : [];
+
+    // Active platform agreements
+    const platformAgreements = await db
+      .select({
+        id: platformAgreementsTable.id,
+        title: platformAgreementsTable.title,
+        checkboxLabel: platformAgreementsTable.checkboxLabel,
+        isRequired: platformAgreementsTable.isRequired,
+        version: platformAgreementsTable.version,
+      })
+      .from(platformAgreementsTable)
+      .where(eq(platformAgreementsTable.isActive, true))
+      .orderBy(platformAgreementsTable.sortOrder);
+
+    // Active operator contract for this tenant
+    const [operatorContract] = booking.tenantId
+      ? await db
+          .select({
+            id: operatorContractsTable.id,
+            title: operatorContractsTable.title,
+            checkboxLabel: operatorContractsTable.checkboxLabel,
+            version: operatorContractsTable.version,
+            includeOutdoorShareAgreements: operatorContractsTable.includeOutdoorShareAgreements,
+          })
+          .from(operatorContractsTable)
+          .where(and(
+            eq(operatorContractsTable.tenantId, booking.tenantId),
+            eq(operatorContractsTable.isActive, true),
+          ))
+          .limit(1)
+      : [null];
+
+    // If operator has opted out of platform agreements, don't show them
+    const showPlatformAgreements = !operatorContract || operatorContract.includeOutdoorShareAgreements;
+
+    res.json({
+      alreadySigned: !!booking.agreementSignedAt,
+      rules: rules.map(r => ({
+        id: r.id,
+        title: r.title,
+        description: r.description ?? "",
+        fee: r.fee ? parseFloat(String(r.fee)) : 0,
+      })),
+      platformAgreements: showPlatformAgreements
+        ? platformAgreements.map(a => ({
+            id: a.id,
+            title: a.title,
+            checkboxLabel: a.checkboxLabel,
+            isRequired: a.isRequired,
+            version: a.version,
+          }))
+        : [],
+      operatorContract: operatorContract
+        ? {
+            id: operatorContract.id,
+            title: operatorContract.title,
+            checkboxLabel: operatorContract.checkboxLabel,
+            version: operatorContract.version,
+          }
+        : null,
+    });
+  } catch (err) {
+    req.log.error(err);
+    res.status(500).json({ error: "Failed to fetch agreements" });
+  }
+});
+
 // ── POST /bookings/:id/sign-agreement-public — renter signs agreement post-payment ──
+// Supports both v1 (legacy) and v2 (multi-agreement) payloads.
 // Public endpoint authenticated by customerEmail matching the booking record.
 router.post("/bookings/:id/sign-agreement-public", async (req, res) => {
   try {
     const bookingId = Number(req.params.id);
-    const { customerEmail, agreementSignerName, agreementText, agreementSignatureDataUrl } = req.body ?? {};
-    if (!customerEmail || !agreementSignerName || !agreementSignatureDataUrl) {
-      res.status(400).json({ error: "customerEmail, agreementSignerName, and agreementSignatureDataUrl are required" });
+    const {
+      customerEmail,
+      // v2 fields
+      signerName,
+      signatureDataUrl,
+      additionalRiders,
+      minors,
+      acceptances,
+      // v1 compat
+      agreementSignerName,
+      agreementText,
+      agreementSignatureDataUrl,
+    } = req.body ?? {};
+
+    const resolvedSignerName     = (signerName ?? agreementSignerName ?? "").trim();
+    const resolvedSignatureDataUrl = signatureDataUrl ?? agreementSignatureDataUrl ?? "";
+    const isV2                    = !!signerName || Array.isArray(acceptances);
+
+    if (!customerEmail || !resolvedSignerName || !resolvedSignatureDataUrl) {
+      res.status(400).json({ error: "customerEmail, signerName, and signatureDataUrl are required" });
       return;
     }
 
     const [booking] = await db.select().from(bookingsTable).where(eq(bookingsTable.id, bookingId));
     if (!booking) { res.status(404).json({ error: "Booking not found" }); return; }
 
-    // Verify customer email matches
     if ((booking.customerEmail ?? "").toLowerCase().trim() !== String(customerEmail).toLowerCase().trim()) {
-      res.status(403).json({ error: "Email does not match this booking" });
-      return;
+      res.status(403).json({ error: "Email does not match this booking" }); return;
     }
 
-    // Already signed — idempotent: just return ok
+    // Idempotent — already signed
     if (booking.agreementSignedAt) {
-      res.json({ ok: true, alreadySigned: true });
-      return;
+      res.json({ ok: true, alreadySigned: true }); return;
     }
 
     const signedAt = new Date();
+
+    // ── V2: build sections and acceptances snapshot ───────────────────────────
+    let pdfSections: { title: string; content: string }[] | undefined;
+    let pdfAcceptances: { checkboxLabel: string; accepted: boolean; type: "operator" | "platform" | "rule" }[] | undefined;
+    let acceptancesSnapshot: unknown[] = [];
+
+    if (isV2 && Array.isArray(acceptances)) {
+      const { resolveAgreementTokens } = await import("../lib/agreement-tokens");
+
+      // Fetch full content for operator contract and platform agreements
+      const [operatorContract] = booking.tenantId
+        ? await db.select().from(operatorContractsTable)
+            .where(and(
+              eq(operatorContractsTable.tenantId, booking.tenantId),
+              eq(operatorContractsTable.isActive, true),
+            ))
+            .limit(1)
+        : [null];
+
+      const platformAgreementsList = await db.select().from(platformAgreementsTable)
+        .where(eq(platformAgreementsTable.isActive, true))
+        .orderBy(platformAgreementsTable.sortOrder);
+
+      const [listing] = booking.listingId
+        ? await db.select({ title: listingsTable.title }).from(listingsTable)
+            .where(eq(listingsTable.id, booking.listingId)).limit(1)
+        : [null];
+
+      const [biz] = booking.tenantId
+        ? await db.select({ businessName: businessProfileTable.businessName }).from(businessProfileTable)
+            .where(eq(businessProfileTable.tenantId, booking.tenantId)).limit(1)
+        : [null];
+
+      const tokenVars = {
+        signerName: resolvedSignerName,
+        customerName: booking.customerName ?? "",
+        customerEmail: booking.customerEmail ?? "",
+        customerPhone: booking.customerPhone ?? "",
+        bookingId,
+        listingTitle: listing?.title ?? "Rental",
+        startDate: booking.startDate ?? "",
+        endDate: booking.endDate ?? "",
+        companyName: biz?.businessName ?? "Rental Company",
+        additionalRiders: Array.isArray(additionalRiders) ? additionalRiders.filter(Boolean) : [],
+        minors: Array.isArray(minors) ? minors.filter(Boolean) : [],
+        signedAt,
+        totalPrice: booking.totalPrice ?? "",
+      };
+
+      pdfSections = [];
+      pdfAcceptances = [];
+
+      // Operator contract section
+      if (operatorContract) {
+        const resolvedContent = resolveAgreementTokens(operatorContract.content ?? "", tokenVars);
+        pdfSections.push({ title: operatorContract.title, content: resolvedContent });
+      }
+
+      // Platform agreements sections (if not opted out)
+      const showPlatform = !operatorContract || operatorContract.includeOutdoorShareAgreements;
+      if (showPlatform) {
+        for (const pa of platformAgreementsList) {
+          const resolvedContent = resolveAgreementTokens(pa.content ?? "", tokenVars);
+          pdfSections.push({ title: pa.title, content: resolvedContent });
+        }
+      }
+
+      // Build immutable snapshot from the incoming acceptances array
+      acceptancesSnapshot = acceptances.map((acc: any) => {
+        if (acc.type === "operator" && operatorContract) {
+          return {
+            type: "operator",
+            id: operatorContract.id,
+            version: operatorContract.version,
+            title: operatorContract.title,
+            checkboxLabel: operatorContract.checkboxLabel,
+            accepted: !!acc.accepted,
+            contentSnapshot: operatorContract.content?.slice(0, 500) ?? "",
+          };
+        }
+        if (acc.type === "platform") {
+          const pa = platformAgreementsList.find(p => p.id === acc.id);
+          return {
+            type: "platform",
+            id: acc.id,
+            version: pa?.version ?? acc.version,
+            title: pa?.title ?? "",
+            checkboxLabel: pa?.checkboxLabel ?? acc.checkboxLabel ?? "",
+            accepted: !!acc.accepted,
+            contentSnapshot: pa?.content?.slice(0, 500) ?? "",
+          };
+        }
+        if (acc.type === "rule") {
+          return {
+            type: "rule",
+            id: acc.id,
+            title: acc.title ?? "",
+            checkboxLabel: acc.checkboxLabel ?? acc.title ?? "",
+            accepted: !!acc.accepted,
+          };
+        }
+        return acc;
+      });
+
+      // Build pdfAcceptances list from the snapshot
+      pdfAcceptances = acceptancesSnapshot.map((a: any) => ({
+        checkboxLabel: a.checkboxLabel ?? a.title ?? "",
+        accepted: !!a.accepted,
+        type: a.type as "operator" | "platform" | "rule",
+      }));
+    }
+
+    // Save booking fields
     await db.update(bookingsTable).set({
-      agreementSignerName: agreementSignerName.trim(),
-      agreementText: agreementText ?? null,
-      agreementSignature: agreementSignatureDataUrl,
+      agreementSignerName: resolvedSignerName,
+      agreementText: (!isV2 && agreementText) ? agreementText : null,
+      agreementSignature: resolvedSignatureDataUrl,
       agreementSignedAt: signedAt,
+      additionalRiders: Array.isArray(additionalRiders) ? JSON.stringify(additionalRiders.filter(Boolean)) : null,
+      minors: Array.isArray(minors) ? JSON.stringify(minors.filter(Boolean)) : null,
+      agreementAcceptances: acceptancesSnapshot.length > 0 ? JSON.stringify(acceptancesSnapshot) : null,
       updatedAt: new Date(),
     }).where(eq(bookingsTable.id, bookingId));
 
-    // Generate PDF with full context — same as the admin booking flow.
+    // Generate PDF
     try {
-      const textForPdf = agreementText ?? booking.agreementText ?? "";
-      const signerForPdf = (agreementSignerName ?? booking.agreementSignerName ?? "").trim();
-      if (textForPdf && signerForPdf) {
-        // Fetch listing + business profile for PDF header/body context.
-        const [listing] = booking.listingId
-          ? await db.select({ title: listingsTable.title, productId: listingsTable.productId })
-              .from(listingsTable).where(eq(listingsTable.id, booking.listingId)).limit(1)
-          : [null];
-        const [biz] = booking.tenantId
-          ? await db.select({ businessName: businessProfileTable.businessName })
-              .from(businessProfileTable).where(eq(businessProfileTable.tenantId, booking.tenantId)).limit(1)
-          : [null];
-        let productSerial: string | null = null;
-        let productEstimatedValue: string | null = null;
-        if (listing?.productId) {
-          const [prod] = await db.select({ serialNumber: productsTable.serialNumber, estimatedValue: productsTable.estimatedValue })
-            .from(productsTable).where(eq(productsTable.id, listing.productId)).limit(1);
-          if (prod) { productSerial = prod.serialNumber ?? null; productEstimatedValue = prod.estimatedValue ?? null; }
-        }
-        const pdfFilename = await generateAgreementPdf({
-          bookingId,
-          companyName: biz?.businessName ?? "Rental Company",
-          customerName: booking.customerName ?? "Customer",
-          customerEmail: booking.customerEmail ?? "",
-          listingTitle: listing?.title ?? "Rental",
-          startDate: booking.startDate ?? "",
-          endDate: booking.endDate ?? "",
-          agreementText: textForPdf,
-          signerName: signerForPdf,
-          signedAt,
-          signatureDataUrl: agreementSignatureDataUrl,
-          serialNumber: productSerial,
-          estimatedValue: productEstimatedValue,
-        });
-        await db.update(bookingsTable).set({ agreementPdfPath: pdfFilename, updatedAt: new Date() }).where(eq(bookingsTable.id, bookingId));
+      const [listing]  = booking.listingId
+        ? await db.select({ title: listingsTable.title, productId: listingsTable.productId })
+            .from(listingsTable).where(eq(listingsTable.id, booking.listingId)).limit(1)
+        : [null];
+      const [biz] = booking.tenantId
+        ? await db.select({ businessName: businessProfileTable.businessName })
+            .from(businessProfileTable).where(eq(businessProfileTable.tenantId, booking.tenantId)).limit(1)
+        : [null];
+      let productSerial: string | null = null;
+      let productEstimatedValue: string | null = null;
+      if (listing?.productId) {
+        const [prod] = await db.select({ serialNumber: productsTable.serialNumber, estimatedValue: productsTable.estimatedValue })
+          .from(productsTable).where(eq(productsTable.id, listing.productId)).limit(1);
+        if (prod) { productSerial = prod.serialNumber ?? null; productEstimatedValue = prod.estimatedValue ?? null; }
       }
+
+      const pdfFilename = await generateAgreementPdf({
+        bookingId,
+        companyName: biz?.businessName ?? "Rental Company",
+        customerName: booking.customerName ?? "Customer",
+        customerEmail: booking.customerEmail ?? "",
+        listingTitle: listing?.title ?? "Rental",
+        startDate: booking.startDate ?? "",
+        endDate: booking.endDate ?? "",
+        ...(isV2 && pdfSections ? { sections: pdfSections, acceptances: pdfAcceptances } : { agreementText: agreementText ?? "" }),
+        additionalRiders: Array.isArray(additionalRiders) ? additionalRiders.filter(Boolean) : undefined,
+        minors: Array.isArray(minors) ? minors.filter(Boolean) : undefined,
+        signerName: resolvedSignerName,
+        signedAt,
+        signatureDataUrl: resolvedSignatureDataUrl,
+        serialNumber: productSerial,
+        estimatedValue: productEstimatedValue,
+      });
+      await db.update(bookingsTable).set({ agreementPdfPath: pdfFilename, updatedAt: new Date() }).where(eq(bookingsTable.id, bookingId));
     } catch (pdfErr: any) {
       req.log.error(pdfErr, "[sign-agreement-public] PDF gen failed");
     }

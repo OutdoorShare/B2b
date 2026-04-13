@@ -1,0 +1,238 @@
+We need to upgrade the agreement/contract system to support both OutdoorShare-required agreements and operator (admin) custom contracts, while keeping the renter UX simple.
+
+This is a combined system with:
+
+1. OutdoorShare required documents (controlled by super admin)
+2. Operator custom contracts (controlled by storefront admin)
+3. A unified signing + autofill + final PDF output
+
+---
+
+## 1. Agreement system structure
+
+We need two layers of agreements:
+
+### A. OutdoorShare required agreements (super admin)
+
+* Created and managed by super admin
+* Can be marked as:
+
+  * required globally
+  * required per listing/category (optional future)
+* Always enforced unless explicitly overridden by insurance logic (see below)
+
+---
+
+### B. Operator (admin) custom agreements
+
+* Each storefront/admin can:
+
+  * upload their own contract (PDF or template)
+  * OR create a contract using fields (like current system)
+* This contract is **in addition to OutdoorShare agreements**
+
+---
+
+## 2. Insurance logic (important)
+
+We need this rule:
+
+* If operator **uses OutdoorShare insurance**
+  → OutdoorShare required agreements MUST be included
+
+* If operator **opts out of insurance**
+  → Operator can choose:
+
+  * use ONLY their own contract
+  * OR still include OutdoorShare agreements optionally
+
+This needs to be configurable at admin level.
+
+---
+
+## 3. Renter signing UX (very important)
+
+We should NOT show renters a long document to scroll through.
+
+Instead:
+
+### UX flow:
+
+* Show clean form inputs (only if not auto populated):
+
+  * First name
+  * Last name
+  * Optional additional riders
+  * optional minors
+  * Signature
+  * Any required custom fields
+
+* Show checkboxes for:
+
+  * rules
+  * policies
+  * agreements
+
+Example:
+[ ] I agree to the rental terms
+[ ] I accept the cancellation policy
+[ ] I acknowledge liability terms
+
+👉 These checkboxes map to actual clauses in the contract(s)
+
+---
+
+## 4. Autofill + contract templating
+
+We need a template system for BOTH:
+
+* OutdoorShare agreements
+* Operator contracts
+
+Support placeholders like:
+
+* {{first_name}}
+* {{last_name}}
+* {{email}}
+* {{phone}}
+* {{booking_id}}
+* {{listing_name}}
+* {{dates}}
+* etc.
+
+Operators should be able to:
+
+* upload a PDF with placeholders OR
+* build a contract using a simple editor
+
+System should:
+
+* auto-fill all known data
+* inject checkbox states into contract
+* inject signature + timestamp
+
+---
+
+## 5. Combined final contract (critical)
+
+After signing, generate ONE final document that includes:
+
+1. Operator contract (if exists)
+2. OutdoorShare required agreements (if applicable)
+
+Combined into:
+
+* single PDF
+* correct order
+* consistent formatting
+
+This PDF should:
+
+* include filled fields
+* include checkbox states as checked
+* include signature
+* include timestamp
+
+---
+
+## 6. Rules & policies → contract mapping
+
+Important requirement:
+
+* The UI checkboxes (rules/policies) must also appear as **checked inside the final contract**
+
+So:
+
+* renter checks box in UI
+  → that clause is marked as accepted in the generated document
+
+---
+
+## 7. Admin configuration
+
+Admin should be able to:
+
+### For their contract:
+
+* upload PDF OR create template
+* define fields/placeholders
+* define required checkboxes
+* preview filled contract
+
+### For agreement behavior:
+
+* require their contract
+* allow optional sections (future)
+* toggle whether OutdoorShare agreements are included (if insurance is off)
+
+---
+
+## 8. Data model
+
+Each booking must store:
+
+* which agreements were used
+* operator contract version
+* OutdoorShare agreement version(s)
+* all filled values
+* checkbox states
+* signature
+* timestamp
+* final generated PDF
+
+This must be immutable after signing.
+
+---
+
+## 9. Technical requirements
+
+* Do NOT rely on frontend for contract generation
+* Generate final document server-side
+* Store final PDF permanently
+* Ensure auditability
+
+---
+
+## 10. UX requirements
+
+* renter never scrolls through long legal doc
+* renter fills simple form
+* renter checks boxes
+* renter signs once
+* system handles document generation
+
+---
+
+## 11. Acceptance criteria
+
+* Admin can upload their own contract
+* OutdoorShare agreements still enforced when required
+* Insurance logic correctly controls agreement requirements
+* Renter signs once for all agreements
+* Final PDF includes:
+
+  * all agreements combined
+  * autofilled data
+  * checkbox confirmations
+  * signature + timestamp
+* UX remains simple and clean
+
+---
+
+## 12. Deliverables
+
+Please provide:
+
+* schema changes
+* contract/template system implementation
+* PDF generation logic
+* example final generated contract
+* renter signing UX screenshots
+* admin contract upload + config UI
+
+---
+
+Important:
+The goal is:
+👉 flexible legal system for operators
+👉 while keeping renter UX extremely simple and frictionless

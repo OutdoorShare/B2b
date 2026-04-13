@@ -1,7 +1,7 @@
 import { Router, type IRouter, type Request, type Response, type NextFunction } from "express";
 import { db } from "@workspace/db";
-import { tenantsTable, listingsTable, bookingsTable, superadminUsersTable, businessProfileTable, platformSettingsTable, categoriesTable, claimsTable, customersTable } from "@workspace/db/schema";
-import { eq, sql, desc, and, ne } from "drizzle-orm";
+import { tenantsTable, listingsTable, bookingsTable, superadminUsersTable, businessProfileTable, platformSettingsTable, categoriesTable, claimsTable, customersTable, platformAgreementsTable } from "@workspace/db/schema";
+import { eq, sql, desc, and, ne, asc } from "drizzle-orm";
 import { scrypt, randomBytes, timingSafeEqual } from "crypto";
 import { promisify } from "util";
 import { sendWelcomeEmail, sendAccountUpdatedEmail, sendClaimChargeEmail, sendClaimSettlementEmail, sendSuperAdminInviteEmail, sendSignupInviteEmail } from "../services/gmail";
@@ -1192,6 +1192,101 @@ router.put("/superadmin/agreement/fields", requireSuperAdmin, async (req, res) =
     res.json({ ok: true, updatedAt: now.toISOString() });
   } catch {
     res.status(500).json({ error: "Failed to save fields" });
+  }
+});
+
+// ── Platform Agreements (multi-document system) ───────────────────────────────
+
+// GET /superadmin/platform-agreements — list all platform agreements
+router.get("/superadmin/platform-agreements", requireSuperAdmin, async (_req, res) => {
+  try {
+    const rows = await db.select().from(platformAgreementsTable)
+      .orderBy(asc(platformAgreementsTable.sortOrder), asc(platformAgreementsTable.id));
+    res.json(rows);
+  } catch {
+    res.status(500).json({ error: "Failed to fetch platform agreements" });
+  }
+});
+
+// POST /superadmin/platform-agreements — create a new platform agreement
+router.post("/superadmin/platform-agreements", requireSuperAdmin, async (req, res) => {
+  try {
+    const { title, content, checkboxLabel, isRequired, sortOrder } = req.body ?? {};
+    if (!title || typeof title !== "string") { res.status(400).json({ error: "title is required" }); return; }
+    const maxOrder = await db
+      .select({ v: sql<number>`coalesce(max(sort_order),0)` })
+      .from(platformAgreementsTable);
+    const [inserted] = await db.insert(platformAgreementsTable).values({
+      title: title.trim(),
+      content: typeof content === "string" ? content : "",
+      checkboxLabel: typeof checkboxLabel === "string" && checkboxLabel.trim()
+        ? checkboxLabel.trim()
+        : "I agree to the terms and conditions",
+      isRequired: isRequired !== false,
+      sortOrder: typeof sortOrder === "number" ? sortOrder : ((maxOrder[0]?.v ?? 0) + 10),
+      isActive: true,
+    }).returning();
+    res.status(201).json(inserted);
+  } catch {
+    res.status(500).json({ error: "Failed to create platform agreement" });
+  }
+});
+
+// PATCH /superadmin/platform-agreements/:id — update a platform agreement
+router.patch("/superadmin/platform-agreements/:id", requireSuperAdmin, async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    const { title, content, checkboxLabel, isRequired, sortOrder, isActive } = req.body ?? {};
+    const updates: Record<string, unknown> = { updatedAt: new Date() };
+    if (typeof title === "string")        updates.title        = title.trim();
+    if (typeof content === "string")      updates.content      = content;
+    if (typeof checkboxLabel === "string") updates.checkboxLabel = checkboxLabel.trim();
+    if (typeof isRequired === "boolean")  updates.isRequired   = isRequired;
+    if (typeof sortOrder === "number")    updates.sortOrder    = sortOrder;
+    if (typeof isActive === "boolean")    updates.isActive     = isActive;
+    // Bump version on content change
+    if (typeof content === "string") {
+      const [current] = await db.select({ version: platformAgreementsTable.version })
+        .from(platformAgreementsTable).where(eq(platformAgreementsTable.id, id)).limit(1);
+      if (current) updates.version = (current.version ?? 1) + 1;
+    }
+    const [updated] = await db.update(platformAgreementsTable).set(updates as any)
+      .where(eq(platformAgreementsTable.id, id)).returning();
+    if (!updated) { res.status(404).json({ error: "Agreement not found" }); return; }
+    res.json(updated);
+  } catch {
+    res.status(500).json({ error: "Failed to update platform agreement" });
+  }
+});
+
+// DELETE /superadmin/platform-agreements/:id — soft delete (deactivate)
+router.delete("/superadmin/platform-agreements/:id", requireSuperAdmin, async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    await db.update(platformAgreementsTable)
+      .set({ isActive: false, updatedAt: new Date() })
+      .where(eq(platformAgreementsTable.id, id));
+    res.json({ ok: true });
+  } catch {
+    res.status(500).json({ error: "Failed to delete platform agreement" });
+  }
+});
+
+// POST /superadmin/platform-agreements/reorder — bulk-update sort orders
+router.post("/superadmin/platform-agreements/reorder", requireSuperAdmin, async (req, res) => {
+  try {
+    const { order } = req.body ?? {}; // [{id, sortOrder}]
+    if (!Array.isArray(order)) { res.status(400).json({ error: "order array required" }); return; }
+    for (const item of order) {
+      if (item.id && typeof item.sortOrder === "number") {
+        await db.update(platformAgreementsTable)
+          .set({ sortOrder: item.sortOrder, updatedAt: new Date() })
+          .where(eq(platformAgreementsTable.id, item.id));
+      }
+    }
+    res.json({ ok: true });
+  } catch {
+    res.status(500).json({ error: "Failed to reorder agreements" });
   }
 });
 

@@ -85,6 +85,14 @@ export const bookingsTable = pgTable("bookings", {
   emailEvents: text("email_events"),
   // Renter-triggered admin review reminder — timestamp of last nudge sent
   lastAdminReminderSentAt: timestamp("last_admin_reminder_sent_at"),
+  // ── Agreement v2 fields (multi-agreement system) ─────────────────────────
+  // JSON array of rider names added at signing time
+  additionalRiders: text("additional_riders"),
+  // JSON array of minor names added at signing time
+  minors: text("minors"),
+  // Immutable snapshot of all agreements accepted at signing:
+  // [{type:'platform'|'operator'|'rule', id, version, checkboxLabel, accepted, contentSnapshot}]
+  agreementAcceptances: text("agreement_acceptances"),
   // Seen/read tracking — false means the viewer has not yet looked at this booking/update
   seenByAdmin: boolean("seen_by_admin").notNull().default(true),
   seenByRenter: boolean("seen_by_renter").notNull().default(true),

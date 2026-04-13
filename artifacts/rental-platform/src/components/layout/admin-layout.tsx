@@ -67,6 +67,7 @@ const NAV_GROUPS: NavGroup[] = [
       { name: "Communications", path: "/communications", icon: MessageSquare },
       { name: "Contact Cards", path: "/contact-cards", icon: IdCard },
       { name: "Waivers", path: "/waivers", icon: FileSignature },
+      { name: "Contract", path: "/contract", icon: FileText },
     ],
   },
   {

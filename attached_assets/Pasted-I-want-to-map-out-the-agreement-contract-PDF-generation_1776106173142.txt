@@ -1,0 +1,604 @@
+I want to map out the agreement/contract PDF generation system technically so it is stable, auditable, and easy to extend.
+
+Goal:
+
+* renter fills simple fields + checkboxes + signature
+* system generates the full legal document(s) behind the scenes
+* final result is one combined PDF with operator contract + OutdoorShare required docs
+* all autofill values, checkbox states, and signature data are embedded correctly
+* generation happens server-side, not in the browser
+
+Please use the following architecture.
+
+---
+
+# 1. Core technical approach
+
+We should support 2 document input types:
+
+## A. Template-based agreements
+
+For OutdoorShare-required agreements and operator-built agreements created in our editor.
+
+Store as:
+
+* structured HTML/markdown/template content
+* placeholder fields like `{{first_name}}`, `{{booking_id}}`, etc.
+* clause definitions for checkbox mapping
+
+Best generation path:
+
+* render template to HTML
+* convert HTML to PDF
+* merge resulting PDFs together
+
+Recommended libraries:
+
+* templating: Handlebars or Mustache
+* HTML rendering: server-side HTML templates
+* PDF output from HTML:
+
+  * preferred: Playwright PDF generation
+  * acceptable alternative: Puppeteer
+* PDF merge/stamp:
+
+  * pdf-lib for merging and metadata
+  * or qpdf / pdftk style server tools if needed
+
+Why:
+
+* HTML templates are easiest to style, preview, version, and autofill
+* much easier than trying to write all agreements directly into PDF primitives
+
+---
+
+## B. Uploaded operator PDF contracts
+
+For admins who upload their own contract PDF.
+
+We need 2 supported modes:
+
+### Mode 1: Uploaded PDF with mapped fields/placeholders
+
+Admin uploads PDF and then maps fill targets in the UI.
+
+Implementation:
+
+* store original uploaded PDF
+* store field mappings separately:
+
+  * pdf page number
+  * x/y/width/height coordinates OR named field id if AcroForm exists
+  * value source (`first_name`, `signature`, checkbox state, etc.)
+
+Recommended libraries:
+
+* pdf-lib for filling/stamping
+* if AcroForm PDF exists: fill native form fields
+* if non-fillable PDF: stamp text/checkmarks/signature image at coordinates
+
+### Mode 2: Uploaded PDF as static appendix
+
+If they do not need autofill in the uploaded contract, still include it in final merged PDF.
+This is the fallback.
+
+---
+
+# 2. Document pipeline
+
+Please build the generation pipeline as a server-side document assembly workflow:
+
+## Step 1: Resolve agreement set
+
+At booking/agreement signing time, determine which docs apply:
+
+Inputs:
+
+* storefront/operator config
+* insurance setting
+* super admin required docs
+* operator custom contract presence
+* listing/category rules if applicable later
+
+Output:
+`resolvedAgreementBundle = { operatorDocs: [], outdoorShareDocs: [], checkboxClauses: [], requiredFields: [] }`
+
+This must be immutable per booking.
+
+---
+
+## Step 2: Collect signer payload
+
+Build a single normalized data object used for all filling:
+
+Example:
+
+```ts
+agreementData = {
+  renter: {
+    firstName,
+    lastName,
+    email,
+    phone,
+    address,
+  },
+  booking: {
+    id,
+    startDate,
+    endDate,
+    listingName,
+    storefrontName,
+  },
+  riders: [...],
+  minors: [...],
+  checkboxes: {
+    rental_terms_accepted: true,
+    cancellation_policy_accepted: true,
+    liability_terms_accepted: true,
+  },
+  signature: {
+    typedName,
+    signatureImageUrlOrBase64,
+    signedAt,
+    ipAddress,
+  }
+}
+```
+
+This should be the single source of truth for generation.
+
+---
+
+## Step 3: Render each document
+
+For each resolved agreement:
+
+### If template-based
+
+* load agreement template version
+* render placeholders with Handlebars/Mustache
+* inject checkbox states visually
+* inject signature block
+* render to PDF using Playwright
+
+### If uploaded fillable PDF
+
+* fill AcroForm fields if present
+* flatten after filling
+
+### If uploaded non-fillable PDF
+
+* place text/checkmarks/signature via coordinate mapping
+* flatten result
+
+Each document should be generated as its own intermediate PDF first.
+
+---
+
+## Step 4: Merge final PDF
+
+Merge all generated PDFs into one final document in defined order:
+
+Recommended order:
+
+1. Operator custom contract
+2. OutdoorShare required agreements
+3. Any appendices/disclosures
+
+Use:
+
+* pdf-lib merge
+  or
+* qpdf merge if needed for reliability
+
+Output:
+
+* one final immutable PDF per booking/agreement completion
+
+---
+
+## Step 5: Stamp final metadata
+
+Add metadata to final PDF:
+
+* booking id
+* renter name
+* storefront name
+* generated at timestamp
+* agreement version ids
+* optional audit reference id
+
+If possible, also add footer/header:
+
+* page number
+* booking reference
+* document generated timestamp
+
+---
+
+# 3. Storage model
+
+We need versioned storage for both agreement definitions and generated outputs.
+
+## Agreement definition tables
+
+Suggested structure:
+
+### agreements
+
+* id
+* ownerType (`outdoorshare` | `storefront`)
+* storefrontId nullable
+* title
+* type (`template` | `uploaded_pdf`)
+* status
+* isRequired
+* insuranceBehavior
+* currentVersionId
+* createdBy
+* createdAt
+
+### agreement_versions
+
+* id
+* agreementId
+* versionNumber
+* templateHtml or templateJson nullable
+* uploadedPdfFileId nullable
+* fieldMappings json nullable
+* checkboxClauses json
+* placeholderSchema json
+* createdAt
+* createdBy
+
+---
+
+## Per-booking immutable record
+
+### booking_agreement_packets
+
+* id
+* bookingId
+* storefrontId
+* resolvedConfig json
+* finalPdfFileId
+* signedAt
+* signatureImageFileId
+* signerName
+* signerEmail
+* ipAddress
+* auditHash optional
+* createdAt
+
+### booking_agreement_documents
+
+* id
+* bookingAgreementPacketId
+* sourceAgreementId
+* sourceAgreementVersionId
+* sourceType (`operator` | `outdoorshare`)
+* generatedPdfFileId
+* fieldValues json
+* checkboxStates json
+* generationOrder
+* createdAt
+
+Important:
+Once signed, these records must be immutable.
+
+---
+
+# 4. Placeholder system
+
+Please define a formal placeholder registry instead of ad hoc strings everywhere.
+
+Example supported placeholders:
+
+* `{{renter.first_name}}`
+* `{{renter.last_name}}`
+* `{{renter.email}}`
+* `{{booking.id}}`
+* `{{booking.start_date}}`
+* `{{booking.end_date}}`
+* `{{listing.name}}`
+* `{{storefront.name}}`
+* `{{signature.name}}`
+* `{{signature.signed_at}}`
+
+Also support loops for:
+
+* additional riders
+* minors
+
+Example:
+
+```handlebars
+{{#each riders}}
+- {{this.firstName}} {{this.lastName}}
+{{/each}}
+```
+
+Need validation:
+
+* show admin which placeholders are valid
+* detect unknown placeholders before save/publish
+
+---
+
+# 5. Checkbox mapping model
+
+Rules/policies accepted in UI must map directly to contract clauses.
+
+Please model checkboxes explicitly:
+
+```ts
+checkboxDefinitions = [
+  {
+    key: "rental_terms_accepted",
+    label: "I agree to the rental terms",
+    required: true,
+    mapsTo: [
+      { agreementVersionId: "agr_123", field: "rental_terms_checkbox" }
+    ]
+  }
+]
+```
+
+Then when the renter checks the box:
+
+* UI state saves boolean
+* generation engine fills/stamps the checkbox in document output
+* final PDF visually shows it as checked
+
+For template-based contracts:
+
+* render checked checkbox symbol directly in HTML
+
+For PDF uploads:
+
+* either fill AcroForm checkbox
+* or stamp checkmark image/text into mapped coordinates
+
+---
+
+# 6. Signature handling
+
+Recommended approach:
+
+* capture signature in frontend as vector strokes or base64 PNG
+* send to server
+* store original signature artifact separately
+* embed rendered signature image in each generated PDF or in final signature section
+
+Also include:
+
+* signer typed full name
+* signed timestamp
+* IP address
+* optional user agent
+* optional booking/session id
+
+Recommended storage:
+
+* signature file in object storage
+* metadata in booking_agreement_packets
+
+Important:
+Do not rely on only visual signature placement. Keep audit metadata separately in DB.
+
+---
+
+# 7. PDF generation libraries
+
+Recommended stack:
+
+## Primary
+
+* **Handlebars** for templating
+* **Playwright** for HTML-to-PDF rendering
+* **pdf-lib** for:
+
+  * PDF merge
+  * stamping text/images/signatures
+  * metadata
+  * flattening/final processing where possible
+
+## Optional / helpful
+
+* **qpdf** for robust PDF merging/normalization if pdf-lib has edge cases
+* **pdfjs** or server-side PDF parsing to inspect uploaded PDFs
+* **sharp** if signature/checkmark images need preprocessing
+
+## For fillable PDFs
+
+* use `pdf-lib` AcroForm support first
+* if uploaded PDFs are inconsistent, add a fallback stamping path
+
+Do not generate the final legal docs in the browser.
+
+---
+
+# 8. Uploaded PDF mapping UX
+
+For admin-uploaded PDFs with autofill:
+please create a mapping UI where admin can:
+
+1. upload PDF
+2. preview each page
+3. click where a value should go
+4. assign field source:
+
+* first name
+* last name
+* email
+* booking dates
+* signature
+* checkbox state
+* custom field
+
+Store these mappings as structured JSON.
+
+Suggested mapping object:
+
+```ts
+{
+  page: 2,
+  type: "text" | "signature" | "checkbox",
+  rect: { x, y, width, height },
+  valueKey: "renter.first_name"
+}
+```
+
+If the PDF already has form fields:
+
+* detect and list them automatically
+* let admin map value keys to existing field names instead of coordinates
+
+---
+
+# 9. Auditability and legal trace
+
+Please build this as an auditable system.
+
+At signing time, save:
+
+* exact agreement version ids
+* exact field values used
+* checkbox states
+* signature artifact reference
+* generated PDF file id
+* signed timestamp
+* signer IP
+* signer email/name
+
+Optional but recommended:
+
+* generate a content hash of the final PDF
+* generate a hash of the payload used to create it
+
+This helps if contract authenticity is ever challenged later.
+
+---
+
+# 10. Failure handling
+
+Need safe failure behavior:
+
+* if any document generation step fails, do not partially sign
+* return a clear error and do not mark agreements complete
+* only finalize booking agreement after final merged PDF is successfully generated and stored
+
+Recommended flow:
+
+1. renter submits agreement
+2. server validates all required data
+3. server generates all component PDFs
+4. server merges final PDF
+5. server stores final PDF
+6. server writes immutable signed packet record
+7. only then mark agreement complete
+
+This should be transactional as much as possible.
+
+---
+
+# 11. Performance strategy
+
+To keep UX fast:
+
+* generate final PDF asynchronously but immediately after submission
+* show renter a short “finalizing agreement” state if needed
+* store generated agreements for later retrieval
+* do not regenerate historical signed documents on every view
+
+Optional:
+
+* cache previews for admin contract testing
+* queue heavy generation jobs if contracts become large
+
+But for initial version, synchronous server generation is acceptable if it stays fast enough.
+
+---
+
+# 12. Recommended folder/module structure
+
+Example:
+
+```txt
+server/
+  agreements/
+    resolver.ts
+    placeholders.ts
+    checkbox-mapping.ts
+    signature.ts
+    template-renderer.ts
+    pdf/
+      render-html-to-pdf.ts
+      fill-acroform-pdf.ts
+      stamp-pdf.ts
+      merge-pdfs.ts
+      finalize-packet.ts
+    versions.ts
+    audit.ts
+    schemas.ts
+```
+
+Key modules:
+
+* `resolver.ts` → decides what docs apply
+* `template-renderer.ts` → builds HTML from templates
+* `fill-acroform-pdf.ts` → fills native form PDFs
+* `stamp-pdf.ts` → stamps text/checkmarks/signatures by coordinates
+* `merge-pdfs.ts` → combines docs
+* `finalize-packet.ts` → writes final immutable packet + file refs
+
+---
+
+# 13. MVP vs future phases
+
+## MVP
+
+* OutdoorShare required template docs
+* operator uploaded PDF
+* coordinate mapping for uploaded PDFs
+* simple checkbox mapping
+* one signature
+* final merged PDF
+* immutable packet record
+
+## Later
+
+* per-listing agreement rules
+* richer clause builder
+* reusable field sets
+* conditional sections
+* e-sign audit certificate page
+* admin preview/test-fill sandbox
+* automatic OCR aid for PDF mapping
+* multi-signer flows
+
+---
+
+# 14. Acceptance criteria
+
+Technical acceptance criteria:
+
+* generation is server-side
+* final PDF is immutable once signed
+* operator docs and OutdoorShare docs can both be included
+* checkbox states appear in final PDF
+* signature appears in final PDF
+* all field values are versioned and auditable
+* uploaded PDFs can be either:
+
+  * static appendices
+  * fillable/mapped contracts
+* one final merged PDF is stored per signed agreement packet
+
+Please implement with maintainability in mind:
+
+* structured versions
+* central placeholder registry
+* explicit checkbox mapping
+* server-side PDF pipeline
+* immutable signed packet storage

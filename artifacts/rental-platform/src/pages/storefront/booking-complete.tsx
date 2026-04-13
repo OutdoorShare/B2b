@@ -5,7 +5,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
   CheckCircle, AlertCircle, Loader2, ChevronRight, PenLine,
-  RotateCcw, ShieldCheck, Calendar, Bike, FileText, Download
+  RotateCcw, ShieldCheck, Calendar, Bike, FileText, Download,
+  Plus, X, Users, Baby,
 } from "lucide-react";
 import { loadStripe } from "@stripe/stripe-js";
 
@@ -32,69 +33,58 @@ interface BookingData {
   listingId?: number;
 }
 
-// Replace {{variable}} tokens with booking data
-function resolveTokens(text: string, booking: BookingData, signerName: string): string {
-  const today = new Date().toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" });
-  return text
-    .replace(/{{renter_name}}/g, signerName || booking.customerName)
-    .replace(/{{customer_name}}/g, booking.customerName)
-    .replace(/{{listing_title}}/g, booking.listingTitle)
-    .replace(/{{start_date}}/g, booking.startDate)
-    .replace(/{{end_date}}/g, booking.endDate)
-    .replace(/{{total_price}}/g, `$${parseFloat(String(booking.totalPrice)).toFixed(2)}`)
-    .replace(/{{today}}/g, today)
-    .replace(/{{date}}/g, today)
-    .replace(/{{[^}]+}}/g, "___");
+interface RuleItem   { id: number; title: string; description: string; fee: number; }
+interface PlatformAgreement { id: number; title: string; checkboxLabel: string; isRequired: boolean; version: number; }
+interface OperatorContract  { id: number; title: string; checkboxLabel: string; version: number; }
+
+interface AgreementsData {
+  rules: RuleItem[];
+  platformAgreements: PlatformAgreement[];
+  operatorContract: OperatorContract | null;
+  alreadySigned: boolean;
 }
 
 const liveStripePromise = loadStripe(import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY ?? "");
 const testStripePromise = loadStripe(import.meta.env.VITE_STRIPE_TEST_PUBLISHABLE_KEY ?? "");
 
+const stripePublishableKey = import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY ?? "";
+
 export default function BookingComplete() {
-  const params = useParams<{ slug: string }>();
-  const slug = params.slug;
+  const params  = useParams<{ slug: string }>();
+  const slug    = params.slug;
   const [, navigate] = useLocation();
 
   const bookingId = getParam("booking_id");
 
-  const [phase, setPhase] = useState<Phase>("verify");
-  const [email, setEmail] = useState("");
+  const [phase, setPhase]     = useState<Phase>("verify");
+  const [email, setEmail]     = useState("");
   const [emailError, setEmailError] = useState("");
   const [booking, setBooking] = useState<BookingData | null>(null);
-  const [error, setError] = useState("");
+  const [error, setError]     = useState("");
 
-  // Agreement state
-  const [agreementText, setAgreementText] = useState("");
-  const [signerName, setSignerName] = useState("");
-  const [isSigning, setIsSigning] = useState(false);
-  const [hasSignature, setHasSignature] = useState(false);
-  const sigCanvasRef = useRef<HTMLCanvasElement>(null);
+  // Agreement v2 state
+  const [agreementsData, setAgreementsData]     = useState<AgreementsData | null>(null);
+  const [agreementsLoading, setAgreementsLoading] = useState(false);
+  const [signerName, setSignerName]             = useState("");
+  const [additionalRiders, setAdditionalRiders] = useState<string[]>([]);
+  const [riderInput, setRiderInput]             = useState("");
+  const [minors, setMinors]                     = useState<string[]>([]);
+  const [minorInput, setMinorInput]             = useState("");
+  const [checkboxStates, setCheckboxStates]     = useState<Record<string, boolean>>({});
+  const [isSigning, setIsSigning]               = useState(false);
+  const [hasSignature, setHasSignature]         = useState(false);
+  const sigCanvasRef  = useRef<HTMLCanvasElement>(null);
   const sigIsDrawingRef = useRef(false);
-  const sigLastPosRef = useRef<{ x: number; y: number } | null>(null);
 
   // Identity state
   const [identityLoading, setIdentityLoading] = useState(false);
-  const [identityError, setIdentityError] = useState("");
+  const [identityError, setIdentityError]     = useState("");
 
-  // Redirect if no booking_id
   useEffect(() => {
-    if (!bookingId) {
-      navigate(`/${slug}`);
-    }
+    if (!bookingId) navigate(`/${slug}`);
   }, [bookingId, slug]);
 
-  // Fetch agreement text after booking is loaded
-  useEffect(() => {
-    if (!booking) return;
-    fetch(`${BASE}/api/platform/agreement`)
-      .then(r => r.json())
-      .then(data => {
-        if (data.value) setAgreementText(data.value);
-      })
-      .catch(() => {});
-  }, [booking]);
-
-  // Signature canvas helpers
+  // ── Signature canvas helpers ──────────────────────────────────────────────
   const getSigPos = useCallback((e: MouseEvent | TouchEvent, canvas: HTMLCanvasElement) => {
     const rect = canvas.getBoundingClientRect();
     const scaleX = canvas.width / rect.width;
@@ -111,12 +101,8 @@ export default function BookingComplete() {
     e.preventDefault();
     sigIsDrawingRef.current = true;
     const pos = getSigPos(e.nativeEvent as any, canvas);
-    sigLastPosRef.current = pos;
     const ctx = canvas.getContext("2d");
-    if (ctx) {
-      ctx.beginPath();
-      ctx.moveTo(pos.x, pos.y);
-    }
+    if (ctx) { ctx.beginPath(); ctx.moveTo(pos.x, pos.y); }
   }, [getSigPos]);
 
   const draw = useCallback((e: React.MouseEvent | React.TouchEvent) => {
@@ -127,21 +113,13 @@ export default function BookingComplete() {
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
     const pos = getSigPos(e.nativeEvent as any, canvas);
-    ctx.lineWidth = 2.5;
-    ctx.lineCap = "round";
-    ctx.strokeStyle = "#1e293b";
-    ctx.lineTo(pos.x, pos.y);
-    ctx.stroke();
-    ctx.beginPath();
-    ctx.moveTo(pos.x, pos.y);
-    sigLastPosRef.current = pos;
+    ctx.lineWidth = 2.5; ctx.lineCap = "round"; ctx.strokeStyle = "#1e293b";
+    ctx.lineTo(pos.x, pos.y); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(pos.x, pos.y);
     setHasSignature(true);
   }, [getSigPos]);
 
-  const endDraw = useCallback(() => {
-    sigIsDrawingRef.current = false;
-    sigLastPosRef.current = null;
-  }, []);
+  const endDraw = useCallback(() => { sigIsDrawingRef.current = false; }, []);
 
   const clearSig = () => {
     const canvas = sigCanvasRef.current;
@@ -151,36 +129,44 @@ export default function BookingComplete() {
     setHasSignature(false);
   };
 
+  // ── Check if all required checkboxes are checked ──────────────────────────
+  const allRequiredChecked = (): boolean => {
+    if (!agreementsData) return false;
+    for (const rule of agreementsData.rules) {
+      if (!checkboxStates[`rule-${rule.id}`]) return false;
+    }
+    for (const pa of agreementsData.platformAgreements) {
+      if (pa.isRequired && !checkboxStates[`platform-${pa.id}`]) return false;
+    }
+    if (agreementsData.operatorContract && !checkboxStates["operator"]) return false;
+    return true;
+  };
+
+  // ── Verify email & load booking ───────────────────────────────────────────
   const handleVerifyEmail = async () => {
     setEmailError("");
     if (!email.trim() || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-      setEmailError("Please enter a valid email address.");
-      return;
+      setEmailError("Please enter a valid email address."); return;
     }
     setPhase("loading");
     try {
-      const res = await fetch(`${BASE}/api/bookings/${bookingId}?customerEmail=${encodeURIComponent(email.trim())}`);
+      const res  = await fetch(`${BASE}/api/bookings/${bookingId}?customerEmail=${encodeURIComponent(email.trim())}`);
       const data = await res.json();
-      if (res.status === 403) {
-        setPhase("verify");
-        setEmailError("That email doesn't match this booking. Please check and try again.");
-        return;
-      }
-      if (!res.ok) {
-        setPhase("error");
-        setError(data.error || "Booking not found. Please contact support.");
-        return;
-      }
+      if (res.status === 403) { setPhase("verify"); setEmailError("That email doesn't match this booking. Please check and try again."); return; }
+      if (!res.ok) { setPhase("error"); setError(data.error || "Booking not found. Please contact support."); return; }
       setBooking(data);
       setSignerName(data.customerName ?? "");
       if (data.agreementSignedAt) {
-        // Agreement already signed — check if identity needed
-        if (data.requireIdentityVerification) {
-          setPhase("identity");
-        } else {
-          setPhase("confirmed");
-        }
+        setPhase(data.requireIdentityVerification ? "identity" : "confirmed");
       } else {
+        // Fetch agreements
+        setAgreementsLoading(true);
+        try {
+          const ar  = await fetch(`${BASE}/api/bookings/${bookingId}/agreements-for-signing?customerEmail=${encodeURIComponent(email.trim())}`);
+          const ad  = await ar.json();
+          if (ar.ok) { setAgreementsData(ad); }
+        } catch { /* proceed with empty agreements */ }
+        setAgreementsLoading(false);
         setPhase("agreement");
       }
     } catch {
@@ -189,34 +175,77 @@ export default function BookingComplete() {
     }
   };
 
+  // ── Add / remove riders and minors ────────────────────────────────────────
+  const addRider = () => {
+    const name = riderInput.trim();
+    if (!name) return;
+    setAdditionalRiders(prev => [...prev, name]);
+    setRiderInput("");
+  };
+  const removeRider = (i: number) => setAdditionalRiders(prev => prev.filter((_, idx) => idx !== i));
+
+  const addMinor = () => {
+    const name = minorInput.trim();
+    if (!name) return;
+    setMinors(prev => [...prev, name]);
+    setMinorInput("");
+  };
+  const removeMinor = (i: number) => setMinors(prev => prev.filter((_, idx) => idx !== i));
+
+  // ── Toggle a checkbox ─────────────────────────────────────────────────────
+  const toggleCheck = (key: string) => {
+    setCheckboxStates(prev => ({ ...prev, [key]: !prev[key] }));
+  };
+
+  // ── Sign agreement ────────────────────────────────────────────────────────
   const handleSignAgreement = async () => {
-    if (!hasSignature) return;
-    if (!signerName.trim()) return;
+    if (!hasSignature || !signerName.trim()) return;
     setIsSigning(true);
     try {
       const canvas = sigCanvasRef.current;
       const signatureDataUrl = canvas?.toDataURL("image/png") ?? "";
-      const resolvedText = agreementText ? resolveTokens(agreementText, booking!, signerName) : "";
+
+      const acceptances = [
+        ...(agreementsData?.rules ?? []).map(r => ({
+          type: "rule" as const,
+          id: r.id,
+          title: r.title,
+          checkboxLabel: r.title,
+          accepted: !!checkboxStates[`rule-${r.id}`],
+        })),
+        ...(agreementsData?.platformAgreements ?? []).map(a => ({
+          type: "platform" as const,
+          id: a.id,
+          version: a.version,
+          checkboxLabel: a.checkboxLabel,
+          accepted: !!checkboxStates[`platform-${a.id}`],
+        })),
+        ...(agreementsData?.operatorContract
+          ? [{
+              type: "operator" as const,
+              id: agreementsData.operatorContract.id,
+              version: agreementsData.operatorContract.version,
+              checkboxLabel: agreementsData.operatorContract.checkboxLabel,
+              accepted: !!checkboxStates["operator"],
+            }]
+          : []),
+      ];
+
       const res = await fetch(`${BASE}/api/bookings/${bookingId}/sign-agreement-public`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           customerEmail: email.trim(),
-          agreementSignerName: signerName.trim(),
-          agreementText: resolvedText,
-          agreementSignatureDataUrl: signatureDataUrl,
+          signerName: signerName.trim(),
+          signatureDataUrl,
+          additionalRiders: additionalRiders.filter(Boolean),
+          minors: minors.filter(Boolean),
+          acceptances,
         }),
       });
       const data = await res.json();
-      if (!res.ok) {
-        alert(data.error || "Failed to sign agreement. Please try again.");
-        return;
-      }
-      if (booking?.requireIdentityVerification) {
-        setPhase("identity");
-      } else {
-        setPhase("confirmed");
-      }
+      if (!res.ok) { alert(data.error || "Failed to sign. Please try again."); return; }
+      setPhase(booking?.requireIdentityVerification ? "identity" : "confirmed");
     } catch {
       alert("Connection error. Please try again.");
     } finally {
@@ -224,10 +253,10 @@ export default function BookingComplete() {
     }
   };
 
+  // ── Identity verification ─────────────────────────────────────────────────
   const handleStartIdentityVerification = async () => {
     if (!booking) return;
-    setIdentityLoading(true);
-    setIdentityError("");
+    setIdentityLoading(true); setIdentityError("");
     try {
       const res = await fetch(`${BASE}/api/stripe/identity/session`, {
         method: "POST",
@@ -235,47 +264,37 @@ export default function BookingComplete() {
         body: JSON.stringify({ bookingId: Number(bookingId), listingId: booking.listingId, tenantSlug: slug }),
       });
       const data = await res.json();
-      if (!res.ok || !data.clientSecret) {
-        setIdentityError(data.error || "Failed to start identity verification.");
-        setIdentityLoading(false);
-        return;
-      }
-      const isTestMode = !!data.testMode;
-      const stripePromise = isTestMode ? testStripePromise : liveStripePromise;
+      if (!res.ok || !data.clientSecret) { setIdentityError(data.error || "Failed to start identity verification."); setIdentityLoading(false); return; }
+      const stripePromise = data.testMode ? testStripePromise : liveStripePromise;
       const stripe = await stripePromise;
       if (!stripe) { setIdentityError("Failed to load payment processor."); setIdentityLoading(false); return; }
-      const { error } = await (stripe as any).verifyIdentity(data.clientSecret);
-      if (error) {
-        setIdentityError(error.message || "Verification failed.");
-        setIdentityLoading(false);
-        return;
-      }
-      // Check status
-      const statusRes = await fetch(`${BASE}/api/stripe/identity/status/${data.sessionId}?tenantSlug=${encodeURIComponent(slug ?? "")}`);
+      const { error: stripeErr } = await (stripe as any).verifyIdentity(data.clientSecret);
+      if (stripeErr) { setIdentityError(stripeErr.message || "Verification failed."); setIdentityLoading(false); return; }
+      const statusRes  = await fetch(`${BASE}/api/stripe/identity/status/${data.sessionId}?tenantSlug=${encodeURIComponent(slug ?? "")}`);
       const statusData = await statusRes.json();
-      if (statusData.verified) {
-        setPhase("confirmed");
-      } else {
-        setIdentityError("Verification could not be confirmed. Please try again or contact support.");
-      }
-    } catch {
-      setIdentityError("Identity verification failed. Please try again.");
-    } finally {
-      setIdentityLoading(false);
-    }
+      if (statusData.verified) { setPhase("confirmed"); }
+      else { setIdentityError("Verification could not be confirmed. Please try again or contact support."); }
+    } catch { setIdentityError("Identity verification failed. Please try again."); }
+    finally { setIdentityLoading(false); }
   };
 
   const skipIdentity = () => setPhase("confirmed");
 
-  // Format date
   const fmt = (d: string) => {
     try { return new Date(d).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" }); }
     catch { return d; }
   };
 
+  const hasAnyAgreements = (agreementsData?.rules?.length ?? 0) > 0
+    || (agreementsData?.platformAgreements?.length ?? 0) > 0
+    || !!agreementsData?.operatorContract;
+
+  const canSubmit = hasSignature && signerName.trim().length > 0 && allRequiredChecked();
+
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-start px-4 py-10">
       <div className="w-full max-w-lg space-y-6">
+
         {/* Header */}
         <div className="text-center">
           <div className="inline-flex items-center justify-center w-12 h-12 rounded-2xl mb-4" style={{ backgroundColor: "#3ab549" }}>
@@ -285,22 +304,18 @@ export default function BookingComplete() {
             {phase === "confirmed" ? "You're all set!" : "Complete your booking"}
           </h1>
           <p className="text-slate-500 text-sm mt-1">
-            {phase === "verify" && "Enter your email to continue with your booking."}
-            {phase === "loading" && "Looking up your booking…"}
-            {phase === "agreement" && "Please review and sign the rental agreement to finalize your booking."}
-            {phase === "identity" && "One last step — please verify your identity."}
+            {phase === "verify"    && "Enter your email to continue with your booking."}
+            {phase === "loading"   && "Looking up your booking…"}
+            {phase === "agreement" && "Review and sign to finalize your booking."}
+            {phase === "identity"  && "One last step — please verify your identity."}
             {phase === "confirmed" && "Payment received and booking confirmed."}
-            {phase === "error" && "Something went wrong."}
+            {phase === "error"     && "Something went wrong."}
           </p>
         </div>
 
         {/* Step indicator */}
         {booking && phase !== "verify" && phase !== "loading" && phase !== "error" && (() => {
-          const steps = [
-            "agreement",
-            ...(booking.requireIdentityVerification ? ["identity"] : []),
-            "confirmed",
-          ];
+          const steps  = ["agreement", ...(booking.requireIdentityVerification ? ["identity"] : []), "confirmed"];
           const labels: Record<string, string> = { agreement: "Agreement", identity: "Verify ID", confirmed: "Confirmed" };
           const currentIdx = steps.indexOf(phase);
           return (
@@ -309,10 +324,8 @@ export default function BookingComplete() {
                 <div key={key} className="flex items-center gap-2">
                   <div className={`px-2.5 py-1 rounded-full text-xs font-semibold transition-colors ${
                     i === currentIdx ? "bg-primary text-white" :
-                    i < currentIdx ? "bg-primary/20 text-primary" : "bg-slate-200 text-slate-500"
-                  }`}>
-                    {labels[key]}
-                  </div>
+                    i < currentIdx  ? "bg-primary/20 text-primary" : "bg-slate-200 text-slate-500"
+                  }`}>{labels[key]}</div>
                   {i < steps.length - 1 && <ChevronRight className="w-3.5 h-3.5 text-slate-300" />}
                 </div>
               ))}
@@ -329,11 +342,9 @@ export default function BookingComplete() {
               </div>
               <div className="flex-1 min-w-0">
                 <p className="font-semibold text-slate-800 truncate">{booking.listingTitle}</p>
-                <div className="flex items-center gap-2 mt-0.5 flex-wrap">
-                  <span className="text-xs text-slate-500 flex items-center gap-1">
-                    <Calendar className="w-3 h-3" /> {fmt(booking.startDate)} – {fmt(booking.endDate)}
-                  </span>
-                </div>
+                <span className="text-xs text-slate-500 flex items-center gap-1">
+                  <Calendar className="w-3 h-3" /> {fmt(booking.startDate)} – {fmt(booking.endDate)}
+                </span>
               </div>
               <div className="text-right shrink-0">
                 <p className="font-bold text-slate-800">${parseFloat(String(booking.totalPrice)).toFixed(2)}</p>
@@ -343,15 +354,13 @@ export default function BookingComplete() {
           </div>
         )}
 
-        {/* ── Phase: Verify email ── */}
+        {/* ── Verify email ─────────────────────────────────────────────────── */}
         {phase === "verify" && (
           <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-6 space-y-4">
             <div className="space-y-1.5">
               <Label htmlFor="email">Email address</Label>
               <Input
-                id="email"
-                type="email"
-                value={email}
+                id="email" type="email" value={email}
                 onChange={e => setEmail(e.target.value)}
                 onKeyDown={e => e.key === "Enter" && handleVerifyEmail()}
                 placeholder="the email used for your booking"
@@ -369,7 +378,7 @@ export default function BookingComplete() {
           </div>
         )}
 
-        {/* ── Phase: Loading ── */}
+        {/* ── Loading ──────────────────────────────────────────────────────── */}
         {phase === "loading" && (
           <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-10 flex flex-col items-center gap-3">
             <Loader2 className="w-8 h-8 animate-spin text-primary" />
@@ -377,81 +386,250 @@ export default function BookingComplete() {
           </div>
         )}
 
-        {/* ── Phase: Agreement ── */}
+        {/* ── Agreement ────────────────────────────────────────────────────── */}
         {phase === "agreement" && booking && (
-          <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-6 space-y-5">
-            <div className="space-y-1.5">
-              <Label>Your name (as signer)</Label>
-              <Input
-                value={signerName}
-                onChange={e => setSignerName(e.target.value)}
-                placeholder="Full name"
-              />
+          <div className="space-y-4">
+            {agreementsLoading && (
+              <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-6 flex items-center gap-3">
+                <Loader2 className="w-5 h-5 animate-spin text-primary shrink-0" />
+                <p className="text-sm text-slate-500">Fetching your agreements…</p>
+              </div>
+            )}
+
+            {/* Section 1 — Your Information */}
+            <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-6 space-y-5">
+              <h2 className="text-sm font-semibold text-slate-700 flex items-center gap-2">
+                <span className="w-5 h-5 rounded-full bg-primary text-white text-xs flex items-center justify-center font-bold">1</span>
+                Your Information
+              </h2>
+
+              <div className="space-y-1.5">
+                <Label>Full name (signer)</Label>
+                <Input
+                  value={signerName}
+                  onChange={e => setSignerName(e.target.value)}
+                  placeholder="Full legal name"
+                />
+              </div>
+
+              {/* Additional Riders */}
+              <div className="space-y-2">
+                <Label className="flex items-center gap-1.5">
+                  <Users className="w-3.5 h-3.5 text-slate-400" />
+                  Additional Riders <span className="text-slate-400 font-normal">(optional)</span>
+                </Label>
+                <div className="flex gap-2">
+                  <Input
+                    value={riderInput}
+                    onChange={e => setRiderInput(e.target.value)}
+                    onKeyDown={e => e.key === "Enter" && addRider()}
+                    placeholder="Full name"
+                    className="flex-1"
+                  />
+                  <Button type="button" variant="outline" size="sm" onClick={addRider} className="shrink-0">
+                    <Plus className="w-4 h-4" />
+                  </Button>
+                </div>
+                {additionalRiders.length > 0 && (
+                  <div className="flex flex-wrap gap-1.5">
+                    {additionalRiders.map((name, i) => (
+                      <span key={i} className="inline-flex items-center gap-1 bg-slate-100 text-slate-700 text-xs rounded-full px-2.5 py-1">
+                        {name}
+                        <button onClick={() => removeRider(i)} className="text-slate-400 hover:text-slate-700">
+                          <X className="w-3 h-3" />
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Minors */}
+              <div className="space-y-2">
+                <Label className="flex items-center gap-1.5">
+                  <Baby className="w-3.5 h-3.5 text-slate-400" />
+                  Minors participating <span className="text-slate-400 font-normal">(optional)</span>
+                </Label>
+                <div className="flex gap-2">
+                  <Input
+                    value={minorInput}
+                    onChange={e => setMinorInput(e.target.value)}
+                    onKeyDown={e => e.key === "Enter" && addMinor()}
+                    placeholder="Name and age (e.g. Emma, 10)"
+                    className="flex-1"
+                  />
+                  <Button type="button" variant="outline" size="sm" onClick={addMinor} className="shrink-0">
+                    <Plus className="w-4 h-4" />
+                  </Button>
+                </div>
+                {minors.length > 0 && (
+                  <div className="flex flex-wrap gap-1.5">
+                    {minors.map((name, i) => (
+                      <span key={i} className="inline-flex items-center gap-1 bg-slate-100 text-slate-700 text-xs rounded-full px-2.5 py-1">
+                        {name}
+                        <button onClick={() => removeMinor(i)} className="text-slate-400 hover:text-slate-700">
+                          <X className="w-3 h-3" />
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
 
-            {agreementText && (
-              <div className="space-y-1.5">
-                <Label>Rental Agreement</Label>
-                <div
-                  className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-xs text-slate-600 leading-relaxed max-h-52 overflow-y-auto whitespace-pre-wrap font-mono"
-                >
-                  {resolveTokens(agreementText, booking, signerName)}
+            {/* Section 2 — Rules & Policies */}
+            {(agreementsData?.rules?.length ?? 0) > 0 && (
+              <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-6 space-y-4">
+                <h2 className="text-sm font-semibold text-slate-700 flex items-center gap-2">
+                  <span className="w-5 h-5 rounded-full bg-primary text-white text-xs flex items-center justify-center font-bold">2</span>
+                  Rental Rules & Policies
+                </h2>
+                <div className="space-y-3">
+                  {agreementsData!.rules.map(rule => (
+                    <label
+                      key={rule.id}
+                      className={`flex items-start gap-3 p-3 rounded-xl border cursor-pointer transition-colors ${
+                        checkboxStates[`rule-${rule.id}`]
+                          ? "border-emerald-200 bg-emerald-50"
+                          : "border-slate-200 bg-slate-50 hover:bg-slate-100"
+                      }`}
+                    >
+                      <input
+                        type="checkbox"
+                        className="mt-0.5 w-4 h-4 accent-emerald-600 shrink-0 cursor-pointer"
+                        checked={!!checkboxStates[`rule-${rule.id}`]}
+                        onChange={() => toggleCheck(`rule-${rule.id}`)}
+                      />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-slate-800">{rule.title}</p>
+                        {rule.description && (
+                          <p className="text-xs text-slate-500 mt-0.5">{rule.description}</p>
+                        )}
+                        {rule.fee > 0 && (
+                          <p className="text-xs text-amber-700 font-medium mt-0.5">
+                            Violation fee: ${rule.fee.toFixed(2)}
+                          </p>
+                        )}
+                      </div>
+                    </label>
+                  ))}
                 </div>
               </div>
             )}
 
-            <div className="space-y-1.5">
-              <div className="flex items-center justify-between">
-                <Label className="flex items-center gap-1.5">
-                  <PenLine className="w-4 h-4 text-slate-400" /> Signature
-                </Label>
-                {hasSignature && (
-                  <button
-                    type="button"
-                    onClick={clearSig}
-                    className="text-xs text-slate-400 hover:text-slate-600 flex items-center gap-1"
-                  >
-                    <RotateCcw className="w-3 h-3" /> Clear
-                  </button>
+            {/* Section 3 — Agreements */}
+            {hasAnyAgreements && (agreementsData?.platformAgreements?.length ?? 0) + (agreementsData?.operatorContract ? 1 : 0) > 0 && (
+              <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-6 space-y-4">
+                <h2 className="text-sm font-semibold text-slate-700 flex items-center gap-2">
+                  <span className="w-5 h-5 rounded-full bg-primary text-white text-xs flex items-center justify-center font-bold">
+                    {(agreementsData?.rules?.length ?? 0) > 0 ? "3" : "2"}
+                  </span>
+                  Agreements & Terms
+                </h2>
+                <div className="space-y-3">
+                  {/* Operator contract */}
+                  {agreementsData?.operatorContract && (
+                    <label
+                      className={`flex items-start gap-3 p-3 rounded-xl border cursor-pointer transition-colors ${
+                        checkboxStates["operator"]
+                          ? "border-emerald-200 bg-emerald-50"
+                          : "border-slate-200 bg-slate-50 hover:bg-slate-100"
+                      }`}
+                    >
+                      <input
+                        type="checkbox"
+                        className="mt-0.5 w-4 h-4 accent-emerald-600 shrink-0 cursor-pointer"
+                        checked={!!checkboxStates["operator"]}
+                        onChange={() => toggleCheck("operator")}
+                      />
+                      <p className="text-sm text-slate-800 leading-snug">
+                        {agreementsData.operatorContract.checkboxLabel}
+                      </p>
+                    </label>
+                  )}
+                  {/* Platform agreements */}
+                  {agreementsData?.platformAgreements.map(pa => (
+                    <label
+                      key={pa.id}
+                      className={`flex items-start gap-3 p-3 rounded-xl border cursor-pointer transition-colors ${
+                        checkboxStates[`platform-${pa.id}`]
+                          ? "border-emerald-200 bg-emerald-50"
+                          : "border-slate-200 bg-slate-50 hover:bg-slate-100"
+                      }`}
+                    >
+                      <input
+                        type="checkbox"
+                        className="mt-0.5 w-4 h-4 accent-emerald-600 shrink-0 cursor-pointer"
+                        checked={!!checkboxStates[`platform-${pa.id}`]}
+                        onChange={() => toggleCheck(`platform-${pa.id}`)}
+                      />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm text-slate-800 leading-snug">{pa.checkboxLabel}</p>
+                        {!pa.isRequired && (
+                          <p className="text-xs text-slate-400 mt-0.5">Optional</p>
+                        )}
+                      </div>
+                    </label>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Section — Signature */}
+            <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-6 space-y-4">
+              <h2 className="text-sm font-semibold text-slate-700 flex items-center gap-2">
+                <span className="w-5 h-5 rounded-full bg-primary text-white text-xs flex items-center justify-center font-bold">
+                  <PenLine className="w-3 h-3" />
+                </span>
+                Signature
+              </h2>
+
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <p className="text-xs text-slate-500">Draw your signature in the box below</p>
+                  {hasSignature && (
+                    <button type="button" onClick={clearSig} className="text-xs text-slate-400 hover:text-slate-600 flex items-center gap-1">
+                      <RotateCcw className="w-3 h-3" /> Clear
+                    </button>
+                  )}
+                </div>
+                <div className="rounded-xl border-2 border-dashed border-slate-200 bg-slate-50 overflow-hidden touch-none">
+                  <canvas
+                    ref={sigCanvasRef}
+                    width={600} height={140}
+                    className="w-full h-[140px] cursor-crosshair"
+                    onMouseDown={startDraw} onMouseMove={draw} onMouseUp={endDraw} onMouseLeave={endDraw}
+                    onTouchStart={startDraw} onTouchMove={draw} onTouchEnd={endDraw}
+                  />
+                </div>
+                {!hasSignature && (
+                  <p className="text-xs text-slate-400 text-center">Sign above to finalize</p>
                 )}
               </div>
-              <div className="rounded-xl border-2 border-dashed border-slate-200 bg-slate-50 overflow-hidden touch-none">
-                <canvas
-                  ref={sigCanvasRef}
-                  width={600}
-                  height={140}
-                  className="w-full h-[140px] cursor-crosshair"
-                  onMouseDown={startDraw}
-                  onMouseMove={draw}
-                  onMouseUp={endDraw}
-                  onMouseLeave={endDraw}
-                  onTouchStart={startDraw}
-                  onTouchMove={draw}
-                  onTouchEnd={endDraw}
-                />
-              </div>
-              {!hasSignature && (
-                <p className="text-xs text-slate-400 text-center">Draw your signature above</p>
+
+              <Button
+                className="w-full text-white"
+                style={{ backgroundColor: "#3ab549" }}
+                disabled={!canSubmit || isSigning}
+                onClick={handleSignAgreement}
+              >
+                {isSigning
+                  ? <span className="flex items-center gap-2"><Loader2 className="w-4 h-4 animate-spin" /> Saving…</span>
+                  : "Finalize Booking"}
+              </Button>
+
+              {!canSubmit && (
+                <p className="text-xs text-slate-400 text-center">
+                  {!signerName.trim() && "Enter your name above. "}
+                  {!allRequiredChecked() && "Check all required boxes. "}
+                  {!hasSignature && "Draw your signature above."}
+                </p>
               )}
             </div>
-
-            <Button
-              className="w-full text-white"
-              style={{ backgroundColor: "#3ab549" }}
-              disabled={!hasSignature || !signerName.trim() || isSigning}
-              onClick={handleSignAgreement}
-            >
-              {isSigning ? (
-                <span className="flex items-center gap-2"><Loader2 className="w-4 h-4 animate-spin" /> Saving…</span>
-              ) : "Finalize Booking"}
-            </Button>
-            <p className="text-xs text-slate-400 text-center">
-              By signing, you agree to the rental agreement and terms above.
-            </p>
           </div>
         )}
 
-        {/* ── Phase: Identity verification ── */}
+        {/* ── Identity verification ─────────────────────────────────────────── */}
         {phase === "identity" && (
           <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-6 space-y-5 text-center">
             <div className="w-14 h-14 rounded-2xl bg-blue-50 border border-blue-100 flex items-center justify-center mx-auto">
@@ -470,27 +648,22 @@ export default function BookingComplete() {
             )}
             <div className="space-y-2">
               <Button
-                className="w-full text-white"
-                style={{ backgroundColor: "#3ab549" }}
+                className="w-full text-white" style={{ backgroundColor: "#3ab549" }}
                 disabled={identityLoading || !stripePublishableKey}
                 onClick={handleStartIdentityVerification}
               >
-                {identityLoading ? (
-                  <span className="flex items-center gap-2"><Loader2 className="w-4 h-4 animate-spin" /> Starting…</span>
-                ) : "Start Identity Verification"}
+                {identityLoading
+                  ? <span className="flex items-center gap-2"><Loader2 className="w-4 h-4 animate-spin" /> Starting…</span>
+                  : "Start Identity Verification"}
               </Button>
-              <button
-                type="button"
-                className="w-full text-xs text-slate-400 hover:text-slate-600 py-1"
-                onClick={skipIdentity}
-              >
+              <button type="button" className="w-full text-xs text-slate-400 hover:text-slate-600 py-1" onClick={skipIdentity}>
                 Skip for now (you may be contacted by the host)
               </button>
             </div>
           </div>
         )}
 
-        {/* ── Phase: Confirmed ── */}
+        {/* ── Confirmed ────────────────────────────────────────────────────── */}
         {phase === "confirmed" && booking && (
           <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-8 text-center space-y-4">
             <div className="w-16 h-16 rounded-full bg-emerald-50 border-2 border-emerald-200 flex items-center justify-center mx-auto">
@@ -513,25 +686,20 @@ export default function BookingComplete() {
             </p>
             <a
               href={`${BASE}/api/bookings/${booking.id}/agreement-pdf`}
-              target="_blank"
-              rel="noopener noreferrer"
+              target="_blank" rel="noopener noreferrer"
               className="flex items-center justify-center gap-2 w-full rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-2.5 text-sm font-medium text-emerald-700 hover:bg-emerald-100 transition-colors"
             >
               <FileText className="w-4 h-4" />
               Download Signed Agreement PDF
               <Download className="w-3.5 h-3.5 opacity-70" />
             </a>
-            <Button
-              variant="outline"
-              className="w-full"
-              onClick={() => navigate(`/${slug}`)}
-            >
+            <Button variant="outline" className="w-full" onClick={() => navigate(`/${slug}`)}>
               Back to storefront
             </Button>
           </div>
         )}
 
-        {/* ── Phase: Error ── */}
+        {/* ── Error ────────────────────────────────────────────────────────── */}
         {phase === "error" && (
           <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-8 text-center space-y-4">
             <div className="w-14 h-14 rounded-full bg-red-50 border border-red-200 flex items-center justify-center mx-auto">
