@@ -15,7 +15,11 @@ export const operatorContractsTable = pgTable("operator_contracts", {
   id: serial("id").primaryKey(),
   tenantId: integer("tenant_id").notNull(),
   title: text("title").notNull().default("Rental Agreement"),
+  // contractType: "template" = built in the editor; "uploaded_pdf" = operator uploaded a PDF file
+  contractType: text("contract_type", { enum: ["template", "uploaded_pdf"] }).notNull().default("template"),
   content: text("content").notNull().default(""),
+  // For uploaded_pdf type — object-storage key for the uploaded PDF
+  uploadedPdfStorageKey: text("uploaded_pdf_storage_key"),
   checkboxLabel: text("checkbox_label").notNull().default("I agree to the rental terms and conditions"),
   includeOutdoorShareAgreements: boolean("include_outdoorshare_agreements").notNull().default(true),
   version: integer("version").notNull().default(1),

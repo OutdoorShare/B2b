@@ -8,6 +8,7 @@ import { db } from "@workspace/db";
 import { bookingsTable, listingsTable, businessProfileTable, tenantsTable, contactCardsTable, customersTable, productsTable, quotesTable, platformProtectionPlansTable, listingRulesTable, platformAgreementsTable, operatorContractsTable } from "@workspace/db/schema";
 import { eq, and, gte, lte, isNull, or, sql } from "drizzle-orm";
 import { generateAgreementPdf } from "../lib/generate-agreement-pdf";
+import { runAgreementPipeline } from "../lib/agreements/pipeline";
 import {
   sendPickupLinkEmail,
   sendReturnLinkEmail,
@@ -868,167 +869,105 @@ router.post("/bookings/:id/sign-agreement-public", async (req, res) => {
 
     const signedAt = new Date();
 
-    // ── V2: build sections and acceptances snapshot ───────────────────────────
-    let pdfSections: { title: string; content: string }[] | undefined;
-    let pdfAcceptances: { checkboxLabel: string; accepted: boolean; type: "operator" | "platform" | "rule" }[] | undefined;
-    let acceptancesSnapshot: unknown[] = [];
+    // ── Fetch context for both v1 and v2 ─────────────────────────────────────
+    const [listing] = booking.listingId
+      ? await db.select({ title: listingsTable.title, productId: listingsTable.productId })
+          .from(listingsTable).where(eq(listingsTable.id, booking.listingId)).limit(1)
+      : [null];
+    const [biz] = booking.tenantId
+      ? await db.select({ businessName: businessProfileTable.businessName })
+          .from(businessProfileTable).where(eq(businessProfileTable.tenantId, booking.tenantId)).limit(1)
+      : [null];
 
-    if (isV2 && Array.isArray(acceptances)) {
-      const { resolveAgreementTokens } = await import("../lib/agreement-tokens");
+    const cleanRiders = Array.isArray(additionalRiders) ? additionalRiders.filter(Boolean) : [];
+    const cleanMinors = Array.isArray(minors) ? minors.filter(Boolean) : [];
 
-      // Fetch full content for operator contract and platform agreements
-      const [operatorContract] = booking.tenantId
-        ? await db.select().from(operatorContractsTable)
-            .where(and(
-              eq(operatorContractsTable.tenantId, booking.tenantId),
-              eq(operatorContractsTable.isActive, true),
-            ))
-            .limit(1)
-        : [null];
-
-      const platformAgreementsList = await db.select().from(platformAgreementsTable)
-        .where(eq(platformAgreementsTable.isActive, true))
-        .orderBy(platformAgreementsTable.sortOrder);
-
-      const [listing] = booking.listingId
-        ? await db.select({ title: listingsTable.title }).from(listingsTable)
-            .where(eq(listingsTable.id, booking.listingId)).limit(1)
-        : [null];
-
-      const [biz] = booking.tenantId
-        ? await db.select({ businessName: businessProfileTable.businessName }).from(businessProfileTable)
-            .where(eq(businessProfileTable.tenantId, booking.tenantId)).limit(1)
-        : [null];
-
-      const tokenVars = {
-        signerName: resolvedSignerName,
-        customerName: booking.customerName ?? "",
-        customerEmail: booking.customerEmail ?? "",
-        customerPhone: booking.customerPhone ?? "",
-        bookingId,
-        listingTitle: listing?.title ?? "Rental",
-        startDate: booking.startDate ?? "",
-        endDate: booking.endDate ?? "",
-        companyName: biz?.businessName ?? "Rental Company",
-        additionalRiders: Array.isArray(additionalRiders) ? additionalRiders.filter(Boolean) : [],
-        minors: Array.isArray(minors) ? minors.filter(Boolean) : [],
-        signedAt,
-        totalPrice: booking.totalPrice ?? "",
-      };
-
-      pdfSections = [];
-      pdfAcceptances = [];
-
-      // Operator contract section
-      if (operatorContract) {
-        const resolvedContent = resolveAgreementTokens(operatorContract.content ?? "", tokenVars);
-        pdfSections.push({ title: operatorContract.title, content: resolvedContent });
-      }
-
-      // Platform agreements sections (if not opted out)
-      const showPlatform = !operatorContract || operatorContract.includeOutdoorShareAgreements;
-      if (showPlatform) {
-        for (const pa of platformAgreementsList) {
-          const resolvedContent = resolveAgreementTokens(pa.content ?? "", tokenVars);
-          pdfSections.push({ title: pa.title, content: resolvedContent });
-        }
-      }
-
-      // Build immutable snapshot from the incoming acceptances array
-      acceptancesSnapshot = acceptances.map((acc: any) => {
-        if (acc.type === "operator" && operatorContract) {
-          return {
-            type: "operator",
-            id: operatorContract.id,
-            version: operatorContract.version,
-            title: operatorContract.title,
-            checkboxLabel: operatorContract.checkboxLabel,
-            accepted: !!acc.accepted,
-            contentSnapshot: operatorContract.content?.slice(0, 500) ?? "",
-          };
-        }
-        if (acc.type === "platform") {
-          const pa = platformAgreementsList.find(p => p.id === acc.id);
-          return {
-            type: "platform",
-            id: acc.id,
-            version: pa?.version ?? acc.version,
-            title: pa?.title ?? "",
-            checkboxLabel: pa?.checkboxLabel ?? acc.checkboxLabel ?? "",
-            accepted: !!acc.accepted,
-            contentSnapshot: pa?.content?.slice(0, 500) ?? "",
-          };
-        }
-        if (acc.type === "rule") {
-          return {
-            type: "rule",
-            id: acc.id,
-            title: acc.title ?? "",
-            checkboxLabel: acc.checkboxLabel ?? acc.title ?? "",
-            accepted: !!acc.accepted,
-          };
-        }
-        return acc;
-      });
-
-      // Build pdfAcceptances list from the snapshot
-      pdfAcceptances = acceptancesSnapshot.map((a: any) => ({
-        checkboxLabel: a.checkboxLabel ?? a.title ?? "",
-        accepted: !!a.accepted,
-        type: a.type as "operator" | "platform" | "rule",
-      }));
-    }
-
-    // Save booking fields
+    // ── Save signing fields immediately (so signing is recorded even if PDF fails) ──
     await db.update(bookingsTable).set({
       agreementSignerName: resolvedSignerName,
-      agreementText: (!isV2 && agreementText) ? agreementText : null,
-      agreementSignature: resolvedSignatureDataUrl,
-      agreementSignedAt: signedAt,
-      additionalRiders: Array.isArray(additionalRiders) ? JSON.stringify(additionalRiders.filter(Boolean)) : null,
-      minors: Array.isArray(minors) ? JSON.stringify(minors.filter(Boolean)) : null,
-      agreementAcceptances: acceptancesSnapshot.length > 0 ? JSON.stringify(acceptancesSnapshot) : null,
-      updatedAt: new Date(),
+      agreementText:       (!isV2 && agreementText) ? agreementText : null,
+      agreementSignature:  resolvedSignatureDataUrl,
+      agreementSignedAt:   signedAt,
+      additionalRiders:    cleanRiders.length > 0 ? JSON.stringify(cleanRiders) : null,
+      minors:              cleanMinors.length > 0 ? JSON.stringify(cleanMinors) : null,
+      agreementAcceptances: Array.isArray(acceptances) ? JSON.stringify(acceptances) : null,
+      updatedAt:           new Date(),
     }).where(eq(bookingsTable.id, bookingId));
 
-    // Generate PDF
+    // ── Generate PDF ──────────────────────────────────────────────────────────
     try {
-      const [listing]  = booking.listingId
-        ? await db.select({ title: listingsTable.title, productId: listingsTable.productId })
-            .from(listingsTable).where(eq(listingsTable.id, booking.listingId)).limit(1)
-        : [null];
-      const [biz] = booking.tenantId
-        ? await db.select({ businessName: businessProfileTable.businessName })
-            .from(businessProfileTable).where(eq(businessProfileTable.tenantId, booking.tenantId)).limit(1)
-        : [null];
-      let productSerial: string | null = null;
-      let productEstimatedValue: string | null = null;
-      if (listing?.productId) {
-        const [prod] = await db.select({ serialNumber: productsTable.serialNumber, estimatedValue: productsTable.estimatedValue })
-          .from(productsTable).where(eq(productsTable.id, listing.productId)).limit(1);
-        if (prod) { productSerial = prod.serialNumber ?? null; productEstimatedValue = prod.estimatedValue ?? null; }
-      }
+      if (isV2 && booking.tenantId) {
+        // ── V2 path: full pipeline (Handlebars + multi-doc merge + immutable packet) ──
+        const result = await runAgreementPipeline({
+          bookingId,
+          tenantId:         booking.tenantId,
+          signerName:       resolvedSignerName,
+          signerEmail:      booking.customerEmail ?? "",
+          signatureDataUrl: resolvedSignatureDataUrl,
+          riders:           cleanRiders,
+          minors:           cleanMinors,
+          ipAddress:        req.ip ?? undefined,
+          userAgent:        req.headers["user-agent"] as string | undefined,
+          acceptances:      Array.isArray(acceptances)
+            ? acceptances.map((a: any) => ({
+                checkboxLabel: a.checkboxLabel ?? a.title ?? "",
+                accepted:      !!a.accepted,
+                type:          (a.type ?? "operator") as "operator" | "platform",
+              }))
+            : [],
+          bookingContext: {
+            startDate:   booking.startDate ?? "",
+            endDate:     booking.endDate ?? "",
+            listingName: listing?.title ?? "Rental",
+            companyName: biz?.businessName ?? "Rental Company",
+            phone:       booking.customerPhone ?? undefined,
+            totalPrice:  booking.totalPrice ?? undefined,
+          },
+        });
 
-      const pdfFilename = await generateAgreementPdf({
-        bookingId,
-        companyName: biz?.businessName ?? "Rental Company",
-        customerName: booking.customerName ?? "Customer",
-        customerEmail: booking.customerEmail ?? "",
-        listingTitle: listing?.title ?? "Rental",
-        startDate: booking.startDate ?? "",
-        endDate: booking.endDate ?? "",
-        ...(isV2 && pdfSections ? { sections: pdfSections, acceptances: pdfAcceptances } : { agreementText: agreementText ?? "" }),
-        additionalRiders: Array.isArray(additionalRiders) ? additionalRiders.filter(Boolean) : undefined,
-        minors: Array.isArray(minors) ? minors.filter(Boolean) : undefined,
-        signerName: resolvedSignerName,
-        signedAt,
-        signatureDataUrl: resolvedSignatureDataUrl,
-        serialNumber: productSerial,
-        estimatedValue: productEstimatedValue,
-      });
-      await db.update(bookingsTable).set({ agreementPdfPath: pdfFilename, updatedAt: new Date() }).where(eq(bookingsTable.id, bookingId));
+        await db.update(bookingsTable)
+          .set({ agreementPdfPath: result.pdfStorageKey, updatedAt: new Date() })
+          .where(eq(bookingsTable.id, bookingId));
+
+      } else {
+        // ── V1 fallback: original PDFKit single-doc path ──────────────────────
+        let productSerial: string | null = null;
+        let productEstimatedValue: string | null = null;
+        if (listing?.productId) {
+          const [prod] = await db.select({
+            serialNumber: productsTable.serialNumber,
+            estimatedValue: productsTable.estimatedValue,
+          }).from(productsTable).where(eq(productsTable.id, listing.productId)).limit(1);
+          if (prod) {
+            productSerial = prod.serialNumber ?? null;
+            productEstimatedValue = prod.estimatedValue ?? null;
+          }
+        }
+
+        const pdfFilename = await generateAgreementPdf({
+          bookingId,
+          companyName:       biz?.businessName ?? "Rental Company",
+          customerName:      booking.customerName ?? "Customer",
+          customerEmail:     booking.customerEmail ?? "",
+          listingTitle:      listing?.title ?? "Rental",
+          startDate:         booking.startDate ?? "",
+          endDate:           booking.endDate ?? "",
+          agreementText:     agreementText ?? "",
+          additionalRiders:  cleanRiders.length > 0 ? cleanRiders : undefined,
+          minors:            cleanMinors.length > 0 ? cleanMinors : undefined,
+          signerName:        resolvedSignerName,
+          signedAt,
+          signatureDataUrl:  resolvedSignatureDataUrl,
+          serialNumber:      productSerial,
+          estimatedValue:    productEstimatedValue,
+        });
+
+        await db.update(bookingsTable)
+          .set({ agreementPdfPath: pdfFilename, updatedAt: new Date() })
+          .where(eq(bookingsTable.id, bookingId));
+      }
     } catch (pdfErr: any) {
-      req.log.error(pdfErr, "[sign-agreement-public] PDF gen failed");
+      req.log.error(pdfErr, "[sign-agreement-public] PDF generation failed (non-fatal)");
     }
 
     res.json({ ok: true });
