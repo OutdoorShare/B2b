@@ -14,6 +14,7 @@ import { useGetBusinessProfile } from "@workspace/api-client-react";
 import { PoweredByBadge } from "@/components/powered-by-badge";
 import { NotificationBell } from "@/components/notification-bell";
 import { applyBrandColors, saveBrandColors, loadBrandColors } from "@/lib/theme";
+import { applyStorefrontBrand, applyPlatformBrand } from "@/lib/branding";
 
 // ── Demo Gate ────────────────────────────────────────────────────────────────
 // Slugs whose storefronts require the same credentials as their admin panel.
@@ -233,107 +234,14 @@ export function StorefrontLayout({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     if (!companyName) return;
-
-    const title       = `${companyName} — Rental Booking`;
-    const description = desc || tagline || `Book rentals from ${companyName} online.`;
-    const toAbsolute  = (u: string) => u.startsWith("http") ? u : `${window.location.origin}${u.startsWith("/") ? "" : "/"}${u}`;
-    const BRAND_ICON  = "/favicon-180.png?v=3";
-    const image       = toAbsolute(logoUrl || BRAND_ICON);
-    const url         = window.location.href;
-
-    // ── helpers ───────────────────────────────────────────────────────
-    const setMeta = (selector: string, attr: string, value: string) => {
-      const el = document.querySelector<HTMLMetaElement>(selector);
-      if (el) (el as any)[attr] = value;
-    };
-    const setLink = (selector: string, href: string) => {
-      const el = document.querySelector<HTMLLinkElement>(selector);
-      if (el) el.href = href;
-    };
-    const setFavicon = (href: string) => {
-      let link = document.querySelector<HTMLLinkElement>("link#favicon");
-      if (!link) {
-        link = document.createElement("link");
-        link.id = "favicon"; link.rel = "icon"; link.type = "image/png";
-        document.head.appendChild(link);
-      }
-      link.href = href;
-    };
-    const applyIcons = (iconUrl: string) => {
-      setFavicon(iconUrl);
-      setLink('link[rel="shortcut icon"]',    iconUrl);
-      setLink('link[rel="apple-touch-icon"]', iconUrl);
-    };
-
-    // ── save originals for cleanup ────────────────────────────────────
-    const origTitle = document.title;
-
-    // ── apply tenant branding ─────────────────────────────────────────
-    document.title = title;
-
-    // Verify logo loads before using it; fall back to branded icon if broken
-    if (logoUrl) {
-      const testImg = new Image();
-      testImg.onload  = () => applyIcons(image);
-      testImg.onerror = () => applyIcons(toAbsolute(BRAND_ICON));
-      testImg.src = image;
-    } else {
-      applyIcons(toAbsolute(BRAND_ICON));
-    }
-
-    // Primary SEO meta
-    setMeta('meta[name="description"]',                  "content", description);
-    setMeta('meta[name="theme-color"]',                  "content", primaryColor);
-    setMeta('meta[name="msapplication-TileColor"]',      "content", primaryColor);
-    setMeta('meta[name="msapplication-TileImage"]',      "content", image);
-    setMeta('meta[name="apple-mobile-web-app-title"]',   "content", companyName);
-
-    // Open Graph
-    setMeta('meta[property="og:title"]',                 "content", title);
-    setMeta('meta[property="og:description"]',           "content", description);
-    setMeta('meta[property="og:url"]',                   "content", url);
-    setMeta('meta[property="og:image"]',                 "content", image);
-    setMeta('meta[property="og:image:secure_url"]',      "content", image);
-    setMeta('meta[property="og:site_name"]',             "content", companyName);
-    setMeta('meta[property="og:image:alt"]',             "content", `${companyName} logo`);
-
-    // Twitter / X
-    setMeta('meta[name="twitter:title"]',                "content", title);
-    setMeta('meta[name="twitter:description"]',          "content", description);
-    setMeta('meta[name="twitter:image"]',                "content", image);
-    setMeta('meta[name="twitter:image:alt"]',            "content", `${companyName} logo`);
-
-    // ── restore OutdoorShare defaults on unmount ──────────────────────
-    return () => {
-      document.title = origTitle;
-      setFavicon("/outdoorshare-logo.png");
-      setLink('link[rel="shortcut icon"]',    "/outdoorshare-logo.png");
-      setLink('link[rel="apple-touch-icon"]', "/outdoorshare-logo.png");
-
-      setMeta('meta[name="description"]',                "content", "Launch your outdoor rental business online in minutes. OutdoorShare gives you a white-label branded storefront, online booking engine, analytics dashboard, and more.");
-      setMeta('meta[name="theme-color"]',                "content", "#3ab549");
-      setMeta('meta[name="msapplication-TileColor"]',    "content", "#1a2332");
-      setMeta('meta[name="msapplication-TileImage"]',    "content", "/outdoorshare-logo.png");
-      setMeta('meta[name="apple-mobile-web-app-title"]', "content", "OutdoorShare");
-
-      const OS_TITLE = "OutdoorShare — Rental Management Software for Outdoor Equipment Businesses";
-      const OS_DESC  = "Launch your outdoor rental business online in minutes. White-label branded storefront, booking engine, analytics & admin dashboard.";
-      const OS_IMG   = "https://myoutdoorshare.com/opengraph.jpg";
-      const OS_URL   = "https://myoutdoorshare.com/";
-
-      setMeta('meta[property="og:title"]',               "content", OS_TITLE);
-      setMeta('meta[property="og:description"]',         "content", OS_DESC);
-      setMeta('meta[property="og:url"]',                 "content", OS_URL);
-      setMeta('meta[property="og:image"]',               "content", OS_IMG);
-      setMeta('meta[property="og:image:secure_url"]',    "content", OS_IMG);
-      setMeta('meta[property="og:site_name"]',           "content", "OutdoorShare");
-      setMeta('meta[property="og:image:alt"]',           "content", "OutdoorShare rental management platform");
-
-      setMeta('meta[name="twitter:title"]',              "content", OS_TITLE);
-      setMeta('meta[name="twitter:description"]',        "content", OS_DESC);
-      setMeta('meta[name="twitter:image"]',              "content", OS_IMG);
-      setMeta('meta[name="twitter:image:alt"]',          "content", "OutdoorShare rental management platform");
-    };
+    const cleanup = applyStorefrontBrand({
+      companyName,
+      logoUrl,
+      primaryColor,
+      description: desc,
+      tagline,
+    });
+    return cleanup;
   }, [companyName, tagline, desc, logoUrl, primaryColor]);
 
   // Auto-contrast text colors

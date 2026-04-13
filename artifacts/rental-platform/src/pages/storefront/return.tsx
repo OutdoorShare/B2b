@@ -179,7 +179,7 @@ export default function ReturnPage() {
               </div>
             )}
             <p className="text-center text-xs text-gray-400">
-              Powered by OutdoorShare — photos protect both you and the equipment owner.
+              Photos protect both you and the equipment owner.
             </p>
           </div>
         ) : (
@@ -270,7 +270,7 @@ export default function ReturnPage() {
             )}
 
             <p className="text-center text-xs text-gray-400">
-              Powered by OutdoorShare — your photos are securely stored and linked to Booking #{info.bookingId}.
+              Your photos are securely stored and linked to Booking #{info.bookingId}.
             </p>
           </>
         )}

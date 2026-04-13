@@ -1,5 +1,6 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Link, useLocation } from "wouter";
+import { applyPlatformBrand } from "@/lib/branding";
 import {
   LayoutDashboard, Building2, LogOut, ChevronRight,
   Menu, X, Users, Package, FileText, ShieldAlert, Monitor, Shield, BarChart3, MessageSquarePlus, Bug, BookOpen, FileDown
@@ -39,6 +40,15 @@ async function logout(setLocation: (to: string) => void) {
 export function SuperAdminLayout({ children }: { children: React.ReactNode }) {
   const [location, setLocation] = useLocation();
   const [mobileOpen, setMobileOpen] = useState(false);
+
+  useEffect(() => {
+    const origTitle = document.title;
+    applyPlatformBrand("OutdoorShare — Super Admin");
+    return () => {
+      document.title = origTitle;
+      applyPlatformBrand();
+    };
+  }, []);
 
   return (
     <div className="min-h-[100dvh] flex flex-col md:flex-row bg-slate-950 text-slate-100">

@@ -43,6 +43,7 @@ The platform is built as a monorepo using `pnpm workspaces`, Node.js 24, and Typ
 - **Customer Storefront:** Branded homepage, gear detail pages with photo carousels, and a multi-step booking checkout flow.
 - **Admin Dashboard:** Comprehensive dashboard with live analytics, CRUD interfaces for listings, bookings, quotes, categories, and business settings. Includes tools like a real-time notification bell, Kiosk Mode, custom quote builder.
 - **White-label Theming:** CSS variable-based theming with 8 preset themes and a live color picker for extensive branding customization.
+- **Centralized Head Branding:** `artifacts/rental-platform/src/lib/branding.ts` exports `applyPlatformBrand(title?)` and `applyStorefrontBrand(opts)` for managing document `<head>` (title, favicon, OG, Twitter meta). Admin/superadmin layouts always apply OutdoorShare platform branding; `StorefrontLayout` applies tenant branding on mount and restores OutdoorShare defaults on unmount. Storefront footer "Powered by OutdoorShare" is conditional on `!isPaid`.
 - **AI Assistant Widget:** A floating chat widget (`AIChatWidget`) with a fixed green circular button, opening a 360x520px chat panel with a dark navy header, rendering markdown for conversation.
 
 **Feature Specifications & System Design Choices:**

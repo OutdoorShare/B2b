@@ -1153,7 +1153,7 @@ function MemoriesTab({ bookings, isLoading }: { bookings: RenterBooking[]; isLoa
           <Camera className="w-5 h-5 text-white" />
         </div>
         <div>
-          <h2 className="font-black text-xl">OutdoorShare Memories</h2>
+          <h2 className="font-black text-xl">Your Adventures</h2>
           <p className="text-muted-foreground text-sm">{memories.length} adventure{memories.length !== 1 ? "s" : ""} completed</p>
         </div>
       </div>

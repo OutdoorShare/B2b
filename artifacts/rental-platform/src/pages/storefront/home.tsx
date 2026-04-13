@@ -297,6 +297,8 @@ export default function StorefrontHome() {
   };
 
   const businessName = (profile as any)?.name || "OutdoorShare";
+  const tenantPlan   = (profile as any)?.plan as string | undefined;
+  const isPaid       = tenantPlan && tenantPlan !== "starter";
   const primaryColor = "hsl(var(--primary))";
 
   return (
@@ -832,10 +834,12 @@ export default function StorefrontHome() {
           </div>
           <div className="mt-6 pt-6 border-t border-border flex flex-col sm:flex-row items-center justify-between gap-2 text-xs text-muted-foreground">
             <p>© {new Date().getFullYear()} {businessName}. All rights reserved.</p>
-            <p className="flex items-center gap-1.5">
-              Powered by
-              <span className="font-semibold text-foreground">OutdoorShare</span>
-            </p>
+            {!isPaid && (
+              <p className="flex items-center gap-1.5">
+                Powered by
+                <span className="font-semibold text-foreground">OutdoorShare</span>
+              </p>
+            )}
           </div>
         </div>
       </footer>
