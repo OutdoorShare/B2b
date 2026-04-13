@@ -93,36 +93,110 @@ const TOKEN_GROUPS = [
   },
 ];
 
-const DEFAULT_CONTENT = `This Rental Agreement ("Agreement") is entered into as of {{today}} between {{company_name}} ("Company") and {{full_name}} ("Renter").
+// Markdown format — paste directly from ChatGPT.
+// Supports: # ## ### headings, **bold**, *italic*, - bullets, 1. numbered lists.
+const DEFAULT_CONTENT = `# Rental Agreement
 
-1. RENTAL DETAILS
-The Renter agrees to rent {{listing_name}} for the period from {{start_date}} to {{end_date}}. The total rental fee is {{total_price}}.
+This Rental Agreement ("Agreement") is entered into as of **{{today}}** between **{{company_name}}** ("Company") and **{{full_name}}** ("Renter").
 
-2. RENTER RESPONSIBILITIES
+---
+
+## 1. Rental Details
+
+The Renter agrees to rent **{{listing_name}}** for the period from **{{start_date}}** to **{{end_date}}**. The total rental fee is **{{total_price}}**.
+
+## 2. Renter Responsibilities
+
 The Renter agrees to:
-a) Use the rental equipment only for its intended purpose and in a safe manner.
-b) Return the equipment in the same condition as received, normal wear and tear excepted.
-c) Immediately report any damage, malfunction, or theft to the Company.
-d) Be solely responsible for any citations, fines, or violations incurred during the rental period.
 
-3. LIABILITY WAIVER
-The Renter acknowledges that use of the rental equipment involves inherent risks, including the risk of personal injury, property damage, or death. The Renter voluntarily assumes all such risks and agrees to hold the Company harmless from any claims arising out of the rental.
+- Use the rental equipment only for its intended purpose and in a safe manner.
+- Return the equipment in the same condition as received, normal wear and tear excepted.
+- Immediately report any damage, malfunction, or theft to the Company.
+- Be solely responsible for any citations, fines, or violations incurred during the rental period.
 
-4. DAMAGE & LOSS
+## 3. Liability Waiver
+
+The Renter acknowledges that use of the rental equipment involves inherent risks, including the risk of personal injury, property damage, or death. The Renter **voluntarily assumes all such risks** and agrees to hold the Company harmless from any claims arising out of the rental.
+
+## 4. Damage & Loss
+
 The Renter is responsible for all damage to or loss of the rental equipment beyond normal wear and tear. The Renter authorizes the Company to charge the Renter's payment method on file for the cost of repairs or replacement.
 
-5. IDENTIFICATION
+## 5. Identification
+
 The Renter represents that they are of legal rental age and possess any licenses or qualifications required to operate the rental equipment.
 
-6. ADDITIONAL RIDERS & MINORS
-Additional riders: {{additional_riders}}
-Minors: {{minors}}
+## 6. Additional Riders & Minors
+
+- Additional riders: {{additional_riders}}
+- Minors: {{minors}}
+
 All additional riders and minors using the equipment are covered under the terms of this Agreement and are the Renter's sole responsibility.
 
-7. GOVERNING LAW
+## 7. Governing Law
+
 This Agreement shall be governed by the laws of the jurisdiction where the Company is located.
 
+---
+
 By signing below, the Renter confirms they have read, understood, and agree to all terms of this Agreement.`;
+
+// ── Markdown → HTML renderer (supports ChatGPT output format) ─────────────────
+// Handles: # ## ### headings, **bold**, *italic*, - bullets, 1. lists, ---, blank lines.
+// {{tokens}} are highlighted in the preview as styled badges.
+function inlineMd(raw: string): string {
+  return raw
+    .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+    .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
+    .replace(/\*(.+?)\*/g, "<em>$1</em>")
+    .replace(/`(.+?)`/g, "<code style='background:#f1f5f9;padding:1px 4px;border-radius:3px;font-size:0.9em'>$1</code>")
+    .replace(/\{\{([^}]+)\}\}/g,
+      "<span style='display:inline-block;background:#eff6ff;color:#1d4ed8;border:1px solid #bfdbfe;border-radius:4px;padding:0 5px;font-size:0.85em;font-family:monospace'>{{$1}}</span>");
+}
+
+function markdownToHtml(md: string): string {
+  const lines = md.split("\n");
+  const out: string[] = [];
+  let ulOpen = false;
+  let olOpen = false;
+
+  const closeList = () => {
+    if (ulOpen) { out.push("</ul>"); ulOpen = false; }
+    if (olOpen) { out.push("</ol>"); olOpen = false; }
+  };
+
+  for (const line of lines) {
+    if (line.startsWith("### ")) {
+      closeList();
+      out.push(`<h3 style="font-size:1em;font-weight:700;margin:1.1em 0 0.3em;color:#1e293b">${inlineMd(line.slice(4))}</h3>`);
+    } else if (line.startsWith("## ")) {
+      closeList();
+      out.push(`<h2 style="font-size:1.15em;font-weight:700;margin:1.4em 0 0.4em;color:#1b4332;border-bottom:1px solid #e2e8f0;padding-bottom:0.3em">${inlineMd(line.slice(3))}</h2>`);
+    } else if (line.startsWith("# ")) {
+      closeList();
+      out.push(`<h1 style="font-size:1.45em;font-weight:800;margin:0 0 0.6em;color:#111827">${inlineMd(line.slice(2))}</h1>`);
+    } else if (/^---+$/.test(line.trim())) {
+      closeList();
+      out.push(`<hr style="border:none;border-top:1px solid #e2e8f0;margin:1em 0">`);
+    } else if (/^[-*] /.test(line)) {
+      if (olOpen) { out.push("</ol>"); olOpen = false; }
+      if (!ulOpen) { out.push(`<ul style="padding-left:1.4em;margin:0.4em 0">`); ulOpen = true; }
+      out.push(`<li style="margin:0.2em 0">${inlineMd(line.slice(2))}</li>`);
+    } else if (/^\d+\. /.test(line)) {
+      if (ulOpen) { out.push("</ul>"); ulOpen = false; }
+      if (!olOpen) { out.push(`<ol style="padding-left:1.4em;margin:0.4em 0">`); olOpen = true; }
+      out.push(`<li style="margin:0.2em 0">${inlineMd(line.replace(/^\d+\. /, ""))}</li>`);
+    } else if (line.trim() === "") {
+      closeList();
+      out.push(`<div style="height:0.7em"></div>`);
+    } else {
+      closeList();
+      out.push(`<p style="margin:0 0 0.5em;line-height:1.8">${inlineMd(line)}</p>`);
+    }
+  }
+  closeList();
+  return out.join("");
+}
 
 // ── Platform-off warning panel ────────────────────────────────────────────────
 interface PlatformWarningPanelProps {
@@ -393,6 +467,8 @@ export default function ContractBuilder() {
   const [includePlatform, setIncludePlatform] = useState(true);
   const [settingsOpen, setSettingsOpen]     = useState(false);
   const [historyOpen, setHistoryOpen]       = useState(false);
+
+  const [viewMode, setViewMode]                                   = useState<"edit" | "preview">("edit");
 
   const [showPlatformWarning, setShowPlatformWarning]             = useState(false);
   const [platformWarningAcknowledged, setPlatformWarningAcknowledged] = useState(false);
@@ -678,6 +754,26 @@ export default function ContractBuilder() {
           {/* Document canvas */}
           <div className="flex-1 overflow-y-auto py-8 px-6 flex justify-center">
             <div className="w-full max-w-[780px] space-y-6">
+
+              {/* Edit / Preview toggle */}
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-1.5 text-xs text-slate-500">
+                  <Info className="w-3.5 h-3.5 text-slate-400" />
+                  Supports Markdown — paste directly from ChatGPT.&nbsp;
+                  <span className="font-mono text-slate-400"># ## **bold** - list 1. list</span>
+                </div>
+                <div className="flex gap-0.5 bg-slate-100 p-0.5 rounded-lg">
+                  <button type="button" onClick={() => setViewMode("edit")}
+                    className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all flex items-center gap-1.5 ${viewMode === "edit" ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-700"}`}>
+                    <Type className="w-3 h-3" /> Edit
+                  </button>
+                  <button type="button" onClick={() => setViewMode("preview")}
+                    className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all flex items-center gap-1.5 ${viewMode === "preview" ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-700"}`}>
+                    <Eye className="w-3 h-3" /> Preview
+                  </button>
+                </div>
+              </div>
+
               <div className="bg-white rounded-sm shadow-[0_2px_8px_rgba(0,0,0,0.12),0_0_0_1px_rgba(0,0,0,0.04)] flex flex-col" style={{ minHeight: 900 }}>
                 <div className="px-16 pt-14 pb-6 border-b border-slate-100">
                   <input type="text" value={title} onChange={e => setTitle(e.target.value)}
@@ -688,14 +784,21 @@ export default function ContractBuilder() {
                     <p className="text-xs text-slate-400 mt-2">Last saved {new Date(contract.updatedAt).toLocaleString()}</p>
                   )}
                 </div>
-                <div className="flex-1 px-16 py-10">
-                  <textarea ref={textareaRef} id="contract-content" value={content}
-                    onChange={e => setContent(e.target.value)}
-                    placeholder="Start typing your agreement…"
-                    className="w-full h-full min-h-[640px] bg-transparent border-none outline-none resize-none text-slate-800 placeholder-slate-300"
-                    style={{ fontFamily: "'Georgia', 'Times New Roman', serif", fontSize: "14.5px", lineHeight: "1.9", letterSpacing: "0.01em" }}
-                    spellCheck />
-                </div>
+
+                {viewMode === "edit" ? (
+                  <div className="flex-1 px-16 py-10">
+                    <textarea ref={textareaRef} id="contract-content" value={content}
+                      onChange={e => setContent(e.target.value)}
+                      placeholder={`Start typing your agreement, or paste directly from ChatGPT.\n\nMarkdown is supported:\n  # Section Heading\n  ## Sub-section\n  **bold text**\n  - bullet item\n  1. numbered item`}
+                      className="w-full h-full min-h-[640px] bg-transparent border-none outline-none resize-none text-slate-800 placeholder-slate-300"
+                      style={{ fontFamily: "'Georgia', 'Times New Roman', serif", fontSize: "14.5px", lineHeight: "1.9", letterSpacing: "0.01em" }}
+                      spellCheck />
+                  </div>
+                ) : (
+                  <div className="flex-1 px-16 py-10 min-h-[640px] text-slate-800"
+                    style={{ fontFamily: "'Georgia', 'Times New Roman', serif", fontSize: "14.5px" }}
+                    dangerouslySetInnerHTML={{ __html: markdownToHtml(content) || "<p style='color:#94a3b8'>Nothing to preview yet.</p>" }} />
+                )}
               </div>
 
               {historySection}

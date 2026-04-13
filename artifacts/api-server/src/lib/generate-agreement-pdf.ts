@@ -68,20 +68,79 @@ function drawSectionHeader(
   doc.moveDown(0.5);
 }
 
-// ── Helper: draw body text ─────────────────────────────────────────────────
+// ── Helper: strip inline markdown markers for PDF plain text ──────────────
+function stripInline(raw: string): string {
+  return raw
+    .replace(/\*\*(.+?)\*\*/g, "$1")
+    .replace(/\*(.+?)\*/g, "$1")
+    .replace(/`(.+?)`/g, "$1");
+}
+
+// ── Helper: draw body text with markdown support ───────────────────────────
+// Handles: # ## ### headings, **bold** (stripped), - / 1. lists, ---, blank lines.
+// Matches the same subset the admin markdown preview renders.
 function drawBody(
   doc: InstanceType<typeof PDFDocument>,
   text: string,
   pageWidth: number,
   dark: string,
 ) {
-  const paragraphs = text.split("\n\n").filter(Boolean);
-  for (const para of paragraphs) {
-    if (doc.y > doc.page.height - 100) doc.addPage();
-    doc.fillColor(dark).font("Helvetica").fontSize(9.5).lineGap(3)
-      .text(para.trim(), 60, doc.y, { width: pageWidth, align: "justify" });
-    doc.moveDown(0.8);
+  const lines = text.split("\n");
+  const pendingBullets: { prefix: string; body: string }[] = [];
+  const PRIMARY = "#1b4332";
+
+  const flushBullets = () => {
+    if (!pendingBullets.length) return;
+    for (const b of pendingBullets) {
+      if (doc.y > doc.page.height - 60) doc.addPage();
+      // Draw bullet prefix on the left, then body text indented
+      doc.fillColor(dark).font("Helvetica").fontSize(9.5).lineGap(2)
+        .text(b.prefix, 70, doc.y, { continued: true, width: 14 });
+      doc.text(stripInline(b.body), { width: pageWidth - 14, align: "left" });
+      doc.moveDown(0.2);
+    }
+    pendingBullets.length = 0;
+    doc.moveDown(0.3);
+  };
+
+  for (const line of lines) {
+    if (line.startsWith("### ")) {
+      flushBullets();
+      if (doc.y > doc.page.height - 80) doc.addPage();
+      doc.fillColor(dark).font("Helvetica-Bold").fontSize(10)
+        .text(stripInline(line.slice(4).trim()), 60, doc.y, { width: pageWidth });
+      doc.moveDown(0.4);
+    } else if (line.startsWith("## ")) {
+      flushBullets();
+      drawSectionHeader(doc, stripInline(line.slice(3).trim()), PRIMARY, pageWidth);
+    } else if (line.startsWith("# ")) {
+      flushBullets();
+      if (doc.y > doc.page.height - 80) doc.addPage();
+      doc.fillColor(PRIMARY).font("Helvetica-Bold").fontSize(13)
+        .text(stripInline(line.slice(2).trim()), 60, doc.y, { width: pageWidth });
+      doc.moveDown(0.6);
+    } else if (/^---+$/.test(line.trim())) {
+      flushBullets();
+      doc.moveTo(60, doc.y).lineTo(60 + pageWidth, doc.y)
+        .strokeColor("#dddddd").lineWidth(0.75).stroke();
+      doc.moveDown(0.8);
+    } else if (/^[-*] /.test(line)) {
+      pendingBullets.push({ prefix: "•", body: line.slice(2) });
+    } else if (/^\d+\. /.test(line)) {
+      const num = line.match(/^(\d+)\. /)?.[1] ?? "1";
+      pendingBullets.push({ prefix: `${num}.`, body: line.replace(/^\d+\. /, "") });
+    } else if (line.trim() === "") {
+      flushBullets();
+      doc.moveDown(0.5);
+    } else {
+      flushBullets();
+      if (doc.y > doc.page.height - 60) doc.addPage();
+      doc.fillColor(dark).font("Helvetica").fontSize(9.5).lineGap(3)
+        .text(stripInline(line.trim()), 60, doc.y, { width: pageWidth, align: "justify" });
+      doc.moveDown(0.3);
+    }
   }
+  flushBullets();
 }
 
 export async function generateAgreementPdf(opts: AgreementPdfOptions): Promise<string> {
