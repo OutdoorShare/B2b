@@ -118,6 +118,69 @@ This Agreement shall be governed by the laws of the jurisdiction where the Compa
 
 By signing below, the Renter confirms they have read, understood, and agree to all terms of this Agreement.`;
 
+interface PlatformWarningPanelProps {
+  show: boolean;
+  acknowledged: boolean;
+  loading: boolean;
+  onAcknowledge: (v: boolean) => void;
+  onCancel: () => void;
+  onConfirm: () => void;
+}
+
+function PlatformWarningPanel({ show, acknowledged, loading, onAcknowledge, onCancel, onConfirm }: PlatformWarningPanelProps) {
+  if (!show) return null;
+  return (
+    <div className="rounded-xl border-2 border-red-300 bg-red-50 p-4 space-y-4">
+      <div className="flex items-start gap-2.5">
+        <AlertCircle className="w-5 h-5 text-red-500 shrink-0 mt-0.5" />
+        <div>
+          <p className="text-sm font-semibold text-red-800">Protection Plan will be automatically disabled</p>
+          <p className="text-sm text-red-700 mt-1">
+            OutdoorShare platform agreements are required for the Protection Plan to function. Turning this off will:
+          </p>
+          <ul className="mt-2 space-y-1 text-sm text-red-700 list-disc list-inside">
+            <li>Remove OutdoorShare's Terms of Service from your renter checkout</li>
+            <li>Automatically mark the Protection Plan as optional on your account</li>
+            <li>Renters will <strong>not</strong> receive OutdoorShare Protection Plan coverage</li>
+            <li>In the event of damage or loss, OutdoorShare will not process claims</li>
+          </ul>
+        </div>
+      </div>
+
+      <label className="flex items-start gap-3 cursor-pointer select-none">
+        <input
+          type="checkbox"
+          className="mt-0.5 accent-red-600 w-4 h-4 shrink-0"
+          checked={acknowledged}
+          onChange={e => onAcknowledge(e.target.checked)}
+        />
+        <span className="text-sm font-medium text-red-800">
+          I understand that disabling platform agreements will remove Protection Plan coverage from all future bookings and I accept full responsibility for unprotected rentals.
+        </span>
+      </label>
+
+      <div className="flex items-center gap-2 justify-end pt-1">
+        <button
+          type="button"
+          onClick={onCancel}
+          className="px-4 py-2 rounded-lg text-sm font-medium text-slate-600 bg-white border border-slate-200 hover:bg-slate-50 transition-colors"
+        >
+          Keep Platform Agreements On
+        </button>
+        <button
+          type="button"
+          disabled={!acknowledged || loading}
+          onClick={onConfirm}
+          className="px-4 py-2 rounded-lg text-sm font-medium text-white bg-red-600 hover:bg-red-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors flex items-center gap-2"
+        >
+          {loading && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+          Disable Platform Agreements &amp; Protection Plan
+        </button>
+      </div>
+    </div>
+  );
+}
+
 interface Contract {
   id: number;
   title: string;
@@ -146,6 +209,11 @@ export default function ContractBuilder() {
   const [checkboxLabel, setCheckboxLabel]     = useState("I have read and agree to the rental terms and conditions");
   const [includePlatform, setIncludePlatform] = useState(true);
   const [settingsOpen, setSettingsOpen]       = useState(false);
+
+  // Platform-off warning flow
+  const [showPlatformWarning, setShowPlatformWarning]             = useState(false);
+  const [platformWarningAcknowledged, setPlatformWarningAcknowledged] = useState(false);
+  const [disablingPlatform, setDisablingPlatform]                 = useState(false);
 
   const fileInputRef              = useRef<HTMLInputElement>(null);
   const textareaRef               = useRef<HTMLTextAreaElement>(null);
@@ -221,6 +289,40 @@ export default function ContractBuilder() {
       setError(e.message || "Failed to remove contract");
     } finally {
       setDeleting(false);
+    }
+  };
+
+  // Called when user wants to turn platform agreements OFF — shows warning first
+  const requestDisablePlatform = () => {
+    setShowPlatformWarning(true);
+    setPlatformWarningAcknowledged(false);
+    setSettingsOpen(true); // ensure the settings drawer is open so the warning is visible
+  };
+
+  // Re-enable platform agreements — clears warning state
+  const cancelDisablePlatform = () => {
+    setShowPlatformWarning(false);
+    setPlatformWarningAcknowledged(false);
+    setIncludePlatform(true);
+  };
+
+  // Confirmed: disable platform agreements AND auto-disable protection plan
+  const handleDisablePlatform = async () => {
+    if (!platformWarningAcknowledged) return;
+    setDisablingPlatform(true);
+    try {
+      // Automatically make protection plan optional (effectively disabled) when platform agreements are removed
+      await apiFetch("business", {
+        method: "PATCH",
+        body: JSON.stringify({ protectionPlanOptional: true }),
+      });
+      setIncludePlatform(false);
+      setShowPlatformWarning(false);
+      setPlatformWarningAcknowledged(false);
+    } catch (e: any) {
+      setError(e.message || "Failed to update protection plan settings");
+    } finally {
+      setDisablingPlatform(false);
     }
   };
 
@@ -440,17 +542,34 @@ export default function ContractBuilder() {
                   <p className="text-xs text-slate-400">The exact text shown next to the checkbox renters must check before signing.</p>
                 </div>
 
-                <div className="flex items-start gap-3 pt-5">
-                  <Switch id="include-platform" checked={includePlatform} onCheckedChange={setIncludePlatform} />
-                  <div>
-                    <Label htmlFor="include-platform" className="cursor-pointer text-sm font-medium text-slate-700">
-                      Include OutdoorShare platform agreements
-                    </Label>
-                    <p className="text-xs text-slate-400 mt-1">
-                      Renters also accept OutdoorShare's Terms of Service alongside your contract.
-                      Disable only with prior approval.
-                    </p>
+                <div className="pt-4 space-y-3">
+                  <div className="flex items-start gap-3">
+                    <Switch
+                      id="include-platform"
+                      checked={includePlatform}
+                      onCheckedChange={checked => {
+                        if (!checked) { requestDisablePlatform(); }
+                        else { setIncludePlatform(true); setShowPlatformWarning(false); }
+                      }}
+                    />
+                    <div>
+                      <Label htmlFor="include-platform" className="cursor-pointer text-sm font-medium text-slate-700">
+                        Include OutdoorShare platform agreements
+                      </Label>
+                      <p className="text-xs text-slate-400 mt-1">
+                        Renters also accept OutdoorShare's Terms of Service alongside your contract.
+                        Disabling this also removes the Protection Plan from all bookings.
+                      </p>
+                    </div>
                   </div>
+                  <PlatformWarningPanel
+                    show={showPlatformWarning}
+                    acknowledged={platformWarningAcknowledged}
+                    loading={disablingPlatform}
+                    onAcknowledge={setPlatformWarningAcknowledged}
+                    onCancel={cancelDisablePlatform}
+                    onConfirm={handleDisablePlatform}
+                  />
                 </div>
               </div>
             )}
@@ -563,16 +682,34 @@ export default function ContractBuilder() {
                 />
               </div>
 
-              <div className="flex items-start gap-3 p-4 bg-slate-50 rounded-xl border border-slate-200">
-                <Switch id="include-platform-pdf" checked={includePlatform} onCheckedChange={setIncludePlatform} />
-                <div>
-                  <Label htmlFor="include-platform-pdf" className="cursor-pointer text-sm font-medium text-slate-700">
-                    Include OutdoorShare platform agreements
-                  </Label>
-                  <p className="text-xs text-slate-400 mt-1">
-                    Your PDF will be combined with OutdoorShare's platform agreements in the final signed document.
-                  </p>
+              <div className="space-y-3">
+                <div className="flex items-start gap-3 p-4 bg-slate-50 rounded-xl border border-slate-200">
+                  <Switch
+                    id="include-platform-pdf"
+                    checked={includePlatform}
+                    onCheckedChange={checked => {
+                      if (!checked) { requestDisablePlatform(); }
+                      else { setIncludePlatform(true); setShowPlatformWarning(false); }
+                    }}
+                  />
+                  <div>
+                    <Label htmlFor="include-platform-pdf" className="cursor-pointer text-sm font-medium text-slate-700">
+                      Include OutdoorShare platform agreements
+                    </Label>
+                    <p className="text-xs text-slate-400 mt-1">
+                      Your PDF will be combined with OutdoorShare's platform agreements in the final signed document.
+                      Disabling this also removes the Protection Plan from all bookings.
+                    </p>
+                  </div>
                 </div>
+                <PlatformWarningPanel
+                  show={showPlatformWarning}
+                  acknowledged={platformWarningAcknowledged}
+                  loading={disablingPlatform}
+                  onAcknowledge={setPlatformWarningAcknowledged}
+                  onCancel={cancelDisablePlatform}
+                  onConfirm={handleDisablePlatform}
+                />
               </div>
             </div>
 
