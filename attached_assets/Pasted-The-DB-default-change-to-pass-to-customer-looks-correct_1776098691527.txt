@@ -1,0 +1,87 @@
+The DB default change to `pass_to_customer` looks correct.
+
+Now I need to make sure the entire system is consistent and production-safe. Please complete and confirm all of the following:
+
+1. Schema + migration
+
+* Confirm the Drizzle schema now sets:
+  fee_mode default = "pass_to_customer"
+* Provide the migration file name and confirm it has been run in production
+
+2. Production data backfill
+   Run and confirm this in production:
+
+UPDATE business_profile
+SET fee_mode = 'pass_to_customer'
+WHERE fee_mode IS NULL OR fee_mode = '';
+
+Also confirm:
+
+* how many rows were affected
+* whether any rows still have invalid values
+
+3. Other data sources
+   Confirm whether fee mode is stored anywhere else:
+
+* listings
+* products
+* experiences
+* JSON feeSettings fields
+
+If yes:
+
+* apply the same default and backfill logic
+* list exact tables/fields updated
+
+4. Frontend safety
+   Confirm the following code is in production:
+
+book.tsx:
+const rawFeeMode = feeSettings.feeMode || feeModeFromLegacy(!!feeSettings.passPlatformFeeToCustomer);
+const feeMode = normalizeFeeMode(rawFeeMode);
+
+pricing.ts:
+
+* normalizeFeeMode defaults invalid values to "pass_to_customer"
+* calculateBookingPricing never throws on invalid input
+* no NaN values can reach the UI
+
+5. Error boundaries
+   Confirm both are implemented and working:
+
+* global RouteErrorBoundary
+* BookingErrorBoundary on /:slug/book
+
+6. Production verification
+   I need proof this works end-to-end:
+
+* production URL tested
+
+* specific listing used
+
+* steps:
+
+  1. open listing
+  2. click Book Now
+  3. confirm booking page loads (no white screen)
+  4. confirm pricing renders correctly
+
+* include screenshot or screen recording
+
+* confirm both fee modes work:
+
+  * pass_to_customer
+  * absorb
+
+7. Root cause summary
+   Provide a concise final answer:
+
+* what caused the blank fee mode in production
+* why it reached the booking page
+* what exact fixes prevent it from happening again
+
+Do not close this until:
+
+* production is verified
+* no blank fee_mode values remain
+* booking flow works reliably for renters

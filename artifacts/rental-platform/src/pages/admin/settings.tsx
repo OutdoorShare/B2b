@@ -1422,9 +1422,9 @@ export default function AdminSettings() {
                 {/* ── Platform Fee Handling Mode ── */}
                 <div className="space-y-4">
                   <div>
-                    <Label className="text-base">Platform Fee Handling</Label>
+                    <Label className="text-base">Who should pay the platform fee?</Label>
                     <p className="text-sm text-muted-foreground mt-1">
-                      Your OutdoorShare platform fee is <strong>{formData.platformFeePercent ?? 10}%</strong>. Choose how this fee is distributed between you and your customers.
+                      Your OutdoorShare platform fee is <strong>{formData.platformFeePercent ?? 10}%</strong>. Choose who is responsible for paying it.
                     </p>
                   </div>
 
@@ -1432,19 +1432,19 @@ export default function AdminSettings() {
                   <div className="space-y-2">
                     {([
                       {
-                        value: "absorb",
-                        label: "Absorb fees",
-                        description: "You cover the platform fee — customers see no extra charge at checkout.",
+                        value: "pass_to_customer",
+                        label: "Pass fee to customer",
+                        description: "The customer will see a service fee at checkout. You receive the full booking subtotal before payment processing fees.",
                       },
                       {
-                        value: "pass_to_customer",
-                        label: "Pass fees to customer",
-                        description: "Customers pay the platform fee at checkout — your payout stays the same.",
+                        value: "absorb",
+                        label: "Absorb fee",
+                        description: "The customer will not see an added service fee. The platform fee is deducted from your payout.",
                       },
                       {
                         value: "split",
-                        label: "Split fees",
-                        description: "Part is paid by the customer, part is deducted from your payout.",
+                        label: "Split fee",
+                        description: "Part is paid by the customer at checkout, part is deducted from your payout.",
                       },
                     ] as const).map(option => (
                       <button
@@ -1452,16 +1452,16 @@ export default function AdminSettings() {
                         type="button"
                         onClick={() => setFormData(prev => ({ ...prev, feeMode: option.value }))}
                         className={`w-full text-left rounded-lg border p-4 transition-colors ${
-                          (formData.feeMode ?? "absorb") === option.value
+                          (formData.feeMode ?? "pass_to_customer") === option.value
                             ? "border-primary bg-primary/5 ring-1 ring-primary"
                             : "border-border hover:border-primary/50"
                         }`}
                       >
                         <div className="flex items-start gap-3">
                           <div className={`mt-0.5 w-4 h-4 rounded-full border-2 flex-shrink-0 flex items-center justify-center ${
-                            (formData.feeMode ?? "absorb") === option.value ? "border-primary" : "border-muted-foreground"
+                            (formData.feeMode ?? "pass_to_customer") === option.value ? "border-primary" : "border-muted-foreground"
                           }`}>
-                            {(formData.feeMode ?? "absorb") === option.value && (
+                            {(formData.feeMode ?? "pass_to_customer") === option.value && (
                               <div className="w-2 h-2 rounded-full bg-primary" />
                             )}
                           </div>
@@ -1475,7 +1475,7 @@ export default function AdminSettings() {
                   </div>
 
                   {/* Split mode: customer/operator percentage inputs */}
-                  {(formData.feeMode ?? "absorb") === "split" && (
+                  {(formData.feeMode ?? "pass_to_customer") === "split" && (
                     <div className="ml-4 border-l-2 border-primary/20 pl-4 space-y-3">
                       <p className="text-xs text-muted-foreground">
                         Set how much of the platform fee each party pays. The two values must add up to 100%.
@@ -1541,30 +1541,31 @@ export default function AdminSettings() {
                     </div>
                   )}
 
-                  {/* Live preview */}
+                  {/* Live example preview */}
                   {(() => {
                     const feePercent = parseFloat(String(formData.platformFeePercent ?? "10"));
-                    const mode = (formData.feeMode ?? "absorb") as "absorb" | "pass_to_customer" | "split";
+                    const mode = (formData.feeMode ?? "pass_to_customer") as "absorb" | "pass_to_customer" | "split";
                     const cPct = Number(formData.feeSplitCustomerPercent ?? 50);
-                    const example = 300;
+                    const example = 100;
                     const totalFee = example * feePercent / 100;
                     const custFee = mode === "pass_to_customer" ? totalFee : mode === "split" ? totalFee * cPct / 100 : 0;
                     const opFee = mode === "absorb" ? totalFee : mode === "split" ? totalFee - custFee : 0;
                     return (
-                      <div className="rounded-lg bg-muted/50 border p-3 space-y-1">
-                        <p className="text-xs font-semibold text-muted-foreground mb-2">Example for a $300 rental ({feePercent}% platform fee)</p>
-                        <div className="flex justify-between text-xs">
+                      <div className="rounded-lg bg-muted/50 border p-4 space-y-2">
+                        <p className="text-xs font-semibold text-muted-foreground">
+                          Example: $100 rental at {feePercent}% platform fee
+                        </p>
+                        <div className="flex justify-between text-sm">
                           <span className="text-muted-foreground">Customer pays</span>
-                          <span className="font-medium">${(example + custFee).toFixed(2)}</span>
+                          <span className="font-semibold">${(example + custFee).toFixed(2)}</span>
                         </div>
-                        <div className="flex justify-between text-xs">
+                        <div className="flex justify-between text-sm">
                           <span className="text-muted-foreground">Your payout</span>
-                          <span className="font-medium">${(example - opFee).toFixed(2)}</span>
+                          <span className="font-semibold">${(example - opFee).toFixed(2)}</span>
                         </div>
-                        <div className="flex justify-between text-xs">
-                          <span className="text-muted-foreground">Platform revenue</span>
-                          <span className="font-medium">${totalFee.toFixed(2)}</span>
-                        </div>
+                        <p className="text-xs text-muted-foreground pt-1 border-t">
+                          Payment processing fees may apply separately.
+                        </p>
                       </div>
                     );
                   })()}
