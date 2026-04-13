@@ -59,7 +59,7 @@ export const businessProfileTable = pgTable("business_profile", {
   // pass_to_customer: customer pays full platform fee on top of rental price
   // absorb: operator's payout is reduced by the platform fee
   // split: customer pays splitCustomerPercent of fee, operator absorbs the rest
-  feeMode: text("fee_mode", { enum: ["pass_to_customer", "absorb", "split"] }).notNull().default("absorb"),
+  feeMode: text("fee_mode", { enum: ["pass_to_customer", "absorb", "split"] }).notNull().default("pass_to_customer"),
   feeSplitCustomerPercent: decimal("fee_split_customer_percent", { precision: 5, scale: 2 }).default("50"),
   feeSplitOperatorPercent: decimal("fee_split_operator_percent", { precision: 5, scale: 2 }).default("50"),
   // When true, renters may opt out of the platform protection plan at checkout.
