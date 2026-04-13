@@ -1,0 +1,202 @@
+I want to harden this booking and checkout flow for production, especially around Stripe. Please review and implement the following stability and safety improvements.
+
+1. Server is the source of truth
+
+* Never trust client-side totals, fee mode, or payout math
+* Recalculate all pricing on the server before creating the Stripe Checkout Session or PaymentIntent
+* Server must use the same shared pricing logic or a server-safe equivalent
+* Reject checkout creation if pricing inputs are invalid
+
+2. Stripe amount safety
+
+* Stripe charge amounts must always be generated from server-side values only
+* Convert currency to smallest unit safely (for example dollars to cents)
+* Never send floating point values directly to Stripe
+* Add a shared helper like:
+
+  * `toStripeAmount(amount)` => integer cents
+* Validate that final charge amount is a non-negative integer before calling Stripe
+
+3. Idempotency
+
+* Add Stripe idempotency keys when creating Checkout Sessions or PaymentIntents
+* Prevent duplicate bookings or duplicate charges if the user refreshes, retries, double-clicks, or the request is replayed
+* Also add app-level protection so the same pending booking cannot create multiple payment sessions accidentally
+
+4. Booking state model
+   Please make booking/payment status explicit and durable. Example states:
+
+* draft
+* pending_payment
+* paid
+* payment_failed
+* cancelled
+* refunded
+
+Do not mark a booking as confirmed until Stripe payment success is verified.
+
+5. Webhook-first confirmation
+
+* Treat Stripe webhook events as the final source of truth for payment success
+* Do not rely only on frontend redirect success pages
+* Verify Stripe webhook signatures
+* Handle at minimum:
+
+  * checkout.session.completed
+  * payment_intent.succeeded
+  * payment_intent.payment_failed
+  * charge.refunded
+* Ensure webhook handlers are idempotent
+
+6. Metadata and traceability
+   Attach booking metadata to Stripe objects:
+
+* booking id
+* listing id
+* operator/business id
+* renter/user id
+* fee mode
+* subtotal
+* customer fee
+* operator fee
+* platform revenue
+
+This makes debugging, reconciliation, refunds, and support much easier.
+
+7. Save immutable pricing snapshot before payment
+   Before creating the Stripe checkout session, save a booking pricing snapshot in the database:
+
+* subtotal
+* fee mode
+* platform fee percent
+* customer fee
+* operator fee
+* customer total
+* operator payout
+* platform revenue
+
+Do not recompute old bookings later from current settings.
+
+8. Success and cancel flow
+
+* If Stripe payment succeeds, redirect to a success page that loads booking data from server
+* If payment is cancelled, return user safely to booking flow with a clear message
+* Never leave the renter on a blank or ambiguous state
+* Show:
+
+  * payment complete
+  * payment failed
+  * payment cancelled
+    clearly and consistently
+
+9. Retry-safe UX
+
+* Disable Book Now / Pay button while checkout session is being created
+* Show loading state
+* Prevent double submit
+* If API fails, show inline error and allow retry
+* Do not crash route on failed Stripe session creation
+
+10. Better error handling
+    For all Stripe and booking API calls:
+
+* catch and log errors
+* show user-friendly messages
+* do not expose raw Stripe errors to users
+* map known failures to clean UI copy
+
+Examples:
+
+* “We couldn’t start checkout. Please try again.”
+* “Your payment did not complete. No charge was made.”
+* “This listing is temporarily unavailable.”
+
+11. Reconcile booking vs payment
+    Add safeguards so these cannot drift apart:
+
+* paid Stripe session with missing booking update
+* booking marked paid without Stripe confirmation
+* duplicate booking rows for one Stripe payment
+
+Use Stripe session id / payment intent id as unique references in the booking/payment tables.
+
+12. Logging and observability
+    Please log these events with correlation ids:
+
+* booking checkout requested
+* pricing calculated
+* Stripe session created
+* Stripe redirect started
+* webhook received
+* booking marked paid
+* payment failed
+* refund processed
+
+Include:
+
+* booking id
+* listing id
+* renter id
+* Stripe session id / payment intent id
+* route
+* environment
+
+13. Availability recheck before payment
+    Before creating Stripe checkout:
+
+* re-check listing availability on server
+* confirm listing is still bookable
+* confirm price and fee settings are still valid
+* reject checkout if inventory changed
+
+This prevents charging for unavailable bookings.
+
+14. Timeout and stale session handling
+
+* Expire pending bookings that never complete payment
+* Clean up stale pending_payment records after a safe window
+* Prevent stale Stripe sessions from confirming outdated availability
+
+15. Refund support
+    Please make refund handling explicit:
+
+* save Stripe charge/payment intent references
+* support full refund and partial refund flows
+* update booking/payment state after refund webhook
+* keep an audit trail
+
+16. Security and env checks
+    At startup, validate all required Stripe env vars exist:
+
+* secret key
+* webhook secret
+* public key
+* success/cancel URLs if needed
+
+If missing:
+
+* fail safely
+* log clearly
+* do not allow checkout route to crash silently
+
+17. Tests
+    Please add tests for:
+
+* invalid fee mode fallback
+* amount conversion to Stripe cents
+* duplicate checkout request handling
+* webhook idempotency
+* booking not confirmed until webhook success
+* payment failure path
+* cancel flow
+* stale pending booking cleanup
+
+18. Final deliverable
+    Please send back:
+
+* exact files changed
+* schema changes
+* Stripe flow changes
+* webhook events handled
+* test coverage added
+* proof tested in production or Stripe test mode end-to-end
