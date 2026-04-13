@@ -800,13 +800,13 @@ export default function ContractBuilder() {
                           onClick={() => handleToggleActive(t)}
                           disabled={togglingId === t.id}
                           title={t.isActive ? "Deactivate" : "Activate"}
-                          className="p-2 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors"
+                          className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors"
                         >
                           {togglingId === t.id
-                            ? <Loader2 className="w-4 h-4 animate-spin" />
+                            ? <Loader2 className="w-8 h-8 animate-spin" />
                             : t.isActive
-                              ? <ToggleRight className="w-4 h-4 text-emerald-500" />
-                              : <ToggleLeft className="w-4 h-4" />
+                              ? <ToggleRight className="w-8 h-8 text-emerald-500" />
+                              : <ToggleLeft className="w-8 h-8" />
                           }
                         </button>
                         {/* Edit */}
