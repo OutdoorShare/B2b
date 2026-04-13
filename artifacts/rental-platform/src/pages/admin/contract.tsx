@@ -141,20 +141,20 @@ function PlatformWarningPanel({ show, acknowledged, loading, onAcknowledge, onCa
       <div className="flex items-start gap-2.5">
         <AlertCircle className="w-5 h-5 text-red-500 shrink-0 mt-0.5" />
         <div>
-          <p className="text-sm font-semibold text-red-800">Protection Plan will be automatically disabled</p>
-          <p className="text-sm text-red-700 mt-1">OutdoorShare platform agreements are required for the Protection Plan to function. Turning this off will:</p>
+          <p className="text-sm font-semibold text-red-800">OutdoorShare platform agreements will be removed</p>
+          <p className="text-sm text-red-700 mt-1">Renters will only see and sign your contract. Turning this off will:</p>
           <ul className="mt-2 space-y-1 text-sm text-red-700 list-disc list-inside">
             <li>Remove OutdoorShare's Terms of Service from your renter checkout</li>
-            <li>Automatically mark the Protection Plan as optional on your account</li>
-            <li>Renters will <strong>not</strong> receive OutdoorShare Protection Plan coverage</li>
-            <li>In the event of damage or loss, OutdoorShare will not process claims</li>
+            <li>Renters will rely solely on your contract for liability and damage terms</li>
+            <li>OutdoorShare will not process any damage or loss claims for future bookings</li>
+            <li>The Protection Plan add-on will be hidden from your booking flow entirely</li>
           </ul>
         </div>
       </div>
       <label className="flex items-start gap-3 cursor-pointer select-none">
         <input type="checkbox" className="mt-0.5 accent-red-600 w-4 h-4 shrink-0" checked={acknowledged} onChange={e => onAcknowledge(e.target.checked)} />
         <span className="text-sm font-medium text-red-800">
-          I understand that disabling platform agreements will remove Protection Plan coverage from all future bookings and I accept full responsibility for unprotected rentals.
+          I understand that disabling platform agreements removes OutdoorShare coverage from all future bookings, and I accept full responsibility through my own rental contract.
         </span>
       </label>
       <div className="flex items-center gap-2 justify-end pt-1">
@@ -482,7 +482,7 @@ export default function ContractBuilder() {
     if (!platformWarningAcknowledged) return;
     setDisablingPlatform(true);
     try {
-      await apiFetch("business", { method: "PATCH", body: JSON.stringify({ protectionPlanOptional: true }) });
+      await apiFetch("business", { method: "PUT", body: JSON.stringify({ protectionPlanEnabled: false }) });
       setIncludePlatform(false);
       setShowPlatformWarning(false);
       setPlatformWarningAcknowledged(false);

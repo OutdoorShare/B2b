@@ -65,6 +65,9 @@ export const businessProfileTable = pgTable("business_profile", {
   // When true, renters may opt out of the platform protection plan at checkout.
   // Admin must acknowledge the insurance-risk warning to enable this.
   protectionPlanOptional: boolean("protection_plan_optional").notNull().default(false),
+  // When false, the Protection Plan is completely hidden from the renter booking flow.
+  // Set to false automatically when the operator disables OutdoorShare platform agreements.
+  protectionPlanEnabled: boolean("protection_plan_enabled").notNull().default(true),
   lat: decimal("lat", { precision: 10, scale: 6 }),
   lng: decimal("lng", { precision: 10, scale: 6 }),
   createdAt: timestamp("created_at").defaultNow().notNull(),

@@ -1,0 +1,148 @@
+We need to fix the Stripe dev/demo payment flow error shown in checkout:
+
+`Invalid value for stripe.confirmPayment(): elements should have a mounted Payment Element or Express Checkout Element.`
+
+Important scope:
+
+* This should be fixed for DEV / DEMO / TEST Stripe environments
+* Do not break current production live payment behavior
+* The demo site on prod/dev and any dev site should use Stripe test mode correctly
+
+What this error means:
+The frontend is calling `stripe.confirmPayment()` without a mounted `PaymentElement` or `ExpressCheckoutElement` attached to the same `elements` instance.
+
+Please treat this as a Stripe Elements integration bug, not just a UI message bug.
+
+## What I need you to do
+
+### 1. Confirm which Stripe flow we are using in dev/demo
+
+Please explicitly confirm whether dev/demo checkout is using:
+
+* `PaymentElement` + `stripe.confirmPayment()`
+  or
+* `CardElement` + `stripe.confirmCardPayment()`
+  or
+* Stripe Checkout Session redirect
+
+Right now it looks like the code is calling `stripe.confirmPayment()` but the mounted UI may not actually be a `PaymentElement`.
+
+That mismatch needs to be fixed.
+
+### 2. Audit the dev/demo checkout component
+
+Please inspect the payment form component and confirm all of the following:
+
+* `Elements` provider is mounted with a valid `clientSecret`
+* `PaymentElement` is actually rendered before submit
+* submit button is disabled until:
+
+  * `stripe` exists
+  * `elements` exists
+  * `clientSecret` exists
+  * `PaymentElement` is mounted and ready
+* `useElements()` is reading from the correct `Elements` provider
+* no conditional rendering is unmounting the payment element before confirm
+* no stale `elements` reference is being used
+
+### 3. Fix the likely integration mismatch
+
+If we are using `stripe.confirmPayment()`, then we must use a mounted `PaymentElement` or `ExpressCheckoutElement`.
+
+That means:
+
+* do not use `CardElement` with `confirmPayment`
+* do not call `confirmPayment` before `PaymentElement` is mounted
+
+If the UI is intended to be a card-only flow, then the code may need to use the correct Stripe method for that flow instead.
+
+### 4. Add guards before submit
+
+Before calling Stripe confirm, add checks like:
+
+* if `!stripe` → do not submit
+* if `!elements` → do not submit
+* if no mounted `PaymentElement` → do not submit
+* if `clientSecret` missing → do not submit
+
+Show a renter-friendly inline message instead of throwing this raw Stripe error.
+
+Example:
+`We’re still loading secure payment fields. Please wait a moment and try again.`
+
+### 5. Check client secret timing
+
+Please verify in dev/demo:
+
+* the payment/session API is returning a valid test-mode client secret
+* the client secret belongs to the same Stripe test account/key being used by frontend
+* `Elements` is initialized only after client secret is available
+* `PaymentElement` is not rendering with an empty or invalid client secret
+
+### 6. Environment separation
+
+Because this should apply to dev/demo/test environments only, please confirm environment handling for:
+
+* dev sites
+* demo site
+* live production
+
+I want:
+
+* dev + demo to use Stripe test keys
+* live production to use live keys
+* no accidental cross-over
+
+Please make environment selection explicit and safe.
+
+### 7. Logging for dev/demo
+
+Please add temporary logs in dev/demo checkout for:
+
+* environment name
+* which Stripe key type is loaded (test vs live, without exposing secrets)
+* whether client secret is present
+* whether `Elements` mounted
+* whether `PaymentElement` mounted
+* which confirm method is called:
+
+  * `confirmPayment`
+  * `confirmCardPayment`
+  * redirect flow
+
+### 8. UX requirement
+
+Do not show the raw Stripe integration error to renters.
+
+Instead:
+
+* show a friendly inline error
+* disable submit until payment fields are ready
+* show loading state while secure payment form initializes
+
+### 9. Production safety
+
+This fix must not change live production checkout behavior unless the same bug exists there.
+
+Please scope the dev/demo test payment fix carefully:
+
+* fix the integration pattern
+* keep environment-specific Stripe config correct
+* do not break live production flows
+
+### 10. Required report back
+
+Please send back:
+
+1. exact root cause
+2. exact component/file changed
+3. whether dev/demo was using the wrong Stripe confirm method
+4. whether `PaymentElement` was missing/unmounted
+5. proof test payment now works on:
+
+   * demo site
+   * at least one dev site
+6. confirmation that live production flow was not impacted
+
+My likely diagnosis:
+The checkout code is calling `stripe.confirmPayment()` while the mounted payment UI is not actually a `PaymentElement`, or it is submitting before the `PaymentElement` is ready.

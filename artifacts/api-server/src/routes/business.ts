@@ -127,6 +127,7 @@ router.put("/business", requireTenant as any, async (req, res) => {
       feeSplitCustomerPercent,
       feeSplitOperatorPercent,
       protectionPlanOptional,
+      protectionPlanEnabled,
     } = req.body;
 
     // Require business address fields whenever they are submitted with content.
@@ -194,6 +195,7 @@ router.put("/business", requireTenant as any, async (req, res) => {
       ...(feeSplitCustomerPercent    !== undefined && { feeSplitCustomerPercent: feeSplitCustomerPercent !== null ? String(feeSplitCustomerPercent) : null }),
       ...(feeSplitOperatorPercent    !== undefined && { feeSplitOperatorPercent: feeSplitOperatorPercent !== null ? String(feeSplitOperatorPercent) : null }),
       ...(protectionPlanOptional     !== undefined && { protectionPlanOptional }),
+      ...(protectionPlanEnabled      !== undefined && { protectionPlanEnabled }),
     };
 
     // If this tenant is design-locked (e.g. the platform demo), strip design fields

@@ -976,10 +976,13 @@ export default function StorefrontBook() {
 
   // Derived early so useEffect dependency array can reference it without TDZ
   const protectionIsOptional = !!(businessProfile as any)?.protectionPlanOptional;
+  // When false, the protection plan is completely hidden from the renter — no fee, no mention.
+  const protectionPlanHidden = (businessProfile as any)?.protectionPlanEnabled === false;
 
   // When the admin makes protection plan required (not optional), ensure protection addons
   // are re-selected and any opt-out state is cleared.
   useEffect(() => {
+    if (protectionPlanHidden) return; // plan is fully disabled, nothing to enforce
     if (protectionIsOptional) return; // nothing to enforce when optional
     if (availableAddons.length === 0) return; // wait until addons are loaded
     const protectionAddons = availableAddons.filter(a => a.name.toLowerCase().includes("protection"));
@@ -993,7 +996,7 @@ export default function StorefrontBook() {
     });
     // Also clear platform-plan opt-out state
     setProtectionDeclined(false);
-  }, [protectionIsOptional, availableAddons]);
+  }, [protectionIsOptional, protectionPlanHidden, availableAddons]);
 
   // Fetch listing rules + check promos
   useEffect(() => {
@@ -1294,7 +1297,7 @@ export default function StorefrontBook() {
   // can decline it. When declined, remove the fee from the total.
   // (protectionIsOptional is declared earlier to avoid TDZ in useEffect)
   // effectiveProtectionFee is 0 when the renter has opted out
-  const platformProtectionFee = protectionIsOptional && protectionDeclined ? 0 : platformProtectionFeeBase;
+  const platformProtectionFee = (protectionPlanHidden || (protectionIsOptional && protectionDeclined)) ? 0 : platformProtectionFeeBase;
   // For addon-based protection plans: has the renter deselected an optional protection addon?
   const addonProtectionDeclined = protectionIsOptional && platformProtectionFeeBase === 0 &&
     availableAddons.some(a => a.name.toLowerCase().includes("protection") && !selectedAddonIds.has(a.id));
@@ -2263,7 +2266,7 @@ export default function StorefrontBook() {
                       </span>
                       <span className="font-semibold">${subtotal.toFixed(2)}</span>
                     </div>
-                    {platformProtectionFeeBase > 0 && (
+                    {platformProtectionFeeBase > 0 && !protectionPlanHidden && (
                       <div className="px-4 py-3 space-y-2 text-sm">
                         <div className="flex items-center justify-between">
                           <span className="flex items-center gap-2">
@@ -4612,7 +4615,7 @@ export default function StorefrontBook() {
                             <span>+${(a.priceType === "per_day" ? a.price * days : a.price).toFixed(2)}</span>
                           </div>
                         ))}
-                      {platformProtectionFeeBase > 0 && !protectionDeclined && (
+                      {platformProtectionFeeBase > 0 && !protectionDeclined && !protectionPlanHidden && (
                         <div className="space-y-1.5">
                           {/* Protection plan line item */}
                           <button
@@ -4701,7 +4704,7 @@ export default function StorefrontBook() {
                           )}
                         </div>
                       )}
-                      {platformProtectionFeeBase > 0 && protectionDeclined && (
+                      {platformProtectionFeeBase > 0 && protectionDeclined && !protectionPlanHidden && (
                         <div className="space-y-1">
                           <div className="flex justify-between text-muted-foreground">
                             <span className="flex items-center gap-1.5 line-through">Protection Plan — declined</span>
