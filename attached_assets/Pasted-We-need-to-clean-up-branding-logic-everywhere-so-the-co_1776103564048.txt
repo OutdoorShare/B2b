@@ -1,0 +1,233 @@
+We need to clean up branding logic everywhere so the correct logo/icon is always used based on context.
+
+Goal:
+
+* Admin / OutdoorShare-facing views should always show OutdoorShare branding
+* Customer / renter-facing storefront views should always show the storefront company’s branding
+* This must apply consistently across browser tabs, favicon/app icons, metadata, emails, and any customer-facing branded surfaces
+
+Branding rules
+
+1. Admin / platform-facing areas
+   Use OutdoorShare branding everywhere:
+
+* OutdoorShare logo
+* OutdoorShare favicon / tab icon
+* OutdoorShare site name / metadata
+* OutdoorShare email branding for platform/admin/internal flows
+
+This applies to:
+
+* admin dashboard
+* operator admin settings
+* platform login/admin login
+* internal platform pages
+* any page intended for OutdoorShare staff or operator management inside the platform shell
+
+2. Customer / renter-facing storefront areas
+   Use storefront company branding everywhere:
+
+* storefront logo
+* storefront favicon / browser tab icon
+* storefront company name in metadata/title
+* storefront branding in customer emails
+* storefront Open Graph / social metadata if applicable
+
+This applies to:
+
+* storefront homepage
+* listing pages
+* booking flow
+* checkout
+* confirmation pages
+* renter account pages if they are storefront-branded
+* renter-facing emails and notifications
+
+Important distinction:
+If the user is acting as a renter/customer in the storefront, they should not see OutdoorShare branding in browser tabs, email headers, metadata, or logos. They should see the storefront company brand.
+
+What to implement
+
+1. Central branding resolver
+   Create one shared branding utility / resolver so branding is not hardcoded in scattered components.
+
+Example idea:
+getBrandingContext({
+route,
+userType,
+storefront,
+}) => {
+logoUrl,
+faviconUrl,
+brandName,
+emailFromName,
+metaTitleBase,
+metaImage,
+themeColor,
+appName
+}
+
+This should determine whether the current experience is:
+
+* platform/admin branded
+  or
+* storefront branded
+
+2. Route/context-based branding rules
+   Please define branding based on route/context.
+
+Examples:
+Platform/admin routes:
+
+* /admin/*
+* /dashboard/*
+* platform auth pages
+* internal settings pages
+
+Use OutdoorShare branding.
+
+Storefront/renter routes:
+
+* /:slug
+* /:slug/listings/:id
+* /:slug/book
+* /:slug/my-bookings
+* customer-facing auth/account pages tied to storefront
+
+Use storefront company branding.
+
+If needed, also use current layout/shell to determine brand context.
+
+3. Browser tab title + favicon
+   Please ensure:
+
+* admin/platform pages show OutdoorShare favicon and page title branding
+* storefront pages show storefront favicon and storefront name
+* favicon updates correctly on navigation between admin vs storefront contexts
+* document title/meta is updated consistently per route
+
+4. Metadata
+   Customer-facing storefront pages should use storefront company branding in:
+
+* page title
+* meta title
+* meta description where relevant
+* Open Graph site name
+* social share metadata
+* app/web manifest fields if applicable
+
+Admin/platform pages should use OutdoorShare branding in those same places.
+
+5. Emails
+   Brand emails based on recipient context.
+
+Use storefront branding for renter/customer-facing emails:
+
+* booking confirmation
+* payment receipt
+* booking reminder
+* pickup/return emails
+* renter support or transactional emails tied to a storefront booking
+
+Use OutdoorShare branding for platform/admin/operator emails:
+
+* admin invites
+* platform alerts
+* internal notifications
+* operator/admin account emails
+* platform/system messages
+
+Please confirm:
+
+* logo used in email header
+* sender/display name
+* footer branding
+* any linked homepage URL
+  all follow the correct brand context.
+
+6. Manifest / app icons / touch icons
+   Please audit:
+
+* favicon
+* apple-touch-icon
+* manifest icons
+* browser tab icon
+* pinned icons if applicable
+
+Storefront context should use storefront assets if we support dynamic branding there.
+Admin/platform context should use OutdoorShare assets.
+
+7. Branding source of truth
+   Please confirm where storefront branding is sourced from:
+
+* branding section/settings
+* storefront config
+* business profile
+* uploaded logo/favicon assets
+
+I want a single source of truth for:
+
+* storefront logo
+* storefront favicon
+* storefront brand name
+* email branding assets
+
+8. Fallback behavior
+   If storefront branding assets are missing:
+
+* fallback to OutdoorShare only as a last resort
+* log missing branding asset clearly
+* do not break rendering
+
+Fallback order should be explicit:
+
+* storefront uploaded asset
+* storefront default asset
+* OutdoorShare fallback
+
+9. Audit hardcoded references
+   Please search for and remove any hardcoded OutdoorShare branding in customer-facing surfaces, especially:
+
+* tab title
+* favicon
+* email templates
+* metadata components
+* booking flow header/logo
+* confirmation pages
+* renter portal/account pages
+
+10. Acceptance criteria
+    I want these outcomes:
+
+Admin/platform view:
+
+* browser tab shows OutdoorShare
+* favicon shows OutdoorShare
+* emails show OutdoorShare branding
+
+Customer/storefront view:
+
+* browser tab shows storefront company name
+* favicon shows storefront logo/icon
+* booking pages show storefront logo
+* renter emails show storefront logo/name/footer
+* metadata/social previews use storefront branding
+
+11. Deliverables
+    Please send back:
+
+* exact files changed
+* branding resolver/source-of-truth file
+* routes mapped to OutdoorShare vs storefront branding
+* email templates updated
+* metadata/favicon logic updated
+* proof with screenshots from:
+
+  * admin view
+  * storefront homepage
+  * listing page
+  * booking page
+  * renter confirmation email
+
+Important:
+I want branding to be context-aware and centralized, not hardcoded page-by-page.
