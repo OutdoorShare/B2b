@@ -517,16 +517,27 @@ function StripePaymentForm({ onSuccess, customerEmail, testMode }: { onSuccess: 
   const stripe = useStripe();
   const elements = useElements();
   const [paying, setPaying] = useState(false);
+  // elementReady is ONLY set true by the PaymentElement's own onReady callback — never by a timer.
+  // This prevents enabling the submit button before the PaymentElement iframe has actually mounted.
   const [elementReady, setElementReady] = useState(false);
+  const [loadSlow, setLoadSlow] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const { toast } = useToast();
 
-  // Fallback: if onReady hasn't fired within 6 seconds, enable the button anyway.
-  // This handles cases where Stripe's event doesn't fire (e.g. HTTP dev environment).
+  // After 12 seconds, show a "taking longer than expected" hint — but do NOT enable the button.
+  // Fixes: old 6-second fallback would enable Pay before PaymentElement mounted, causing
+  // "elements should have a mounted Payment Element" Stripe SDK error on submit.
   useEffect(() => {
-    const t = setTimeout(() => setElementReady(true), 6000);
+    const t = setTimeout(() => setLoadSlow(true), 12000);
     return () => clearTimeout(t);
   }, []);
+
+  // ── Dev/test diagnostics (only in non-production builds) ──────────────────
+  useEffect(() => {
+    if (import.meta.env.PROD) return;
+    const keyType = testMode ? "TEST" : "LIVE";
+    console.info(`[Stripe] mode=${keyType} stripe=${!!stripe} elements=${!!elements} ready=${elementReady}`);
+  }, [stripe, elements, elementReady, testMode]);
 
   // If on HTTP, Stripe's card iframes won't initialize. Show instructions to open via HTTPS.
   if (isHttp) {
@@ -579,14 +590,26 @@ function StripePaymentForm({ onSuccess, customerEmail, testMode }: { onSuccess: 
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!stripe || !elements) return;
+
+    // Hard guards — these must all be true before we call Stripe.
+    if (!stripe) {
+      setError("Secure payment is still initializing. Please wait a moment and try again.");
+      return;
+    }
+    if (!elements) {
+      setError("Payment form is not ready yet. Please wait for the card fields to load, then try again.");
+      return;
+    }
+    if (!elementReady) {
+      setError("Payment fields are still loading. Please wait a moment and try again.");
+      return;
+    }
+
     setPaying(true);
     setError(null);
     try {
-      // In the standard Stripe flow (clientSecret already set on <Elements>),
-      // stripe.confirmPayment() handles form submission and validation internally.
-      // Calling elements.submit() separately before confirmPayment causes a
-      // double-submission that triggers Stripe's "(unknown runtime error)".
+      // Using PaymentElement + stripe.confirmPayment() — the correct Stripe Elements v3 flow.
+      // Do NOT call elements.submit() separately; confirmPayment handles it internally.
       const { error: confirmErr } = await stripe.confirmPayment({
         elements,
         confirmParams: {
@@ -605,7 +628,14 @@ function StripePaymentForm({ onSuccess, customerEmail, testMode }: { onSuccess: 
       }
     } catch (stripeErr: any) {
       const msg: string = stripeErr?.message ?? "";
-      if (msg.includes("unknown runtime error") || msg.includes("iframe")) {
+      if (
+        msg.includes("mounted Payment Element") ||
+        msg.includes("ExpressCheckoutElement") ||
+        msg.includes("Invalid value for stripe.confirmPayment")
+      ) {
+        // PaymentElement wasn't ready — safe friendly message
+        setError("The secure payment form is not ready yet. Please wait a moment for it to finish loading, then try again.");
+      } else if (msg.includes("unknown runtime error") || msg.includes("iframe")) {
         setError("Payment processing error. Please refresh the page and try again, or use a different browser.");
       } else {
         setError(msg || "Payment failed. Please try again.");
@@ -618,12 +648,20 @@ function StripePaymentForm({ onSuccess, customerEmail, testMode }: { onSuccess: 
     <form onSubmit={handleSubmit} className="space-y-4">
       <PaymentElement
         options={{ layout: "tabs", wallets: { applePay: "auto", googlePay: "auto", ...(testMode ? { link: "never" } : {}) } }}
-        onReady={() => setElementReady(true)}
+        onReady={() => { setElementReady(true); setLoadSlow(false); }}
       />
       {!elementReady && !error && (
-        <div className="flex items-center justify-center gap-2 text-muted-foreground text-sm py-1">
-          <Loader2 className="w-3.5 h-3.5 animate-spin" />
-          Loading payment form…
+        <div className="flex flex-col items-center gap-1.5 py-1">
+          <div className="flex items-center gap-2 text-muted-foreground text-sm">
+            <Loader2 className="w-3.5 h-3.5 animate-spin" />
+            {loadSlow ? "Still loading secure payment fields…" : "Loading secure payment form…"}
+          </div>
+          {loadSlow && (
+            <p className="text-xs text-muted-foreground text-center">
+              Taking longer than expected. Please check your connection or{" "}
+              <button type="button" className="underline text-primary" onClick={() => window.location.reload()}>refresh the page</button>.
+            </p>
+          )}
         </div>
       )}
       {error && (
@@ -632,7 +670,10 @@ function StripePaymentForm({ onSuccess, customerEmail, testMode }: { onSuccess: 
           {error}
         </div>
       )}
-      <Button type="submit" size="lg" className="w-full h-13 text-base font-bold rounded-xl" disabled={paying || !stripe || !elementReady}>
+      {/* Button is disabled until stripe, elements, AND elementReady are all true.
+          elementReady is set ONLY by PaymentElement's onReady callback — never by a timer.
+          This prevents the "elements should have a mounted Payment Element" Stripe SDK error. */}
+      <Button type="submit" size="lg" className="w-full h-13 text-base font-bold rounded-xl" disabled={paying || !stripe || !elements || !elementReady}>
         {paying ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Processing…</> : <><ShieldCheck className="w-4 h-4 mr-2" />Pay & Book</>}
       </Button>
       <p className="text-center text-xs text-muted-foreground">
