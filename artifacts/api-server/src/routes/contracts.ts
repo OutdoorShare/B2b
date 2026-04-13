@@ -9,61 +9,69 @@ const router = Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 20 * 1024 * 1024 } });
 const BUCKET_ID = process.env.DEFAULT_OBJECT_STORAGE_BUCKET_ID ?? "";
 
-// ── GET /contracts — fetch tenant's active operator contract ─────────────────
-router.get("/contracts", async (req, res) => {
-  try {
-    if (!req.tenantId) { res.status(401).json({ error: "Not authenticated" }); return; }
-    const [contract] = await db
-      .select()
-      .from(operatorContractsTable)
-      .where(and(
-        eq(operatorContractsTable.tenantId, req.tenantId),
-        eq(operatorContractsTable.isActive, true),
-      ))
-      .limit(1);
-    res.json(contract ?? null);
-  } catch (err) {
-    req.log.error(err);
-    res.status(500).json({ error: "Failed to fetch contract" });
-  }
-});
+// ── Auth helper ───────────────────────────────────────────────────────────────
+async function resolveTenantId(req: any): Promise<number | null> {
+  if (req.tenantId) return req.tenantId;
+  const token = req.cookies?.admin_session
+    ?? (req.headers["x-admin-token"] as string | undefined)
+    ?? (req.query.token as string | undefined);
+  if (!token) return null;
+  const [u] = await db.select().from(adminUsersTable).where(eq(adminUsersTable.token, token)).limit(1);
+  if (u?.tenantId) return u.tenantId;
+  const [t] = await db.select().from(tenantsTable).where(eq(tenantsTable.adminToken, token)).limit(1);
+  return t?.id ?? null;
+}
 
-// ── GET /contracts/history — all versions for this tenant ────────────────────
-router.get("/contracts/history", async (req, res) => {
+// ── Helper: stream a PDF from storage/disk ────────────────────────────────────
+async function streamPdf(res: any, req: any, key: string, filename: string) {
+  if (BUCKET_ID) {
+    try {
+      const bucket = objectStorageClient.bucket(BUCKET_ID);
+      const file = bucket.file(key);
+      const [exists] = await file.exists();
+      if (exists) {
+        res.setHeader("Content-Type", "application/pdf");
+        res.setHeader("Content-Disposition", `inline; filename="${filename}"`);
+        res.setHeader("Cache-Control", "private, no-cache");
+        file.createReadStream().pipe(res);
+        return;
+      }
+    } catch (err) {
+      req.log?.warn(err, "Object storage read failed, trying local fallback");
+    }
+  }
+  const fs  = await import("fs");
+  const pth = await import("path");
+  const localPath = pth.resolve(process.cwd(), "uploads", key);
+  if (!fs.existsSync(localPath)) {
+    res.status(404).json({ error: "PDF file not found in storage" }); return;
+  }
+  res.setHeader("Content-Type", "application/pdf");
+  res.setHeader("Content-Disposition", `inline; filename="${filename}"`);
+  res.setHeader("Cache-Control", "private, no-cache");
+  fs.createReadStream(localPath).pipe(res);
+}
+
+// ── GET /contracts — all templates for this tenant ───────────────────────────
+router.get("/contracts", async (req, res) => {
   try {
     if (!req.tenantId) { res.status(401).json({ error: "Not authenticated" }); return; }
     const rows = await db
       .select()
       .from(operatorContractsTable)
       .where(eq(operatorContractsTable.tenantId, req.tenantId))
-      .orderBy(desc(operatorContractsTable.version))
-      .limit(25);
+      .orderBy(desc(operatorContractsTable.updatedAt));
     res.json(rows);
   } catch (err) {
     req.log.error(err);
-    res.status(500).json({ error: "Failed to fetch contract history" });
+    res.status(500).json({ error: "Failed to fetch contracts" });
   }
 });
 
-// ── GET /contracts/active/pdf — stream the uploaded PDF for viewing ──────────
-// Accepts auth via x-admin-token header OR ?token= query param (for browser new-tab)
+// ── GET /contracts/active/pdf — stream the active uploaded PDF for admin viewing ──
 router.get("/contracts/active/pdf", async (req, res) => {
   try {
-    // Resolve tenant from token (header or query param)
-    const token = (req as any).cookies?.admin_session
-      ?? (req.headers["x-admin-token"] as string | undefined)
-      ?? (req.query.token as string | undefined);
-
-    let tenantId = req.tenantId;
-    if (!tenantId && token) {
-      // Try staff user
-      const [u] = await db.select().from(adminUsersTable).where(eq(adminUsersTable.token, token)).limit(1);
-      if (u?.tenantId) { tenantId = u.tenantId; }
-      else {
-        const [t] = await db.select().from(tenantsTable).where(eq(tenantsTable.adminToken, token)).limit(1);
-        if (t) tenantId = t.id;
-      }
-    }
+    const tenantId = await resolveTenantId(req);
     if (!tenantId) { res.status(401).json({ error: "Not authenticated" }); return; }
 
     const [contract] = await db
@@ -73,66 +81,23 @@ router.get("/contracts/active/pdf", async (req, res) => {
         eq(operatorContractsTable.tenantId, tenantId),
         eq(operatorContractsTable.isActive, true),
       ))
+      .orderBy(desc(operatorContractsTable.updatedAt))
       .limit(1);
 
     if (!contract || contract.contractType !== "uploaded_pdf" || !contract.uploadedPdfStorageKey) {
       res.status(404).json({ error: "No uploaded PDF contract found" }); return;
     }
-
-    const key = contract.uploadedPdfStorageKey;
-    const filename = contract.uploadedFileName ?? "contract.pdf";
-
-    // Try object storage first
-    if (BUCKET_ID) {
-      try {
-        const bucket = objectStorageClient.bucket(BUCKET_ID);
-        const file = bucket.file(key);
-        const [exists] = await file.exists();
-        if (exists) {
-          res.setHeader("Content-Type", "application/pdf");
-          res.setHeader("Content-Disposition", `inline; filename="${filename}"`);
-          res.setHeader("Cache-Control", "private, no-cache");
-          file.createReadStream().pipe(res);
-          return;
-        }
-      } catch (storageErr) {
-        req.log.warn(storageErr, "Object storage read failed, trying local fallback");
-      }
-    }
-
-    // Local fallback — key is just a filename
-    const fs  = await import("fs");
-    const pth = await import("path");
-    const localPath = pth.resolve(process.cwd(), "uploads", key);
-    if (!fs.existsSync(localPath)) {
-      res.status(404).json({ error: "PDF file not found in storage" }); return;
-    }
-    res.setHeader("Content-Type", "application/pdf");
-    res.setHeader("Content-Disposition", `inline; filename="${filename}"`);
-    res.setHeader("Cache-Control", "private, no-cache");
-    fs.createReadStream(localPath).pipe(res);
+    await streamPdf(res, req, contract.uploadedPdfStorageKey, contract.uploadedFileName ?? "contract.pdf");
   } catch (err) {
     req.log.error(err);
     res.status(500).json({ error: "Failed to serve PDF" });
   }
 });
 
-// ── GET /contracts/:id/pdf — stream a specific version PDF ──────────────────
+// ── GET /contracts/:id/pdf — stream a specific contract's PDF ────────────────
 router.get("/contracts/:id/pdf", async (req, res) => {
   try {
-    const token = (req as any).cookies?.admin_session
-      ?? (req.headers["x-admin-token"] as string | undefined)
-      ?? (req.query.token as string | undefined);
-
-    let tenantId = req.tenantId;
-    if (!tenantId && token) {
-      const [u] = await db.select().from(adminUsersTable).where(eq(adminUsersTable.token, token)).limit(1);
-      if (u?.tenantId) { tenantId = u.tenantId; }
-      else {
-        const [t] = await db.select().from(tenantsTable).where(eq(tenantsTable.adminToken, token)).limit(1);
-        if (t) tenantId = t.id;
-      }
-    }
+    const tenantId = await resolveTenantId(req);
     if (!tenantId) { res.status(401).json({ error: "Not authenticated" }); return; }
 
     const contractId = Number(req.params.id);
@@ -146,70 +111,24 @@ router.get("/contracts/:id/pdf", async (req, res) => {
       .limit(1);
 
     if (!contract || contract.contractType !== "uploaded_pdf" || !contract.uploadedPdfStorageKey) {
-      res.status(404).json({ error: "No PDF for this contract version" }); return;
+      res.status(404).json({ error: "No PDF for this contract" }); return;
     }
-
-    const key = contract.uploadedPdfStorageKey;
-    const filename = contract.uploadedFileName ?? "contract.pdf";
-
-    if (BUCKET_ID) {
-      try {
-        const bucket = objectStorageClient.bucket(BUCKET_ID);
-        const file = bucket.file(key);
-        const [exists] = await file.exists();
-        if (exists) {
-          res.setHeader("Content-Type", "application/pdf");
-          res.setHeader("Content-Disposition", `inline; filename="${filename}"`);
-          res.setHeader("Cache-Control", "private, no-cache");
-          file.createReadStream().pipe(res);
-          return;
-        }
-      } catch { /* fall through to local */ }
-    }
-
-    const fs  = await import("fs");
-    const pth = await import("path");
-    const localPath = pth.resolve(process.cwd(), "uploads", key);
-    if (!fs.existsSync(localPath)) {
-      res.status(404).json({ error: "PDF file not found in storage" }); return;
-    }
-    res.setHeader("Content-Type", "application/pdf");
-    res.setHeader("Content-Disposition", `inline; filename="${filename}"`);
-    res.setHeader("Cache-Control", "private, no-cache");
-    fs.createReadStream(localPath).pipe(res);
+    await streamPdf(res, req, contract.uploadedPdfStorageKey, contract.uploadedFileName ?? "contract.pdf");
   } catch (err) {
     req.log.error(err);
     res.status(500).json({ error: "Failed to serve PDF" });
   }
 });
 
-// ── POST /contracts — create or fully replace the tenant's active contract ───
+// ── POST /contracts — create a new template ──────────────────────────────────
+// Does NOT deactivate existing templates — multiple can be active.
 router.post("/contracts", async (req, res) => {
   try {
     if (!req.tenantId) { res.status(401).json({ error: "Not authenticated" }); return; }
-    const { title, content, checkboxLabel, includeOutdoorShareAgreements } = req.body ?? {};
+    const { title, content, checkboxLabel, includeOutdoorShareAgreements, listingIds } = req.body ?? {};
     if (!title || typeof title !== "string") {
       res.status(400).json({ error: "title is required" }); return;
     }
-
-    const [current] = await db
-      .select({ version: operatorContractsTable.version })
-      .from(operatorContractsTable)
-      .where(and(
-        eq(operatorContractsTable.tenantId, req.tenantId),
-        eq(operatorContractsTable.isActive, true),
-      ))
-      .limit(1);
-
-    const nextVersion = (current?.version ?? 0) + 1;
-
-    await db
-      .update(operatorContractsTable)
-      .set({ isActive: false, updatedAt: new Date() })
-      .where(and(
-        eq(operatorContractsTable.tenantId, req.tenantId),
-        eq(operatorContractsTable.isActive, true),
-      ));
 
     const [inserted] = await db
       .insert(operatorContractsTable)
@@ -221,7 +140,8 @@ router.post("/contracts", async (req, res) => {
           ? checkboxLabel.trim()
           : "I agree to the rental terms and conditions",
         includeOutdoorShareAgreements: includeOutdoorShareAgreements !== false,
-        version: nextVersion,
+        listingIds: Array.isArray(listingIds) ? listingIds : [],
+        version: 1,
         isActive: true,
       })
       .returning();
@@ -229,11 +149,139 @@ router.post("/contracts", async (req, res) => {
     res.status(201).json(inserted);
   } catch (err) {
     req.log.error(err);
-    res.status(500).json({ error: "Failed to save contract" });
+    res.status(500).json({ error: "Failed to create contract" });
   }
 });
 
-// ── POST /contracts/upload-pdf — upload a PDF file as the operator's contract ─
+// ── PATCH /contracts/:id — edit a template in-place ─────────────────────────
+router.patch("/contracts/:id", async (req, res) => {
+  try {
+    if (!req.tenantId) { res.status(401).json({ error: "Not authenticated" }); return; }
+    const contractId = Number(req.params.id);
+    const { title, content, checkboxLabel, includeOutdoorShareAgreements, listingIds } = req.body ?? {};
+
+    const updateFields: Record<string, any> = { updatedAt: new Date() };
+    if (typeof title === "string" && title.trim()) updateFields.title = title.trim();
+    if (typeof content === "string") updateFields.content = content;
+    if (typeof checkboxLabel === "string" && checkboxLabel.trim()) updateFields.checkboxLabel = checkboxLabel.trim();
+    if (typeof includeOutdoorShareAgreements === "boolean") updateFields.includeOutdoorShareAgreements = includeOutdoorShareAgreements;
+    if (Array.isArray(listingIds)) updateFields.listingIds = listingIds;
+
+    // Bump version on content edits
+    if ("content" in updateFields || "title" in updateFields) {
+      const [cur] = await db.select({ version: operatorContractsTable.version })
+        .from(operatorContractsTable)
+        .where(and(eq(operatorContractsTable.id, contractId), eq(operatorContractsTable.tenantId, req.tenantId)))
+        .limit(1);
+      if (cur) updateFields.version = (cur.version ?? 0) + 1;
+    }
+
+    const [updated] = await db
+      .update(operatorContractsTable)
+      .set(updateFields)
+      .where(and(
+        eq(operatorContractsTable.id, contractId),
+        eq(operatorContractsTable.tenantId, req.tenantId),
+      ))
+      .returning();
+
+    if (!updated) { res.status(404).json({ error: "Contract not found" }); return; }
+    res.json(updated);
+  } catch (err) {
+    req.log.error(err);
+    res.status(500).json({ error: "Failed to update contract" });
+  }
+});
+
+// ── PATCH /contracts/:id/activate — set this template active ─────────────────
+router.patch("/contracts/:id/activate", async (req, res) => {
+  try {
+    if (!req.tenantId) { res.status(401).json({ error: "Not authenticated" }); return; }
+    const contractId = Number(req.params.id);
+
+    const [updated] = await db
+      .update(operatorContractsTable)
+      .set({ isActive: true, updatedAt: new Date() })
+      .where(and(
+        eq(operatorContractsTable.id, contractId),
+        eq(operatorContractsTable.tenantId, req.tenantId),
+      ))
+      .returning();
+
+    if (!updated) { res.status(404).json({ error: "Contract not found" }); return; }
+    res.json(updated);
+  } catch (err) {
+    req.log.error(err);
+    res.status(500).json({ error: "Failed to activate contract" });
+  }
+});
+
+// ── PATCH /contracts/:id/deactivate — set this template inactive ──────────────
+router.patch("/contracts/:id/deactivate", async (req, res) => {
+  try {
+    if (!req.tenantId) { res.status(401).json({ error: "Not authenticated" }); return; }
+    const contractId = Number(req.params.id);
+
+    const [updated] = await db
+      .update(operatorContractsTable)
+      .set({ isActive: false, updatedAt: new Date() })
+      .where(and(
+        eq(operatorContractsTable.id, contractId),
+        eq(operatorContractsTable.tenantId, req.tenantId),
+      ))
+      .returning();
+
+    if (!updated) { res.status(404).json({ error: "Contract not found" }); return; }
+    res.json(updated);
+  } catch (err) {
+    req.log.error(err);
+    res.status(500).json({ error: "Failed to deactivate contract" });
+  }
+});
+
+// ── DELETE /contracts/:id — permanently delete a template ────────────────────
+router.delete("/contracts/:id", async (req, res) => {
+  try {
+    if (!req.tenantId) { res.status(401).json({ error: "Not authenticated" }); return; }
+    const contractId = Number(req.params.id);
+
+    if (isNaN(contractId) || contractId <= 0) {
+      res.status(400).json({ error: "Invalid contract ID" }); return;
+    }
+
+    await db
+      .delete(operatorContractsTable)
+      .where(and(
+        eq(operatorContractsTable.id, contractId),
+        eq(operatorContractsTable.tenantId, req.tenantId),
+      ));
+
+    res.json({ ok: true });
+  } catch (err) {
+    req.log.error(err);
+    res.status(500).json({ error: "Failed to delete contract" });
+  }
+});
+
+// ── DELETE /contracts/active — backward-compat: deactivate the most-recent active ──
+router.delete("/contracts/active", async (req, res) => {
+  try {
+    if (!req.tenantId) { res.status(401).json({ error: "Not authenticated" }); return; }
+    await db
+      .update(operatorContractsTable)
+      .set({ isActive: false, updatedAt: new Date() })
+      .where(and(
+        eq(operatorContractsTable.tenantId, req.tenantId),
+        eq(operatorContractsTable.isActive, true),
+      ));
+    res.json({ ok: true });
+  } catch (err) {
+    req.log.error(err);
+    res.status(500).json({ error: "Failed to deactivate contract" });
+  }
+});
+
+// ── POST /contracts/upload-pdf — upload a PDF as a new template ──────────────
 router.post("/contracts/upload-pdf", upload.single("file"), async (req, res) => {
   try {
     if (!req.tenantId) { res.status(401).json({ error: "Not authenticated" }); return; }
@@ -246,7 +294,7 @@ router.post("/contracts/upload-pdf", upload.single("file"), async (req, res) => 
       res.status(400).json({ error: "File exceeds 20 MB limit" }); return;
     }
 
-    const { title, checkboxLabel, includeOutdoorShareAgreements } = req.body ?? {};
+    const { title, checkboxLabel, includeOutdoorShareAgreements, listingIds } = req.body ?? {};
     const { randomBytes } = await import("crypto");
     const storageKey = `contracts/${req.tenantId}/pdf-${randomBytes(8).toString("hex")}.pdf`;
     const originalName = file.originalname || "rental-agreement.pdf";
@@ -276,16 +324,8 @@ router.post("/contracts/upload-pdf", upload.single("file"), async (req, res) => 
       savedKey = fname;
     }
 
-    const [current] = await db
-      .select({ version: operatorContractsTable.version })
-      .from(operatorContractsTable)
-      .where(and(eq(operatorContractsTable.tenantId, req.tenantId), eq(operatorContractsTable.isActive, true)))
-      .limit(1);
-    const nextVersion = (current?.version ?? 0) + 1;
-
-    await db.update(operatorContractsTable)
-      .set({ isActive: false, updatedAt: new Date() })
-      .where(and(eq(operatorContractsTable.tenantId, req.tenantId), eq(operatorContractsTable.isActive, true)));
+    let parsedListingIds: number[] = [];
+    try { parsedListingIds = JSON.parse(listingIds ?? "[]"); } catch { /* ignore */ }
 
     const [inserted] = await db.insert(operatorContractsTable).values({
       tenantId:                    req.tenantId,
@@ -299,7 +339,8 @@ router.post("/contracts/upload-pdf", upload.single("file"), async (req, res) => 
                                      ? checkboxLabel.trim()
                                      : "I have read and agree to the attached rental agreement",
       includeOutdoorShareAgreements: includeOutdoorShareAgreements !== "false" && includeOutdoorShareAgreements !== false,
-      version:                     nextVersion,
+      listingIds:                  Array.isArray(parsedListingIds) ? parsedListingIds : [],
+      version:                     1,
       isActive:                    true,
     }).returning();
 
@@ -307,59 +348,6 @@ router.post("/contracts/upload-pdf", upload.single("file"), async (req, res) => 
   } catch (err) {
     req.log.error(err);
     res.status(500).json({ error: "Failed to upload contract PDF" });
-  }
-});
-
-// ── PATCH /contracts/:id/activate — restore a previous version ───────────────
-router.patch("/contracts/:id/activate", async (req, res) => {
-  try {
-    if (!req.tenantId) { res.status(401).json({ error: "Not authenticated" }); return; }
-    const contractId = Number(req.params.id);
-
-    const [target] = await db
-      .select()
-      .from(operatorContractsTable)
-      .where(and(
-        eq(operatorContractsTable.id, contractId),
-        eq(operatorContractsTable.tenantId, req.tenantId),
-      ))
-      .limit(1);
-
-    if (!target) { res.status(404).json({ error: "Contract version not found" }); return; }
-
-    // Deactivate all current versions
-    await db.update(operatorContractsTable)
-      .set({ isActive: false, updatedAt: new Date() })
-      .where(eq(operatorContractsTable.tenantId, req.tenantId));
-
-    // Activate the target
-    const [updated] = await db.update(operatorContractsTable)
-      .set({ isActive: true, updatedAt: new Date() })
-      .where(eq(operatorContractsTable.id, contractId))
-      .returning();
-
-    res.json(updated);
-  } catch (err) {
-    req.log.error(err);
-    res.status(500).json({ error: "Failed to activate contract version" });
-  }
-});
-
-// ── DELETE /contracts/active — deactivate (clear) the active contract ────────
-router.delete("/contracts/active", async (req, res) => {
-  try {
-    if (!req.tenantId) { res.status(401).json({ error: "Not authenticated" }); return; }
-    await db
-      .update(operatorContractsTable)
-      .set({ isActive: false, updatedAt: new Date() })
-      .where(and(
-        eq(operatorContractsTable.tenantId, req.tenantId),
-        eq(operatorContractsTable.isActive, true),
-      ));
-    res.json({ ok: true });
-  } catch (err) {
-    req.log.error(err);
-    res.status(500).json({ error: "Failed to delete contract" });
   }
 });
 

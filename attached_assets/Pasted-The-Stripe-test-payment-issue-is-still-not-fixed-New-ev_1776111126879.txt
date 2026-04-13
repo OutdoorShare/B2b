@@ -1,0 +1,165 @@
+The Stripe test payment issue is still not fixed.
+
+New evidence:
+The payment section is stuck on:
+
+* “Loading secure payment form...”
+* the secure Stripe fields never finish mounting
+* Pay & Book stays disabled
+
+This means the problem is earlier than submit. The Stripe payment element is not becoming ready in test mode.
+
+Please debug this as a Stripe Elements initialization problem, not just a confirmPayment problem.
+
+I need you to investigate and fix all of the following:
+
+1. Confirm whether PaymentElement is actually mounting
+   Please add logs for:
+
+* Stripe loaded
+* Elements created
+* clientSecret received
+* PaymentElement rendered
+* PaymentElement onReady fired
+* PaymentElement onLoadError fired
+
+I want to know which step never happens.
+
+2. Add explicit onReady / onLoadError handlers
+   On the mounted PaymentElement, add:
+
+* onReady
+* onLoadError
+* onLoaderStart if available
+
+Log each event and surface an inline UI state.
+
+Example desired states:
+
+* Loading secure payment form...
+* Secure payment form ready
+* Failed to load secure payment form
+
+Right now it just spins forever with no real diagnosis.
+
+3. Verify clientSecret is valid in dev/demo
+   Please confirm the exact client secret returned from the backend is:
+
+* present
+* non-empty
+* from Stripe test mode
+* for the correct account
+* for the correct PaymentIntent/SetupIntent type expected by this flow
+
+Important:
+If clientSecret is invalid, expired, mismatched, or from the wrong Stripe account, PaymentElement may never initialize correctly.
+
+4. Verify Elements provider setup
+   Please inspect the exact component tree and confirm:
+
+* `<Elements>` is mounted only after clientSecret exists
+* the same `elements` instance is used by the payment form
+* the payment form is not rendering before Elements is initialized
+* no re-render loop is destroying and remounting Elements repeatedly
+
+Common bug:
+
+* clientSecret starts empty
+* Elements mounts wrong
+* later value changes but component never stabilizes correctly
+
+5. Check for conditional rendering bugs
+   Please inspect whether any of these conditions are preventing PaymentElement from rendering:
+
+* test mode flag
+* mobile/desktop conditional
+* “scan card instead” UI path
+* loading state race condition
+* hidden CSS container size issue
+* route transition/remount issue
+
+I need confirmation that the PaymentElement DOM node is actually present in the page.
+
+6. Inspect browser console and network in dev/demo
+   Please capture:
+
+* browser console errors
+* Stripe.js warnings
+* failed network requests
+* CSP / iframe blocking issues
+* mixed content / domain mismatch issues
+
+Specifically check whether:
+
+* js.stripe.com loads successfully
+* Stripe iframe requests succeed
+* no adblock/CSP issue is blocking Stripe assets
+
+7. Check domain / Stripe config for demo + dev
+   Please verify Stripe test mode is allowed for:
+
+* demo site on prod/dev
+* all dev sites / preview sites
+
+I need confirmation that:
+
+* the current dev/demo domain is supported by Stripe integration setup
+* no domain-specific CSP/frame policy is blocking Stripe Elements
+
+8. Add timeout + visible failure state
+   If PaymentElement does not become ready within a reasonable time, do not spin forever.
+
+Please implement:
+
+* timeout after a short window
+* show clear inline error like:
+  “We couldn’t load the secure payment form. Please refresh and try again.”
+* add retry action
+* log the failure details
+
+A silent loading spinner is not acceptable.
+
+9. Confirm correct Stripe integration type
+   Please explicitly confirm:
+
+* are we using PaymentIntent + PaymentElement?
+* are we using Checkout Session?
+* are we using CardElement?
+* is there any mix of patterns?
+
+I suspect the current code may still have a mismatch between the intended Stripe flow and the mounted UI.
+
+10. Test with the simplest possible dev payment form
+    If needed, temporarily strip the test checkout form down to the minimum working Stripe implementation:
+
+* fetch clientSecret
+* mount `<Elements options={{ clientSecret }}>`
+* render only `<PaymentElement />`
+* wait for onReady
+* then enable submit
+
+Once that works, layer the rest of the UI back in.
+
+11. Production-safe isolation
+    This fix should target test/dev/demo flow safely.
+    Do not break live production flow.
+    If needed, create a minimal test-mode payment path that uses the simplest stable Stripe setup for non-live environments.
+
+12. Report back with exact findings
+    I need:
+
+* exact failure point
+* exact logs for:
+
+  * clientSecret received
+  * Elements mounted
+  * PaymentElement ready or failed
+* exact root cause
+* exact files changed
+* proof the secure payment form now loads on:
+
+  * demo site
+  * at least one dev site
+
+This is the key issue now:
+The Stripe form is not finishing initialization. Please fix the mount/ready path first before anything else.

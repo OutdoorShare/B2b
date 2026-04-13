@@ -9,6 +9,7 @@ import {
   Info, Trash2, Upload, FileText, X, ChevronDown, ChevronUp,
   Type, DollarSign, Users, Eye, Download, RotateCcw,
   ExternalLink, Clock, ShieldCheck, ShieldOff, History,
+  ArrowLeft, Plus, ToggleLeft, ToggleRight, Link2,
 } from "lucide-react";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
@@ -262,8 +263,14 @@ interface Contract {
   includeOutdoorShareAgreements: boolean;
   version: number;
   isActive: boolean;
+  listingIds: number[];
   createdAt: string;
   updatedAt: string;
+}
+
+interface Listing {
+  id: number;
+  title: string;
 }
 
 function formatBytes(bytes: number): string {
@@ -450,61 +457,103 @@ function HistoryRow({ row, onActivate }: { row: Contract; onActivate: (id: numbe
 
 // ── Main component ─────────────────────────────────────────────────────────────
 export default function ContractBuilder() {
-  const [contract, setContract] = useState<Contract | null>(null);
-  const [history, setHistory]   = useState<Contract[]>([]);
-  const [loading, setLoading]   = useState(true);
-  const [saving, setSaving]     = useState(false);
-  const [deleting, setDeleting] = useState(false);
-  const [saved, setSaved]       = useState(false);
-  const [error, setError]       = useState("");
+  // ── Library state ──────────────────────────────────────────────────────────
+  const [templates, setTemplates]   = useState<Contract[]>([]);
+  const [listings, setListings]     = useState<Listing[]>([]);
+  const [loadingLib, setLoadingLib] = useState(true);
+  const [view, setView]             = useState<"library" | "editor">("library");
+  const [deletingId, setDeletingId] = useState<number | null>(null);
+  const [togglingId, setTogglingId] = useState<number | null>(null);
 
-  const [mode, setMode]                     = useState<"template" | "upload_pdf">("template");
-  const [uploadPhase, setUploadPhase]       = useState<"card" | "upload_form">("card");
+  // ── Editor state ───────────────────────────────────────────────────────────
+  const [editingId, setEditingId]   = useState<number | null>(null); // null = creating new
 
-  const [title, setTitle]                   = useState("Rental Agreement");
-  const [content, setContent]               = useState(DEFAULT_CONTENT);
-  const [checkboxLabel, setCheckboxLabel]   = useState("I have read and agree to the rental terms and conditions");
+  const [mode, setMode]                   = useState<"template" | "upload_pdf">("template");
+  const [uploadPhase, setUploadPhase]     = useState<"card" | "upload_form">("card");
+  const [title, setTitle]                 = useState("Rental Agreement");
+  const [content, setContent]             = useState(DEFAULT_CONTENT);
+  const [checkboxLabel, setCheckboxLabel] = useState("I have read and agree to the rental terms and conditions");
   const [includePlatform, setIncludePlatform] = useState(true);
-  const [settingsOpen, setSettingsOpen]     = useState(false);
-  const [historyOpen, setHistoryOpen]       = useState(false);
+  const [editorListingIds, setEditorListingIds] = useState<number[]>([]);
 
-  const [viewMode, setViewMode]                                   = useState<"edit" | "preview">("edit");
+  const [saving, setSaving]       = useState(false);
+  const [saved, setSaved]         = useState(false);
+  const [error, setError]         = useState("");
+  const [settingsOpen, setSettingsOpen]   = useState(false);
+  const [listingDropOpen, setListingDropOpen] = useState(false);
+  const [viewMode, setViewMode]           = useState<"edit" | "preview">("edit");
 
-  const [showPlatformWarning, setShowPlatformWarning]             = useState(false);
+  const [showPlatformWarning, setShowPlatformWarning]                 = useState(false);
   const [platformWarningAcknowledged, setPlatformWarningAcknowledged] = useState(false);
-  const [disablingPlatform, setDisablingPlatform]                 = useState(false);
+  const [disablingPlatform, setDisablingPlatform]                     = useState(false);
 
-  const fileInputRef              = useRef<HTMLInputElement>(null);
-  const textareaRef               = useRef<HTMLTextAreaElement>(null);
-  const [pdfFile, setPdfFile]     = useState<File | null>(null);
-  const [uploading, setUploading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const textareaRef  = useRef<HTMLTextAreaElement>(null);
+  const [pdfFile, setPdfFile]         = useState<File | null>(null);
+  const [uploading, setUploading]     = useState(false);
   const [uploadProgress, setUploadProgress] = useState<"idle" | "uploading" | "processing" | "done" | "error">("idle");
 
   const wordCount = useMemo(() => content.trim().split(/\s+/).filter(Boolean).length, [content]);
 
-  const loadData = async () => {
+  // ── Data loaders ───────────────────────────────────────────────────────────
+  const loadTemplates = async () => {
+    setLoadingLib(true);
     try {
-      const [active, hist] = await Promise.all([
-        apiFetch("contracts").catch(() => null),
-        apiFetch("contracts/history").catch(() => []),
+      const [tmpl, lst] = await Promise.all([
+        apiFetch("contracts").catch(() => []),
+        apiFetch("listings").catch(() => []),
       ]);
-      if (active) {
-        setContract(active);
-        setTitle(active.title);
-        setContent(active.content || DEFAULT_CONTENT);
-        setCheckboxLabel(active.checkboxLabel);
-        setIncludePlatform(active.includeOutdoorShareAgreements !== false);
-        if (active.contractType === "uploaded_pdf") {
-          setMode("upload_pdf");
-          setUploadPhase("card");
-        }
-      }
-      setHistory(hist || []);
-    } catch { /* fallback */ }
-    finally { setLoading(false); }
+      setTemplates(Array.isArray(tmpl) ? tmpl : []);
+      setListings(Array.isArray(lst) ? lst.map((l: any) => ({ id: l.id, title: l.title })) : []);
+    } finally { setLoadingLib(false); }
   };
 
-  useEffect(() => { loadData(); }, []);
+  useEffect(() => { loadTemplates(); }, []);
+
+  // ── Editor helpers ─────────────────────────────────────────────────────────
+  const resetEditor = () => {
+    setTitle("Rental Agreement");
+    setContent(DEFAULT_CONTENT);
+    setCheckboxLabel("I have read and agree to the rental terms and conditions");
+    setIncludePlatform(true);
+    setEditorListingIds([]);
+    setMode("template");
+    setUploadPhase("card");
+    setPdfFile(null);
+    setUploadProgress("idle");
+    setViewMode("edit");
+    setSettingsOpen(false);
+    setError("");
+    setSaved(false);
+  };
+
+  const loadIntoEditor = (t: Contract) => {
+    setEditingId(t.id);
+    setTitle(t.title);
+    setContent(t.content || DEFAULT_CONTENT);
+    setCheckboxLabel(t.checkboxLabel || "I have read and agree to the rental terms and conditions");
+    setIncludePlatform(t.includeOutdoorShareAgreements !== false);
+    setEditorListingIds(Array.isArray(t.listingIds) ? t.listingIds : []);
+    setMode(t.contractType === "uploaded_pdf" ? "upload_pdf" : "template");
+    setUploadPhase(t.contractType === "uploaded_pdf" ? "card" : "card");
+    setPdfFile(null);
+    setUploadProgress("idle");
+    setViewMode("edit");
+    setSettingsOpen(false);
+    setError("");
+    setSaved(false);
+  };
+
+  const openEditor = (t?: Contract) => {
+    if (t) loadIntoEditor(t);
+    else { resetEditor(); setEditingId(null); }
+    setView("editor");
+  };
+
+  const closeEditor = async () => {
+    setView("library");
+    await loadTemplates();
+  };
 
   const insertToken = (token: string) => {
     const ta = textareaRef.current;
@@ -516,42 +565,74 @@ export default function ContractBuilder() {
     requestAnimationFrame(() => { ta.focus(); ta.setSelectionRange(start + token.length, start + token.length); });
   };
 
+  // ── Save (create or update) ────────────────────────────────────────────────
   const handleSave = async () => {
     setError(""); setSaving(true); setSaved(false);
     try {
-      const data = await apiFetch("contracts", {
-        method: "POST",
-        body: JSON.stringify({ title, content, checkboxLabel, includeOutdoorShareAgreements: includePlatform }),
-      });
-      setContract(data);
+      const body = { title, content, checkboxLabel, includeOutdoorShareAgreements: includePlatform, listingIds: editorListingIds };
+      if (editingId !== null) {
+        await apiFetch(`contracts/${editingId}`, { method: "PATCH", body: JSON.stringify(body) });
+      } else {
+        await apiFetch("contracts", { method: "POST", body: JSON.stringify(body) });
+      }
       setSaved(true);
       setTimeout(() => setSaved(false), 3000);
-      await loadData();
+      await closeEditor();
     } catch (e: any) {
       setError(e.message || "Failed to save contract");
     } finally { setSaving(false); }
   };
 
-  const handleDelete = async () => {
-    if (!contract) return;
-    if (!confirm("Remove your current contract? Renters will only see OutdoorShare's platform agreements going forward.")) return;
-    setDeleting(true);
+  // ── Delete a template ──────────────────────────────────────────────────────
+  const handleDelete = async (id: number, title: string) => {
+    if (!confirm(`Delete "${title}"? This cannot be undone.`)) return;
+    setDeletingId(id);
     try {
-      await apiFetch("contracts/active", { method: "DELETE" });
-      setContract(null);
-      setTitle("Rental Agreement");
-      setContent(DEFAULT_CONTENT);
-      setCheckboxLabel("I have read and agree to the rental terms and conditions");
-      setIncludePlatform(true);
-      setPdfFile(null);
-      setMode("template");
-      setUploadPhase("card");
-      await loadData();
+      await apiFetch(`contracts/${id}`, { method: "DELETE" });
+      await loadTemplates();
     } catch (e: any) {
-      setError(e.message || "Failed to remove contract");
-    } finally { setDeleting(false); }
+      alert(e.message || "Failed to delete");
+    } finally { setDeletingId(null); }
   };
 
+  // ── Toggle active / inactive ───────────────────────────────────────────────
+  const handleToggleActive = async (t: Contract) => {
+    setTogglingId(t.id);
+    try {
+      await apiFetch(`contracts/${t.id}/${t.isActive ? "deactivate" : "activate"}`, { method: "PATCH" });
+      await loadTemplates();
+    } catch (e: any) {
+      alert(e.message || "Failed to update status");
+    } finally { setTogglingId(null); }
+  };
+
+  // ── Upload PDF for a new template ─────────────────────────────────────────
+  const handlePdfUpload = async () => {
+    if (!pdfFile) return;
+    setError(""); setUploading(true); setSaved(false); setUploadProgress("uploading");
+    try {
+      const headers = adminHeaders();
+      const fd = new FormData();
+      fd.append("file", pdfFile);
+      fd.append("title", title.trim() || "Rental Agreement");
+      fd.append("checkboxLabel", checkboxLabel.trim() || "I have read and agree to the attached rental agreement");
+      fd.append("includeOutdoorShareAgreements", String(includePlatform));
+      fd.append("listingIds", JSON.stringify(editorListingIds));
+      setUploadProgress("processing");
+      const res = await fetch(`${BASE}/api/contracts/upload-pdf`, { method: "POST", headers, body: fd });
+      if (!res.ok) { const t = await res.text(); throw new Error(t || "Upload failed"); }
+      setPdfFile(null);
+      setUploadProgress("done");
+      setSaved(true);
+      setTimeout(() => setSaved(false), 3000);
+      await closeEditor();
+    } catch (e: any) {
+      setError(e.message || "Failed to upload PDF");
+      setUploadProgress("error");
+    } finally { setUploading(false); }
+  };
+
+  // ── Platform toggle ────────────────────────────────────────────────────────
   const requestDisablePlatform = () => { setShowPlatformWarning(true); setPlatformWarningAcknowledged(false); setSettingsOpen(true); };
   const cancelDisablePlatform  = () => { setShowPlatformWarning(false); setPlatformWarningAcknowledged(false); setIncludePlatform(true); };
   const handleDisablePlatform  = async () => {
@@ -567,56 +648,11 @@ export default function ContractBuilder() {
     } finally { setDisablingPlatform(false); }
   };
 
-  const handlePdfUpload = async () => {
-    if (!pdfFile) return;
-    setError(""); setUploading(true); setSaved(false); setUploadProgress("uploading");
-    try {
-      const headers = adminHeaders();
-      const fd = new FormData();
-      fd.append("file", pdfFile);
-      fd.append("title", title.trim() || "Rental Agreement");
-      fd.append("checkboxLabel", checkboxLabel.trim() || "I have read and agree to the attached rental agreement");
-      fd.append("includeOutdoorShareAgreements", String(includePlatform));
-      setUploadProgress("processing");
-      const res = await fetch(`${BASE}/api/contracts/upload-pdf`, { method: "POST", headers, body: fd });
-      if (!res.ok) { const t = await res.text(); throw new Error(t || "Upload failed"); }
-      const data = await res.json();
-      setContract(data);
-      setPdfFile(null);
-      setUploadPhase("card");
-      setUploadProgress("done");
-      setSaved(true);
-      setTimeout(() => setSaved(false), 4000);
-      await loadData();
-    } catch (e: any) {
-      setError(e.message || "Failed to upload PDF");
-      setUploadProgress("error");
-    } finally { setUploading(false); }
-  };
-
-  const handleActivate = async (id: number) => {
-    try {
-      const data = await apiFetch(`contracts/${id}/activate`, { method: "PATCH" });
-      setContract(data);
-      setTitle(data.title);
-      setContent(data.content || DEFAULT_CONTENT);
-      setCheckboxLabel(data.checkboxLabel);
-      setIncludePlatform(data.includeOutdoorShareAgreements !== false);
-      if (data.contractType === "uploaded_pdf") { setMode("upload_pdf"); setUploadPhase("card"); }
-      else setMode("template");
-      await loadData();
-    } catch (e: any) {
-      setError(e.message || "Failed to activate version");
-    }
-  };
-
-  // ── Platform toggle handler (shared) ────────────────────────────────────────
   const platformToggle = (checked: boolean) => {
     if (!checked) requestDisablePlatform();
     else { setIncludePlatform(true); setShowPlatformWarning(false); }
   };
 
-  // ── Platform settings JSX (shared) ──────────────────────────────────────────
   const platformSettingsJSX = (
     <div className="space-y-3">
       <div className="flex items-start gap-3">
@@ -642,96 +678,217 @@ export default function ContractBuilder() {
     </div>
   );
 
-  if (loading) {
+  // ── Listing assignment label ───────────────────────────────────────────────
+  const assignmentLabel = (ids: number[]) => {
+    if (!ids || ids.length === 0) return "All rentals (default)";
+    const names = ids.map(id => listings.find(l => l.id === id)?.title ?? `#${id}`);
+    if (names.length <= 2) return names.join(", ");
+    return `${names.slice(0, 2).join(", ")} +${names.length - 2} more`;
+  };
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // LIBRARY VIEW
+  // ═══════════════════════════════════════════════════════════════════════════
+  if (view === "library") {
     return (
-      <div className="flex items-center justify-center h-64">
-        <Loader2 className="w-6 h-6 animate-spin text-slate-400" />
+      <div className="flex flex-col h-full min-h-screen bg-slate-100">
+        {/* Header */}
+        <div className="bg-white border-b border-slate-200 px-6 py-3 flex items-center justify-between shrink-0">
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 rounded-lg bg-emerald-50 border border-emerald-100 flex items-center justify-center">
+              <FileSignature className="w-4 h-4 text-emerald-600" />
+            </div>
+            <div>
+              <h1 className="text-sm font-semibold text-slate-900 leading-none">Contract Templates</h1>
+              <p className="text-xs text-slate-400 mt-0.5">Build and manage the agreements your renters sign at checkout</p>
+            </div>
+          </div>
+          <Button onClick={() => openEditor()} size="sm" style={{ backgroundColor: "#3ab549" }} className="text-white text-xs">
+            <Plus className="w-3.5 h-3.5 mr-1.5" /> New Template
+          </Button>
+        </div>
+
+        {/* Body */}
+        <div className="flex-1 overflow-y-auto p-6">
+          {loadingLib ? (
+            <div className="flex items-center justify-center h-40">
+              <Loader2 className="w-5 h-5 animate-spin text-slate-400" />
+            </div>
+          ) : templates.length === 0 ? (
+            <div className="flex flex-col items-center justify-center h-64 gap-4">
+              <div className="w-14 h-14 rounded-2xl bg-slate-100 border border-slate-200 flex items-center justify-center">
+                <FileSignature className="w-7 h-7 text-slate-400" />
+              </div>
+              <div className="text-center">
+                <p className="text-sm font-medium text-slate-700">No contract templates yet</p>
+                <p className="text-xs text-slate-400 mt-1">Create a template to collect signed agreements from your renters at checkout.</p>
+              </div>
+              <Button onClick={() => openEditor()} size="sm" style={{ backgroundColor: "#3ab549" }} className="text-white text-xs mt-2">
+                <Plus className="w-3.5 h-3.5 mr-1.5" /> Create First Template
+              </Button>
+            </div>
+          ) : (
+            <div className="space-y-3 max-w-4xl">
+              {templates.map(t => {
+                const ids = Array.isArray(t.listingIds) ? t.listingIds : [];
+                const isPdf = t.contractType === "uploaded_pdf";
+                return (
+                  <div key={t.id} className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
+                    <div className="flex items-center gap-4 px-5 py-4">
+                      {/* Icon */}
+                      <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${t.isActive ? "bg-emerald-100 border border-emerald-200" : "bg-slate-100 border border-slate-200"}`}>
+                        {isPdf
+                          ? <FileText className={`w-5 h-5 ${t.isActive ? "text-emerald-600" : "text-slate-400"}`} />
+                          : <Type className={`w-5 h-5 ${t.isActive ? "text-emerald-600" : "text-slate-400"}`} />
+                        }
+                      </div>
+
+                      {/* Info */}
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <p className="text-sm font-semibold text-slate-900 truncate">{t.title}</p>
+                          <Badge variant="outline" className={`text-[10px] px-1.5 py-0 shrink-0 ${t.isActive ? "bg-emerald-50 text-emerald-700 border-emerald-200" : "bg-slate-50 text-slate-500 border-slate-200"}`}>
+                            {t.isActive ? "Active" : "Inactive"}
+                          </Badge>
+                          <Badge variant="outline" className="text-[10px] px-1.5 py-0 shrink-0 bg-slate-50 text-slate-500 border-slate-200">
+                            {isPdf ? "PDF" : "Template"}
+                          </Badge>
+                        </div>
+                        <div className="flex items-center gap-3 mt-1 flex-wrap">
+                          <span className="text-xs text-slate-400 flex items-center gap-1">
+                            <Link2 className="w-3 h-3" />
+                            {assignmentLabel(ids)}
+                          </span>
+                          <span className="text-xs text-slate-300">·</span>
+                          <span className="text-xs text-slate-400 flex items-center gap-1">
+                            <Clock className="w-3 h-3" />
+                            v{t.version} · {new Date(t.updatedAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Actions */}
+                      <div className="flex items-center gap-1 shrink-0">
+                        {/* View PDF */}
+                        {isPdf && (
+                          <a
+                            href={pdfUrl(t.id)}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="p-2 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors"
+                            title="View PDF"
+                          >
+                            <Eye className="w-4 h-4" />
+                          </a>
+                        )}
+                        {/* Toggle active */}
+                        <button
+                          type="button"
+                          onClick={() => handleToggleActive(t)}
+                          disabled={togglingId === t.id}
+                          title={t.isActive ? "Deactivate" : "Activate"}
+                          className="p-2 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors"
+                        >
+                          {togglingId === t.id
+                            ? <Loader2 className="w-4 h-4 animate-spin" />
+                            : t.isActive
+                              ? <ToggleRight className="w-4 h-4 text-emerald-500" />
+                              : <ToggleLeft className="w-4 h-4" />
+                          }
+                        </button>
+                        {/* Edit */}
+                        <button
+                          type="button"
+                          onClick={() => openEditor(t)}
+                          className="px-3 py-1.5 rounded-lg text-xs font-medium text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-200 transition-colors"
+                        >
+                          Edit
+                        </button>
+                        {/* Delete */}
+                        <button
+                          type="button"
+                          onClick={() => handleDelete(t.id, t.title)}
+                          disabled={deletingId === t.id}
+                          className="p-2 rounded-lg text-slate-400 hover:text-red-500 hover:bg-red-50 transition-colors"
+                          title="Delete"
+                        >
+                          {deletingId === t.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+
+              {/* Info callout */}
+              <div className="flex items-start gap-3 bg-blue-50 border border-blue-200 rounded-xl p-4 mt-2">
+                <Info className="w-4 h-4 text-blue-500 shrink-0 mt-0.5" />
+                <p className="text-xs text-blue-800">
+                  <span className="font-semibold">Assignment rules:</span> When a renter books, OutdoorShare first looks for an active template assigned to that specific rental.
+                  If none matches, it uses the default template (assigned to "All rentals").
+                  Multiple templates can be active at the same time.
+                </p>
+              </div>
+            </div>
+          )}
+        </div>
       </div>
     );
   }
 
-  // ── Version History section (shared at bottom) ───────────────────────────────
-  const historySection = history.length > 1 && (
-    <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
-      <button
-        type="button"
-        onClick={() => setHistoryOpen(v => !v)}
-        className="w-full flex items-center justify-between px-5 py-3.5 hover:bg-slate-50 transition-colors"
-      >
-        <span className="flex items-center gap-2 text-sm font-medium text-slate-700">
-          <History className="w-4 h-4 text-slate-400" />
-          Version History
-          <Badge variant="outline" className="text-xs text-slate-500 border-slate-200">{history.length}</Badge>
-        </span>
-        {historyOpen ? <ChevronUp className="w-4 h-4 text-slate-400" /> : <ChevronDown className="w-4 h-4 text-slate-400" />}
-      </button>
-      {historyOpen && (
-        <div className="border-t border-slate-100 px-5">
-          {history.map(row => (
-            <HistoryRow key={row.id} row={row} onActivate={handleActivate} />
-          ))}
-        </div>
-      )}
-    </div>
-  );
+  // ═══════════════════════════════════════════════════════════════════════════
+  // EDITOR VIEW
+  // ═══════════════════════════════════════════════════════════════════════════
+  const editorContract = editingId !== null ? templates.find(t => t.id === editingId) ?? null : null;
 
   return (
     <div className="flex flex-col h-full min-h-screen bg-slate-100">
-
-      {/* ── Top bar ──────────────────────────────────────────────────────── */}
+      {/* ── Top bar ─────────────────────────────────────────────────────── */}
       <div className="bg-white border-b border-slate-200 px-6 py-3 flex items-center justify-between shrink-0">
         <div className="flex items-center gap-3">
-          <div className="w-8 h-8 rounded-lg bg-emerald-50 border border-emerald-100 flex items-center justify-center">
-            <FileSignature className="w-4 h-4 text-emerald-600" />
-          </div>
-          <div>
-            <h1 className="text-sm font-semibold text-slate-900 leading-none">Contract Builder</h1>
-            <p className="text-xs text-slate-400 mt-0.5">Create the agreement your renters sign at checkout</p>
+          <button
+            type="button"
+            onClick={closeEditor}
+            className="flex items-center gap-1.5 text-sm text-slate-500 hover:text-slate-900 transition-colors"
+          >
+            <ArrowLeft className="w-4 h-4" />
+            Templates
+          </button>
+          <span className="text-slate-300">/</span>
+          <div className="flex items-center gap-2">
+            <div className="w-7 h-7 rounded-lg bg-emerald-50 border border-emerald-100 flex items-center justify-center">
+              <FileSignature className="w-3.5 h-3.5 text-emerald-600" />
+            </div>
+            <p className="text-sm font-semibold text-slate-900">
+              {editingId !== null ? "Edit Template" : "New Template"}
+            </p>
+            {editorContract && (
+              <Badge variant="outline" className="text-xs text-slate-400 border-slate-200">v{editorContract.version}</Badge>
+            )}
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
-          {contract && (
-            <Badge variant="outline" className="text-xs text-slate-400 border-slate-200">v{contract.version}</Badge>
-          )}
-          <div className="flex gap-0.5 bg-slate-100 p-0.5 rounded-lg">
-            <button type="button" onClick={() => { setMode("template"); setUploadPhase("card"); }}
-              className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all flex items-center gap-1.5 ${mode === "template" ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-700"}`}>
-              <Type className="w-3 h-3" /> Build Template
-            </button>
-            <button type="button" onClick={() => setMode("upload_pdf")}
-              className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all flex items-center gap-1.5 ${mode === "upload_pdf" ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-700"}`}>
-              <Upload className="w-3 h-3" /> Upload PDF
-            </button>
-          </div>
-          {contract && (
-            <button type="button" onClick={handleDelete} disabled={deleting}
-              className="p-1.5 rounded-lg text-slate-400 hover:text-red-500 hover:bg-red-50 transition-colors" title="Remove contract">
-              {deleting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
-            </button>
-          )}
+        <div className="flex gap-0.5 bg-slate-100 p-0.5 rounded-lg">
+          <button type="button" onClick={() => { setMode("template"); setUploadPhase("card"); }}
+            className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all flex items-center gap-1.5 ${mode === "template" ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-700"}`}>
+            <Type className="w-3 h-3" /> Build Template
+          </button>
+          <button type="button" onClick={() => setMode("upload_pdf")}
+            className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all flex items-center gap-1.5 ${mode === "upload_pdf" ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-700"}`}>
+            <Upload className="w-3 h-3" /> Upload PDF
+          </button>
         </div>
       </div>
 
-      {/* ── Alerts ───────────────────────────────────────────────────────── */}
-      {(!contract || error) && (
-        <div className="px-6 pt-3 space-y-2 shrink-0">
-          {!contract && (
-            <div className="flex items-start gap-3 bg-amber-50 border border-amber-200 rounded-xl p-3">
-              <Info className="w-4 h-4 text-amber-500 shrink-0 mt-0.5" />
-              <p className="text-xs text-amber-800">No contract yet. Use the editor below to get started, then save.</p>
-            </div>
-          )}
-          {error && (
-            <div className="flex items-start gap-3 bg-red-50 border border-red-200 rounded-xl p-3">
-              <AlertCircle className="w-4 h-4 text-red-500 shrink-0 mt-0.5" />
-              <p className="text-xs text-red-700">{error}</p>
-            </div>
-          )}
+      {/* Error banner */}
+      {error && (
+        <div className="mx-6 mt-3 flex items-start gap-3 bg-red-50 border border-red-200 rounded-xl p-3 shrink-0">
+          <AlertCircle className="w-4 h-4 text-red-500 shrink-0 mt-0.5" />
+          <p className="text-xs text-red-700">{error}</p>
         </div>
       )}
 
-      {/* ── TEMPLATE MODE ────────────────────────────────────────────────── */}
+      {/* ── TEMPLATE MODE ──────────────────────────────────────────────── */}
       {mode === "template" && (
         <div className="flex flex-col flex-1 overflow-hidden">
           {/* Token ribbon */}
@@ -754,7 +911,6 @@ export default function ContractBuilder() {
           {/* Document canvas */}
           <div className="flex-1 overflow-y-auto py-8 px-6 flex justify-center">
             <div className="w-full max-w-[780px] space-y-6">
-
               {/* Edit / Preview toggle */}
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-1.5 text-xs text-slate-500">
@@ -780,8 +936,8 @@ export default function ContractBuilder() {
                     className="w-full text-2xl font-bold text-slate-900 placeholder-slate-300 bg-transparent border-none outline-none tracking-tight"
                     placeholder="Agreement Title"
                     style={{ fontFamily: "'Georgia', 'Times New Roman', serif" }} />
-                  {contract?.updatedAt && (
-                    <p className="text-xs text-slate-400 mt-2">Last saved {new Date(contract.updatedAt).toLocaleString()}</p>
+                  {editorContract?.updatedAt && (
+                    <p className="text-xs text-slate-400 mt-2">Last saved {new Date(editorContract.updatedAt).toLocaleString()}</p>
                   )}
                 </div>
 
@@ -800,8 +956,6 @@ export default function ContractBuilder() {
                     dangerouslySetInnerHTML={{ __html: markdownToHtml(content) || "<p style='color:#94a3b8'>Nothing to preview yet.</p>" }} />
                 )}
               </div>
-
-              {historySection}
             </div>
           </div>
 
@@ -811,20 +965,88 @@ export default function ContractBuilder() {
               className="w-full flex items-center justify-between px-6 py-3 text-sm font-medium text-slate-600 hover:text-slate-900 hover:bg-slate-50 transition-colors">
               <span className="flex items-center gap-2">
                 <DollarSign className="w-4 h-4 text-slate-400" />
-                Agreement settings — checkbox label &amp; platform policy
+                Agreement settings — checkbox label, platform policy &amp; listing assignment
               </span>
               {settingsOpen ? <ChevronDown className="w-4 h-4 text-slate-400" /> : <ChevronUp className="w-4 h-4 text-slate-400" />}
             </button>
 
             {settingsOpen && (
-              <div className="px-6 pb-5 grid grid-cols-1 md:grid-cols-2 gap-5 border-t border-slate-100">
-                <div className="space-y-1.5 pt-4">
-                  <Label htmlFor="checkbox-label" className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Renter Checkbox Label</Label>
-                  <Input id="checkbox-label" value={checkboxLabel} onChange={e => setCheckboxLabel(e.target.value)}
-                    placeholder="I have read and agree to the rental terms and conditions" className="text-sm" />
-                  <p className="text-xs text-slate-400">The exact text shown next to the checkbox renters must check before signing.</p>
+              <div className="px-6 pb-5 border-t border-slate-100">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-5 pt-4">
+                  <div className="space-y-1.5">
+                    <Label htmlFor="checkbox-label" className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Renter Checkbox Label</Label>
+                    <Input id="checkbox-label" value={checkboxLabel} onChange={e => setCheckboxLabel(e.target.value)}
+                      placeholder="I have read and agree to the rental terms and conditions" className="text-sm" />
+                    <p className="text-xs text-slate-400">The exact text shown next to the checkbox renters must check before signing.</p>
+                  </div>
+                  <div className="pt-1">{platformSettingsJSX}</div>
                 </div>
-                <div className="pt-5">{platformSettingsJSX}</div>
+
+                {/* Listing assignment */}
+                <div className="mt-5 space-y-2">
+                  <Label className="text-xs font-semibold text-slate-500 uppercase tracking-wider flex items-center gap-1.5">
+                    <Link2 className="w-3.5 h-3.5" /> Assign to Specific Rentals
+                  </Label>
+                  <p className="text-xs text-slate-400">
+                    Leave empty to use as the default template for all rentals.
+                    When assigned to specific rentals, this template only applies to bookings for those rentals.
+                  </p>
+                  <div className="relative">
+                    <button
+                      type="button"
+                      onClick={() => setListingDropOpen(v => !v)}
+                      className="w-full flex items-center justify-between px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-sm text-slate-700 hover:border-slate-300 transition-colors"
+                    >
+                      <span className="flex items-center gap-2 text-sm">
+                        <Link2 className="w-3.5 h-3.5 text-slate-400" />
+                        {editorListingIds.length === 0
+                          ? <span className="text-slate-400">All rentals (default)</span>
+                          : <span>{assignmentLabel(editorListingIds)}</span>
+                        }
+                      </span>
+                      {listingDropOpen ? <ChevronUp className="w-4 h-4 text-slate-400" /> : <ChevronDown className="w-4 h-4 text-slate-400" />}
+                    </button>
+                    {listingDropOpen && (
+                      <div className="absolute bottom-full mb-1 left-0 right-0 bg-white border border-slate-200 rounded-xl shadow-lg overflow-hidden z-10 max-h-60 overflow-y-auto">
+                        {/* "All rentals" option */}
+                        <button
+                          type="button"
+                          onClick={() => setEditorListingIds([])}
+                          className={`w-full flex items-center gap-3 px-4 py-2.5 text-sm hover:bg-slate-50 transition-colors ${editorListingIds.length === 0 ? "text-emerald-700 font-medium" : "text-slate-700"}`}
+                        >
+                          <div className={`w-4 h-4 rounded border flex items-center justify-center shrink-0 ${editorListingIds.length === 0 ? "bg-emerald-500 border-emerald-500" : "border-slate-300"}`}>
+                            {editorListingIds.length === 0 && <CheckCircle className="w-3 h-3 text-white" />}
+                          </div>
+                          All rentals (default)
+                        </button>
+                        {listings.length > 0 && <div className="border-t border-slate-100" />}
+                        {listings.map(l => {
+                          const checked = editorListingIds.includes(l.id);
+                          return (
+                            <button
+                              key={l.id}
+                              type="button"
+                              onClick={() => {
+                                setEditorListingIds(prev =>
+                                  prev.includes(l.id) ? prev.filter(id => id !== l.id) : [...prev, l.id]
+                                );
+                              }}
+                              className={`w-full flex items-center gap-3 px-4 py-2.5 text-sm hover:bg-slate-50 transition-colors ${checked ? "text-emerald-700 font-medium" : "text-slate-700"}`}
+                            >
+                              <div className={`w-4 h-4 rounded border flex items-center justify-center shrink-0 ${checked ? "bg-emerald-500 border-emerald-500" : "border-slate-300"}`}>
+                                {checked && <CheckCircle className="w-3 h-3 text-white" />}
+                              </div>
+                              {l.title}
+                            </button>
+                          );
+                        })}
+                        {listings.length === 0 && (
+                          <p className="px-4 py-3 text-xs text-slate-400">No rentals found. Create rentals first.</p>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </div>
               </div>
             )}
           </div>
@@ -840,37 +1062,34 @@ export default function ContractBuilder() {
                 style={{ backgroundColor: "#3ab549" }} className="text-white text-xs px-4">
                 {saving
                   ? <span className="flex items-center gap-1.5"><Loader2 className="w-3.5 h-3.5 animate-spin" /> Saving…</span>
-                  : <span className="flex items-center gap-1.5"><Save className="w-3.5 h-3.5" /> Save Contract</span>}
+                  : <span className="flex items-center gap-1.5"><Save className="w-3.5 h-3.5" /> Save Template</span>}
               </Button>
             </div>
           </div>
         </div>
       )}
 
-      {/* ── UPLOAD PDF MODE ──────────────────────────────────────────────── */}
+      {/* ── UPLOAD PDF MODE ─────────────────────────────────────────────── */}
       {mode === "upload_pdf" && (
         <div className="flex-1 overflow-y-auto py-8 px-6 flex justify-center">
           <div className="w-full max-w-[640px] space-y-5 pb-8">
-
-            {/* Active PDF card (shown when a PDF is already uploaded and not replacing) */}
-            {uploadPhase === "card" && contract?.contractType === "uploaded_pdf" && (
+            {/* Active PDF card (editing an existing PDF template) */}
+            {uploadPhase === "card" && editorContract?.contractType === "uploaded_pdf" && (
               <ActivePdfCard
-                contract={contract}
+                contract={editorContract}
                 onReplace={() => { setPdfFile(null); setUploadPhase("upload_form"); setUploadProgress("idle"); }}
-                onRemove={handleDelete}
+                onRemove={() => handleDelete(editorContract.id, editorContract.title).then(closeEditor)}
               />
             )}
 
-            {/* Upload form (shown when no PDF yet, or replacing) */}
-            {(uploadPhase === "upload_form" || !contract || contract.contractType !== "uploaded_pdf") && (
+            {/* Upload form */}
+            {(uploadPhase === "upload_form" || !editorContract || editorContract.contractType !== "uploaded_pdf") && (
               <>
-                {uploadPhase === "upload_form" && contract?.contractType === "uploaded_pdf" && (
-                  <div className="flex items-center gap-2">
-                    <button type="button" onClick={() => setUploadPhase("card")}
-                      className="text-sm text-slate-500 hover:text-slate-700 flex items-center gap-1.5">
-                      ← Back to current PDF
-                    </button>
-                  </div>
+                {uploadPhase === "upload_form" && editorContract?.contractType === "uploaded_pdf" && (
+                  <button type="button" onClick={() => setUploadPhase("card")}
+                    className="text-sm text-slate-500 hover:text-slate-700 flex items-center gap-1.5">
+                    ← Back to current PDF
+                  </button>
                 )}
 
                 <div className="flex items-start gap-3 bg-blue-50 border border-blue-200 rounded-xl p-4">
@@ -889,34 +1108,21 @@ export default function ContractBuilder() {
 
                   <div>
                     <Label className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2 block">PDF File</Label>
-
-                    {/* Upload progress states */}
                     {(uploadProgress === "uploading" || uploadProgress === "processing") && (
                       <div className="flex items-center gap-3 p-4 bg-blue-50 border border-blue-200 rounded-xl">
                         <Loader2 className="w-5 h-5 text-blue-500 animate-spin shrink-0" />
                         <div>
-                          <p className="text-sm font-medium text-blue-800">
-                            {uploadProgress === "uploading" ? "Uploading…" : "Processing…"}
-                          </p>
+                          <p className="text-sm font-medium text-blue-800">{uploadProgress === "uploading" ? "Uploading…" : "Processing…"}</p>
                           <p className="text-xs text-blue-600 mt-0.5">Please wait, do not close this page</p>
                         </div>
                       </div>
                     )}
-
-                    {uploadProgress === "done" && !pdfFile && (
-                      <div className="flex items-center gap-3 p-4 bg-emerald-50 border border-emerald-200 rounded-xl">
-                        <CheckCircle className="w-5 h-5 text-emerald-500 shrink-0" />
-                        <p className="text-sm font-medium text-emerald-800">Upload complete — PDF is now active</p>
-                      </div>
-                    )}
-
                     {uploadProgress === "error" && (
                       <div className="flex items-center gap-3 p-4 bg-red-50 border border-red-200 rounded-xl">
                         <AlertCircle className="w-5 h-5 text-red-500 shrink-0" />
                         <p className="text-sm text-red-700">{error || "Upload failed. Please try again."}</p>
                       </div>
                     )}
-
                     {pdfFile && uploadProgress !== "uploading" && uploadProgress !== "processing" ? (
                       <div className="flex items-center gap-3 p-3 bg-slate-50 border border-slate-200 rounded-xl">
                         <FileText className="w-5 h-5 text-slate-500 shrink-0" />
@@ -949,6 +1155,53 @@ export default function ContractBuilder() {
                   </div>
 
                   <div className="pt-1">{platformSettingsJSX}</div>
+
+                  {/* Listing assignment for PDF */}
+                  <div className="space-y-2 pt-2">
+                    <Label className="text-xs font-semibold text-slate-500 uppercase tracking-wider flex items-center gap-1.5">
+                      <Link2 className="w-3.5 h-3.5" /> Assign to Specific Rentals
+                    </Label>
+                    <p className="text-xs text-slate-400">Leave empty to use as the default for all rentals.</p>
+                    <div className="relative">
+                      <button type="button" onClick={() => setListingDropOpen(v => !v)}
+                        className="w-full flex items-center justify-between px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-sm text-slate-700 hover:border-slate-300 transition-colors">
+                        <span className="flex items-center gap-2">
+                          <Link2 className="w-3.5 h-3.5 text-slate-400" />
+                          {editorListingIds.length === 0
+                            ? <span className="text-slate-400">All rentals (default)</span>
+                            : <span>{assignmentLabel(editorListingIds)}</span>
+                          }
+                        </span>
+                        {listingDropOpen ? <ChevronUp className="w-4 h-4 text-slate-400" /> : <ChevronDown className="w-4 h-4 text-slate-400" />}
+                      </button>
+                      {listingDropOpen && (
+                        <div className="absolute bottom-full mb-1 left-0 right-0 bg-white border border-slate-200 rounded-xl shadow-lg overflow-hidden z-10 max-h-60 overflow-y-auto">
+                          <button type="button" onClick={() => setEditorListingIds([])}
+                            className={`w-full flex items-center gap-3 px-4 py-2.5 text-sm hover:bg-slate-50 ${editorListingIds.length === 0 ? "text-emerald-700 font-medium" : "text-slate-700"}`}>
+                            <div className={`w-4 h-4 rounded border flex items-center justify-center shrink-0 ${editorListingIds.length === 0 ? "bg-emerald-500 border-emerald-500" : "border-slate-300"}`}>
+                              {editorListingIds.length === 0 && <CheckCircle className="w-3 h-3 text-white" />}
+                            </div>
+                            All rentals (default)
+                          </button>
+                          {listings.length > 0 && <div className="border-t border-slate-100" />}
+                          {listings.map(l => {
+                            const checked = editorListingIds.includes(l.id);
+                            return (
+                              <button key={l.id} type="button"
+                                onClick={() => setEditorListingIds(prev => prev.includes(l.id) ? prev.filter(id => id !== l.id) : [...prev, l.id])}
+                                className={`w-full flex items-center gap-3 px-4 py-2.5 text-sm hover:bg-slate-50 ${checked ? "text-emerald-700 font-medium" : "text-slate-700"}`}>
+                                <div className={`w-4 h-4 rounded border flex items-center justify-center shrink-0 ${checked ? "bg-emerald-500 border-emerald-500" : "border-slate-300"}`}>
+                                  {checked && <CheckCircle className="w-3 h-3 text-white" />}
+                                </div>
+                                {l.title}
+                              </button>
+                            );
+                          })}
+                          {listings.length === 0 && <p className="px-4 py-3 text-xs text-slate-400">No rentals found.</p>}
+                        </div>
+                      )}
+                    </div>
+                  </div>
                 </div>
 
                 <div className="flex items-center justify-end gap-3">
@@ -961,8 +1214,6 @@ export default function ContractBuilder() {
                 </div>
               </>
             )}
-
-            {historySection}
           </div>
         </div>
       )}

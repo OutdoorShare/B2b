@@ -122,7 +122,7 @@ router.post("/customers/set-password", async (req, res) => {
     (async () => {
       try {
         const [biz] = await db
-          .select({ businessName: businessProfileTable.businessName })
+          .select({ businessName: businessProfileTable.name })
           .from(businessProfileTable)
           .where(eq(businessProfileTable.tenantId, tenant.id));
         await sendCredentialsEmail({

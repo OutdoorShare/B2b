@@ -1,16 +1,20 @@
-import { pgTable, serial, text, integer, boolean, timestamp } from "drizzle-orm/pg-core";
+import { pgTable, serial, text, integer, boolean, timestamp, json } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 
 // ── Operator Contracts ────────────────────────────────────────────────────────
 // Per-tenant custom contracts that operators build or upload.
-// Each tenant has at most one active contract (isActive = true).
-// Supports {{placeholder}} tokens — see resolveAgreementTokens() in the API.
+// Multiple templates can be active simultaneously. isActive = true means
+// this template is in use. listingIds controls which listings use it:
+//   - empty array  → default contract (used for any booking not matched below)
+//   - [3, 7, 12]   → only for bookings on listing 3, 7, or 12
+//
+// Resolution priority when a booking is created:
+//   1. Active contract whose listingIds includes the booking's listing
+//   2. Active contract with empty listingIds (global default)
 //
 // includeOutdoorShareAgreements: when true, active platform_agreements are
 // appended to the combined PDF in addition to this contract.
-// When false (insurance opted out), only this contract is included unless the
-// operator explicitly re-enables it.
 export const operatorContractsTable = pgTable("operator_contracts", {
   id: serial("id").primaryKey(),
   tenantId: integer("tenant_id").notNull(),
@@ -26,6 +30,8 @@ export const operatorContractsTable = pgTable("operator_contracts", {
   includeOutdoorShareAgreements: boolean("include_outdoorshare_agreements").notNull().default(true),
   version: integer("version").notNull().default(1),
   isActive: boolean("is_active").notNull().default(true),
+  // Listing IDs this template is assigned to. Empty = global default.
+  listingIds: json("listing_ids").$type<number[]>().notNull().default([]),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });

@@ -478,7 +478,7 @@ router.post("/bookings", async (req, res) => {
         // Fetch company name for the PDF header
         let companyName = "Rental Company";
         if (req.tenantId) {
-          const [biz] = await db.select({ businessName: businessProfileTable.businessName })
+          const [biz] = await db.select({ businessName: businessProfileTable.name })
             .from(businessProfileTable)
             .where(eq(businessProfileTable.tenantId, req.tenantId));
           if (biz?.businessName) companyName = biz.businessName;
@@ -753,10 +753,7 @@ router.get("/bookings/:id/agreements-for-signing", async (req, res) => {
           fee: listingRulesTable.fee,
         })
           .from(listingRulesTable)
-          .where(and(
-            eq(listingRulesTable.listingId, booking.listingId),
-            eq(listingRulesTable.isActive, true),
-          ))
+          .where(eq(listingRulesTable.listingId, booking.listingId))
           .orderBy(listingRulesTable.sortOrder)
       : [];
 
@@ -773,8 +770,8 @@ router.get("/bookings/:id/agreements-for-signing", async (req, res) => {
       .where(eq(platformAgreementsTable.isActive, true))
       .orderBy(platformAgreementsTable.sortOrder);
 
-    // Active operator contract for this tenant
-    const [operatorContract] = booking.tenantId
+    // Active operator contract for this tenant — resolve listing-specific first, then global default
+    const activeContracts = booking.tenantId
       ? await db
           .select({
             id: operatorContractsTable.id,
@@ -786,14 +783,18 @@ router.get("/bookings/:id/agreements-for-signing", async (req, res) => {
             content: operatorContractsTable.content,
             uploadedPdfStorageKey: operatorContractsTable.uploadedPdfStorageKey,
             uploadedFileName: operatorContractsTable.uploadedFileName,
+            listingIds: operatorContractsTable.listingIds,
           })
           .from(operatorContractsTable)
           .where(and(
             eq(operatorContractsTable.tenantId, booking.tenantId),
             eq(operatorContractsTable.isActive, true),
           ))
-          .limit(1)
-      : [null];
+      : [];
+    const operatorContract =
+      activeContracts.find(c => (c.listingIds as number[] ?? []).includes(booking.listingId ?? -1)) ??
+      activeContracts.find(c => !(c.listingIds as number[] ?? []).length) ??
+      null;
 
     // If operator has opted out of platform agreements, don't show them
     const showPlatformAgreements = !operatorContract || operatorContract.includeOutdoorShareAgreements;
@@ -852,20 +853,24 @@ router.get("/bookings/:id/contract-pdf", async (req, res) => {
       res.status(403).json({ error: "Email does not match booking" }); return;
     }
 
-    const [contract] = booking.tenantId
+    const allActiveContracts = booking.tenantId
       ? await db
           .select({
             contractType: operatorContractsTable.contractType,
             uploadedPdfStorageKey: operatorContractsTable.uploadedPdfStorageKey,
             uploadedFileName: operatorContractsTable.uploadedFileName,
+            listingIds: operatorContractsTable.listingIds,
           })
           .from(operatorContractsTable)
           .where(and(
             eq(operatorContractsTable.tenantId, booking.tenantId),
             eq(operatorContractsTable.isActive, true),
           ))
-          .limit(1)
-      : [null];
+      : [];
+    const contract =
+      allActiveContracts.find(c => (c.listingIds as number[] ?? []).includes(booking.listingId ?? -1)) ??
+      allActiveContracts.find(c => !(c.listingIds as number[] ?? []).length) ??
+      null;
 
     if (!contract || contract.contractType !== "uploaded_pdf" || !contract.uploadedPdfStorageKey) {
       res.status(404).json({ error: "No PDF contract on file for this rental" }); return;
@@ -953,7 +958,7 @@ router.post("/bookings/:id/sign-agreement-public", async (req, res) => {
           .from(listingsTable).where(eq(listingsTable.id, booking.listingId)).limit(1)
       : [null];
     const [biz] = booking.tenantId
-      ? await db.select({ businessName: businessProfileTable.businessName })
+      ? await db.select({ businessName: businessProfileTable.name })
           .from(businessProfileTable).where(eq(businessProfileTable.tenantId, booking.tenantId)).limit(1)
       : [null];
 
@@ -1779,7 +1784,7 @@ router.post("/bookings/:id/before-photos", pickupUpload.array("photos", 15), asy
             let companyName = "Rental Company";
             let adminEmail: string | undefined;
             if (booking.tenantId) {
-              const [biz] = await db.select({ businessName: businessProfileTable.businessName })
+              const [biz] = await db.select({ businessName: businessProfileTable.name })
                 .from(businessProfileTable).where(eq(businessProfileTable.tenantId, booking.tenantId));
               if (biz?.businessName) companyName = biz.businessName;
               const [t] = await db.select({ email: tenantsTable.email })
@@ -1909,9 +1914,9 @@ router.post("/pickup/:token/photos", pickupUpload.array("photos", 20), async (re
           let adminEmail: string | undefined;
           let tenantSlug = "";
           if (booking.tenantId) {
-            const [biz] = await db.select({ businessName: businessProfileTable.businessName, name: businessProfileTable.name })
+            const [biz] = await db.select({ name: businessProfileTable.name })
               .from(businessProfileTable).where(eq(businessProfileTable.tenantId, booking.tenantId));
-            companyName = biz?.name ?? biz?.businessName ?? "Rental Company";
+            companyName = biz?.name ?? "Rental Company";
             const [t] = await db.select({ email: tenantsTable.email, slug: tenantsTable.slug })
               .from(tenantsTable).where(eq(tenantsTable.id, booking.tenantId));
             if (t?.email) adminEmail = t.email;
