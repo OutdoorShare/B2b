@@ -30,22 +30,48 @@ const testimonials = [
   { name: "Derek Park", company: "Trail Wheels MTB", text: "Finally a platform built for rental companies, not adapted from something else.", stars: 5 },
 ];
 
-function HeroSignIn() {
-  const [showSlugInput, setShowSlugInput] = useState(false);
-  const [slug, setSlug] = useState("");
-  const [error, setError] = useState("");
-  const [, navigate] = useLocation();
+const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
-  function handleSignIn(e: React.FormEvent) {
+function HeroSignIn() {
+  const [showLogin, setShowLogin] = useState(false);
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
+
+  async function handleSignIn(e: React.FormEvent) {
     e.preventDefault();
-    const s = slug.trim().toLowerCase().replace(/\s+/g, "-");
-    if (!s) { setError("Enter your company's website name."); return; }
-    navigate(`/${s}/admin`);
+    if (!email.trim() || !password) { setError("Email and password are required."); return; }
+    setError(""); setLoading(true);
+    try {
+      const res = await fetch(`${BASE}/api/admin/auth/universal-login`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: email.trim(), password }),
+        credentials: "include",
+      });
+      const data = await res.json();
+      if (!res.ok) { setError(data.error || "Invalid email or password."); return; }
+      if (data.single) {
+        const m = data.match;
+        const session = m.type === "owner"
+          ? { type: "owner", token: data.token, tenantId: m.tenantId, tenantSlug: m.tenantSlug, tenantName: m.tenantName, email: email.trim() }
+          : { type: "user", token: data.token, tenantId: m.tenantId, tenantSlug: m.tenantSlug, id: m.userId, name: m.userName, role: m.role };
+        localStorage.setItem("admin_session", JSON.stringify(session));
+        window.location.href = `${BASE}/${m.tenantSlug}/admin`;
+      } else {
+        // Multiple accounts — redirect to full login page with email pre-filled
+        window.location.href = `${BASE}/admin/login?email=${encodeURIComponent(email.trim())}`;
+      }
+    } catch {
+      setError("Connection error. Please try again.");
+    } finally { setLoading(false); }
   }
 
   return (
     <div className="flex flex-col items-center gap-4">
-      {!showSlugInput ? (
+      {!showLogin ? (
         <div className="flex flex-col sm:flex-row gap-4 justify-center">
           <Link href="/signup">
             <Button
@@ -60,34 +86,69 @@ function HeroSignIn() {
             size="lg"
             variant="outline"
             className="h-13 px-8 text-base border-white/40 text-white hover:bg-white/10 hover:border-white/70 hover:text-white bg-white/5 backdrop-blur-sm"
-            onClick={() => setShowSlugInput(true)}
+            onClick={() => setShowLogin(true)}
           >
             Sign into my account
           </Button>
         </div>
       ) : (
         <form onSubmit={handleSignIn} className="flex flex-col items-center gap-3 w-full max-w-sm">
-          <p className="text-sm text-white/70 font-medium">Enter your company's website name</p>
-          <div className="flex gap-2 w-full">
+          <p className="text-sm text-white/70 font-medium">Sign in to your admin account</p>
+          <Input
+            autoFocus
+            type="email"
+            autoComplete="email"
+            value={email}
+            onChange={e => { setEmail(e.target.value); setError(""); }}
+            placeholder="you@yourcompany.com"
+            className="h-11 text-sm w-full bg-white/10 border-white/30 text-white placeholder:text-white/40 focus:border-green-400"
+          />
+          <div className="relative w-full">
             <Input
-              autoFocus
-              value={slug}
-              onChange={e => { setSlug(e.target.value); setError(""); }}
-              placeholder="e.g. summit-rentals"
-              className="h-11 text-sm flex-1 bg-white/10 border-white/30 text-white placeholder:text-white/40 focus:border-green-400"
+              type={showPassword ? "text" : "password"}
+              autoComplete="current-password"
+              value={password}
+              onChange={e => { setPassword(e.target.value); setError(""); }}
+              placeholder="Password"
+              className="h-11 text-sm w-full bg-white/10 border-white/30 text-white placeholder:text-white/40 focus:border-green-400 pr-10"
             />
-            <Button type="submit" size="lg" className="h-11 px-5 font-bold text-white hover:opacity-90" style={{ backgroundColor: OS_GREEN }}>
-              Go
-            </Button>
+            <button
+              type="button"
+              onClick={() => setShowPassword(v => !v)}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-white/40 hover:text-white/80"
+              tabIndex={-1}
+            >
+              {showPassword
+                ? <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-4 h-4"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/><path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+                : <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-4 h-4"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+              }
+            </button>
           </div>
           {error && <p className="text-xs text-red-400">{error}</p>}
-          <button
-            type="button"
-            className="text-xs text-white/50 hover:text-white/80 underline"
-            onClick={() => { setShowSlugInput(false); setSlug(""); setError(""); }}
+          <Button
+            type="submit"
+            size="lg"
+            className="w-full h-11 font-bold text-white hover:opacity-90"
+            style={{ backgroundColor: OS_GREEN }}
+            disabled={loading}
           >
-            Cancel
-          </button>
+            {loading ? "Signing in…" : "Sign In"}
+          </Button>
+          <div className="flex items-center justify-between w-full">
+            <button
+              type="button"
+              className="text-xs text-white/50 hover:text-white/80 underline"
+              onClick={() => { setShowLogin(false); setEmail(""); setPassword(""); setError(""); }}
+            >
+              Cancel
+            </button>
+            <a
+              href={`${BASE}/forgot-password?type=owner${email ? `&email=${encodeURIComponent(email.trim())}` : ""}`}
+              className="text-xs text-white/50 hover:text-white/80 underline"
+            >
+              Forgot password?
+            </a>
+          </div>
         </form>
       )}
       <p className="text-sm text-white/50">No credit card required · Cancel anytime</p>
@@ -97,8 +158,11 @@ function HeroSignIn() {
 
 function SignInDropdown() {
   const [open, setOpen] = useState(false);
-  const [adminSlug, setAdminSlug] = useState("");
+  const [adminEmail, setAdminEmail] = useState("");
+  const [adminPassword, setAdminPassword] = useState("");
+  const [adminShowPw, setAdminShowPw] = useState(false);
   const [adminError, setAdminError] = useState("");
+  const [adminLoading, setAdminLoading] = useState(false);
   const [renterSlug, setRenterSlug] = useState("");
   const [renterError, setRenterError] = useState("");
   const [, navigate] = useLocation();
@@ -112,12 +176,34 @@ function SignInDropdown() {
     return () => document.removeEventListener("mousedown", onClickOutside);
   }, []);
 
-  function goToAdmin(e: React.FormEvent) {
+  async function goToAdmin(e: React.FormEvent) {
     e.preventDefault();
-    const slug = adminSlug.trim().toLowerCase().replace(/\s+/g, "-");
-    if (!slug) { setAdminError("Enter your company's website name."); return; }
-    setOpen(false);
-    navigate(`/${slug}/admin`);
+    if (!adminEmail.trim() || !adminPassword) { setAdminError("Email and password are required."); return; }
+    setAdminError(""); setAdminLoading(true);
+    try {
+      const res = await fetch(`${BASE}/api/admin/auth/universal-login`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: adminEmail.trim(), password: adminPassword }),
+        credentials: "include",
+      });
+      const data = await res.json();
+      if (!res.ok) { setAdminError(data.error || "Invalid email or password."); return; }
+      if (data.single) {
+        const m = data.match;
+        const session = m.type === "owner"
+          ? { type: "owner", token: data.token, tenantId: m.tenantId, tenantSlug: m.tenantSlug, tenantName: m.tenantName, email: adminEmail.trim() }
+          : { type: "user", token: data.token, tenantId: m.tenantId, tenantSlug: m.tenantSlug, id: m.userId, name: m.userName, role: m.role };
+        localStorage.setItem("admin_session", JSON.stringify(session));
+        setOpen(false);
+        window.location.href = `${BASE}/${m.tenantSlug}/admin`;
+      } else {
+        setOpen(false);
+        window.location.href = `${BASE}/admin/login?email=${encodeURIComponent(adminEmail.trim())}`;
+      }
+    } catch {
+      setAdminError("Connection error. Please try again.");
+    } finally { setAdminLoading(false); }
   }
 
   function goToRenterPortal(e: React.FormEvent) {
@@ -154,20 +240,52 @@ function SignInDropdown() {
             </div>
             <form onSubmit={goToAdmin} className="space-y-2">
               <Input
-                value={adminSlug}
-                onChange={e => { setAdminSlug(e.target.value); setAdminError(""); }}
-                placeholder="e.g. summit-rentals"
+                type="email"
+                autoComplete="email"
+                value={adminEmail}
+                onChange={e => { setAdminEmail(e.target.value); setAdminError(""); }}
+                placeholder="you@yourcompany.com"
                 className="h-9 text-sm"
               />
+              <div className="relative">
+                <Input
+                  type={adminShowPw ? "text" : "password"}
+                  autoComplete="current-password"
+                  value={adminPassword}
+                  onChange={e => { setAdminPassword(e.target.value); setAdminError(""); }}
+                  placeholder="Password"
+                  className="h-9 text-sm pr-9"
+                />
+                <button
+                  type="button"
+                  onClick={() => setAdminShowPw(v => !v)}
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                  tabIndex={-1}
+                >
+                  {adminShowPw
+                    ? <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-3.5 h-3.5"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/><path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+                    : <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-3.5 h-3.5"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                  }
+                </button>
+              </div>
               {adminError && <p className="text-xs text-destructive">{adminError}</p>}
-              <p className="text-[11px] text-muted-foreground">Enter your company's website name</p>
+              <div className="flex items-center justify-between">
+                <a
+                  href={`${BASE}/forgot-password?type=owner${adminEmail ? `&email=${encodeURIComponent(adminEmail.trim())}` : ""}`}
+                  className="text-[10px] text-muted-foreground hover:text-foreground underline"
+                  onClick={() => setOpen(false)}
+                >
+                  Forgot password?
+                </a>
+              </div>
               <Button
                 type="submit"
                 size="sm"
                 className="w-full font-bold text-white hover:opacity-90"
                 style={{ backgroundColor: OS_GREEN }}
+                disabled={adminLoading}
               >
-                Go to Admin
+                {adminLoading ? "Signing in…" : "Sign In"}
               </Button>
             </form>
           </div>

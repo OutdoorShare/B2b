@@ -7,6 +7,14 @@ import { ShieldCheck, Eye, EyeOff, Building2, ChevronRight, Users } from "lucide
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
+// Read pre-filled email from URL (e.g. ?email=user@co.com) — set when redirected
+// from the marketing page login form when multiple accounts are found.
+function getUrlEmail() {
+  try {
+    return new URLSearchParams(window.location.search).get("email") ?? "";
+  } catch { return ""; }
+}
+
 interface AccountMatch {
   type: "owner" | "staff";
   tenantId: number;
@@ -23,7 +31,7 @@ export default function UniversalAdminLogin() {
   const { toast } = useToast();
 
   const [step, setStep] = useState<Step>("credentials");
-  const [email, setEmail] = useState("");
+  const [email, setEmail] = useState(getUrlEmail);
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");

@@ -14,7 +14,6 @@ interface Props {
 export default function AdminLoginPage({ slug }: Props) {
   const { toast } = useToast();
 
-  const [tab, setTab] = useState<"owner" | "team">("owner");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -22,73 +21,81 @@ export default function AdminLoginPage({ slug }: Props) {
   const [redirectSlug, setRedirectSlug] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
-  const handleOwnerLogin = async () => {
+  const handleLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
     setError(""); setRedirectSlug(null);
-    if (!email || !password) { setError("Email and password are required."); return; }
+    if (!email.trim() || !password) { setError("Email and password are required."); return; }
     setLoading(true);
-    try {
-      const res = await fetch(`${BASE}/api/admin/auth/owner-login`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({ email, password, slug }),
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        if (data.correctSlug) {
-          setError("These credentials belong to a different company.");
-          setRedirectSlug(data.correctSlug);
-        } else {
-          setError(data.error || "Login failed.");
-        }
-        return;
-      }
-      if (data.tenantSlug !== slug) {
-        setError("These credentials belong to a different company.");
-        setRedirectSlug(data.tenantSlug);
-        return;
-      }
-      localStorage.setItem("admin_session", JSON.stringify({
-        type: "owner",
-        token: data.token,
-        tenantId: data.tenantId,
-        tenantName: data.tenantName,
-        tenantSlug: data.tenantSlug,
-        email: data.email,
-        emailVerified: data.emailVerified ?? true,
-      }));
-      toast({ title: "Welcome back!", description: `Signed in as owner of ${data.tenantName}` });
-      window.location.href = `${BASE}/${slug}/admin`;
-    } catch {
-      setError("Connection error. Please try again.");
-    } finally { setLoading(false); }
-  };
 
-  const handleTeamLogin = async () => {
-    setError("");
-    if (!email || !password) { setError("Email and password are required."); return; }
-    setLoading(true);
     try {
-      const res = await fetch(`${BASE}/api/admin/auth/login`, {
+      // Use the universal login API which handles both owners and staff.
+      // We then verify the result belongs to this specific tenant slug.
+      const res = await fetch(`${BASE}/api/admin/auth/universal-login`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
-        body: JSON.stringify({ email, password, slug }),
+        body: JSON.stringify({ email: email.trim(), password }),
       });
       const data = await res.json();
-      if (!res.ok) { setError(data.error || "Login failed."); return; }
-      localStorage.setItem("admin_session", JSON.stringify({
-        type: "user",
-        token: data.token,
-        tenantId: data.tenantId,
-        tenantSlug: data.tenantSlug,
-        id: data.user.id,
-        name: data.user.name,
-        email: data.user.email,
-        role: data.user.role,
-      }));
-      toast({ title: `Welcome, ${data.user.name}!`, description: `Logged in as ${data.user.role}` });
-      window.location.href = `${BASE}/${slug}/admin`;
+
+      if (!res.ok) {
+        setError(data.error || "Invalid email or password.");
+        return;
+      }
+
+      if (data.single) {
+        const m = data.match;
+
+        if (m.tenantSlug !== slug) {
+          // Valid credentials, but they belong to a different company
+          setError("These credentials are linked to a different company.");
+          setRedirectSlug(m.tenantSlug);
+          return;
+        }
+
+        const session = m.type === "owner"
+          ? { type: "owner", token: data.token, tenantId: m.tenantId, tenantSlug: m.tenantSlug, tenantName: m.tenantName, email: email.trim() }
+          : { type: "user", token: data.token, tenantId: m.tenantId, tenantSlug: m.tenantSlug, id: m.userId, name: m.userName, role: m.role };
+        localStorage.setItem("admin_session", JSON.stringify(session));
+        toast({ title: "Welcome back!", description: `Signed in to ${m.tenantName}` });
+        window.location.href = `${BASE}/${slug}/admin`;
+
+      } else {
+        // Multiple accounts — find the one for this slug
+        const match = data.accounts?.find((a: any) => a.tenantSlug === slug);
+
+        if (!match) {
+          // Credentials are valid but not for this tenant — find any matching account
+          const first = data.accounts?.[0];
+          if (first) {
+            setError("These credentials are linked to a different company.");
+            setRedirectSlug(first.tenantSlug);
+          } else {
+            setError("Invalid email or password.");
+          }
+          return;
+        }
+
+        // Re-authenticate against the specific tenant endpoint to get a session token
+        const endpoint = match.type === "owner"
+          ? `${BASE}/api/admin/auth/owner-login`
+          : `${BASE}/api/admin/auth/login`;
+        const reRes = await fetch(endpoint, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify({ email: email.trim(), password, slug }),
+        });
+        const reData = await reRes.json();
+        if (!reRes.ok) { setError(reData.error || "Sign in failed."); return; }
+
+        const session = match.type === "owner"
+          ? { type: "owner", token: reData.token, tenantId: reData.tenantId, tenantSlug: reData.tenantSlug, tenantName: reData.tenantName, email: email.trim() }
+          : { type: "user", token: reData.token, tenantId: reData.tenantId, tenantSlug: reData.tenantSlug, id: reData.user?.id, name: reData.user?.name, role: reData.user?.role };
+        localStorage.setItem("admin_session", JSON.stringify(session));
+        toast({ title: "Welcome back!", description: `Signed in to ${match.tenantName}` });
+        window.location.href = `${BASE}/${slug}/admin`;
+      }
     } catch {
       setError("Connection error. Please try again.");
     } finally { setLoading(false); }
@@ -101,30 +108,14 @@ export default function AdminLoginPage({ slug }: Props) {
           <div className="inline-flex items-center justify-center w-12 h-12 rounded-xl bg-primary/10 mb-4">
             <ShieldCheck className="w-6 h-6 text-primary" />
           </div>
-          <h1 className="text-2xl font-bold">Admin Portal</h1>
+          <h1 className="text-2xl font-bold">Admin Sign In</h1>
           <p className="text-sm text-muted-foreground mt-1">
             <span className="font-medium text-foreground">{slug}</span> management dashboard
           </p>
         </div>
 
-        <div className="bg-card rounded-2xl border shadow-sm overflow-hidden">
-          <div className="flex border-b">
-            {(["owner", "team"] as const).map(t => (
-              <button
-                key={t}
-                onClick={() => { setTab(t); setError(""); setEmail(""); setPassword(""); }}
-                className={`flex-1 py-3 text-sm font-semibold transition-colors border-b-2 -mb-px
-                  ${tab === t ? "border-primary text-foreground" : "border-transparent text-muted-foreground hover:text-foreground"}`}
-              >
-                {t === "owner" ? "Owner" : "Staff"}
-              </button>
-            ))}
-          </div>
-
-          <form
-            className="p-6 space-y-4"
-            onSubmit={e => { e.preventDefault(); tab === "owner" ? handleOwnerLogin() : handleTeamLogin(); }}
-          >
+        <div className="bg-card rounded-2xl border shadow-sm">
+          <form className="p-6 space-y-4" onSubmit={handleLogin}>
             <div className="space-y-1.5">
               <Label htmlFor="admin-email">Email</Label>
               <Input
@@ -133,8 +124,9 @@ export default function AdminLoginPage({ slug }: Props) {
                 autoComplete="email"
                 value={email}
                 onChange={e => setEmail(e.target.value)}
-                placeholder={tab === "owner" ? "owner@company.com" : "staff@company.com"}
+                placeholder="you@yourcompany.com"
                 className="h-11"
+                autoFocus
               />
             </div>
 
@@ -168,19 +160,19 @@ export default function AdminLoginPage({ slug }: Props) {
                     href={`${BASE}/${redirectSlug}/admin`}
                     className="inline-flex items-center gap-1 text-primary underline underline-offset-2 hover:opacity-80"
                   >
-                    → Sign in to /{redirectSlug}/admin
+                    → Sign in to /{redirectSlug}
                   </a>
                 )}
               </div>
             )}
 
             <Button type="submit" className="w-full h-11 font-bold" disabled={loading}>
-              {loading ? "Signing in…" : "Sign In to Dashboard"}
+              {loading ? "Signing in…" : "Sign In"}
             </Button>
 
             <div className="text-center pt-1">
               <a
-                href={`${BASE}/forgot-password?type=${tab === "owner" ? "owner" : "staff"}&slug=${encodeURIComponent(slug)}${email ? `&email=${encodeURIComponent(email)}` : ""}`}
+                href={`${BASE}/forgot-password?slug=${encodeURIComponent(slug)}${email ? `&email=${encodeURIComponent(email.trim())}` : ""}`}
                 className="text-xs text-muted-foreground hover:text-foreground underline underline-offset-2 transition-colors"
               >
                 Forgot your password?
@@ -192,7 +184,7 @@ export default function AdminLoginPage({ slug }: Props) {
         <p className="text-center text-xs text-muted-foreground space-x-3">
           <a href={`/${slug}`} className="hover:underline">← Back to storefront</a>
           <span>·</span>
-          <a href={`${BASE}/admin/login`} className="hover:underline">Sign in without a slug</a>
+          <a href={`${BASE}/admin/login`} className="hover:underline">Use a different account</a>
         </p>
       </div>
     </div>
