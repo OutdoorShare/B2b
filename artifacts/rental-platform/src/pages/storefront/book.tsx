@@ -881,6 +881,10 @@ export default function StorefrontBook() {
     uploadedFileName: string | null;
     includeOutdoorShareAgreements: boolean;
   } | null>(null);
+  // Which form field is currently focused — used to highlight the matching token in the document
+  const [focusedField, setFocusedField] = useState<string | null>(null);
+  // Ref to the scrollable document preview pane so we can scroll to a specific token
+  const docPaneRef = useRef<HTMLDivElement>(null);
   const sigCanvasRef = useRef<HTMLCanvasElement>(null);
   const isDrawingRef = useRef(false);
   const handleStartVerificationRef = useRef<(() => Promise<void>) | null>(null);
@@ -1563,7 +1567,7 @@ export default function StorefrontBook() {
   function renderAgreementParagraph(para: string, paraIdx: number) {
     const parts = para.split(/({{[^}]+}})/g);
     return (
-      <p key={paraIdx}>
+      <p key={paraIdx} className="leading-loose">
         {parts.map((part, i) => {
           const m = part.match(/^{{(.+)}}$/);
           if (!m) return <span key={i}>{part}</span>;
@@ -1579,16 +1583,31 @@ export default function StorefrontBook() {
           const currentVal = customFieldValues[key];
           const label = fieldDef?.label || key.replace(/_/g, " ");
           const isRequired = fieldDef?.required ?? true;
-          if (currentVal) {
-            return (
-              <span key={i} className={`inline-block font-semibold px-1 rounded mx-0.5 ${isRequired ? "bg-amber-100 text-amber-900 border border-amber-300" : "bg-blue-50 text-blue-900 border border-blue-200"}`}>
-                {fieldDef?.type === "checkbox" ? (currentVal === "true" ? "✓ Yes" : "✗ No") : currentVal}
-              </span>
-            );
-          }
+          const isFocused = focusedField === key;
+
           return (
-            <span key={i} className={`inline-block mx-0.5 px-1.5 rounded border-b-2 italic text-xs ${isRequired ? "border-red-400 text-red-500 bg-red-50" : "border-slate-300 text-slate-400 bg-slate-50"}`}>
-              [{label}]
+            <span
+              key={i}
+              data-field-key={key}
+              onClick={() => scrollToFormField(key)}
+              title={`Click to fill: ${label}`}
+              className={[
+                "inline-block mx-0.5 cursor-pointer rounded transition-all duration-150 select-none",
+                currentVal
+                  ? isRequired
+                    ? "font-semibold px-1.5 py-0.5 bg-amber-100 text-amber-900 border border-amber-300"
+                    : "font-semibold px-1.5 py-0.5 bg-blue-50 text-blue-900 border border-blue-200"
+                  : isRequired
+                    ? "px-1.5 py-0.5 border-b-2 border-red-400 text-red-400 bg-red-50/60 italic text-xs"
+                    : "px-1.5 py-0.5 border-b-2 border-slate-300 text-slate-400 bg-slate-50 italic text-xs",
+                isFocused
+                  ? "ring-2 ring-primary ring-offset-1 scale-105 shadow-md"
+                  : "hover:ring-1 hover:ring-primary/40 hover:scale-[1.02]",
+              ].join(" ")}
+            >
+              {currentVal
+                ? fieldDef?.type === "checkbox" ? (currentVal === "true" ? "✓ Yes" : "✗ No") : currentVal
+                : `[${label}]`}
             </span>
           );
         })}
@@ -1602,6 +1621,31 @@ export default function StorefrontBook() {
       if (autoFillMap[k] !== undefined) return autoFillMap[k];
       return customFieldValues[k] || `[${k}]`;
     });
+  }
+
+  // Scroll the document preview pane to reveal the token for a given field key.
+  // Called when a form field gains focus so the renter can see where it appears in the contract.
+  function scrollToDocToken(key: string) {
+    if (!docPaneRef.current) return;
+    const container = docPaneRef.current;
+    const tokenEl = container.querySelector(`[data-field-key="${key}"]`) as HTMLElement | null;
+    if (!tokenEl) return;
+    const containerRect = container.getBoundingClientRect();
+    const tokenRect = tokenEl.getBoundingClientRect();
+    const targetScroll = container.scrollTop + tokenRect.top - containerRect.top - container.clientHeight / 3;
+    container.scrollTo({ top: Math.max(0, targetScroll), behavior: "smooth" });
+  }
+
+  // Scroll the page to show a form field and focus its input.
+  // Called when the renter clicks a token in the document preview.
+  function scrollToFormField(key: string) {
+    const fieldEl = document.getElementById(`form-field-${key}`);
+    if (!fieldEl) return;
+    fieldEl.scrollIntoView({ behavior: "smooth", block: "center" });
+    setFocusedField(key);
+    const input = fieldEl.querySelector("input, textarea, select") as HTMLElement | null;
+    // Small delay so scroll completes before focus (prevents fighting)
+    setTimeout(() => input?.focus(), 300);
   }
 
   useEffect(() => {
@@ -3797,299 +3841,324 @@ export default function StorefrontBook() {
               <div className="space-y-6">
 
                 {/* ── AGREEMENT PHASE ── */}
-                {completePhase === "agreement" && (
-                  <>
-                    <h1 className="text-2xl font-bold">Rental Agreement</h1>
+                {completePhase === "agreement" && (() => {
+                  // Pre-compute field lists used by both panes
+                  const renterKeys = agreementText
+                    ? [...new Set(Array.from(agreementText.matchAll(/{{([^}]+)}}/g)).map(m => m[1].trim()).filter(k => !(k in autoFillMap)))]
+                    : [];
+                  const requiredUnfilled = renterKeys.filter(k => {
+                    const def = contractFields.find(f => f.key === k);
+                    return (def?.required ?? true) && !customFieldValues[k];
+                  });
+                  const allFieldsDone = requiredUnfilled.length === 0;
+                  const allRulesDone = listingRules.every(r => ruleChecks[r.id]);
+                  const contractTitle = resolvedOperatorContract?.title || "Rental Agreement";
+                  const isPdf = resolvedOperatorContract?.contractType === "uploaded_pdf" && resolvedOperatorContract.hasPdf;
 
-                    {/* Required contract fields */}
-                    {agreementText && (() => {
-                      const renterKeys = Array.from(agreementText.matchAll(/{{([^}]+)}}/g))
-                        .map(m => m[1].trim())
-                        .filter(k => !(k in autoFillMap));
-                      const uniqueKeys = [...new Set(renterKeys)];
-                      if (uniqueKeys.length === 0) return null;
+                  return (
+                    <>
+                      <h1 className="text-2xl font-bold">Review & Sign Agreement</h1>
 
-                      const requiredUnfilled = uniqueKeys.filter(k => {
-                        const def = contractFields.find(f => f.key === k);
-                        const isRequired = def?.required ?? true;
-                        const val = customFieldValues[k];
-                        return isRequired && !val;
-                      });
+                      {/* ── Two-pane layout: document preview left, form right ── */}
+                      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 items-start">
 
-                      return (
-                        <div className="bg-background rounded-2xl border shadow-sm overflow-hidden">
-                          <div className={`px-6 py-4 border-b flex items-center gap-3 ${requiredUnfilled.length === 0 ? "bg-green-50/60" : "bg-amber-50/60"}`}>
-                            {requiredUnfilled.length === 0
-                              ? <><CheckCircle2 className="w-5 h-5 text-green-600 shrink-0" /><div><p className="font-semibold text-green-800">All required fields complete</p><p className="text-xs text-green-600 mt-0.5">Review the agreement below before signing.</p></div></>
-                              : <><AlertTriangle className="w-5 h-5 text-amber-600 shrink-0" /><div><p className="font-semibold text-amber-800">Complete Required Information</p><p className="text-xs text-amber-600 mt-0.5">Fill in the fields below before signing.</p></div></>
-                            }
-                          </div>
-                          <div className="p-6 grid grid-cols-1 gap-4">
-                            {uniqueKeys.map(k => {
-                              const def = contractFields.find(f => f.key === k);
-                              const label = def?.label || k.replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase());
-                              const isRequired = def?.required ?? true;
-                              const placeholder = def?.placeholder || label;
-                              const description = def?.description;
-                              const type = def?.type || "text";
-                              const val = customFieldValues[k] ?? "";
-                              const isFilledIn = type === "checkbox" ? true : !!val;
-
-                              return (
-                                <div key={k} className={`rounded-xl border p-4 transition-colors ${isFilledIn ? "border-green-200 bg-green-50/30" : isRequired ? "border-amber-200 bg-amber-50/30" : "border-slate-200 bg-slate-50/30"}`}>
-                                  <div className="flex items-center gap-2 mb-2">
-                                    <label className="text-sm font-semibold text-foreground">{label}</label>
-                                    <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full border ${isRequired ? "bg-red-100 text-red-600 border-red-200" : "bg-slate-100 text-slate-500 border-slate-200"}`}>
-                                      {isRequired ? "Required" : "Optional"}
-                                    </span>
-                                    {isFilledIn && type !== "checkbox" && <CheckCircle2 className="w-3.5 h-3.5 text-green-500 ml-auto" />}
-                                  </div>
-                                  {description && <p className="text-xs text-muted-foreground mb-2">{description}</p>}
-                                  {type === "textarea" ? (
-                                    <textarea
-                                      value={val}
-                                      onChange={e => setCustomFieldValues(prev => ({ ...prev, [k]: e.target.value }))}
-                                      placeholder={placeholder}
-                                      rows={3}
-                                      className="w-full text-sm border rounded-lg px-3 py-2 bg-background focus:outline-none focus:ring-2 focus:ring-primary/30 resize-none"
-                                    />
-                                  ) : type === "checkbox" ? (
-                                    <label className="flex items-center gap-3 cursor-pointer">
-                                      <input
-                                        type="checkbox"
-                                        checked={val === "true"}
-                                        onChange={e => setCustomFieldValues(prev => ({ ...prev, [k]: e.target.checked ? "true" : "false" }))}
-                                        className="w-4 h-4 accent-primary"
-                                      />
-                                      <span className="text-sm text-foreground">{placeholder || label}</span>
-                                    </label>
-                                  ) : (
-                                    <input
-                                      type={type === "date" ? "date" : type === "number" ? "number" : "text"}
-                                      value={val}
-                                      onChange={e => setCustomFieldValues(prev => ({ ...prev, [k]: e.target.value }))}
-                                      placeholder={placeholder}
-                                      className="w-full text-sm border rounded-lg px-3 py-2 bg-background focus:outline-none focus:ring-2 focus:ring-primary/30"
-                                    />
-                                  )}
-                                </div>
-                              );
-                            })}
-                          </div>
-                        </div>
-                      );
-                    })()}
-
-                    {/* Agreement — PDF uploaded contract type */}
-                    {resolvedOperatorContract?.contractType === "uploaded_pdf" && resolvedOperatorContract.hasPdf && (
-                      <div className="bg-background rounded-2xl border shadow-sm p-6 space-y-4">
-                        <div className="flex items-center gap-2">
-                          <FileText className="w-5 h-5 text-primary" />
-                          <h2 className="text-base font-bold text-foreground">{resolvedOperatorContract.title || "Rental Agreement"}</h2>
-                        </div>
-                        <p className="text-sm text-muted-foreground">
-                          Please review the rental agreement PDF before signing. By adding your signature below you confirm you have read and agree to all terms.
-                        </p>
-                        <a
-                          href={`${BASE}/api/contracts/public-pdf/${resolvedOperatorContract.id}?tenantSlug=${encodeURIComponent(slug ?? "")}`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="inline-flex items-center gap-2 text-sm font-semibold text-primary underline underline-offset-2 hover:opacity-80"
-                        >
-                          <FileText className="w-4 h-4" />
-                          View {resolvedOperatorContract.uploadedFileName ?? "Rental Agreement PDF"}
-                        </a>
-                      </div>
-                    )}
-
-                    {/* Agreement text — template or platform fallback */}
-                    {resolvedOperatorContract?.contractType !== "uploaded_pdf" && (
-                      <div className="bg-background rounded-2xl border shadow-sm p-6 space-y-4 max-h-96 overflow-y-auto text-sm text-muted-foreground leading-relaxed">
-                        <h2 className="text-base font-bold text-foreground">{resolvedOperatorContract?.title || "Rental Agreement"}</h2>
-                        <p><strong className="text-foreground">Rental Period:</strong> {startFormattedWithTime} — {endFormattedWithTime} ({days} day{days > 1 ? "s" : ""})</p>
-                        <p><strong className="text-foreground">Item:</strong> {listing.title}</p>
-                        <p><strong className="text-foreground">Renter:</strong> {name} ({email})</p>
-                        <Separator />
-                        {agreementText
-                          ? agreementText.split("\n\n").filter(Boolean).map((para, i) => renderAgreementParagraph(para, i))
-                          : (
-                            <div className="flex items-center gap-2 text-muted-foreground italic py-4">
-                              <Loader2 className="w-4 h-4 animate-spin shrink-0" />
-                              <span>Loading agreement…</span>
-                            </div>
-                          )
-                        }
-
-                        {/* ── Listing Rules — embedded in agreement document ── */}
-                        {listingRules.length > 0 && (
-                          <>
-                            <Separator />
+                        {/* ══ LEFT PANE — Document Preview (sticky on desktop) ══ */}
+                        <div className="lg:sticky lg:top-4 flex flex-col bg-card border rounded-2xl shadow-sm overflow-hidden">
+                          {/* Pane header */}
+                          <div className="px-5 py-3 border-b bg-muted/20 flex items-center justify-between shrink-0">
                             <div>
-                              <p className="text-xs font-bold uppercase tracking-widest text-foreground mb-0.5">Rental Rules & Policies</p>
-                              <p className="text-xs text-muted-foreground mb-3">
-                                The following rules apply specifically to this listing. You must acknowledge each rule individually before signing.
-                              </p>
-                              <div className="space-y-3">
-                                {listingRules.map((rule, i) => (
-                                  <div key={rule.id} className="pl-3 border-l-2 border-primary/25">
-                                    <p className="text-xs font-semibold text-foreground">{i + 1}. {rule.title}</p>
-                                    {rule.description && (
-                                      <p className="text-xs mt-0.5 leading-relaxed">{rule.description}</p>
-                                    )}
-                                    {rule.fee > 0 && (
-                                      <p className="text-xs mt-1 font-medium text-amber-700">
-                                        Violation fee: ${(rule.fee).toFixed(2)}
-                                      </p>
-                                    )}
+                              <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Contract Preview</p>
+                              <p className="text-sm font-semibold text-foreground leading-tight">{contractTitle}</p>
+                            </div>
+                            <span className="text-[10px] bg-muted rounded-full px-2 py-0.5 text-muted-foreground font-medium border">Read only</span>
+                          </div>
+
+                          {/* Scrollable document body */}
+                          <div
+                            ref={docPaneRef}
+                            className="overflow-y-auto text-sm text-muted-foreground leading-relaxed"
+                            style={{ maxHeight: "calc(100vh - 220px)", minHeight: "320px" }}
+                          >
+                            {isPdf ? (
+                              /* PDF contract */
+                              <div className="p-6 space-y-4">
+                                <div className="flex items-center gap-2.5 text-foreground">
+                                  <FileText className="w-5 h-5 text-primary shrink-0" />
+                                  <p className="font-semibold">{contractTitle}</p>
+                                </div>
+                                <p className="text-sm">Please review the rental agreement PDF before signing. By adding your signature you confirm you have read and agree to all terms.</p>
+                                <a
+                                  href={`${BASE}/api/contracts/public-pdf/${resolvedOperatorContract!.id}?tenantSlug=${encodeURIComponent(slug ?? "")}`}
+                                  target="_blank" rel="noopener noreferrer"
+                                  className="inline-flex items-center gap-2 text-sm font-semibold text-primary underline underline-offset-2 hover:opacity-80"
+                                >
+                                  <FileText className="w-4 h-4" />
+                                  View {resolvedOperatorContract!.uploadedFileName ?? "Rental Agreement PDF"}
+                                </a>
+                              </div>
+                            ) : (
+                              /* Template contract — live-updating with token highlights */
+                              <div className="p-5 space-y-3">
+                                {/* Booking header context */}
+                                <div className="text-xs space-y-0.5 pb-2 border-b">
+                                  <p><strong className="text-foreground">Period:</strong> {startFormattedWithTime} — {endFormattedWithTime} ({days} day{days > 1 ? "s" : ""})</p>
+                                  <p><strong className="text-foreground">Item:</strong> {listing.title}</p>
+                                  <p><strong className="text-foreground">Renter:</strong> {name} ({email})</p>
+                                </div>
+                                {agreementText
+                                  ? agreementText.split("\n\n").filter(Boolean).map((para, i) => renderAgreementParagraph(para, i))
+                                  : (
+                                    <div className="flex items-center gap-2 text-muted-foreground italic py-4">
+                                      <Loader2 className="w-4 h-4 animate-spin shrink-0" />
+                                      <span>Loading agreement…</span>
+                                    </div>
+                                  )
+                                }
+                                {/* Listing rules embedded in document (read-only) */}
+                                {listingRules.length > 0 && (
+                                  <div className="pt-2 border-t mt-3">
+                                    <p className="text-[10px] font-bold uppercase tracking-widest text-foreground mb-2">Rental Rules & Policies</p>
+                                    <div className="space-y-2">
+                                      {listingRules.map((rule, i) => (
+                                        <div key={rule.id} className="pl-3 border-l-2 border-primary/25">
+                                          <p className="text-xs font-semibold text-foreground">{i + 1}. {rule.title}</p>
+                                          {rule.description && <p className="text-xs mt-0.5">{rule.description}</p>}
+                                          {rule.fee > 0 && <p className="text-xs mt-0.5 font-medium text-amber-700">Violation fee: ${rule.fee.toFixed(2)}</p>}
+                                        </div>
+                                      ))}
+                                    </div>
                                   </div>
-                                ))}
+                                )}
+                                <p className="text-[11px] italic border-t pt-2 mt-3">
+                                  By signing, you confirm you have read and agree to all terms{listingRules.length > 0 ? ", including all rental rules" : ""}.
+                                </p>
+                              </div>
+                            )}
+                          </div>
+
+                          {/* Clickable token hint */}
+                          {!isPdf && renterKeys.length > 0 && (
+                            <div className="px-5 py-2.5 border-t bg-primary/5 flex items-center gap-2 shrink-0">
+                              <div className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse" />
+                              <p className="text-[11px] text-primary font-medium">Click any highlighted field in the document to jump to it</p>
+                            </div>
+                          )}
+                        </div>
+
+                        {/* ══ RIGHT PANE — Form fields + signing ══ */}
+                        <div className="space-y-4">
+
+                          {/* Status banner */}
+                          {renterKeys.length > 0 && (
+                            <div className={`rounded-xl border p-3.5 flex items-center gap-3 transition-colors ${allFieldsDone ? "border-green-200 bg-green-50" : "border-amber-200 bg-amber-50"}`}>
+                              {allFieldsDone
+                                ? <><CheckCircle2 className="w-4 h-4 text-green-600 shrink-0" /><div><p className="text-sm font-semibold text-green-800">All fields complete</p><p className="text-xs text-green-600">Review the document, then sign below.</p></div></>
+                                : <><AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" /><div><p className="text-sm font-semibold text-amber-800">Complete all required fields</p><p className="text-xs text-amber-600">{requiredUnfilled.length} field{requiredUnfilled.length > 1 ? "s" : ""} needed before signing.</p></div></>
+                              }
+                            </div>
+                          )}
+
+                          {/* Dynamic fields — each has id="form-field-{key}" for scroll targeting */}
+                          {renterKeys.length > 0 && (
+                            <div className="bg-card rounded-2xl border shadow-sm overflow-hidden">
+                              <div className="px-5 py-3.5 border-b bg-muted/20">
+                                <p className="font-semibold text-sm">Agreement Fields</p>
+                                <p className="text-xs text-muted-foreground mt-0.5">Your responses populate the contract automatically</p>
+                              </div>
+                              <div className="p-4 space-y-3">
+                                {renterKeys.map(k => {
+                                  const def = contractFields.find(f => f.key === k);
+                                  const label = def?.label || k.replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase());
+                                  const isRequired = def?.required ?? true;
+                                  const placeholder = def?.placeholder || label;
+                                  const description = def?.description;
+                                  const type = def?.type || "text";
+                                  const val = customFieldValues[k] ?? "";
+                                  const isFilledIn = type === "checkbox" ? true : !!val;
+                                  const isFocused = focusedField === k;
+
+                                  return (
+                                    <div
+                                      key={k}
+                                      id={`form-field-${k}`}
+                                      className={[
+                                        "rounded-xl border p-3.5 transition-all duration-150",
+                                        isFocused ? "border-primary ring-2 ring-primary/20 bg-primary/5" : isFilledIn ? "border-green-200 bg-green-50/30" : isRequired ? "border-amber-200 bg-amber-50/20" : "border-slate-200 bg-slate-50/20",
+                                      ].join(" ")}
+                                    >
+                                      <div className="flex items-center gap-2 mb-2">
+                                        <label htmlFor={`field-input-${k}`} className="text-sm font-semibold text-foreground">{label}</label>
+                                        <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full border ${isRequired ? "bg-red-100 text-red-600 border-red-200" : "bg-slate-100 text-slate-500 border-slate-200"}`}>
+                                          {isRequired ? "Required" : "Optional"}
+                                        </span>
+                                        {isFilledIn && type !== "checkbox" && <CheckCircle2 className="w-3.5 h-3.5 text-green-500 ml-auto" />}
+                                      </div>
+                                      {description && <p className="text-xs text-muted-foreground mb-2">{description}</p>}
+                                      {type === "textarea" ? (
+                                        <textarea
+                                          id={`field-input-${k}`}
+                                          value={val}
+                                          onFocus={() => { setFocusedField(k); scrollToDocToken(k); }}
+                                          onBlur={() => setFocusedField(null)}
+                                          onChange={e => setCustomFieldValues(prev => ({ ...prev, [k]: e.target.value }))}
+                                          placeholder={placeholder}
+                                          rows={3}
+                                          className="w-full text-sm border rounded-lg px-3 py-2 bg-background focus:outline-none focus:ring-2 focus:ring-primary/30 resize-none"
+                                        />
+                                      ) : type === "checkbox" ? (
+                                        <label className="flex items-center gap-3 cursor-pointer">
+                                          <input
+                                            id={`field-input-${k}`}
+                                            type="checkbox"
+                                            checked={val === "true"}
+                                            onFocus={() => { setFocusedField(k); scrollToDocToken(k); }}
+                                            onBlur={() => setFocusedField(null)}
+                                            onChange={e => setCustomFieldValues(prev => ({ ...prev, [k]: e.target.checked ? "true" : "false" }))}
+                                            className="w-4 h-4 accent-primary"
+                                          />
+                                          <span className="text-sm text-foreground">{placeholder || label}</span>
+                                        </label>
+                                      ) : (
+                                        <input
+                                          id={`field-input-${k}`}
+                                          type={type === "date" ? "date" : type === "number" ? "number" : "text"}
+                                          value={val}
+                                          onFocus={() => { setFocusedField(k); scrollToDocToken(k); }}
+                                          onBlur={() => setFocusedField(null)}
+                                          onChange={e => setCustomFieldValues(prev => ({ ...prev, [k]: e.target.value }))}
+                                          placeholder={placeholder}
+                                          className="w-full text-sm border rounded-lg px-3 py-2 bg-background focus:outline-none focus:ring-2 focus:ring-primary/30"
+                                        />
+                                      )}
+                                    </div>
+                                  );
+                                })}
                               </div>
                             </div>
-                          </>
-                        )}
+                          )}
 
-                        <p className="text-xs italic">By signing below, you confirm you have read, understood, and agree to all terms in this rental agreement{listingRules.length > 0 ? ", including all rental rules and policies listed above" : ""}.</p>
-                      </div>
-                    )}
-
-                    {/* Listing rules — checkbox acknowledgment */}
-                    {listingRules.length > 0 && (
-                      <div className="bg-background rounded-2xl border shadow-sm p-6 space-y-4">
-                        <div className="flex items-center gap-2">
-                          <ShieldCheck className="w-4 h-4 text-primary" />
-                          <h3 className="font-semibold">Acknowledge Each Rule Before Signing</h3>
-                        </div>
-                        <p className="text-sm text-muted-foreground">
-                          The rules listed in the agreement above require your individual acknowledgment. Check each box to confirm you have read and agree to it.
-                        </p>
-                        <div className="space-y-2.5">
-                          {listingRules.map(rule => {
-                            const checked = !!ruleChecks[rule.id];
-                            return (
-                              <button
-                                key={rule.id}
-                                type="button"
-                                onClick={() => setRuleChecks(prev => ({ ...prev, [rule.id]: !prev[rule.id] }))}
-                                className={`w-full flex gap-4 items-start rounded-xl border p-4 text-left transition-all cursor-pointer
-                                  ${checked
-                                    ? "border-green-300 bg-green-50/60 shadow-sm"
-                                    : "border-dashed border-muted-foreground/30 bg-muted/20 hover:border-muted-foreground/50 hover:bg-muted/30"}`}
-                              >
-                                {/* Checkbox */}
-                                <div className={`mt-0.5 w-5 h-5 rounded border-2 shrink-0 flex items-center justify-center transition-all
-                                  ${checked
-                                    ? "bg-green-600 border-green-600"
-                                    : "bg-background border-muted-foreground/40"}`}
-                                >
-                                  {checked && (
-                                    <svg viewBox="0 0 12 9" className="w-3 h-3 text-white fill-current" xmlns="http://www.w3.org/2000/svg">
-                                      <path d="M1 4l3.5 3.5L11 1" stroke="white" strokeWidth="1.8" fill="none" strokeLinecap="round" strokeLinejoin="round" />
-                                    </svg>
-                                  )}
+                          {/* Listing rule acknowledgments */}
+                          {listingRules.length > 0 && (
+                            <div className="bg-card rounded-2xl border shadow-sm overflow-hidden">
+                              <div className="px-5 py-3.5 border-b bg-muted/20 flex items-center gap-3">
+                                <ShieldCheck className="w-4 h-4 text-primary shrink-0" />
+                                <div>
+                                  <p className="font-semibold text-sm">Acknowledge Each Rule</p>
+                                  <p className="text-xs text-muted-foreground">Check each box to confirm you agree</p>
                                 </div>
-                                {/* Content */}
-                                <div className="flex-1 min-w-0">
-                                  <p className="font-medium text-sm">{rule.title}</p>
-                                  {rule.description && (
-                                    <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed">{rule.description}</p>
-                                  )}
-                                  {rule.fee > 0 && (
-                                    <p className="text-xs text-amber-700 mt-1.5 font-semibold flex items-center gap-1">
-                                      <AlertTriangle className="w-3 h-3 shrink-0" />
-                                      Violation fee: ${rule.fee.toFixed(2)} one time
-                                    </p>
-                                  )}
+                              </div>
+                              <div className="p-4 space-y-2.5">
+                                {listingRules.map(rule => {
+                                  const checked = !!ruleChecks[rule.id];
+                                  return (
+                                    <button
+                                      key={rule.id}
+                                      type="button"
+                                      onClick={() => setRuleChecks(prev => ({ ...prev, [rule.id]: !prev[rule.id] }))}
+                                      className={`w-full flex gap-3.5 items-start rounded-xl border p-3.5 text-left transition-all cursor-pointer ${checked ? "border-green-300 bg-green-50/60 shadow-sm" : "border-dashed border-muted-foreground/30 bg-muted/20 hover:border-muted-foreground/50"}`}
+                                    >
+                                      <div className={`mt-0.5 w-5 h-5 rounded border-2 shrink-0 flex items-center justify-center transition-all ${checked ? "bg-green-600 border-green-600" : "bg-background border-muted-foreground/40"}`}>
+                                        {checked && <svg viewBox="0 0 12 9" className="w-3 h-3 text-white fill-current"><path d="M1 4l3.5 3.5L11 1" stroke="white" strokeWidth="1.8" fill="none" strokeLinecap="round" strokeLinejoin="round" /></svg>}
+                                      </div>
+                                      <div className="flex-1 min-w-0">
+                                        <p className="font-medium text-sm">{rule.title}</p>
+                                        {rule.description && <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed">{rule.description}</p>}
+                                        {rule.fee > 0 && <p className="text-xs text-amber-700 mt-1 font-semibold flex items-center gap-1"><AlertTriangle className="w-3 h-3 shrink-0" />Violation fee: ${rule.fee.toFixed(2)}</p>}
+                                      </div>
+                                      {checked && <CheckCircle2 className="w-4 h-4 text-green-600 shrink-0 mt-0.5" />}
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                              {!allRulesDone && (
+                                <div className="px-5 pb-4">
+                                  <p className="text-xs text-amber-700 flex items-center gap-1.5">
+                                    <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
+                                    Acknowledge all rules before signing.
+                                  </p>
                                 </div>
-                                {checked && (
-                                  <CheckCircle2 className="w-4 h-4 text-green-600 shrink-0 mt-0.5" />
-                                )}
-                              </button>
-                            );
-                          })}
-                        </div>
-                        {listingRules.some(r => !ruleChecks[r.id]) && (
-                          <p className="text-xs text-amber-700 flex items-center gap-1.5">
-                            <AlertTriangle className="w-3.5 h-3.5" />
-                            All rules must be checked before you can sign the agreement.
-                          </p>
-                        )}
-                      </div>
-                    )}
+                              )}
+                            </div>
+                          )}
 
-                    {/* Cancellation Policy */}
-                    {(businessProfile as any)?.cancellationPolicy && (
-                      <div className="bg-background rounded-2xl border shadow-sm p-6 space-y-3">
-                        <div className="flex items-center gap-2">
-                          <AlertTriangle className="w-4 h-4 text-amber-500" />
-                          <h3 className="font-semibold">Cancellation Policy</h3>
-                        </div>
-                        <div className="bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-xl px-4 py-3">
-                          <p className="text-sm text-amber-900 dark:text-amber-200 whitespace-pre-wrap leading-relaxed">
-                            {(businessProfile as any).cancellationPolicy}
-                          </p>
-                        </div>
-                        <p className="text-xs text-muted-foreground">
-                          This policy is set by <strong>{(businessProfile as any)?.name}</strong>. Contact them directly if you have questions about your specific situation.
-                        </p>
-                      </div>
-                    )}
+                          {/* Cancellation Policy */}
+                          {(businessProfile as any)?.cancellationPolicy && (
+                            <div className="bg-card rounded-2xl border shadow-sm p-5 space-y-2.5">
+                              <div className="flex items-center gap-2">
+                                <AlertTriangle className="w-4 h-4 text-amber-500" />
+                                <h3 className="font-semibold text-sm">Cancellation Policy</h3>
+                              </div>
+                              <div className="bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-xl px-4 py-3">
+                                <p className="text-sm text-amber-900 dark:text-amber-200 whitespace-pre-wrap leading-relaxed">
+                                  {(businessProfile as any).cancellationPolicy}
+                                </p>
+                              </div>
+                              <p className="text-xs text-muted-foreground">
+                                Policy set by <strong>{(businessProfile as any)?.name}</strong>.
+                              </p>
+                            </div>
+                          )}
 
-                    {/* Signature */}
-                    <div className="bg-background rounded-2xl border shadow-sm p-6 space-y-4">
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                          <FileText className="w-4 h-4 text-primary" />
-                          <h3 className="font-semibold">Sign the Agreement</h3>
-                        </div>
-                        {sigHasContent && (
-                          <button type="button" onClick={clearSig} className="text-xs text-muted-foreground hover:text-destructive underline">Clear</button>
-                        )}
-                      </div>
-                      <p className="text-sm text-muted-foreground">Draw your signature below using your mouse or finger</p>
-                      <div className={`relative border-2 rounded-xl overflow-hidden bg-white transition-colors ${sigHasContent ? "border-primary" : "border-dashed border-muted-foreground/40"}`} style={{ touchAction: "none" }}>
-                        <canvas
-                          ref={sigCanvasRef}
-                          width={800}
-                          height={200}
-                          className="w-full block cursor-crosshair"
-                          style={{ height: "160px" }}
-                          onMouseDown={startSigDraw}
-                          onMouseMove={drawSig}
-                          onMouseUp={stopSigDraw}
-                          onMouseLeave={stopSigDraw}
-                          onTouchStart={startSigDraw}
-                          onTouchMove={drawSig}
-                          onTouchEnd={stopSigDraw}
-                        />
-                        {!sigHasContent && (
-                          <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none select-none">
-                            <span className="text-muted-foreground/50 text-sm font-light italic">Sign here</span>
-                            <span className="text-muted-foreground/30 text-xs mt-1">{name}</span>
+                          {/* Signature */}
+                          <div className="bg-card rounded-2xl border shadow-sm p-5 space-y-4">
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center gap-2">
+                                <FileText className="w-4 h-4 text-primary" />
+                                <h3 className="font-semibold text-sm">Sign the Agreement</h3>
+                              </div>
+                              {sigHasContent && (
+                                <button type="button" onClick={clearSig} className="text-xs text-muted-foreground hover:text-destructive underline">Clear</button>
+                              )}
+                            </div>
+                            <p className="text-xs text-muted-foreground">Draw your signature using your mouse or finger</p>
+                            <div className={`relative border-2 rounded-xl overflow-hidden bg-white transition-colors ${sigHasContent ? "border-primary" : "border-dashed border-muted-foreground/40"}`} style={{ touchAction: "none" }}>
+                              <canvas
+                                ref={sigCanvasRef}
+                                width={800} height={200}
+                                className="w-full block cursor-crosshair"
+                                style={{ height: "140px" }}
+                                onMouseDown={startSigDraw}
+                                onMouseMove={drawSig}
+                                onMouseUp={stopSigDraw}
+                                onMouseLeave={stopSigDraw}
+                                onTouchStart={startSigDraw}
+                                onTouchMove={drawSig}
+                                onTouchEnd={stopSigDraw}
+                              />
+                              {!sigHasContent && (
+                                <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none select-none">
+                                  <span className="text-muted-foreground/50 text-sm font-light italic">Sign here</span>
+                                  <span className="text-muted-foreground/30 text-xs mt-1">{name}</span>
+                                </div>
+                              )}
+                              <div className="absolute bottom-7 left-8 right-8 border-b border-muted-foreground/20 pointer-events-none" />
+                            </div>
+                            <p className="text-xs text-muted-foreground flex items-center gap-1.5">
+                              <User className="w-3 h-3" />
+                              Signing as: <strong>{name}</strong>
+                            </p>
+                            <label className="flex items-start gap-3 cursor-pointer">
+                              <input type="checkbox" checked={agreeChecked} onChange={e => setAgreeChecked(e.target.checked)} className="mt-0.5 w-4 h-4 accent-primary" />
+                              <span className="text-sm">{resolvedOperatorContract?.checkboxLabel || "I have read and agree to all terms in the rental agreement, including the cancellation policy and damage liability."}</span>
+                            </label>
                           </div>
-                        )}
-                        <div className="absolute bottom-8 left-8 right-8 border-b border-muted-foreground/20 pointer-events-none" />
-                      </div>
-                      <p className="text-xs text-muted-foreground flex items-center gap-1.5">
-                        <User className="w-3 h-3" />
-                        Signing as: <strong>{name}</strong>
-                      </p>
-                      <label className="flex items-start gap-3 cursor-pointer">
-                        <input type="checkbox" checked={agreeChecked} onChange={e => setAgreeChecked(e.target.checked)} className="mt-0.5 w-4 h-4 accent-primary" />
-                        <span className="text-sm">{resolvedOperatorContract?.checkboxLabel || "I have read and agree to all terms in the rental agreement above, including the cancellation policy and damage liability."}</span>
-                      </label>
-                    </div>
 
-                    <Button
-                      size="lg"
-                      className="w-full h-13 text-base font-bold rounded-xl"
-                      onClick={handleFinalSubmit}
-                      disabled={isSubmitting || !agreeChecked || !sigHasContent || listingRules.some(r => !ruleChecks[r.id])}
-                    >
-                      {isSubmitting ? "Submitting…" : "Sign & Verify My Identity"}
-                      <ScanFace className="w-4 h-4 ml-2" />
-                    </Button>
-                  </>
-                )}
+                          <Button
+                            size="lg"
+                            className="w-full h-13 text-base font-bold rounded-xl"
+                            onClick={handleFinalSubmit}
+                            disabled={isSubmitting || !agreeChecked || !sigHasContent || !allRulesDone}
+                          >
+                            {isSubmitting ? "Submitting…" : "Sign & Verify My Identity"}
+                            <ScanFace className="w-4 h-4 ml-2" />
+                          </Button>
+                        </div>
+                        {/* end right pane */}
+                      </div>
+                      {/* end two-pane grid */}
+                    </>
+                  );
+                })()}
 
                 {/* ── VERIFICATION PHASE ── */}
                 {completePhase === "verification" && (
