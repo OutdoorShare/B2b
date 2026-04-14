@@ -27,6 +27,7 @@ export default defineConfig({
   define: {
     "import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY": JSON.stringify(process.env.STRIPE_PUBLISHABLE_KEY ?? ""),
     "import.meta.env.VITE_STRIPE_TEST_PUBLISHABLE_KEY": JSON.stringify(process.env.STRIPE_TEST_PUBLISHABLE_KEY ?? ""),
+    "import.meta.env.VITE_API_URL": JSON.stringify(process.env.VITE_API_URL ?? ""),
   },
   plugins: [
     react(),
