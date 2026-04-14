@@ -522,6 +522,7 @@ function ContractFieldsManager({
       setLocalFields(prev => prev.map(f => f.id === editingId ? field : f));
     } else {
       setLocalFields(prev => [...prev, field]);
+      onInsertToken(`{{${field.key}}}`);
     }
     cancelForm();
   }
@@ -724,12 +725,377 @@ type PlatformAgreement = {
   updatedAt: string;
 };
 
-type PADraft = {
-  title: string;
-  content: string;
-  checkboxLabel: string;
-  isRequired: boolean;
+type PlatformAckItem = {
+  id: number;
+  platformAgreementId: number;
+  text: string;
+  required: boolean;
+  sortOrder: number;
+  isActive: boolean;
 };
+
+// ── Platform Acknowledgements Manager ─────────────────────────────────────────
+function PlatformAckManager({ agreementId }: { agreementId: number }) {
+  const { toast } = useToast();
+  const [items, setItems] = useState<PlatformAckItem[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [draft, setDraft] = useState("");
+  const [draftRequired, setDraftRequired] = useState(true);
+  const [adding, setAdding] = useState(false);
+  const [editingId, setEditingId] = useState<number | null>(null);
+  const [editText, setEditText] = useState("");
+  const [editRequired, setEditRequired] = useState(true);
+
+  useEffect(() => {
+    apiFetch(`superadmin/platform-agreements/${agreementId}/acknowledgements`)
+      .then(setItems)
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, [agreementId]);
+
+  async function addItem() {
+    if (!draft.trim()) return;
+    setSaving(true);
+    try {
+      const item = await apiFetch(`superadmin/platform-agreements/${agreementId}/acknowledgements`, {
+        method: "POST",
+        body: JSON.stringify({ text: draft.trim(), required: draftRequired, sortOrder: items.length * 10 }),
+      });
+      setItems(prev => [...prev, item]);
+      setDraft(""); setDraftRequired(true); setAdding(false);
+    } catch (e: any) { toast({ title: "Failed to add", description: e.message, variant: "destructive" }); }
+    finally { setSaving(false); }
+  }
+
+  async function updateItem(id: number) {
+    setSaving(true);
+    try {
+      const item = await apiFetch(`superadmin/platform-agreements/acknowledgements/${id}`, {
+        method: "PATCH",
+        body: JSON.stringify({ text: editText.trim(), required: editRequired }),
+      });
+      setItems(prev => prev.map(i => i.id === id ? { ...i, ...item } : i));
+      setEditingId(null);
+    } catch (e: any) { toast({ title: "Failed to update", description: e.message, variant: "destructive" }); }
+    finally { setSaving(false); }
+  }
+
+  async function deleteItem(id: number) {
+    if (!confirm("Remove this acknowledgement item?")) return;
+    try {
+      await apiFetch(`superadmin/platform-agreements/acknowledgements/${id}`, { method: "DELETE" });
+      setItems(prev => prev.filter(i => i.id !== id));
+    } catch (e: any) { toast({ title: "Failed to delete", description: e.message, variant: "destructive" }); }
+  }
+
+  async function moveItem(id: number, dir: "up" | "down") {
+    const idx = items.findIndex(i => i.id === id);
+    if (idx < 0) return;
+    const newIdx = dir === "up" ? idx - 1 : idx + 1;
+    if (newIdx < 0 || newIdx >= items.length) return;
+    const reordered = [...items];
+    [reordered[idx], reordered[newIdx]] = [reordered[newIdx], reordered[idx]];
+    const updated = reordered.map((it, i) => ({ ...it, sortOrder: i * 10 }));
+    setItems(updated);
+    for (const it of updated) {
+      await apiFetch(`superadmin/platform-agreements/acknowledgements/${it.id}`, {
+        method: "PATCH", body: JSON.stringify({ sortOrder: it.sortOrder }),
+      }).catch(() => {});
+    }
+  }
+
+  if (loading) return <div className="flex items-center gap-2 py-4 text-slate-400 text-sm"><Loader2 className="w-4 h-4 animate-spin" />Loading…</div>;
+
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center justify-between">
+        <div>
+          <p className="text-sm font-semibold text-white">Acknowledgement Items</p>
+          <p className="text-xs text-slate-500 mt-0.5">Custom checkboxes the renter must confirm within this agreement.</p>
+        </div>
+        {!adding && (
+          <Button size="sm" variant="outline" className="border-slate-700 text-slate-300 hover:bg-slate-800 gap-1.5 h-8"
+            onClick={() => { setAdding(true); setDraft(""); setDraftRequired(true); }}>
+            <Plus className="w-3.5 h-3.5" />Add Item
+          </Button>
+        )}
+      </div>
+      {items.length === 0 && !adding && (
+        <p className="text-slate-500 text-sm py-2">No acknowledgement items yet. Items here appear as extra checkboxes in the renter's signing flow for this agreement.</p>
+      )}
+      <div className="space-y-2">
+        {items.map((item, idx) => (
+          <div key={item.id} className="bg-slate-800 border border-slate-700 rounded-xl overflow-hidden">
+            {editingId === item.id ? (
+              <div className="p-3 space-y-2">
+                <textarea value={editText} onChange={e => setEditText(e.target.value)}
+                  className="w-full min-h-[60px] text-sm text-slate-200 bg-slate-900 border border-slate-600 rounded-lg p-2 resize-none focus:outline-none focus:border-emerald-500" />
+                <div className="flex items-center justify-between">
+                  <label className="flex items-center gap-2 text-xs text-slate-400 cursor-pointer">
+                    <input type="checkbox" checked={editRequired} onChange={e => setEditRequired(e.target.checked)} className="w-3.5 h-3.5 accent-emerald-500" />
+                    Required
+                  </label>
+                  <div className="flex gap-2">
+                    <Button size="sm" variant="ghost" className="text-slate-500 h-7 text-xs" onClick={() => setEditingId(null)}>Cancel</Button>
+                    <Button size="sm" className="bg-emerald-600 hover:bg-emerald-700 text-white h-7 text-xs gap-1"
+                      disabled={saving} onClick={() => updateItem(item.id)}>
+                      {saving ? <Loader2 className="w-3 h-3 animate-spin" /> : <Save className="w-3 h-3" />}Save
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="flex items-start gap-2 px-3 py-2.5">
+                <div className="flex flex-col gap-0.5 shrink-0 mt-0.5">
+                  <button onClick={() => moveItem(item.id, "up")} disabled={idx === 0} className="text-slate-600 hover:text-slate-400 disabled:opacity-20 p-0.5"><ChevronUp className="w-3 h-3" /></button>
+                  <button onClick={() => moveItem(item.id, "down")} disabled={idx === items.length - 1} className="text-slate-600 hover:text-slate-400 disabled:opacity-20 p-0.5"><ChevronDown className="w-3 h-3" /></button>
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm text-slate-200">{item.text}</p>
+                  {item.required && <span className="text-[10px] text-emerald-400 font-medium mt-0.5 block">Required</span>}
+                </div>
+                <div className="flex gap-1 shrink-0">
+                  <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-slate-500 hover:text-slate-300"
+                    onClick={() => { setEditingId(item.id); setEditText(item.text); setEditRequired(item.required); }}>
+                    <Edit3 className="w-3.5 h-3.5" />
+                  </Button>
+                  <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-red-500 hover:text-red-300" onClick={() => deleteItem(item.id)}>
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </Button>
+                </div>
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+      {adding && (
+        <div className="bg-slate-800 border border-slate-700 rounded-xl p-3 space-y-2">
+          <textarea value={draft} onChange={e => setDraft(e.target.value)} autoFocus
+            placeholder="e.g. I confirm I have read and agree to the full terms of this agreement."
+            className="w-full min-h-[70px] text-sm text-slate-200 bg-slate-900 border border-slate-600 rounded-lg p-2 resize-none focus:outline-none focus:border-emerald-500" />
+          <div className="flex items-center justify-between">
+            <label className="flex items-center gap-2 text-xs text-slate-400 cursor-pointer">
+              <input type="checkbox" checked={draftRequired} onChange={e => setDraftRequired(e.target.checked)} className="w-3.5 h-3.5 accent-emerald-500" />
+              Required
+            </label>
+            <div className="flex gap-2">
+              <Button size="sm" variant="ghost" className="text-slate-500 h-7 text-xs" onClick={() => setAdding(false)}>Cancel</Button>
+              <Button size="sm" className="bg-emerald-600 hover:bg-emerald-700 text-white h-7 text-xs gap-1"
+                disabled={saving || !draft.trim()} onClick={addItem}>
+                {saving ? <Loader2 className="w-3 h-3 animate-spin" /> : <Plus className="w-3 h-3" />}Add
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Platform Agreement Full Editor ────────────────────────────────────────────
+function PAEditorCard({
+  pa, contractFields, onClose, onCreated, onUpdated,
+}: {
+  pa: PlatformAgreement | null;
+  contractFields: ContractField[];
+  onClose: () => void;
+  onCreated: (pa: PlatformAgreement) => void;
+  onUpdated: (pa: PlatformAgreement) => void;
+}) {
+  const { toast } = useToast();
+  const [title, setTitle] = useState(pa?.title ?? "");
+  const [content, setContent] = useState(pa?.content ?? "");
+  const [checkboxLabel, setCheckboxLabel] = useState(pa?.checkboxLabel ?? "I agree to the terms and conditions");
+  const [isRequired, setIsRequired] = useState(pa?.isRequired ?? true);
+  const [viewMode, setViewMode] = useState<ViewMode>("split");
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const [editorTab, setEditorTab] = useState<"document" | "acks">("document");
+  const [isSaving, setIsSaving] = useState(false);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const cursorRef = useRef<number>(0);
+  const isNew = pa === null;
+  const savedContent = pa?.content ?? "";
+  const isDirty = content !== savedContent || (pa && (title !== pa.title || checkboxLabel !== pa.checkboxLabel || isRequired !== pa.isRequired));
+
+  useEffect(() => {
+    if (!isFullscreen) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setIsFullscreen(false); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [isFullscreen]);
+
+  function trackCursor() {
+    if (textareaRef.current) cursorRef.current = textareaRef.current.selectionStart ?? content.length;
+  }
+
+  function insertToken(token: string) {
+    const el = textareaRef.current;
+    const pos = cursorRef.current;
+    const next = content.slice(0, pos) + token + content.slice(pos);
+    setContent(next);
+    cursorRef.current = pos + token.length;
+    setTimeout(() => { if (el) { el.focus(); el.setSelectionRange(cursorRef.current, cursorRef.current); } }, 0);
+    setViewMode(m => m === "preview" ? "split" : m);
+  }
+
+  async function handleSave() {
+    if (!title.trim()) { toast({ title: "Title is required", variant: "destructive" }); return; }
+    setIsSaving(true);
+    try {
+      const body = { title: title.trim(), content, checkboxLabel, isRequired };
+      if (isNew) {
+        const data = await apiFetch("superadmin/platform-agreements", { method: "POST", body: JSON.stringify(body) });
+        onCreated(data);
+        toast({ title: "Agreement created" });
+      } else {
+        const data = await apiFetch(`superadmin/platform-agreements/${pa.id}`, { method: "PATCH", body: JSON.stringify(body) });
+        onUpdated(data);
+        toast({ title: "Agreement saved" });
+      }
+    } catch (e: any) { toast({ title: "Save failed", description: e.message, variant: "destructive" }); }
+    finally { setIsSaving(false); }
+  }
+
+  const paragraphs = content.split(/\n{2,}/).filter(p => p.trim());
+
+  const editorBody = (
+    <div className={`flex flex-col ${isFullscreen ? "flex-1 min-h-0" : ""}`}>
+      {/* Token toolbar */}
+      <div className="flex items-center gap-1.5 flex-wrap px-3 py-2 border-b border-slate-700 bg-slate-800/50">
+        <span className="text-[10px] font-semibold text-slate-500 uppercase tracking-widest mr-1">Auto</span>
+        {AUTO_TOKENS.map(tok => (
+          <button key={tok.key} onClick={() => insertToken(`{{${tok.key}}}`)}
+            className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium bg-emerald-500/15 text-emerald-300 hover:bg-emerald-500/30 transition-colors border border-emerald-500/20">
+            <Zap className="w-2.5 h-2.5" />{tok.label}
+          </button>
+        ))}
+        <span className="text-[10px] font-semibold text-slate-500 uppercase tracking-widest mx-1">Renter</span>
+        {RENTER_TOKENS.map(tok => (
+          <button key={tok.key} onClick={() => insertToken(`{{${tok.key}}}`)}
+            className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium bg-amber-500/15 text-amber-300 hover:bg-amber-500/30 transition-colors border border-amber-500/20">
+            <UserCheck className="w-2.5 h-2.5" />{tok.label}
+          </button>
+        ))}
+        {contractFields.length > 0 && <>
+          <span className="text-[10px] font-semibold text-slate-500 uppercase tracking-widest mx-1">Custom</span>
+          {contractFields.map(f => (
+            <button key={f.id} onClick={() => insertToken(`{{${f.key}}}`)}
+              className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium bg-violet-500/15 text-violet-300 hover:bg-violet-500/30 transition-colors border border-violet-500/20">
+              {f.label}
+            </button>
+          ))}
+        </>}
+        <div className="ml-auto flex items-center gap-1">
+          {(["split", "edit", "preview"] as ViewMode[]).map(m => (
+            <button key={m} onClick={() => setViewMode(m)}
+              className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-colors ${viewMode === m ? "bg-slate-600 text-white" : "text-slate-400 hover:bg-slate-700"}`}>
+              {m === "split" ? "⬜ Split" : m === "edit" ? "✏️ Edit" : "👁 Preview"}
+            </button>
+          ))}
+          <button onClick={() => setIsFullscreen(f => !f)} title={isFullscreen ? "Exit fullscreen (Esc)" : "Fullscreen"}
+            className="p-1.5 rounded-lg text-slate-400 hover:bg-slate-700 ml-1">
+            {isFullscreen ? <Minimize2 className="w-3.5 h-3.5" /> : <Maximize2 className="w-3.5 h-3.5" />}
+          </button>
+        </div>
+      </div>
+      {/* Edit / Preview panes */}
+      <div className={`flex overflow-hidden ${isFullscreen ? "flex-1" : "min-h-[280px]"}`}>
+        {viewMode !== "preview" && (
+          <div className={`flex flex-col bg-white ${viewMode === "split" ? "w-1/2 border-r border-slate-300" : "w-full"}`}>
+            <div className="flex-none px-3 py-1.5 bg-gray-50 border-b border-gray-200">
+              <span className="text-[10px] font-semibold uppercase tracking-widest text-gray-400">Edit</span>
+            </div>
+            <textarea ref={textareaRef} value={content} onChange={e => setContent(e.target.value)}
+              onSelect={trackCursor} onKeyUp={trackCursor} onMouseUp={trackCursor}
+              className="flex-1 p-4 text-sm text-gray-800 font-mono leading-relaxed resize-none focus:outline-none bg-white"
+              placeholder={"Enter agreement text here…\n\nUse {{token}} placeholders for booking data."} spellCheck={false} />
+          </div>
+        )}
+        {viewMode !== "edit" && (
+          <div className={`flex flex-col bg-gray-100 ${viewMode === "split" ? "w-1/2" : "w-full"} overflow-y-auto`}>
+            <div className="flex-none px-4 py-1.5 bg-gray-200 border-b border-gray-300">
+              <span className="text-[10px] font-semibold uppercase tracking-widest text-gray-500">Preview</span>
+            </div>
+            <div className="flex-1 p-6 font-serif">
+              {paragraphs.length === 0
+                ? <p className="text-gray-400 italic text-sm">Start typing to see the preview…</p>
+                : paragraphs.map((para, i) => (
+                    <p key={i} className="mb-4 text-sm leading-relaxed text-gray-800">{renderPreviewText(para)}</p>
+                  ))}
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+
+  return (
+    <div className={isFullscreen
+      ? "fixed inset-0 z-50 bg-slate-950 flex flex-col"
+      : "bg-slate-900 border border-slate-700 rounded-2xl overflow-hidden"}>
+      {/* Header */}
+      <div className="flex items-center gap-3 px-5 py-3 border-b border-slate-700 bg-slate-800/60 shrink-0">
+        <Shield className="w-4 h-4 text-emerald-400 shrink-0" />
+        <span className="text-sm font-semibold text-white flex-1 truncate">{isNew ? "New Platform Agreement" : `Editing: ${pa.title}`}</span>
+        {isDirty && <span className="text-[11px] text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded-full border border-amber-500/20 shrink-0">Unsaved</span>}
+        <button onClick={onClose} className="text-slate-500 hover:text-slate-300 shrink-0"><X className="w-4 h-4" /></button>
+      </div>
+      {/* Meta fields */}
+      {!isFullscreen && (
+        <div className="px-5 py-3 border-b border-slate-700 grid grid-cols-2 gap-3 bg-slate-900 shrink-0">
+          <div className="space-y-1">
+            <label className="text-[10px] font-semibold text-slate-500 uppercase tracking-wide">Title</label>
+            <Input value={title} onChange={e => setTitle(e.target.value)} placeholder="e.g. OutdoorShare Terms of Service"
+              className="bg-slate-800 border-slate-700 text-white text-sm h-8" />
+          </div>
+          <div className="space-y-1">
+            <label className="text-[10px] font-semibold text-slate-500 uppercase tracking-wide">Checkbox Label</label>
+            <Input value={checkboxLabel} onChange={e => setCheckboxLabel(e.target.value)} placeholder="I agree to the terms…"
+              className="bg-slate-800 border-slate-700 text-white text-sm h-8" />
+          </div>
+          <div className="col-span-2 flex items-center gap-3">
+            <button type="button" onClick={() => setIsRequired(r => !r)} className="flex items-center gap-2 text-sm text-slate-300">
+              {isRequired ? <ToggleRight className="w-5 h-5 text-emerald-400" /> : <ToggleLeft className="w-5 h-5 text-slate-500" />}
+              <span>Required — renter must check this to proceed</span>
+            </button>
+          </div>
+        </div>
+      )}
+      {/* Sub-tabs (only for existing agreements) */}
+      {!isNew && !isFullscreen && (
+        <div className="flex gap-0 border-b border-slate-700 bg-slate-900 shrink-0">
+          <button onClick={() => setEditorTab("document")}
+            className={`px-4 py-2 text-xs font-semibold transition-colors border-b-2 ${editorTab === "document" ? "border-emerald-500 text-emerald-300 bg-emerald-500/5" : "border-transparent text-slate-400 hover:text-slate-200"}`}>
+            <span className="flex items-center gap-1.5"><FileText className="w-3 h-3" />Document</span>
+          </button>
+          <button onClick={() => setEditorTab("acks")}
+            className={`px-4 py-2 text-xs font-semibold transition-colors border-b-2 ${editorTab === "acks" ? "border-emerald-500 text-emerald-300 bg-emerald-500/5" : "border-transparent text-slate-400 hover:text-slate-200"}`}>
+            <span className="flex items-center gap-1.5"><CheckSquare className="w-3 h-3" />Acknowledgements</span>
+          </button>
+        </div>
+      )}
+      {/* Content area */}
+      {(editorTab === "document" || isNew || isFullscreen) && editorBody}
+      {editorTab === "acks" && !isNew && pa && (
+        <div className="p-5 overflow-y-auto">
+          <PlatformAckManager agreementId={pa.id} />
+        </div>
+      )}
+      {/* Footer */}
+      {!isFullscreen && (
+        <div className="flex justify-end gap-2 px-5 py-3 border-t border-slate-700 bg-slate-900 shrink-0">
+          <Button variant="ghost" size="sm" className="text-slate-400" onClick={onClose}>Cancel</Button>
+          <Button size="sm" className="bg-emerald-600 hover:bg-emerald-700 text-white gap-1.5"
+            disabled={isSaving || (!isNew && !isDirty)} onClick={handleSave}>
+            {isSaving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
+            {isNew ? "Create Agreement" : "Save Changes"}
+          </Button>
+        </div>
+      )}
+    </div>
+  );
+}
 
 // ── Main page ─────────────────────────────────────────────────────────────────
 export default function SuperAdminAgreementPage() {
@@ -760,13 +1126,8 @@ export default function SuperAdminAgreementPage() {
   const [platformAgreements, setPlatformAgreements] = useState<PlatformAgreement[]>([]);
   const [paLoading, setPaLoading] = useState(false);
   const [paError, setPaError] = useState("");
-  const [showNewPA, setShowNewPA] = useState(false);
-  const [newPADraft, setNewPADraft] = useState<PADraft>({
-    title: "", content: "", checkboxLabel: "I agree to the terms and conditions", isRequired: true,
-  });
-  const [savingPA, setSavingPA] = useState(false);
+  const [creatingPA, setCreatingPA] = useState(false);
   const [editingPA, setEditingPA] = useState<number | null>(null);
-  const [editDraft, setEditDraft] = useState<PADraft>({ title: "", content: "", checkboxLabel: "", isRequired: true });
 
   useEffect(() => {
     Promise.all([
@@ -803,36 +1164,6 @@ export default function SuperAdminAgreementPage() {
   }
 
   useEffect(() => { if (tab === "platform-agreements") fetchPlatformAgreements(); }, [tab]);
-
-  async function createPlatformAgreement() {
-    if (!newPADraft.title.trim()) return;
-    setSavingPA(true); setPaError("");
-    try {
-      const data = await apiFetch("superadmin/platform-agreements", {
-        method: "POST", body: JSON.stringify(newPADraft),
-      });
-      setPlatformAgreements(prev => [...prev, data]);
-      setShowNewPA(false);
-      setNewPADraft({ title: "", content: "", checkboxLabel: "I agree to the terms and conditions", isRequired: true });
-      toast({ title: "Agreement created" });
-    } catch (e: any) {
-      setPaError(e.message ?? "Failed to create");
-    } finally { setSavingPA(false); }
-  }
-
-  async function updatePlatformAgreement(id: number) {
-    setSavingPA(true); setPaError("");
-    try {
-      const data = await apiFetch(`superadmin/platform-agreements/${id}`, {
-        method: "PATCH", body: JSON.stringify(editDraft),
-      });
-      setPlatformAgreements(prev => prev.map(p => p.id === id ? data : p));
-      setEditingPA(null);
-      toast({ title: "Agreement updated", description: `Version bumped to ${data.version}` });
-    } catch (e: any) {
-      setPaError(e.message ?? "Failed to update");
-    } finally { setSavingPA(false); }
-  }
 
   async function deletePlatformAgreement(id: number) {
     if (!confirm("Deactivate this platform agreement? It will no longer appear in the renter's signing flow.")) return;
@@ -990,70 +1321,15 @@ export default function SuperAdminAgreementPage() {
             </div>
           )}
 
-          {/* Add new form */}
-          {showNewPA && (
-            <div className="bg-slate-900 border border-slate-700 rounded-2xl p-5 space-y-4">
-              <div className="flex items-center justify-between">
-                <p className="text-sm font-semibold text-white">New Platform Agreement</p>
-                <button onClick={() => setShowNewPA(false)} className="text-slate-500 hover:text-slate-300">
-                  <X className="w-4 h-4" />
-                </button>
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-1.5 col-span-2">
-                  <label className="text-xs font-medium text-slate-400 uppercase tracking-wide">Title</label>
-                  <Input
-                    value={newPADraft.title}
-                    onChange={e => setNewPADraft(d => ({ ...d, title: e.target.value }))}
-                    placeholder="e.g. OutdoorShare Terms of Service"
-                    className="bg-slate-800 border-slate-700 text-white"
-                  />
-                </div>
-                <div className="space-y-1.5 col-span-2">
-                  <label className="text-xs font-medium text-slate-400 uppercase tracking-wide">Checkbox Label</label>
-                  <Input
-                    value={newPADraft.checkboxLabel}
-                    onChange={e => setNewPADraft(d => ({ ...d, checkboxLabel: e.target.value }))}
-                    placeholder="I agree to the OutdoorShare Terms of Service"
-                    className="bg-slate-800 border-slate-700 text-white"
-                  />
-                </div>
-                <div className="space-y-1.5 col-span-2">
-                  <label className="text-xs font-medium text-slate-400 uppercase tracking-wide">Full Content (shown in PDF)</label>
-                  <textarea
-                    value={newPADraft.content}
-                    onChange={e => setNewPADraft(d => ({ ...d, content: e.target.value }))}
-                    className="w-full min-h-[180px] rounded-xl bg-slate-800 border border-slate-700 text-slate-200 text-sm p-3 font-mono resize-y focus:outline-none focus:border-emerald-500"
-                    placeholder="Enter full agreement text here. Use {{tokens}} for booking data…"
-                  />
-                </div>
-                <div className="col-span-2 flex items-center gap-3">
-                  <input
-                    type="checkbox"
-                    id="new-pa-required"
-                    checked={newPADraft.isRequired}
-                    onChange={e => setNewPADraft(d => ({ ...d, isRequired: e.target.checked }))}
-                    className="w-4 h-4 accent-emerald-500"
-                  />
-                  <label htmlFor="new-pa-required" className="text-sm text-slate-300 cursor-pointer">
-                    Required — renter must check this to proceed
-                  </label>
-                </div>
-              </div>
-              <div className="flex justify-end gap-2">
-                <Button variant="ghost" size="sm" className="text-slate-400" onClick={() => setShowNewPA(false)}>
-                  Cancel
-                </Button>
-                <Button
-                  size="sm"
-                  className="bg-emerald-600 hover:bg-emerald-700 text-white"
-                  disabled={savingPA || !newPADraft.title.trim()}
-                  onClick={createPlatformAgreement}
-                >
-                  {savingPA ? <Loader2 className="w-4 h-4 animate-spin" /> : <><Save className="w-4 h-4 mr-1.5" /> Create Agreement</>}
-                </Button>
-              </div>
-            </div>
+          {/* New agreement card */}
+          {creatingPA && (
+            <PAEditorCard
+              pa={null}
+              contractFields={contractFields}
+              onClose={() => setCreatingPA(false)}
+              onCreated={(newPA) => { setPlatformAgreements(prev => [...prev, newPA]); setCreatingPA(false); }}
+              onUpdated={() => {}}
+            />
           )}
 
           {/* List */}
@@ -1062,7 +1338,7 @@ export default function SuperAdminAgreementPage() {
               <Loader2 className="w-5 h-5 animate-spin" />
               <span className="text-sm">Loading platform agreements…</span>
             </div>
-          ) : platformAgreements.length === 0 ? (
+          ) : platformAgreements.length === 0 && !creatingPA ? (
             <div className="text-center py-12 space-y-3">
               <div className="w-14 h-14 rounded-2xl bg-slate-800 flex items-center justify-center mx-auto">
                 <Layers className="w-7 h-7 text-slate-600" />
@@ -1072,87 +1348,31 @@ export default function SuperAdminAgreementPage() {
           ) : (
             <div className="space-y-3">
               {platformAgreements.map((pa, idx) => (
-                <div key={pa.id} className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden">
+                <div key={pa.id}>
                   {editingPA === pa.id ? (
-                    /* Edit form */
-                    <div className="p-5 space-y-4">
-                      <div className="flex items-center justify-between">
-                        <p className="text-sm font-semibold text-white">Editing: {pa.title}</p>
-                        <button onClick={() => setEditingPA(null)} className="text-slate-500 hover:text-slate-300">
-                          <X className="w-4 h-4" />
-                        </button>
-                      </div>
-                      <div className="space-y-1.5">
-                        <label className="text-xs font-medium text-slate-400 uppercase tracking-wide">Title</label>
-                        <Input
-                          value={editDraft.title}
-                          onChange={e => setEditDraft(d => ({ ...d, title: e.target.value }))}
-                          className="bg-slate-800 border-slate-700 text-white"
-                        />
-                      </div>
-                      <div className="space-y-1.5">
-                        <label className="text-xs font-medium text-slate-400 uppercase tracking-wide">Checkbox Label</label>
-                        <Input
-                          value={editDraft.checkboxLabel}
-                          onChange={e => setEditDraft(d => ({ ...d, checkboxLabel: e.target.value }))}
-                          className="bg-slate-800 border-slate-700 text-white"
-                        />
-                      </div>
-                      <div className="space-y-1.5">
-                        <label className="text-xs font-medium text-slate-400 uppercase tracking-wide">Full Content</label>
-                        <textarea
-                          value={editDraft.content}
-                          onChange={e => setEditDraft(d => ({ ...d, content: e.target.value }))}
-                          className="w-full min-h-[180px] rounded-xl bg-slate-800 border border-slate-700 text-slate-200 text-sm p-3 font-mono resize-y focus:outline-none focus:border-emerald-500"
-                        />
-                      </div>
-                      <div className="flex items-center gap-3">
-                        <input
-                          type="checkbox"
-                          id={`edit-required-${pa.id}`}
-                          checked={editDraft.isRequired}
-                          onChange={e => setEditDraft(d => ({ ...d, isRequired: e.target.checked }))}
-                          className="w-4 h-4 accent-emerald-500"
-                        />
-                        <label htmlFor={`edit-required-${pa.id}`} className="text-sm text-slate-300 cursor-pointer">
-                          Required
-                        </label>
-                      </div>
-                      <div className="flex justify-end gap-2">
-                        <Button variant="ghost" size="sm" className="text-slate-400" onClick={() => setEditingPA(null)}>
-                          Cancel
-                        </Button>
-                        <Button
-                          size="sm"
-                          className="bg-emerald-600 hover:bg-emerald-700 text-white"
-                          disabled={savingPA}
-                          onClick={() => updatePlatformAgreement(pa.id)}
-                        >
-                          {savingPA ? <Loader2 className="w-4 h-4 animate-spin" /> : <><Save className="w-4 h-4 mr-1.5" /> Save Changes</>}
-                        </Button>
-                      </div>
-                    </div>
+                    <PAEditorCard
+                      pa={pa}
+                      contractFields={contractFields}
+                      onClose={() => setEditingPA(null)}
+                      onCreated={() => {}}
+                      onUpdated={(updated) => {
+                        setPlatformAgreements(prev => prev.map(p => p.id === updated.id ? updated : p));
+                        setEditingPA(null);
+                      }}
+                    />
                   ) : (
                     /* View row */
-                    <div className="flex items-center gap-3 px-5 py-4">
-                      {/* Reorder buttons */}
+                    <div className="bg-slate-900 border border-slate-800 rounded-2xl flex items-center gap-3 px-5 py-4">
                       <div className="flex flex-col gap-0.5 shrink-0">
-                        <button
-                          onClick={() => movePlatformAgreement(pa.id, "up")}
-                          disabled={idx === 0}
-                          className="p-0.5 text-slate-600 hover:text-slate-400 disabled:opacity-20"
-                        >
+                        <button onClick={() => movePlatformAgreement(pa.id, "up")} disabled={idx === 0}
+                          className="p-0.5 text-slate-600 hover:text-slate-400 disabled:opacity-20">
                           <ChevronUp className="w-3.5 h-3.5" />
                         </button>
-                        <button
-                          onClick={() => movePlatformAgreement(pa.id, "down")}
-                          disabled={idx === platformAgreements.length - 1}
-                          className="p-0.5 text-slate-600 hover:text-slate-400 disabled:opacity-20"
-                        >
+                        <button onClick={() => movePlatformAgreement(pa.id, "down")} disabled={idx === platformAgreements.length - 1}
+                          className="p-0.5 text-slate-600 hover:text-slate-400 disabled:opacity-20">
                           <ChevronDown className="w-3.5 h-3.5" />
                         </button>
                       </div>
-
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2">
                           <p className="text-sm font-semibold text-white truncate">{pa.title}</p>
@@ -1163,23 +1383,15 @@ export default function SuperAdminAgreementPage() {
                         </div>
                         <p className="text-xs text-slate-500 truncate mt-0.5">{pa.checkboxLabel}</p>
                       </div>
-
                       <div className="flex items-center gap-2 shrink-0">
-                        <Button
-                          variant="ghost" size="sm"
-                          className="text-slate-400 hover:text-white hover:bg-slate-700 h-8 w-8 p-0"
-                          onClick={() => {
-                            setEditingPA(pa.id);
-                            setEditDraft({ title: pa.title, content: pa.content, checkboxLabel: pa.checkboxLabel, isRequired: pa.isRequired });
-                          }}
-                        >
-                          <Edit3 className="w-3.5 h-3.5" />
+                        <Button variant="ghost" size="sm"
+                          className="text-slate-400 hover:text-white hover:bg-slate-700 h-8 px-3 gap-1.5 text-xs"
+                          onClick={() => { setCreatingPA(false); setEditingPA(pa.id); }}>
+                          <Edit3 className="w-3.5 h-3.5" />Edit
                         </Button>
-                        <Button
-                          variant="ghost" size="sm"
+                        <Button variant="ghost" size="sm"
                           className="text-red-400 hover:text-red-300 hover:bg-red-500/10 h-8 w-8 p-0"
-                          onClick={() => deletePlatformAgreement(pa.id)}
-                        >
+                          onClick={() => deletePlatformAgreement(pa.id)}>
                           <Trash2 className="w-3.5 h-3.5" />
                         </Button>
                       </div>
@@ -1190,11 +1402,11 @@ export default function SuperAdminAgreementPage() {
             </div>
           )}
 
-          {!showNewPA && (
+          {!creatingPA && editingPA === null && (
             <Button
               variant="outline"
               className="border-slate-700 text-slate-400 hover:text-white hover:bg-slate-800 gap-2"
-              onClick={() => setShowNewPA(true)}
+              onClick={() => { setEditingPA(null); setCreatingPA(true); }}
             >
               <Plus className="w-4 h-4" /> Add Platform Agreement
             </Button>

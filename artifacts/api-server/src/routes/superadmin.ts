@@ -1372,6 +1372,69 @@ router.post("/superadmin/platform-agreements/reorder", requireSuperAdmin, async 
   }
 });
 
+// ── Platform Agreement Acknowledgements CRUD ───────────────────────────────────
+// GET  /superadmin/platform-agreements/:id/acknowledgements
+router.get("/superadmin/platform-agreements/:id/acknowledgements", requireSuperAdmin, async (req, res) => {
+  try {
+    const agreementId = parseInt(req.params.id);
+    if (!agreementId) { res.status(400).json({ error: "Invalid id" }); return; }
+    const rows = await db.execute(sql`
+      SELECT id, platform_agreement_id AS "platformAgreementId", text, required, sort_order AS "sortOrder", is_active AS "isActive", created_at AS "createdAt", updated_at AS "updatedAt"
+      FROM platform_acknowledgements
+      WHERE platform_agreement_id = ${agreementId} AND is_active = true
+      ORDER BY sort_order ASC, id ASC
+    `);
+    res.json(rows.rows ?? []);
+  } catch { res.status(500).json({ error: "Failed to load acknowledgements" }); }
+});
+
+// POST /superadmin/platform-agreements/:id/acknowledgements
+router.post("/superadmin/platform-agreements/:id/acknowledgements", requireSuperAdmin, async (req, res) => {
+  try {
+    const agreementId = parseInt(req.params.id);
+    if (!agreementId) { res.status(400).json({ error: "Invalid id" }); return; }
+    const { text, required = true, sortOrder = 0 } = req.body ?? {};
+    if (!text?.trim()) { res.status(400).json({ error: "text is required" }); return; }
+    const result = await db.execute(sql`
+      INSERT INTO platform_acknowledgements (platform_agreement_id, text, required, sort_order)
+      VALUES (${agreementId}, ${text.trim()}, ${!!required}, ${sortOrder})
+      RETURNING id, platform_agreement_id AS "platformAgreementId", text, required, sort_order AS "sortOrder", created_at AS "createdAt", updated_at AS "updatedAt"
+    `);
+    res.json(result.rows[0]);
+  } catch { res.status(500).json({ error: "Failed to create acknowledgement" }); }
+});
+
+// PATCH /superadmin/platform-agreements/acknowledgements/:ackId
+router.patch("/superadmin/platform-agreements/acknowledgements/:ackId", requireSuperAdmin, async (req, res) => {
+  try {
+    const ackId = parseInt(req.params.ackId);
+    if (!ackId) { res.status(400).json({ error: "Invalid ackId" }); return; }
+    const { text, required, sortOrder } = req.body ?? {};
+    const result = await db.execute(sql`
+      UPDATE platform_acknowledgements
+      SET
+        text        = COALESCE(${text?.trim() ?? null}, text),
+        required    = COALESCE(${required !== undefined ? !!required : null}, required),
+        sort_order  = COALESCE(${sortOrder !== undefined ? sortOrder : null}, sort_order),
+        updated_at  = NOW()
+      WHERE id = ${ackId}
+      RETURNING id, platform_agreement_id AS "platformAgreementId", text, required, sort_order AS "sortOrder", created_at AS "createdAt", updated_at AS "updatedAt"
+    `);
+    if (!result.rows[0]) { res.status(404).json({ error: "Not found" }); return; }
+    res.json(result.rows[0]);
+  } catch (e: any) { res.status(500).json({ error: "Failed to update acknowledgement", detail: e.message }); }
+});
+
+// DELETE /superadmin/platform-agreements/acknowledgements/:ackId
+router.delete("/superadmin/platform-agreements/acknowledgements/:ackId", requireSuperAdmin, async (req, res) => {
+  try {
+    const ackId = parseInt(req.params.ackId);
+    if (!ackId) { res.status(400).json({ error: "Invalid ackId" }); return; }
+    await db.execute(sql`DELETE FROM platform_acknowledgements WHERE id = ${ackId}`);
+    res.json({ ok: true });
+  } catch { res.status(500).json({ error: "Failed to delete acknowledgement" }); }
+});
+
 // ── GET /superadmin/claims ─────────────────────────────────────────────────────
 router.get("/superadmin/claims", requireSuperAdmin, async (req, res) => {
   try {
