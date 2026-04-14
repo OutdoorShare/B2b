@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
-import { ZoomIn, ZoomOut, RotateCcw, ChevronRight, AlertCircle } from "lucide-react";
+import { ZoomIn, ZoomOut, RotateCcw, ChevronRight, AlertCircle, X } from "lucide-react";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 interface Props {
