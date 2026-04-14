@@ -627,8 +627,13 @@ export default function StorefrontProductDetail() {
                     : <>Book Now — {days} day{days !== 1 ? "s" : ""} <ChevronRight className="w-5 h-5 ml-1" /></>}
                 </Button>
                 {profile?.location && (
-                  <div className="flex items-center justify-center gap-1.5 text-xs text-muted-foreground">
-                    <MapPin className="w-3 h-3" /> Pickup: {cityState(profile.location)}
+                  <div className="flex flex-col items-center gap-0.5">
+                    <div className="flex items-center justify-center gap-1.5 text-xs text-muted-foreground">
+                      <MapPin className="w-3 h-3 shrink-0" /> Pickup: {cityState(profile.location)}
+                    </div>
+                    {(profile as any).locationDetail && (
+                      <p className="text-xs text-muted-foreground/70 text-center">{(profile as any).locationDetail}</p>
+                    )}
                   </div>
                 )}
                 <p className="text-xs text-center text-muted-foreground">No charge until your booking is confirmed.</p>

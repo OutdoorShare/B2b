@@ -4416,12 +4416,22 @@ export default function StorefrontBook() {
                                 {/* Contact details column */}
                                 <div className="p-5 space-y-3">
                                   <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">Contact & Pickup</p>
-                                  {cc.address && (
+                                  {listing.location ? (
+                                    <div className="flex items-start gap-2 text-sm text-muted-foreground">
+                                      <MapPin className="w-3.5 h-3.5 mt-0.5 shrink-0 text-primary/60" />
+                                      <span className="leading-snug">
+                                        {listing.location}
+                                        {(listing as any).locationDetail && (
+                                          <span className="block text-xs text-muted-foreground/70 mt-0.5">{(listing as any).locationDetail}</span>
+                                        )}
+                                      </span>
+                                    </div>
+                                  ) : cc.address ? (
                                     <div className="flex items-start gap-2 text-sm text-muted-foreground">
                                       <MapPin className="w-3.5 h-3.5 mt-0.5 shrink-0 text-primary/60" />
                                       <span className="leading-snug">{cc.address}</span>
                                     </div>
-                                  )}
+                                  ) : null}
                                   {cc.phone && (
                                     <a href={`tel:${cc.phone}`} className="flex items-center gap-2 text-sm text-muted-foreground hover:text-primary transition-colors">
                                       <Phone className="w-3.5 h-3.5 shrink-0 text-primary/60" />

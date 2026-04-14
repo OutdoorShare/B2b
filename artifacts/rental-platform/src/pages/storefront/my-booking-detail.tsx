@@ -1048,10 +1048,15 @@ export default function MyBookingDetail() {
             </div>
             <div className="px-5 py-4 space-y-3">
               {card.name && <p className="font-semibold text-base">{card.name}</p>}
-              {card.address && (
+              {(booking.listingLocation || card.address) && (
                 <div className="flex items-start gap-2 text-sm">
                   <MapPin className="w-4 h-4 text-primary shrink-0 mt-0.5" />
-                  <span className="text-foreground">{card.address}</span>
+                  <span className="text-foreground leading-snug">
+                    {booking.listingLocation || card.address}
+                    {booking.listingLocation && booking.listingLocationDetail && (
+                      <span className="block text-xs text-muted-foreground mt-0.5">{booking.listingLocationDetail}</span>
+                    )}
+                  </span>
                 </div>
               )}
               {card.phone && (

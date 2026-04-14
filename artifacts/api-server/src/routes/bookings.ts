@@ -748,7 +748,7 @@ router.get("/bookings/:id", async (req, res) => {
       }
     }
 
-    res.json({ ...formatBooking(booking, listing?.title ?? "Unknown"), contactCard, depositAmount, platformFeePercent, requireIdentityVerification: listing?.requireIdentityVerification ?? false });
+    res.json({ ...formatBooking(booking, listing?.title ?? "Unknown"), contactCard, depositAmount, platformFeePercent, requireIdentityVerification: listing?.requireIdentityVerification ?? false, listingLocation: listing?.location ?? null, listingLocationDetail: listing?.locationDetail ?? null });
   } catch (err) {
     req.log.error(err);
     res.status(500).json({ error: "Failed to fetch booking" });
