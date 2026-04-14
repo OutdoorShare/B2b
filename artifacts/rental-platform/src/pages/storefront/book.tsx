@@ -1714,6 +1714,7 @@ export default function StorefrontBook() {
       quantity: selectedQuantity,
       planType: selectedPricingType ?? "daily",
       selectedAddonIds: Array.from(selectedAddonIds),
+      promoCode: appliedPromo?.code || undefined,
     });
 
     const MAX_ATTEMPTS = 3;

@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
-import { tenantsTable, bookingsTable, customersTable, listingsTable, businessProfileTable, listingAddonsTable } from "@workspace/db/schema";
+import { tenantsTable, bookingsTable, customersTable, listingsTable, businessProfileTable, listingAddonsTable, promoCodesTable } from "@workspace/db/schema";
 import { eq, desc, and, or, sql } from "drizzle-orm";
 import { stripe, getStripeForTenant, PLATFORM_FEE_PERCENT, validateStripeCents, toStripeAmount } from "../services/stripe";
 import { calculateBookingPricing, feeModeFromLegacy, type FeeMode } from "../lib/pricing";
@@ -366,6 +366,7 @@ router.post("/stripe/payment-intent", async (req, res) => {
       planType: rawPlanType,
       selectedAddonIds: rawAddonIds,
       hourlySlotPrice: rawSlotPrice,
+      promoCode: rawPromoCode,
     } = req.body ?? {};
 
     logInfo("payment_intent.creating", {
@@ -475,7 +476,41 @@ router.post("/stripe/payment-intent", async (req, res) => {
             hourlySlotPrice: rawSlotPrice != null ? Number(rawSlotPrice) : undefined,
           });
 
-          const validation = validateRentalBase(serverPricing.baseCents, rentalBase);
+          // Use totalCents (base + addons) for validation — rentalBase also includes addons.
+          // Apply a server-verified promo discount to the floor so promo-discounted bookings
+          // pass validation without needing to widen the tolerance for everyone.
+          let serverFloorCents = serverPricing.totalCents;
+
+          if (rawPromoCode && typeof rawPromoCode === "string") {
+            const [promoRow] = await db.select({
+              discountType: promoCodesTable.discountType,
+              discountValue: promoCodesTable.discountValue,
+              isActive: promoCodesTable.isActive,
+            }).from(promoCodesTable).where(and(
+              eq(promoCodesTable.code, rawPromoCode.trim().toUpperCase()),
+              eq(promoCodesTable.tenantId, tenant.id),
+              eq(promoCodesTable.isActive, true),
+            )).limit(1);
+
+            if (promoRow) {
+              const dv = parseFloat(String(promoRow.discountValue ?? "0"));
+              if (promoRow.discountType === "percent" && isFinite(dv)) {
+                const pct = Math.min(100, Math.max(0, dv));
+                serverFloorCents = Math.round(serverFloorCents * (1 - pct / 100));
+              } else if (promoRow.discountType === "fixed" && isFinite(dv)) {
+                serverFloorCents = Math.max(0, serverFloorCents - Math.round(dv * 100));
+              }
+              logInfo("payment_intent.promo_applied_to_floor", {
+                tenantId: tenant.id,
+                promoCode: rawPromoCode,
+                discountType: promoRow.discountType,
+                discountValue: dv,
+                serverFloorCents,
+              });
+            }
+          }
+
+          const validation = validateRentalBase(serverFloorCents, rentalBase);
 
           if (!validation.valid) {
             logError("payment_intent.price_floor_rejected", {
