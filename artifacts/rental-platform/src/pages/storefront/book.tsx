@@ -868,6 +868,11 @@ export default function StorefrontBook() {
   const [agreeChecked, setAgreeChecked] = useState(false);
   const [agreementText, setAgreementText] = useState(DEFAULT_AGREEMENT);
   const [customFieldValues, setCustomFieldValues] = useState<Record<string, string>>({});
+  // Multi-person lists for agreement tokens
+  const [agreementRiders, setAgreementRiders]           = useState<string[]>([]);
+  const [agreementRiderInput, setAgreementRiderInput]   = useState("");
+  const [agreementMinors, setAgreementMinors]           = useState<string[]>([]);
+  const [agreementMinorInput, setAgreementMinorInput]   = useState("");
   const [contractFields, setContractFields] = useState<Array<{
     id: string; label: string; key: string;
     type: "text" | "date" | "number" | "textarea" | "checkbox";
@@ -1607,6 +1612,14 @@ export default function StorefrontBook() {
     total_price:         `$${discountedTotal.toFixed(2)}`,
     total:               `$${discountedTotal.toFixed(2)}`,
     rental_total:        `$${discountedTotal.toFixed(2)}`,
+    // ── Multi-person agreement fields ──
+    additional_riders:   agreementRiders.length > 0 ? agreementRiders.join(", ") : "None listed",
+    additional_drivers:  agreementRiders.length > 0 ? agreementRiders.join(", ") : "None listed",
+    riders:              agreementRiders.length > 0 ? agreementRiders.join(", ") : "None listed",
+    extra_riders:        agreementRiders.length > 0 ? agreementRiders.join(", ") : "None listed",
+    minors:              agreementMinors.length > 0 ? agreementMinors.join(", ") : "None listed",
+    minor_participants:  agreementMinors.length > 0 ? agreementMinors.join(", ") : "None listed",
+    minors_list:         agreementMinors.length > 0 ? agreementMinors.join(", ") : "None listed",
     // ── Listing name aliases ──
     listing_name:        listing?.title || "—",
     rental_name:         listing?.title || "—",
@@ -4078,6 +4091,103 @@ export default function StorefrontBook() {
                                 ? <><CheckCircle2 className="w-4 h-4 text-green-600 shrink-0" /><div><p className="text-sm font-semibold text-green-800">All fields complete</p><p className="text-xs text-green-600">Review the document, then sign below.</p></div></>
                                 : <><AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" /><div><p className="text-sm font-semibold text-amber-800">Complete all required fields</p><p className="text-xs text-amber-600">{requiredUnfilled.length} field{requiredUnfilled.length > 1 ? "s" : ""} needed before signing.</p></div></>
                               }
+                            </div>
+                          )}
+
+                          {/* People on this rental — multi-add for {{additional_riders}} / {{minors}} tokens */}
+                          {(agreementText.includes("{{additional_riders}}") || agreementText.includes("{{minors}}") || agreementText.includes("{{additional_drivers}}") || agreementText.includes("{{riders}}")) && (
+                            <div className="bg-card rounded-2xl border shadow-sm overflow-hidden">
+                              <div className="px-5 py-3.5 border-b bg-muted/20 flex items-center gap-2">
+                                <div>
+                                  <p className="font-semibold text-sm">People on This Rental</p>
+                                  <p className="text-xs text-muted-foreground mt-0.5">Optional — names are listed on the agreement automatically</p>
+                                </div>
+                              </div>
+                              <div className="p-4 space-y-5">
+
+                                {/* Additional Riders */}
+                                {(agreementText.includes("{{additional_riders}}") || agreementText.includes("{{additional_drivers}}") || agreementText.includes("{{riders}}")) && (
+                                  <div id="form-field-additional_riders" className="space-y-2">
+                                    <div>
+                                      <label className="text-sm font-semibold">Additional Riders <span className="text-xs font-normal text-muted-foreground">— optional</span></label>
+                                      <p className="text-xs text-muted-foreground mt-0.5">Anyone 21 or older who will drive or operate the equipment. By being listed here, they agree to the terms of this rental agreement.</p>
+                                    </div>
+                                    <div className="flex gap-2">
+                                      <input
+                                        type="text"
+                                        value={agreementRiderInput}
+                                        onChange={e => setAgreementRiderInput(e.target.value)}
+                                        onFocus={() => { setFocusedField("additional_riders"); scrollToDocToken("additional_riders"); }}
+                                        onBlur={() => setFocusedField(null)}
+                                        onKeyDown={e => { if (e.key === "Enter") { const n = agreementRiderInput.trim(); if (n) { setAgreementRiders(p => [...p, n]); setAgreementRiderInput(""); } } }}
+                                        placeholder="Full name (21 or older)"
+                                        className="flex-1 text-sm border rounded-lg px-3 py-2 bg-background focus:outline-none focus:ring-2 focus:ring-primary/30"
+                                      />
+                                      <button
+                                        type="button"
+                                        onClick={() => { const n = agreementRiderInput.trim(); if (n) { setAgreementRiders(p => [...p, n]); setAgreementRiderInput(""); } }}
+                                        className="px-3 py-2 rounded-lg border bg-muted hover:bg-muted/80 text-sm flex items-center"
+                                      >
+                                        <Plus className="w-4 h-4" />
+                                      </button>
+                                    </div>
+                                    {agreementRiders.length > 0 && (
+                                      <div className="flex flex-wrap gap-1.5">
+                                        {agreementRiders.map((name, i) => (
+                                          <span key={i} className="inline-flex items-center gap-1 bg-primary/10 text-primary text-xs rounded-full px-2.5 py-1 font-medium">
+                                            {name}
+                                            <button type="button" onClick={() => setAgreementRiders(p => p.filter((_, idx) => idx !== i))} className="ml-0.5 hover:opacity-60">
+                                              <X className="w-3 h-3" />
+                                            </button>
+                                          </span>
+                                        ))}
+                                      </div>
+                                    )}
+                                  </div>
+                                )}
+
+                                {/* Minors */}
+                                {(agreementText.includes("{{minors}}") || agreementText.includes("{{minor_participants}}")) && (
+                                  <div id="form-field-minors" className="space-y-2">
+                                    <div>
+                                      <label className="text-sm font-semibold">Minors <span className="text-xs font-normal text-muted-foreground">— optional</span></label>
+                                      <p className="text-xs text-muted-foreground mt-0.5">Anyone under 21 participating in the rental, regardless of experience or licensing.</p>
+                                    </div>
+                                    <div className="flex gap-2">
+                                      <input
+                                        type="text"
+                                        value={agreementMinorInput}
+                                        onChange={e => setAgreementMinorInput(e.target.value)}
+                                        onFocus={() => { setFocusedField("minors"); scrollToDocToken("minors"); }}
+                                        onBlur={() => setFocusedField(null)}
+                                        onKeyDown={e => { if (e.key === "Enter") { const n = agreementMinorInput.trim(); if (n) { setAgreementMinors(p => [...p, n]); setAgreementMinorInput(""); } } }}
+                                        placeholder="Name and age, e.g. Emma, 17"
+                                        className="flex-1 text-sm border rounded-lg px-3 py-2 bg-background focus:outline-none focus:ring-2 focus:ring-primary/30"
+                                      />
+                                      <button
+                                        type="button"
+                                        onClick={() => { const n = agreementMinorInput.trim(); if (n) { setAgreementMinors(p => [...p, n]); setAgreementMinorInput(""); } }}
+                                        className="px-3 py-2 rounded-lg border bg-muted hover:bg-muted/80 text-sm flex items-center"
+                                      >
+                                        <Plus className="w-4 h-4" />
+                                      </button>
+                                    </div>
+                                    {agreementMinors.length > 0 && (
+                                      <div className="flex flex-wrap gap-1.5">
+                                        {agreementMinors.map((name, i) => (
+                                          <span key={i} className="inline-flex items-center gap-1 bg-slate-100 text-slate-700 text-xs rounded-full px-2.5 py-1 font-medium">
+                                            {name}
+                                            <button type="button" onClick={() => setAgreementMinors(p => p.filter((_, idx) => idx !== i))} className="ml-0.5 hover:opacity-60">
+                                              <X className="w-3 h-3" />
+                                            </button>
+                                          </span>
+                                        ))}
+                                      </div>
+                                    )}
+                                  </div>
+                                )}
+
+                              </div>
                             </div>
                           )}
 
