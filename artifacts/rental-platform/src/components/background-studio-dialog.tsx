@@ -50,10 +50,12 @@ export function BackgroundStudioDialog({ open, onClose, imageUrl, onApply }: Pro
         ? imageUrl
         : `${window.location.origin}${imageUrl.startsWith("/") ? "" : "/"}${imageUrl}`;
 
+      // Do NOT set publicPath — the library's built-in default CDN
+      // (https://staticimgly.com/@imgly/background-removal-data/{version}/dist/)
+      // is the correct source for WASM + ONNX model files.
+      // Passing a custom publicPath (jsDelivr, local, etc.) causes "resources.json
+      // not found" because that host doesn't serve the library's model assets.
       const result = await removeBg(absoluteImage, {
-        // Point to jsDelivr CDN for WASM/model files (1.7.0 matches installed version).
-        // This avoids having to host the ~100 MB model files ourselves.
-        publicPath: "https://cdn.jsdelivr.net/npm/@imgly/background-removal@1.7.0/dist/",
         output: { format: "image/png", quality: 0.9 },
       });
       subjectBlobRef.current = result;

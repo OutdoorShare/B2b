@@ -17,6 +17,12 @@ interface Props {
   outputWidth?: number;
 }
 
+// Single object for zoom + position so they always update atomically in one
+// setState call. Two separate setState calls (scale + offset) can produce a
+// frame where scale is already updated but offset is still stale — causing the
+// image to visually jump sideways before the second update paints.
+type View = { scale: number; ox: number; oy: number };
+
 // ── Component ─────────────────────────────────────────────────────────────────
 export function ImageCropDialog({
   files,
@@ -35,8 +41,10 @@ export function ImageCropDialog({
   const [imgSrc, setImgSrc]             = useState<string>("");
   const [naturalW, setNaturalW]         = useState(0);
   const [naturalH, setNaturalH]         = useState(0);
-  const [scale, setScale]               = useState(1);
-  const [offset, setOffset]             = useState({ x: 0, y: 0 });
+
+  // ── SINGLE atomic view state ── scale + position always update together ──
+  const [view, setView]                 = useState<View>({ scale: 1, ox: 0, oy: 0 });
+
   const [dragging, setDragging]         = useState(false);
   const [collected, setCollected]       = useState<string[]>([]);
   const [processing, setProcessing]     = useState(false);
@@ -44,39 +52,34 @@ export function ImageCropDialog({
   const [imageLoading, setImageLoading] = useState(true);
   const [imageError, setImageError]     = useState<string | null>(null);
 
-  // Container pixel dimensions — driven by ResizeObserver + onLoad measurement
+  // Container pixel dimensions — driven by ResizeObserver
   const [frameW, setFrameW] = useState(0);
   const frameH = frameW > 0 ? Math.round(frameW / ASPECT) : 0;
 
   const containerRef = useRef<HTMLDivElement>(null);
   const dragRef      = useRef({ startX: 0, startY: 0, ox: 0, oy: 0 });
-  const blobUrlRef   = useRef<string>("");   // tracks current blob URL for revoke
+  const blobUrlRef   = useRef<string>("");
 
-  // Refs that shadow state — always hold the latest committed values so
-  // event handlers (zoom, drag) never close over stale state.
-  const scaleRef  = useRef(1);
-  const offsetRef = useRef({ x: 0, y: 0 });
-  const frameWRef = useRef(0);
-  const naturalWRef = useRef(0);
-  const naturalHRef = useRef(0);
+  // Mirror refs — event handlers read these to avoid stale closures.
+  // viewRef always matches the latest committed view state.
+  const viewRef      = useRef<View>({ scale: 1, ox: 0, oy: 0 });
+  const frameWRef    = useRef(0);
+  const naturalWRef  = useRef(0);
+  const naturalHRef  = useRef(0);
 
-  // ── Measure container helper ──────────────────────────────────────────────
-  // IMPORTANT: use offsetWidth, NOT getBoundingClientRect().width.
-  // getBoundingClientRect() is affected by CSS transforms on ancestors (e.g.
-  // Radix Dialog's scale(0.95) open animation). offsetWidth returns the real
-  // CSS layout width, which is always correct regardless of transforms.
+  // ── Measure container ─────────────────────────────────────────────────────
+  // offsetWidth is transform-immune (Radix Dialog's scale() animation cannot
+  // distort it), so we always get the true layout width.
   const measureContainer = useCallback((): number => {
     const el = containerRef.current;
-    if (!el) return 0;
-    return el.offsetWidth;          // transform-immune layout width
+    return el ? el.offsetWidth : 0;
   }, []);
 
-  // ── ResizeObserver for window/container resizes ───────────────────────────
+  // ── ResizeObserver ────────────────────────────────────────────────────────
   useEffect(() => {
     const el = containerRef.current;
     if (!el) return;
     const ro = new ResizeObserver((entries) => {
-      // entry.contentRect.width is the CSS layout width — also transform-immune.
       const w = Math.round(entries[0]?.contentRect.width ?? 0);
       if (w > 0) { frameWRef.current = w; setFrameW(w); }
     });
@@ -84,51 +87,36 @@ export function ImageCropDialog({
     return () => ro.disconnect();
   }, []);
 
-  // ── Clamp helper ──────────────────────────────────────────────────────────
-  const clampXY = useCallback(
-    (ox: number, oy: number, sc: number, nw: number, nh: number, fw: number, fh: number) => ({
-      x: Math.min(0, Math.max(fw - nw * sc, ox)),
-      y: Math.min(0, Math.max(fh - nh * sc, oy)),
-    }),
-    []
-  );
-
-  // ── Helpers: sync state + ref together ───────────────────────────────────
-  const applyScale = useCallback((sc: number) => {
-    scaleRef.current = sc;
-    setScale(sc);
+  // ── Apply view atomically ─────────────────────────────────────────────────
+  // ALL updates to zoom/position go through this one function so React always
+  // receives a single setState call — no intermediate "scale updated, offset
+  // not yet" renders.
+  const applyView = useCallback((v: View) => {
+    viewRef.current = v;
+    setView(v);
   }, []);
 
-  const applyOffset = useCallback((o: { x: number; y: number }) => {
-    offsetRef.current = o;
-    setOffset(o);
-  }, []);
+  // ── Clamp helpers ─────────────────────────────────────────────────────────
+  const clampOx = (ox: number, sc: number, nw: number, fw: number) =>
+    Math.min(0, Math.max(fw - nw * sc, ox));
+  const clampOy = (oy: number, sc: number, nh: number, fh: number) =>
+    Math.min(0, Math.max(fh - nh * sc, oy));
 
-  // ── Center helper (called from multiple places) ───────────────────────────
+  // ── Center helper ─────────────────────────────────────────────────────────
   const centerImage = useCallback(
     (nw: number, nh: number, fw: number, fh: number) => {
       if (!nw || !nh || !fw || !fh) return;
       const sc = Math.max(fw / nw, fh / nh);
-      const ox = (fw - nw * sc) / 2;
-      const oy = (fh - nh * sc) / 2;
-      const clamped = {
-        x: Math.min(0, Math.max(fw - nw * sc, ox)),
-        y: Math.min(0, Math.max(fh - nh * sc, oy)),
-      };
-      applyScale(sc);
-      applyOffset(clamped);
+      const ox = clampOx((fw - nw * sc) / 2, sc, nw, fw);
+      const oy = clampOy((fh - nh * sc) / 2, sc, nh, fh);
+      applyView({ scale: sc, ox, oy });
     },
-    [applyScale, applyOffset]
+    [applyView]
   );
 
   const currentFile = files[queueIdx];
 
-  // ── Preload image off-DOM before mounting it in the crop canvas ───────────
-  // This eliminates the ResizeObserver race condition: by the time imgSrc is
-  // set, we already know naturalW/H. And we measure the container at that
-  // moment instead of relying on the observer having fired first.
-  // We use offsetWidth (not getBoundingClientRect) — it is transform-immune,
-  // so the Radix Dialog's scale() open animation cannot corrupt the measurement.
+  // ── Preload image off-DOM before mounting ─────────────────────────────────
   useEffect(() => {
     if (!currentFile) return;
 
@@ -137,8 +125,7 @@ export function ImageCropDialog({
     setImgSrc("");
     setNaturalW(0); naturalWRef.current = 0;
     setNaturalH(0); naturalHRef.current = 0;
-    applyScale(1);
-    applyOffset({ x: 0, y: 0 });
+    applyView({ scale: 1, ox: 0, oy: 0 });
     setUploadError(null);
 
     const url = URL.createObjectURL(currentFile);
@@ -158,16 +145,11 @@ export function ImageCropDialog({
       const nh = img.naturalHeight;
       console.info("[crop] image preloaded", { nw, nh, name: currentFile.name });
 
-      // offsetWidth is already transform-immune, so one rAF is enough to let
-      // React finish rendering the Dialog before we measure.
       requestAnimationFrame(() => {
         if (cancelled) return;
-
-        const fw = measureContainer();   // offsetWidth — no transform distortion
+        const fw = measureContainer();
         const fh = fw > 0 ? Math.round(fw / ASPECT) : 0;
-
         console.info("[crop] container measured (offsetWidth)", { fw, fh });
-
         naturalWRef.current = nw;
         naturalHRef.current = nh;
         setNaturalW(nw);
@@ -206,25 +188,23 @@ export function ImageCropDialog({
       URL.revokeObjectURL(url);
       blobUrlRef.current = "";
     };
-  }, [currentFile, ASPECT, measureContainer, centerImage]);
+  }, [currentFile, ASPECT, measureContainer, centerImage, applyView]);
 
-  // ── Re-center when frameW changes (window resize) ─────────────────────────
+  // ── Re-center when frame resizes (window resize) ──────────────────────────
   useEffect(() => {
     if (!naturalW || !naturalH || !frameW || !frameH) return;
     centerImage(naturalW, naturalH, frameW, frameH);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [frameW, frameH]); // intentionally only on frame changes, not every centerImage ref change
+  }, [frameW, frameH]);
 
-  // ── onLoad fired by the DOM <img> — re-measure as a safety net ───────────
+  // ── DOM img onLoad (safety net) ───────────────────────────────────────────
   const handleImgLoad = (e: React.SyntheticEvent<HTMLImageElement>) => {
     const { naturalWidth: nw, naturalHeight: nh } = e.currentTarget;
     console.info("[crop] DOM img onLoad", { nw, nh });
-    // If the preload already set dimensions, this is a no-op.
-    // If somehow preload didn't fire, catch up here.
-    if (nw > 0 && nh > 0) {
+    if (nw > 0 && nh > 0 && !naturalW) {
       const fw = frameW > 0 ? frameW : measureContainer();
       const fh = fw > 0 ? Math.round(fw / ASPECT) : 0;
-      if (fw > 0 && !naturalW) {
+      if (fw > 0) {
         setFrameW(fw);
         setNaturalW(nw);
         setNaturalH(nh);
@@ -233,7 +213,6 @@ export function ImageCropDialog({
     }
   };
 
-  // ── onError fired by the DOM <img> ───────────────────────────────────────
   const handleImgError = () => {
     console.error("[crop] DOM img onError", { imgSrc, name: currentFile?.name });
     setImageError("Could not display this image. Please try a different file.");
@@ -246,29 +225,77 @@ export function ImageCropDialog({
     : 1;
   const maxScale = minScale * 3;
 
+  // ── Zoom ──────────────────────────────────────────────────────────────────
+  // Reads all values from refs (never stale). Updates scale AND offset in ONE
+  // applyView() call so there is no intermediate render where only one changes.
+  //
+  // Center-zoom math:
+  //   imgPixelAtFrameCenter = (frameCenter - offset) / prevScale
+  //   newOffset             = frameCenter - imgPixelAtFrameCenter * newScale
+  const handleZoom = useCallback(
+    (newScale: number) => {
+      const fw = frameWRef.current;
+      const fh = fw > 0 ? Math.round(fw / ASPECT) : 0;
+      const nw = naturalWRef.current;
+      const nh = naturalHRef.current;
+      const prev = viewRef.current;
+
+      const mn = (nw && nh && fw && fh) ? Math.max(fw / nw, fh / nh) : 1;
+      const mx = mn * 3;
+      const sc = Math.max(mn, Math.min(mx, newScale));
+
+      const cx = fw / 2;
+      const cy = fh / 2;
+      const imgCx = (cx - prev.ox) / prev.scale;
+      const imgCy = (cy - prev.oy) / prev.scale;
+      const ox = clampOx(cx - imgCx * sc, sc, nw, fw);
+      const oy = clampOy(cy - imgCy * sc, sc, nh, fh);
+
+      console.info("[crop] zoom", { prevScale: prev.scale, sc, cx, imgCx, ox, fw });
+
+      // Single applyView call — scale + offset update in one setState, no split frames
+      applyView({ scale: sc, ox, oy });
+    },
+    [ASPECT, applyView]
+  );
+
+  const handleReset = () => {
+    centerImage(
+      naturalWRef.current, naturalHRef.current,
+      frameWRef.current,
+      frameWRef.current > 0 ? Math.round(frameWRef.current / ASPECT) : 0
+    );
+  };
+
+  const onWheel = (e: React.WheelEvent) => {
+    e.preventDefault();
+    handleZoom(viewRef.current.scale * (e.deltaY < 0 ? 1.08 : 0.92));
+  };
+
   // ── Drag (mouse) ──────────────────────────────────────────────────────────
-  // Use refs for position state so drag never closes over stale values.
   const onMouseDown = (e: React.MouseEvent) => {
     e.preventDefault();
     setDragging(true);
     dragRef.current = {
       startX: e.clientX, startY: e.clientY,
-      ox: offsetRef.current.x, oy: offsetRef.current.y,
+      ox: viewRef.current.ox, oy: viewRef.current.oy,
     };
   };
   const onMouseMove = useCallback((e: React.MouseEvent) => {
     if (!dragging) return;
     const dx = e.clientX - dragRef.current.startX;
     const dy = e.clientY - dragRef.current.startY;
-    const fw = frameWRef.current; const fh = fw > 0 ? Math.round(fw / ASPECT) : 0;
-    const nw = naturalWRef.current; const nh = naturalHRef.current;
-    const sc = scaleRef.current;
-    const o = {
-      x: Math.min(0, Math.max(fw - nw * sc, dragRef.current.ox + dx)),
-      y: Math.min(0, Math.max(fh - nh * sc, dragRef.current.oy + dy)),
-    };
-    applyOffset(o);
-  }, [dragging, ASPECT, applyOffset]);
+    const fw = frameWRef.current;
+    const fh = fw > 0 ? Math.round(fw / ASPECT) : 0;
+    const nw = naturalWRef.current;
+    const nh = naturalHRef.current;
+    const sc = viewRef.current.scale;
+    applyView({
+      scale: sc,
+      ox: clampOx(dragRef.current.ox + dx, sc, nw, fw),
+      oy: clampOy(dragRef.current.oy + dy, sc, nh, fh),
+    });
+  }, [dragging, ASPECT, applyView]);
   const onMouseUp = () => setDragging(false);
 
   // ── Drag (touch) ──────────────────────────────────────────────────────────
@@ -277,7 +304,7 @@ export function ImageCropDialog({
     setDragging(true);
     dragRef.current = {
       startX: t.clientX, startY: t.clientY,
-      ox: offsetRef.current.x, oy: offsetRef.current.y,
+      ox: viewRef.current.ox, oy: viewRef.current.oy,
     };
   };
   const onTouchMove = useCallback((e: React.TouchEvent) => {
@@ -285,64 +312,18 @@ export function ImageCropDialog({
     const t = e.touches[0];
     const dx = t.clientX - dragRef.current.startX;
     const dy = t.clientY - dragRef.current.startY;
-    const fw = frameWRef.current; const fh = fw > 0 ? Math.round(fw / ASPECT) : 0;
-    const nw = naturalWRef.current; const nh = naturalHRef.current;
-    const sc = scaleRef.current;
-    const o = {
-      x: Math.min(0, Math.max(fw - nw * sc, dragRef.current.ox + dx)),
-      y: Math.min(0, Math.max(fh - nh * sc, dragRef.current.oy + dy)),
-    };
-    applyOffset(o);
-  }, [dragging, ASPECT, applyOffset]);
+    const fw = frameWRef.current;
+    const fh = fw > 0 ? Math.round(fw / ASPECT) : 0;
+    const nw = naturalWRef.current;
+    const nh = naturalHRef.current;
+    const sc = viewRef.current.scale;
+    applyView({
+      scale: sc,
+      ox: clampOx(dragRef.current.ox + dx, sc, nw, fw),
+      oy: clampOy(dragRef.current.oy + dy, sc, nh, fh),
+    });
+  }, [dragging, ASPECT, applyView]);
   const onTouchEnd = () => setDragging(false);
-
-  // ── Zoom ──────────────────────────────────────────────────────────────────
-  // Reads all values from refs so it is never stale regardless of when React
-  // scheduled the render. Zooms toward the CENTER of the crop frame.
-  const handleZoom = useCallback(
-    (newScale: number) => {
-      const fw = frameWRef.current;
-      const fh = fw > 0 ? Math.round(fw / ASPECT) : 0;
-      const nw = naturalWRef.current;
-      const nh = naturalHRef.current;
-      const prevScale  = scaleRef.current;
-      const prevOffset = offsetRef.current;
-
-      // Recompute min/max from refs — always fresh
-      const mn = (nw && nh && fw && fh)
-        ? Math.max(fw / nw, fh / nh) : 1;
-      const mx = mn * 3;
-
-      const sc = Math.max(mn, Math.min(mx, newScale));
-
-      // Zoom anchored at the CENTER of the crop frame:
-      //   imgPixelAtCenter = (cx - offset.x) / prevScale
-      //   newOffset = cx - imgPixelAtCenter * sc
-      const cx = fw / 2;
-      const cy = fh / 2;
-      const imgCx = (cx - prevOffset.x) / prevScale;
-      const imgCy = (cy - prevOffset.y) / prevScale;
-      const newOx = Math.min(0, Math.max(fw - nw * sc, cx - imgCx * sc));
-      const newOy = Math.min(0, Math.max(fh - nh * sc, cy - imgCy * sc));
-
-      console.info("[crop] zoom", { prevScale, sc, cx, imgCx, newOx, fw });
-
-      applyScale(sc);
-      applyOffset({ x: newOx, y: newOy });
-    },
-    [ASPECT, applyScale, applyOffset]
-    // NO dependency on scale/offset/minScale/maxScale/naturalW... — all from refs
-  );
-
-  const handleReset = () => {
-    centerImage(naturalWRef.current, naturalHRef.current, frameWRef.current,
-      frameWRef.current > 0 ? Math.round(frameWRef.current / ASPECT) : 0);
-  };
-
-  const onWheel = (e: React.WheelEvent) => {
-    e.preventDefault();
-    handleZoom(scaleRef.current * (e.deltaY < 0 ? 1.08 : 0.92));
-  };
 
   // ── Crop & upload ─────────────────────────────────────────────────────────
   const doCrop = useCallback(async () => {
@@ -352,11 +333,8 @@ export function ImageCropDialog({
 
     console.info("[crop] starting crop+upload", {
       name: currentFile?.name,
-      frameW,
-      frameH,
-      naturalW,
-      naturalH,
-      scale,
+      frameW, frameH, naturalW, naturalH,
+      scale: viewRef.current.scale,
     });
 
     try {
@@ -374,10 +352,7 @@ export function ImageCropDialog({
         source = img;
       }
 
-      // Use refs — they are always current, even if state batching is mid-flush
-      const sc = scaleRef.current;
-      const ox = offsetRef.current.x;
-      const oy = offsetRef.current.y;
+      const { scale: sc, ox, oy } = viewRef.current;
       const fw = frameWRef.current;
       const fh = fw > 0 ? Math.round(fw / ASPECT) : 0;
       const srcX = -ox / sc;
@@ -409,7 +384,7 @@ export function ImageCropDialog({
     } finally {
       setProcessing(false);
     }
-  }, [naturalW, naturalH, imgSrc, offset, scale, frameW, frameH, currentFile, collected, uploadFn, onUploadError, OUTPUT_W, OUTPUT_H]);
+  }, [naturalW, naturalH, imgSrc, frameW, frameH, currentFile, collected, uploadFn, onUploadError, OUTPUT_W, OUTPUT_H, ASPECT]);
 
   const skipFile = () => advance(collected);
 
@@ -427,7 +402,7 @@ export function ImageCropDialog({
 
   const isReady  = !imageLoading && !imageError && imgSrc && naturalW > 0 && frameW > 0;
   const zoomPct  = isReady && minScale < maxScale
-    ? Math.round(((scale - minScale) / (maxScale - minScale)) * 100)
+    ? Math.round(((view.scale - minScale) / (maxScale - minScale)) * 100)
     : 0;
 
   return (
@@ -488,7 +463,7 @@ export function ImageCropDialog({
             </div>
           )}
 
-          {/* Interactive drag area — always mounted so ResizeObserver can measure */}
+          {/* Interactive drag area */}
           <div
             className="absolute inset-0 overflow-hidden"
             style={{ cursor: dragging ? "grabbing" : "grab", touchAction: "none" }}
@@ -501,8 +476,6 @@ export function ImageCropDialog({
             onTouchEnd={isReady ? onTouchEnd : undefined}
             onWheel={isReady ? onWheel : undefined}
           >
-            {/* Image — always rendered when imgSrc is set (removing the frameW gate that caused the bug).
-                Hidden with opacity until fully positioned to avoid a size flash. */}
             {imgSrc && (
               <img
                 src={imgSrc}
@@ -511,12 +484,12 @@ export function ImageCropDialog({
                 draggable={false}
                 className="absolute pointer-events-none transition-opacity duration-150"
                 style={{
-                  left:            offset.x,
-                  top:             offset.y,
-                  width:           naturalW * scale || "auto",
-                  height:          naturalH * scale || "auto",
-                  opacity:         isReady ? 1 : 0,
-                  imageRendering:  "auto",
+                  left:           view.ox,
+                  top:            view.oy,
+                  width:          naturalW * view.scale || "auto",
+                  height:         naturalH * view.scale || "auto",
+                  opacity:        isReady ? 1 : 0,
+                  imageRendering: "auto",
                 }}
               />
             )}
@@ -537,8 +510,8 @@ export function ImageCropDialog({
         <div className="px-5 py-3 flex items-center gap-3">
           <button
             type="button"
-            onClick={() => handleZoom(scaleRef.current * 0.9)}
-            disabled={!isReady || scale <= minScale + 0.001}
+            onClick={() => handleZoom(viewRef.current.scale * 0.9)}
+            disabled={!isReady || view.scale <= minScale + 0.001}
             className="text-muted-foreground hover:text-foreground disabled:opacity-30 transition-colors"
           >
             <ZoomOut className="w-4 h-4" />
@@ -554,8 +527,8 @@ export function ImageCropDialog({
           />
           <button
             type="button"
-            onClick={() => handleZoom(scaleRef.current * 1.1)}
-            disabled={!isReady || scale >= maxScale - 0.001}
+            onClick={() => handleZoom(viewRef.current.scale * 1.1)}
+            disabled={!isReady || view.scale >= maxScale - 0.001}
             className="text-muted-foreground hover:text-foreground disabled:opacity-30 transition-colors"
           >
             <ZoomIn className="w-4 h-4" />
