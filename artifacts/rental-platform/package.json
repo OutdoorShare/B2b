@@ -88,6 +88,7 @@
     "@imgly/background-removal": "^1.7.0",
     "@stripe/react-stripe-js": "^6.0.0",
     "@stripe/stripe-js": "^9.0.0",
+    "onnxruntime-web": "1.21.0",
     "qrcode.react": "^4.2.0",
     "react-easy-crop": "^5.5.7",
     "react-qr-code": "^2.0.18",

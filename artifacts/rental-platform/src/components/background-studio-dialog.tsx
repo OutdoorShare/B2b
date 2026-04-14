@@ -60,8 +60,10 @@ export function BackgroundStudioDialog({ open, onClose, imageUrl, onApply }: Pro
       });
       subjectBlobRef.current = result;
       return result;
-    } catch (err) {
-      console.error("Background removal failed:", err);
+    } catch (err: any) {
+      const msg = err?.message ?? err?.toString?.() ?? "(no message)";
+      const name = err?.name ?? typeof err;
+      console.error("Background removal failed:", { name, msg, raw: err });
       setStage("error");
       setErrorMsg("Could not remove the background. Try a photo with a clear subject.");
       return null;

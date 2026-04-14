@@ -60,14 +60,17 @@ export default defineConfig({
   },
   root: path.resolve(import.meta.dirname),
   optimizeDeps: {
-    exclude: ["@imgly/background-removal", "onnxruntime-web", "onnxruntime-web/webgpu"],
+    // Exclude background-removal from pre-bundling — it's dynamically imported
+    // and its WASM files are loaded at runtime from the staticimgly CDN.
+    // onnxruntime-web MUST be pre-bundled (NOT excluded) so Vite can resolve
+    // the dynamic `import("onnxruntime-web")` call inside the library.
+    exclude: ["@imgly/background-removal"],
   },
   build: {
     outDir: path.resolve(import.meta.dirname, "dist/public"),
     emptyOutDir: true,
-    rollupOptions: {
-      external: ["onnxruntime-web", "onnxruntime-web/webgpu"],
-    },
+    // Do NOT mark onnxruntime-web as external — it needs to be in the bundle
+    // so the background-removal library can import it at runtime.
   },
   server: {
     port,
