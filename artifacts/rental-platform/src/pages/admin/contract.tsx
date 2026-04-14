@@ -92,6 +92,18 @@ const TOKEN_GROUPS = [
       { token: "{{minors}}", label: "Minors" },
     ],
   },
+  {
+    label: "Checkboxes",
+    color: "text-violet-600 bg-violet-50 border-violet-200 hover:bg-violet-100",
+    tokens: [
+      { token: "{{ack_damage_responsibility}}", label: "Damage" },
+      { token: "{{ack_no_refund}}", label: "No Refund" },
+      { token: "{{ack_safety_rules}}", label: "Safety" },
+      { token: "{{ack_terms_and_conditions}}", label: "Terms" },
+      { token: "{{ack_late_return_fee}}", label: "Late Return" },
+      { token: "{{ack_fuel_policy}}", label: "Fuel Policy" },
+    ],
+  },
 ];
 
 // Markdown format — paste directly from ChatGPT.

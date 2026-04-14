@@ -1677,6 +1677,39 @@ export default function StorefrontBook() {
               </span>
             );
           }
+
+          // ── Inline acknowledgement checkbox (ack_* tokens) ─────────────────
+          if (key.startsWith("ack_")) {
+            const checked = customFieldValues[key] === "true";
+            const ackLabel = key.slice(4).replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase());
+            return (
+              <span
+                key={i}
+                data-field-key={key}
+                onClick={() => setCustomFieldValues(prev => ({ ...prev, [key]: prev[key] === "true" ? "false" : "true" }))}
+                title={checked ? "Click to uncheck" : "Click to acknowledge"}
+                className={[
+                  "inline-flex items-center gap-1.5 mx-1 my-0.5 px-2.5 py-1 rounded-lg border-2 cursor-pointer select-none transition-all duration-150 font-medium text-sm align-middle",
+                  checked
+                    ? "bg-green-50 border-green-400 text-green-800"
+                    : "bg-violet-50 border-violet-300 text-violet-700 hover:border-violet-500",
+                ].join(" ")}
+              >
+                <span className={[
+                  "w-4 h-4 rounded border-2 flex items-center justify-center shrink-0 transition-colors",
+                  checked ? "bg-green-500 border-green-500" : "border-violet-400 bg-white",
+                ].join(" ")}>
+                  {checked && (
+                    <svg viewBox="0 0 10 8" className="w-2.5 h-2" fill="none" stroke="white" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                      <polyline points="1,4 3.5,7 9,1" />
+                    </svg>
+                  )}
+                </span>
+                {ackLabel}
+              </span>
+            );
+          }
+
           const fieldDef = contractFields.find(f => f.key === key);
           const currentVal = customFieldValues[key];
           const label = fieldDef?.label || key.replace(/_/g, " ");
@@ -3981,7 +4014,10 @@ export default function StorefrontBook() {
                   const renterKeys = agreementText
                     ? [...new Set(Array.from(agreementText.matchAll(/{{([^}]+)}}/g)).map(m => m[1].trim()).filter(k => !(k in autoFillMap)))]
                     : [];
+                  const ackKeys  = renterKeys.filter(k =>  k.startsWith("ack_"));
+                  const formKeys = renterKeys.filter(k => !k.startsWith("ack_"));
                   const requiredUnfilled = renterKeys.filter(k => {
+                    if (k.startsWith("ack_")) return customFieldValues[k] !== "true";
                     const def = contractFields.find(f => f.key === k);
                     return (def?.required ?? true) && !customFieldValues[k];
                   });
@@ -4191,15 +4227,34 @@ export default function StorefrontBook() {
                             </div>
                           )}
 
+                          {/* Inline acknowledgements hint */}
+                          {ackKeys.length > 0 && (
+                            <div className="bg-violet-50 border border-violet-200 rounded-xl p-3.5 flex items-start gap-3">
+                              <div className="w-5 h-5 rounded border-2 border-violet-400 bg-white flex items-center justify-center shrink-0 mt-0.5">
+                                <svg viewBox="0 0 10 8" className="w-2.5 h-2" fill="none" stroke="#7c3aed" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                                  <polyline points="1,4 3.5,7 9,1" />
+                                </svg>
+                              </div>
+                              <div>
+                                <p className="text-sm font-semibold text-violet-900">
+                                  {ackKeys.filter(k => customFieldValues[k] !== "true").length > 0
+                                    ? `${ackKeys.filter(k => customFieldValues[k] !== "true").length} acknowledgement${ackKeys.filter(k => customFieldValues[k] !== "true").length > 1 ? "s" : ""} needed`
+                                    : "All acknowledgements complete ✓"}
+                                </p>
+                                <p className="text-xs text-violet-700 mt-0.5">Click each checkbox directly in the agreement document on the left to acknowledge.</p>
+                              </div>
+                            </div>
+                          )}
+
                           {/* Dynamic fields — each has id="form-field-{key}" for scroll targeting */}
-                          {renterKeys.length > 0 && (
+                          {formKeys.length > 0 && (
                             <div className="bg-card rounded-2xl border shadow-sm overflow-hidden">
                               <div className="px-5 py-3.5 border-b bg-muted/20">
                                 <p className="font-semibold text-sm">Agreement Fields</p>
                                 <p className="text-xs text-muted-foreground mt-0.5">Your responses populate the contract automatically</p>
                               </div>
                               <div className="p-4 space-y-3">
-                                {renterKeys.map(k => {
+                                {formKeys.map(k => {
                                   const def = contractFields.find(f => f.key === k);
                                   const label = def?.label || k.replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase());
                                   const isRequired = def?.required ?? true;
