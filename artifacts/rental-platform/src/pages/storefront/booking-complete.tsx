@@ -500,7 +500,7 @@ export default function BookingComplete() {
                     Additional Riders
                     <span className="text-xs font-normal text-slate-400 ml-1">— optional</span>
                   </Label>
-                  <p className="text-xs text-slate-400 mt-0.5">Anyone age 21 or older who will drive or operate the equipment during this rental. Add one at a time.</p>
+                  <p className="text-xs text-slate-400 mt-0.5">Anyone 21 or older who will drive or operate the equipment. By being listed here, each person is agreeing to and bound by the terms of this rental agreement.</p>
                 </div>
                 <div className="flex gap-2">
                   <Input
