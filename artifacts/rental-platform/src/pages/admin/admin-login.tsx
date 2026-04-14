@@ -187,8 +187,10 @@ export default function AdminLoginPage({ slug }: Props) {
           </form>
         </div>
 
-        <p className="text-center text-xs text-muted-foreground">
+        <p className="text-center text-xs text-muted-foreground space-x-3">
           <a href={`/${slug}`} className="hover:underline">← Back to storefront</a>
+          <span>·</span>
+          <a href={`${BASE}/admin/login`} className="hover:underline">Sign in without a slug</a>
         </p>
       </div>
     </div>

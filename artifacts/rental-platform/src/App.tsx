@@ -42,6 +42,7 @@ import TermsOfServicePage from "@/pages/public/terms";
 import DemoPage from "@/pages/demo";
 import AdminOnboarding from "@/pages/admin/onboarding";
 import AdminLoginPage from "@/pages/admin/admin-login";
+import UniversalAdminLogin from "@/pages/admin/universal-login";
 import SuperAdminLogin from "@/pages/superadmin/login";
 import SuperAdminDashboard from "@/pages/superadmin/dashboard";
 import { SuperAdminLayout } from "@/components/layout/superadmin-layout";
@@ -257,6 +258,9 @@ function Router() {
       </Route>
       <Route path="/terms">
         <TermsOfServicePage />
+      </Route>
+      <Route path="/admin/login">
+        <UniversalAdminLogin />
       </Route>
       <Route path="/forgot-password">
         <ForgotPasswordPage />

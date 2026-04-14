@@ -130,6 +130,95 @@ router.post("/admin/auth/owner-login", async (req, res) => {
   }
 });
 
+// POST /admin/auth/universal-login — email + password only, no slug required
+router.post("/admin/auth/universal-login", async (req, res) => {
+  try {
+    const { email, password } = req.body;
+    if (!email || !password) {
+      res.status(400).json({ error: "Email and password required" });
+      return;
+    }
+    const normalizedEmail = email.toLowerCase().trim();
+
+    // Collect all matches (owner accounts + staff accounts for this email)
+    const matches: Array<{
+      type: "owner" | "staff";
+      tenantId: number;
+      tenantSlug: string;
+      tenantName: string;
+      token: string;
+      userId?: number;
+      userName?: string;
+      role?: string;
+    }> = [];
+
+    // 1. Check owner accounts
+    const ownerTenants = await db
+      .select()
+      .from(tenantsTable)
+      .where(eq(tenantsTable.email, normalizedEmail));
+
+    for (const tenant of ownerTenants) {
+      if (tenant.status !== "active") continue;
+      const valid = await verifyPassword(password, tenant.adminPasswordHash);
+      if (!valid) continue;
+      const token = tenant.adminToken ?? randomBytes(32).toString("hex");
+      if (!tenant.adminToken) {
+        await db.update(tenantsTable).set({ adminToken: token, updatedAt: new Date() }).where(eq(tenantsTable.id, tenant.id));
+      }
+      const companyInfo = await getCompanyInfo(tenant.id);
+      matches.push({ type: "owner", tenantId: tenant.id, tenantSlug: tenant.slug, tenantName: companyInfo.companyName, token });
+    }
+
+    // 2. Check staff accounts
+    const staffUsers = await db
+      .select()
+      .from(adminUsersTable)
+      .where(eq(adminUsersTable.email, normalizedEmail));
+
+    for (const user of staffUsers) {
+      if (user.status !== "active") continue;
+      if (!user.passwordHash) continue;
+      const valid = await verifyPassword(password, user.passwordHash);
+      if (!valid) continue;
+      if (!user.tenantId) continue;
+      const [tenant] = await db.select().from(tenantsTable).where(eq(tenantsTable.id, user.tenantId)).limit(1);
+      if (!tenant || tenant.status !== "active") continue;
+      const newToken = randomBytes(32).toString("hex");
+      await db.update(adminUsersTable).set({ token: newToken, updatedAt: new Date() }).where(eq(adminUsersTable.id, user.id));
+      const companyInfo = await getCompanyInfo(tenant.id);
+      matches.push({ type: "staff", tenantId: tenant.id, tenantSlug: tenant.slug, tenantName: companyInfo.companyName, token: newToken, userId: user.id, userName: user.name, role: user.role });
+    }
+
+    if (matches.length === 0) {
+      res.status(401).json({ error: "Invalid email or password" });
+      return;
+    }
+
+    // If exactly one match, log them in immediately
+    if (matches.length === 1) {
+      const m = matches[0];
+      res.cookie("admin_session", m.token, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === "production",
+        sameSite: "lax",
+        path: "/",
+        maxAge: 7 * 24 * 60 * 60 * 1000,
+      });
+      res.json({ single: true, match: { type: m.type, tenantId: m.tenantId, tenantSlug: m.tenantSlug, tenantName: m.tenantName, userId: m.userId, userName: m.userName, role: m.role } });
+      return;
+    }
+
+    // Multiple matches — return list for selector (no cookie set yet; client will call login with slug after selection)
+    res.json({
+      single: false,
+      accounts: matches.map(m => ({ type: m.type, tenantId: m.tenantId, tenantSlug: m.tenantSlug, tenantName: m.tenantName, userId: m.userId, userName: m.userName, role: m.role })),
+    });
+  } catch {
+    res.status(500).json({ error: "Login failed" });
+  }
+});
+
 // POST /admin/auth/login — staff member login
 router.post("/admin/auth/login", async (req, res) => {
   try {
