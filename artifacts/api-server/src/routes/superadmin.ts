@@ -992,14 +992,21 @@ router.delete("/superadmin/listings/:id", requireSuperAdmin, async (req, res) =>
 });
 
 // ── GET /superadmin/stats ──────────────────────────────────────────────────────
+// Demo / test-mode tenants are excluded from all platform-wide counts.
 router.get("/superadmin/stats", requireSuperAdmin, async (_req, res) => {
   try {
-    const [{ total }] = await db.select({ total: sql<number>`count(*)::int` }).from(tenantsTable);
-    const [{ active }] = await db.select({ active: sql<number>`count(*)::int` }).from(tenantsTable).where(eq(tenantsTable.status, "active"));
-    const [{ inactive }] = await db.select({ inactive: sql<number>`count(*)::int` }).from(tenantsTable).where(eq(tenantsTable.status, "inactive"));
-    const [{ suspended }] = await db.select({ suspended: sql<number>`count(*)::int` }).from(tenantsTable).where(eq(tenantsTable.status, "suspended"));
-    const [{ listings }] = await db.select({ listings: sql<number>`count(*)::int` }).from(listingsTable);
-    const [{ bookings }] = await db.select({ bookings: sql<number>`count(*)::int` }).from(bookingsTable);
+    const demoFilter = and(eq(tenantsTable.testMode, false), sql`${tenantsTable.slug} != 'demo-outdoorshare'`);
+    const [{ total }]     = await db.select({ total:     sql<number>`count(*)::int` }).from(tenantsTable).where(demoFilter);
+    const [{ active }]    = await db.select({ active:    sql<number>`count(*)::int` }).from(tenantsTable).where(and(demoFilter, eq(tenantsTable.status, "active")));
+    const [{ inactive }]  = await db.select({ inactive:  sql<number>`count(*)::int` }).from(tenantsTable).where(and(demoFilter, eq(tenantsTable.status, "inactive")));
+    const [{ suspended }] = await db.select({ suspended: sql<number>`count(*)::int` }).from(tenantsTable).where(and(demoFilter, eq(tenantsTable.status, "suspended")));
+    // Listings & bookings that belong to non-demo tenants
+    const [{ listings }] = await db.select({ listings: sql<number>`count(*)::int` })
+      .from(listingsTable)
+      .innerJoin(tenantsTable, and(eq(tenantsTable.id, listingsTable.tenantId), demoFilter));
+    const [{ bookings }] = await db.select({ bookings: sql<number>`count(*)::int` })
+      .from(bookingsTable)
+      .innerJoin(tenantsTable, and(eq(tenantsTable.id, bookingsTable.tenantId), demoFilter));
     res.json({ total, active, inactive, suspended, totalListings: listings, totalBookings: bookings });
   } catch (e) {
     res.status(500).json({ error: "Failed to fetch stats" });
@@ -1018,6 +1025,7 @@ router.get("/superadmin/analytics", requireSuperAdmin, async (_req, res) => {
       signupTrendRows,
     ] = await Promise.all([
       // KPI: total revenue, platform commission, protection fees, booking count, new signups
+      // Demo / test-mode tenants are excluded from all platform analytics.
       db.execute(sql`
         SELECT
           COALESCE(SUM(b.total_price) FILTER (WHERE b.status NOT IN ('cancelled')), 0)::numeric AS total_revenue,
@@ -1025,6 +1033,7 @@ router.get("/superadmin/analytics", requireSuperAdmin, async (_req, res) => {
           COALESCE((
             SELECT SUM((addon->>'subtotal')::numeric)
             FROM bookings bx
+            JOIN tenants tx ON tx.id = bx.tenant_id AND tx.test_mode = false AND tx.slug != 'demo-outdoorshare'
             CROSS JOIN LATERAL jsonb_array_elements(
               CASE WHEN bx.addons_data IS NOT NULL AND bx.addons_data NOT IN ('[]','null','')
                    THEN bx.addons_data::jsonb ELSE '[]'::jsonb END
@@ -1032,18 +1041,20 @@ router.get("/superadmin/analytics", requireSuperAdmin, async (_req, res) => {
             WHERE lower(addon->>'name') LIKE '%protection%'
           ), 0)::numeric AS protection_fees,
           COUNT(b.id)::int AS total_bookings,
-          (SELECT COUNT(*)::int FROM tenants WHERE created_at > NOW() - INTERVAL '30 days') AS new_signups,
-          (SELECT COUNT(*)::int FROM tenants) AS total_companies
+          (SELECT COUNT(*)::int FROM tenants WHERE created_at > NOW() - INTERVAL '30 days' AND test_mode = false AND slug != 'demo-outdoorshare') AS new_signups,
+          (SELECT COUNT(*)::int FROM tenants WHERE test_mode = false AND slug != 'demo-outdoorshare') AS total_companies
         FROM bookings b
+        JOIN tenants t ON t.id = b.tenant_id AND t.test_mode = false AND t.slug != 'demo-outdoorshare'
       `),
-      // Booking source breakdown
+      // Booking source breakdown — excludes demo / test-mode tenants
       db.execute(sql`
-        SELECT COALESCE(source, 'online') AS source, COUNT(*)::int AS count
-        FROM bookings
-        GROUP BY COALESCE(source, 'online')
+        SELECT COALESCE(b.source, 'online') AS source, COUNT(*)::int AS count
+        FROM bookings b
+        JOIN tenants t ON t.id = b.tenant_id AND t.test_mode = false AND t.slug != 'demo-outdoorshare'
+        GROUP BY COALESCE(b.source, 'online')
         ORDER BY count DESC
       `),
-      // Company leaderboard
+      // Company leaderboard — excludes demo / test-mode tenants
       db.execute(sql`
         SELECT
           t.id, t.name, t.slug,
@@ -1053,11 +1064,12 @@ router.get("/superadmin/analytics", requireSuperAdmin, async (_req, res) => {
           t.created_at
         FROM tenants t
         LEFT JOIN bookings b ON b.tenant_id = t.id
+        WHERE t.test_mode = false AND t.slug != 'demo-outdoorshare'
         GROUP BY t.id, t.name, t.slug, t.created_at
         ORDER BY booking_count DESC, total_revenue DESC
         LIMIT 25
       `),
-      // Totals per category
+      // Totals per category — excludes demo / test-mode tenants
       db.execute(sql`
         SELECT
           c.name AS category_name,
@@ -1066,10 +1078,11 @@ router.get("/superadmin/analytics", requireSuperAdmin, async (_req, res) => {
         FROM bookings b
         JOIN listings l ON l.id = b.listing_id
         JOIN categories c ON c.id = l.category_id
+        JOIN tenants t ON t.id = b.tenant_id AND t.test_mode = false AND t.slug != 'demo-outdoorshare'
         GROUP BY c.name
         ORDER BY total_revenue DESC
       `),
-      // Top listings by booking count
+      // Top listings by booking count — excludes demo / test-mode tenants
       db.execute(sql`
         SELECT
           l.id, l.title,
@@ -1078,12 +1091,12 @@ router.get("/superadmin/analytics", requireSuperAdmin, async (_req, res) => {
           COALESCE(SUM(b.total_price) FILTER (WHERE b.status NOT IN ('cancelled')), 0)::numeric AS total_revenue
         FROM bookings b
         JOIN listings l ON l.id = b.listing_id
-        JOIN tenants t ON t.id = b.tenant_id
+        JOIN tenants t ON t.id = b.tenant_id AND t.test_mode = false AND t.slug != 'demo-outdoorshare'
         GROUP BY l.id, l.title, t.name
         ORDER BY booking_count DESC
         LIMIT 10
       `),
-      // Monthly tenant signup trend (last 6 months)
+      // Monthly tenant signup trend (last 6 months) — excludes demo / test-mode tenants
       db.execute(sql`
         SELECT
           TO_CHAR(DATE_TRUNC('month', created_at), 'Mon') AS month_label,
@@ -1091,6 +1104,8 @@ router.get("/superadmin/analytics", requireSuperAdmin, async (_req, res) => {
           COUNT(*)::int AS count
         FROM tenants
         WHERE created_at > NOW() - INTERVAL '6 months'
+          AND test_mode = false
+          AND slug != 'demo-outdoorshare'
         GROUP BY DATE_TRUNC('month', created_at)
         ORDER BY DATE_TRUNC('month', created_at)
       `),
