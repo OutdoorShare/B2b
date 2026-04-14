@@ -30,6 +30,7 @@ export default function AdminLoginPage({ slug }: Props) {
       const res = await fetch(`${BASE}/api/admin/auth/owner-login`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        credentials: "include",
         body: JSON.stringify({ email, password, slug }),
       });
       const data = await res.json();
@@ -47,9 +48,9 @@ export default function AdminLoginPage({ slug }: Props) {
         setRedirectSlug(data.tenantSlug);
         return;
       }
-      // Store only non-sensitive metadata — the auth token is in an httpOnly cookie set by the server
       localStorage.setItem("admin_session", JSON.stringify({
         type: "owner",
+        token: data.token,
         tenantId: data.tenantId,
         tenantName: data.tenantName,
         tenantSlug: data.tenantSlug,
@@ -71,13 +72,14 @@ export default function AdminLoginPage({ slug }: Props) {
       const res = await fetch(`${BASE}/api/admin/auth/login`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        credentials: "include",
         body: JSON.stringify({ email, password, slug }),
       });
       const data = await res.json();
       if (!res.ok) { setError(data.error || "Login failed."); return; }
-      // Store only non-sensitive metadata — the auth token is in an httpOnly cookie set by the server
       localStorage.setItem("admin_session", JSON.stringify({
         type: "user",
+        token: data.token,
         tenantId: data.tenantId,
         tenantSlug: data.tenantSlug,
         id: data.user.id,

@@ -119,6 +119,7 @@ router.post("/admin/auth/owner-login", async (req, res) => {
     });
 
     res.json({
+      token,
       tenantId: tenant.id,
       tenantName: tenant.name,
       tenantSlug: tenant.slug,
@@ -205,7 +206,7 @@ router.post("/admin/auth/universal-login", async (req, res) => {
         path: "/",
         maxAge: 7 * 24 * 60 * 60 * 1000,
       });
-      res.json({ single: true, match: { type: m.type, tenantId: m.tenantId, tenantSlug: m.tenantSlug, tenantName: m.tenantName, userId: m.userId, userName: m.userName, role: m.role } });
+      res.json({ single: true, token: m.token, match: { type: m.type, tenantId: m.tenantId, tenantSlug: m.tenantSlug, tenantName: m.tenantName, userId: m.userId, userName: m.userName, role: m.role } });
       return;
     }
 
@@ -260,7 +261,7 @@ router.post("/admin/auth/login", async (req, res) => {
       maxAge: 7 * 24 * 60 * 60 * 1000,
     });
 
-    res.json({ tenantId, tenantSlug, user: safeUser({ ...user, token }) });
+    res.json({ token, tenantId, tenantSlug, user: safeUser(user) });
   } catch {
     res.status(500).json({ error: "Login failed" });
   }

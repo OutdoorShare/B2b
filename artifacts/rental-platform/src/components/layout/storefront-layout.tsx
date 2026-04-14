@@ -45,6 +45,7 @@ function DemoLoginOverlay({ slug, onAuth }: { slug: string; onAuth: () => void }
       const res = await fetch(`${BASE_URL}/api/admin/auth/owner-login`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        credentials: "include",
         body: JSON.stringify({ email, password, slug }),
       });
       const data = await res.json();

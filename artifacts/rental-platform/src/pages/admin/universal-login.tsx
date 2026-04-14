@@ -55,8 +55,8 @@ export default function UniversalAdminLogin() {
       if (data.single) {
         const m: AccountMatch = data.match;
         const session = m.type === "owner"
-          ? { type: "owner", tenantId: m.tenantId, tenantSlug: m.tenantSlug, tenantName: m.tenantName, email }
-          : { type: "user", tenantId: m.tenantId, tenantSlug: m.tenantSlug, id: m.userId, name: m.userName, role: m.role };
+          ? { type: "owner", token: data.token, tenantId: m.tenantId, tenantSlug: m.tenantSlug, tenantName: m.tenantName, email }
+          : { type: "user", token: data.token, tenantId: m.tenantId, tenantSlug: m.tenantSlug, id: m.userId, name: m.userName, role: m.role };
         localStorage.setItem("admin_session", JSON.stringify(session));
         toast({ title: "Welcome back!", description: `Signed in to ${m.tenantName}` });
         window.location.href = `${BASE}/${m.tenantSlug}/admin`;
@@ -90,8 +90,8 @@ export default function UniversalAdminLogin() {
         return;
       }
       const session = account.type === "owner"
-        ? { type: "owner", tenantId: data.tenantId, tenantSlug: data.tenantSlug, tenantName: data.tenantName, email }
-        : { type: "user", tenantId: data.tenantId, tenantSlug: data.tenantSlug, id: data.user?.id, name: data.user?.name, role: data.user?.role };
+        ? { type: "owner", token: data.token, tenantId: data.tenantId, tenantSlug: data.tenantSlug, tenantName: data.tenantName, email }
+        : { type: "user", token: data.token, tenantId: data.tenantId, tenantSlug: data.tenantSlug, id: data.user?.id, name: data.user?.name, role: data.user?.role };
       localStorage.setItem("admin_session", JSON.stringify(session));
       toast({ title: "Welcome back!", description: `Signed in to ${account.tenantName}` });
       window.location.href = `${BASE}/${account.tenantSlug}/admin`;
