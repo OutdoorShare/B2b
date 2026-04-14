@@ -68,6 +68,39 @@ async function getCompanyInfo(tenantId: number) {
 
 const router: IRouter = Router();
 
+// ── Neon cold-start retry helper ──────────────────────────────────────────────
+// Neon serverless DB endpoints auto-suspend after inactivity. The first query
+// after a cold start throws "The endpoint has been disabled. Enable it using
+// the API and retry." — we catch this and retry with back-off so the user
+// never sees a 500 on first login after a quiet period.
+const NEON_COLD_START_MSGS = [
+  "endpoint has been disabled",
+  "endpoint is disabled",
+  "connection terminated unexpectedly",
+  "connection refused",
+];
+
+async function withDbRetry<T>(fn: () => Promise<T>, maxAttempts = 4): Promise<T> {
+  let lastErr: unknown;
+  for (let i = 0; i < maxAttempts; i++) {
+    try {
+      return await fn();
+    } catch (err: any) {
+      lastErr = err;
+      const msg: string = (err?.message ?? err?.cause?.message ?? "").toLowerCase();
+      const isTransient = NEON_COLD_START_MSGS.some(s => msg.includes(s));
+      if (isTransient && i < maxAttempts - 1) {
+        const delay = (i + 1) * 1500; // 1.5s, 3s, 4.5s
+        console.warn(`[db-retry] transient DB error (attempt ${i + 1}/${maxAttempts}), retrying in ${delay}ms:`, msg);
+        await new Promise(r => setTimeout(r, delay));
+        continue;
+      }
+      throw err;
+    }
+  }
+  throw lastErr;
+}
+
 // POST /admin/auth/owner-login — tenant owner login
 router.post("/admin/auth/owner-login", async (req, res) => {
   try {
@@ -77,11 +110,12 @@ router.post("/admin/auth/owner-login", async (req, res) => {
       return;
     }
 
-    const [tenant] = await db
-      .select()
-      .from(tenantsTable)
-      .where(eq(tenantsTable.email, email.toLowerCase().trim()))
-      .limit(1);
+    const [tenant] = await withDbRetry(() =>
+      db.select()
+        .from(tenantsTable)
+        .where(eq(tenantsTable.email, email.toLowerCase().trim()))
+        .limit(1)
+    );
 
     if (slug && tenant && tenant.slug !== slug) {
       res.status(401).json({
@@ -104,10 +138,11 @@ router.post("/admin/auth/owner-login", async (req, res) => {
 
     const token = tenant.adminToken ?? randomBytes(32).toString("hex");
     if (!tenant.adminToken) {
-      await db
-        .update(tenantsTable)
-        .set({ adminToken: token, updatedAt: new Date() })
-        .where(eq(tenantsTable.id, tenant.id));
+      await withDbRetry(() =>
+        db.update(tenantsTable)
+          .set({ adminToken: token, updatedAt: new Date() })
+          .where(eq(tenantsTable.id, tenant.id))
+      );
     }
 
     res.cookie("admin_session", token, {
@@ -126,7 +161,8 @@ router.post("/admin/auth/owner-login", async (req, res) => {
       email: tenant.email,
       emailVerified: tenant.emailVerified,
     });
-  } catch {
+  } catch (err: any) {
+    console.error("[owner-login] fatal error:", err?.message ?? err);
     res.status(500).json({ error: "Login failed" });
   }
 });
@@ -154,10 +190,11 @@ router.post("/admin/auth/universal-login", async (req, res) => {
     }> = [];
 
     // 1. Check owner accounts
-    const ownerTenants = await db
-      .select()
-      .from(tenantsTable)
-      .where(eq(tenantsTable.email, normalizedEmail));
+    const ownerTenants = await withDbRetry(() =>
+      db.select()
+        .from(tenantsTable)
+        .where(eq(tenantsTable.email, normalizedEmail))
+    );
 
     for (const tenant of ownerTenants) {
       if (tenant.status !== "active") continue;
@@ -165,17 +202,20 @@ router.post("/admin/auth/universal-login", async (req, res) => {
       if (!valid) continue;
       const token = tenant.adminToken ?? randomBytes(32).toString("hex");
       if (!tenant.adminToken) {
-        await db.update(tenantsTable).set({ adminToken: token, updatedAt: new Date() }).where(eq(tenantsTable.id, tenant.id));
+        await withDbRetry(() =>
+          db.update(tenantsTable).set({ adminToken: token, updatedAt: new Date() }).where(eq(tenantsTable.id, tenant.id))
+        );
       }
       const companyInfo = await getCompanyInfo(tenant.id);
       matches.push({ type: "owner", tenantId: tenant.id, tenantSlug: tenant.slug, tenantName: companyInfo.companyName, token });
     }
 
     // 2. Check staff accounts
-    const staffUsers = await db
-      .select()
-      .from(adminUsersTable)
-      .where(eq(adminUsersTable.email, normalizedEmail));
+    const staffUsers = await withDbRetry(() =>
+      db.select()
+        .from(adminUsersTable)
+        .where(eq(adminUsersTable.email, normalizedEmail))
+    );
 
     for (const user of staffUsers) {
       if (user.status !== "active") continue;
