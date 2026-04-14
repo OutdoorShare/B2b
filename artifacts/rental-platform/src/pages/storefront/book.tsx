@@ -1706,6 +1706,14 @@ export default function StorefrontBook() {
       protectionFeeCents: platformProtectionFee > 0 ? Math.round(platformProtectionFee * 100) : undefined,
       passthroughFeeCents: serviceFee > 0 ? Math.round(serviceFee * 100) : undefined,
       customFeesCents: customFeesSubtotal > 0 ? Math.round(customFeesSubtotal * 100) : undefined,
+      // Server-side pricing validation params — allow the server to independently
+      // verify the rental base against the listing price in the database.
+      listingId: String(listingId),
+      startDate: dateRange?.from ? format(dateRange.from, "yyyy-MM-dd") : undefined,
+      endDate: dateRange?.to ? format(dateRange.to, "yyyy-MM-dd") : undefined,
+      quantity: selectedQuantity,
+      planType: selectedPricingType ?? "daily",
+      selectedAddonIds: Array.from(selectedAddonIds),
     });
 
     const MAX_ATTEMPTS = 3;

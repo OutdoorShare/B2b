@@ -7,6 +7,7 @@ import { uploadBufferToGCS, downloadFromGCS } from "./upload";
 import { db } from "@workspace/db";
 import { bookingsTable, listingsTable, businessProfileTable, tenantsTable, contactCardsTable, customersTable, productsTable, quotesTable, platformProtectionPlansTable, listingRulesTable, platformAgreementsTable, operatorContractsTable } from "@workspace/db/schema";
 import { eq, and, gte, lte, isNull, or, sql } from "drizzle-orm";
+import { logInfo, logWarn, logError } from "../lib/log";
 import { generateAgreementPdf } from "../lib/generate-agreement-pdf";
 import { runAgreementPipeline } from "../lib/agreements/pipeline";
 import {
@@ -355,11 +356,27 @@ router.post("/bookings", async (req, res) => {
       splitRemainingDueDate: reqSplitDueDate,
       protectionPlanDeclined: reqProtectionPlanDeclined,
       quoteId: reqQuoteId,
-      bookingPricing: reqBookingPricing,
+      bookingPricing: _clientBookingPricing, // ignored — we compute server-side below
       ...restBody
     } = body;
 
-    const bookingPricingJson = reqBookingPricing ? JSON.stringify(reqBookingPricing) : null;
+    // Rule 6: Compute an immutable server-side pricing snapshot.
+    // Never trust the client-provided bookingPricing — compute from DB-verified values.
+    const serverPricingSnapshot = {
+      basePrice,
+      addonsTotal,
+      bundleItemsTotal,
+      protectionPlanFee,
+      bundleDiscountPct,
+      bundleDiscountAmount,
+      preDiscountTotal: basePrice + bundleItemsTotal + addonsTotal + protectionPlanFee,
+      totalPrice,
+      days,
+      listingPricePerDay: parseFloat(listing.pricePerDay ?? "0"),
+      computedAt: new Date().toISOString(),
+      source: "server",
+    };
+    const bookingPricingJson = JSON.stringify(serverPricingSnapshot);
     const quoteId = reqQuoteId ? Number(reqQuoteId) : null;
     const assignedUnitIds = Array.isArray(rawUnitIds) && rawUnitIds.length > 0 ? JSON.stringify(rawUnitIds) : null;
     // Set agreementSignedAt server-side when the customer provides their signature
@@ -428,6 +445,15 @@ router.post("/bookings", async (req, res) => {
       seenByAdmin: restBody.source === "online" ? false : true,
       seenByRenter: true,
     }).returning();
+
+    logInfo("booking.created", {
+      bookingId: created.id,
+      listingId: created.listingId,
+      tenantId: created.tenantId,
+      stripeId: created.stripePaymentIntentId ?? undefined,
+      status: created.status,
+      totalPrice: created.totalPrice,
+    });
 
     // If this booking was created from a quote, mark the quote as accepted
     if (quoteId) {

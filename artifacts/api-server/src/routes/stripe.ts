@@ -1,9 +1,11 @@
 import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
-import { tenantsTable, bookingsTable, customersTable, listingsTable, businessProfileTable } from "@workspace/db/schema";
+import { tenantsTable, bookingsTable, customersTable, listingsTable, businessProfileTable, listingAddonsTable } from "@workspace/db/schema";
 import { eq, desc, and, or, sql } from "drizzle-orm";
 import { stripe, getStripeForTenant, PLATFORM_FEE_PERCENT, validateStripeCents, toStripeAmount } from "../services/stripe";
 import { calculateBookingPricing, feeModeFromLegacy, type FeeMode } from "../lib/pricing";
+import { computeListingPricing, validateRentalBase, countRentalDays } from "../lib/listing-pricing";
+import { logInfo, logWarn, logError } from "../lib/log";
 import { sendStripeRestrictedAlertEmail, sendPaymentRequestEmail, sendPaymentFailedRenterEmail, sendPaymentFailedAdminEmail, sendSplitPaymentChargedEmail, sendSplitPaymentSelfPaidAdminEmail } from "../services/gmail";
 import { triggerAvailablePayout, sweepPendingPayouts } from "../services/payouts";
 import type { Request } from "express";
@@ -268,13 +270,109 @@ router.get("/stripe/connect/check/:slug", async (req, res) => {
   }
 });
 
+// ── Price Quote: server-authoritative breakdown for a listing+dates ───────────
+// The frontend calls this to get the server-calculated price before creating a
+// PaymentIntent. This is the single source of truth for rental base pricing.
+router.get("/stripe/price-quote", async (req, res) => {
+  try {
+    const {
+      tenantSlug, listingId, startDate, endDate, quantity,
+      planType, addonIds, hourlySlotPrice,
+    } = req.query as Record<string, string>;
+
+    if (!tenantSlug || !listingId || !startDate || !endDate) {
+      res.status(400).json({ error: "tenantSlug, listingId, startDate, endDate are required" });
+      return;
+    }
+
+    const [tenant] = await db.select({ id: tenantsTable.id, platformFeePercent: tenantsTable.platformFeePercent })
+      .from(tenantsTable).where(eq(tenantsTable.slug, tenantSlug)).limit(1);
+    if (!tenant) { res.status(404).json({ error: "Tenant not found" }); return; }
+
+    const [listingRow] = await db.select({
+      pricePerDay: listingsTable.pricePerDay,
+      weekendPrice: listingsTable.weekendPrice,
+      pricePerWeek: listingsTable.pricePerWeek,
+      halfDayEnabled: listingsTable.halfDayEnabled,
+      halfDayRate: listingsTable.halfDayRate,
+      hourlyEnabled: listingsTable.hourlyEnabled,
+      hourlyPerHourEnabled: listingsTable.hourlyPerHourEnabled,
+      pricePerHour: listingsTable.pricePerHour,
+      hourlyMinimumHours: listingsTable.hourlyMinimumHours,
+      tenantId: listingsTable.tenantId,
+      status: listingsTable.status,
+    }).from(listingsTable).where(and(
+      eq(listingsTable.id, Number(listingId)),
+      eq(listingsTable.tenantId, tenant.id),
+    )).limit(1);
+
+    if (!listingRow) { res.status(404).json({ error: "Listing not found" }); return; }
+
+    const parsedAddonIds = addonIds ? String(addonIds).split(",").map(Number).filter(n => !isNaN(n)) : [];
+    const addonRows = parsedAddonIds.length
+      ? await db.select({
+          id: listingAddonsTable.id,
+          price: listingAddonsTable.price,
+          priceType: listingAddonsTable.priceType,
+          isActive: listingAddonsTable.isActive,
+        }).from(listingAddonsTable).where(
+          and(eq(listingAddonsTable.listingId, Number(listingId)), eq(listingAddonsTable.isActive, true))
+        )
+      : [];
+
+    const pricing = computeListingPricing(listingRow, addonRows, {
+      startDate,
+      endDate,
+      quantity: quantity ? Math.max(1, Number(quantity)) : 1,
+      planType: planType ?? "daily",
+      selectedAddonIds: parsedAddonIds,
+      hourlySlotPrice: hourlySlotPrice ? Number(hourlySlotPrice) : undefined,
+    });
+
+    const feePercent = tenant.platformFeePercent != null
+      ? parseFloat(tenant.platformFeePercent)
+      : 10;
+
+    res.json({
+      ...pricing,
+      platformFeePercent: feePercent,
+    });
+  } catch (e: any) {
+    logError("price_quote.error", { error: e?.message });
+    res.status(500).json({ error: "Failed to calculate price" });
+  }
+});
+
 // ── Payment Intent: create for a booking ─────────────────────────────────────
 // If tenant has Connect → funds route to their account automatically.
 // If tenant has NOT connected → funds sit on OutdoorShare platform until they do.
 router.post("/stripe/payment-intent", async (req, res) => {
   try {
-    const { tenantSlug, amountCents: rawAmountCents, customerEmail, customerName, bookingMeta, customerId, protectionFeeCents, passthroughFeeCents, customFeesCents } = req.body ?? {};
-    console.log(`[payment-intent] slug="${tenantSlug}" amount=${rawAmountCents} body-keys=${Object.keys(req.body ?? {}).join(",")}`);
+    const {
+      tenantSlug,
+      amountCents: rawAmountCents,
+      customerEmail,
+      customerName,
+      bookingMeta,
+      customerId,
+      protectionFeeCents,
+      passthroughFeeCents,
+      customFeesCents,
+      // Server-side pricing validation params
+      listingId: rawListingId,
+      startDate: rawStartDate,
+      endDate: rawEndDate,
+      quantity: rawQuantity,
+      planType: rawPlanType,
+      selectedAddonIds: rawAddonIds,
+      hourlySlotPrice: rawSlotPrice,
+    } = req.body ?? {};
+
+    logInfo("payment_intent.creating", {
+      tenantSlug,
+      listingId: rawListingId,
+      amountCents: rawAmountCents,
+    });
 
     // Validate the amount is a legitimate integer cents value before touching Stripe
     let amountCents: number;
@@ -291,7 +389,7 @@ router.post("/stripe/payment-intent", async (req, res) => {
 
     const [tenant] = await db.select().from(tenantsTable).where(eq(tenantsTable.slug, tenantSlug));
     if (!tenant) {
-      console.error(`[payment-intent] No tenant for slug="${tenantSlug}"`);
+      logError("payment_intent.tenant_not_found", { tenantSlug });
       res.status(404).json({ error: "Tenant not found" }); return;
     }
 
@@ -324,6 +422,95 @@ router.post("/stripe/payment-intent", async (req, res) => {
 
     // Rental base: everything that should be subject to the platform percentage
     const rentalBase = Math.max(0, amountCents - ppCents - customSubtotal - customFeeChargeCents - passthroughCents);
+
+    // ── Server-side pricing floor validation (Rule 1, 3) ─────────────────────
+    // When the client provides enough context (listingId + dates + quantity), the
+    // server independently calculates the expected rental base and rejects the
+    // request if the client-submitted amount is more than 35% below the floor.
+    // This prevents a malicious client from paying $0.50 for a $500 rental.
+    //
+    // We allow up to 35% off to accommodate: promo codes, bundle discounts,
+    // rounding differences, and operator-customised promotions.
+    const validationListingId = rawListingId ?? bookingMeta?.listing_id;
+    if (validationListingId && rawStartDate && rawEndDate) {
+      try {
+        const [listingRow] = await db.select({
+          pricePerDay: listingsTable.pricePerDay,
+          weekendPrice: listingsTable.weekendPrice,
+          pricePerWeek: listingsTable.pricePerWeek,
+          halfDayEnabled: listingsTable.halfDayEnabled,
+          halfDayRate: listingsTable.halfDayRate,
+          hourlyEnabled: listingsTable.hourlyEnabled,
+          hourlyPerHourEnabled: listingsTable.hourlyPerHourEnabled,
+          pricePerHour: listingsTable.pricePerHour,
+          hourlyMinimumHours: listingsTable.hourlyMinimumHours,
+          tenantId: listingsTable.tenantId,
+          status: listingsTable.status,
+        }).from(listingsTable).where(and(
+          eq(listingsTable.id, Number(validationListingId)),
+          eq(listingsTable.tenantId, tenant.id),
+        )).limit(1);
+
+        if (listingRow) {
+          const addonRows = rawAddonIds?.length
+            ? await db.select({
+                id: listingAddonsTable.id,
+                price: listingAddonsTable.price,
+                priceType: listingAddonsTable.priceType,
+                isActive: listingAddonsTable.isActive,
+              }).from(listingAddonsTable).where(
+                and(
+                  eq(listingAddonsTable.listingId, Number(validationListingId)),
+                  eq(listingAddonsTable.isActive, true),
+                )
+              )
+            : [];
+
+          const serverPricing = computeListingPricing(listingRow, addonRows, {
+            startDate: rawStartDate,
+            endDate: rawEndDate,
+            quantity: Math.max(1, Number(rawQuantity) || 1),
+            planType: rawPlanType ?? "daily",
+            selectedAddonIds: Array.isArray(rawAddonIds) ? rawAddonIds.map(Number) : [],
+            hourlySlotPrice: rawSlotPrice != null ? Number(rawSlotPrice) : undefined,
+          });
+
+          const validation = validateRentalBase(serverPricing.baseCents, rentalBase);
+
+          if (!validation.valid) {
+            logError("payment_intent.price_floor_rejected", {
+              tenantId: tenant.id,
+              listingId: validationListingId,
+              serverBaseCents: validation.serverBaseCents,
+              clientBaseCents: validation.clientBaseCents,
+              gapPercent: validation.gapPercent,
+            });
+            res.status(422).json({
+              error: "payment_amount_invalid",
+              message: "The submitted amount does not match the listing price. Please refresh and try again.",
+              serverBaseCents: validation.serverBaseCents,
+            });
+            return;
+          }
+
+          logInfo("payment_intent.price_validated", {
+            tenantId: tenant.id,
+            listingId: validationListingId,
+            serverBaseCents: validation.serverBaseCents,
+            clientBaseCents: validation.clientBaseCents,
+            gapPercent: validation.gapPercent,
+          });
+        }
+      } catch (priceErr: any) {
+        // Pricing validation failure must never block a legitimate payment.
+        // Log the error and continue — the validation is advisory.
+        logWarn("payment_intent.price_validation_error", {
+          tenantId: tenant.id,
+          listingId: validationListingId,
+          error: priceErr?.message ?? String(priceErr),
+        });
+      }
+    }
 
     const platformFeeAmount = Math.round(rentalBase * feePercent) + ppCents + customFeeChargeCents;
     const transferAmount    = amountCents - platformFeeAmount;
@@ -661,15 +848,22 @@ router.post("/stripe/webhook", async (req, res) => {
           ? pi.latest_charge
           : (pi.latest_charge as any)?.id ?? null;
 
-        await db.update(bookingsTable).set({
+        const [confirmedBooking] = await db.update(bookingsTable).set({
           stripePaymentStatus: "paid",
           // Advance the booking from pending/pending_payment → confirmed
           status: "confirmed",
           ...(chargeId ? { stripeChargeId: chargeId } : {}),
           updatedAt: new Date(),
-        }).where(eq(bookingsTable.stripePaymentIntentId, pi.id));
+        }).where(eq(bookingsTable.stripePaymentIntentId, pi.id))
+          .returning({ id: bookingsTable.id, listingId: bookingsTable.listingId, tenantId: bookingsTable.tenantId });
 
-        console.log(`[webhook] payment_intent.succeeded pi=${pi.id} charge=${chargeId ?? "none"} → booking confirmed`);
+        logInfo("booking.confirmed", {
+          bookingId: confirmedBooking?.id,
+          listingId: confirmedBooking?.listingId,
+          tenantId: confirmedBooking?.tenantId,
+          stripeId: pi.id,
+          chargeId: chargeId ?? undefined,
+        });
 
         // For PIs routed via transfer_data, funds land on the connected account automatically.
         // Trigger an immediate payout so the balance doesn't sit waiting for the default schedule.
@@ -684,7 +878,7 @@ router.post("/stripe/webhook", async (req, res) => {
                 await triggerAvailablePayout(piStripe, t.stripeAccountId);
               }
             } catch (e: any) {
-              console.error("[webhook] payment_intent payout trigger failed:", e.message);
+              logError("webhook.payout_trigger_failed", { tenantId: tenantIdFromMeta, stripeId: pi.id, error: e.message });
             }
           })();
         }
@@ -693,7 +887,7 @@ router.post("/stripe/webhook", async (req, res) => {
       case "payment_intent.payment_failed": {
         const pi = event.data.object;
         const lastErr = (pi.last_payment_error as any)?.message ?? "Payment failed";
-        console.log(`[webhook] payment_intent.payment_failed pi=${pi.id} reason="${lastErr}"`);
+        logWarn("booking.payment_failed", { stripeId: pi.id, reason: lastErr });
         const [updatedBooking] = await db.update(bookingsTable).set({
           stripePaymentStatus: "failed",
           status: "payment_failed",
@@ -782,15 +976,25 @@ router.post("/stripe/webhook", async (req, res) => {
         const latestRefundId = (charge.refunds as any)?.data?.[0]?.id ?? null;
         const fullyRefunded = charge.refunded === true;
 
-        await db.update(bookingsTable).set({
+        const [refundedBooking] = await db.update(bookingsTable).set({
           stripePaymentStatus: fullyRefunded ? "refunded" : "partially_refunded",
+          // A full refund transitions the booking to `refunded` status so admins
+          // and renters can see the final state clearly without digging into Stripe.
+          ...(fullyRefunded ? { status: "refunded" as const } : {}),
           stripeRefundId: latestRefundId ?? undefined,
           stripeRefundedAt: new Date(),
           stripeRefundAmount: refundedDollars,
           updatedAt: new Date(),
-        }).where(eq(bookingsTable.stripePaymentIntentId, piId));
+        }).where(eq(bookingsTable.stripePaymentIntentId, piId)).returning({ id: bookingsTable.id, listingId: bookingsTable.listingId, tenantId: bookingsTable.tenantId });
 
-        console.log(`[webhook] charge.refunded pi=${piId} charge=${charge.id} refunded=${refundedCents}¢ full=${fullyRefunded}`);
+        logInfo("booking.refunded", {
+          bookingId: refundedBooking?.id,
+          listingId: refundedBooking?.listingId,
+          tenantId: refundedBooking?.tenantId,
+          stripeId: piId,
+          refundedCents,
+          fullyRefunded,
+        });
         break;
       }
       case "account.updated": {

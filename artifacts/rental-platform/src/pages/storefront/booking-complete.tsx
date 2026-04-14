@@ -16,7 +16,7 @@ function getParam(key: string): string {
   return new URLSearchParams(window.location.search).get(key) ?? "";
 }
 
-type Phase = "verify" | "loading" | "agreement" | "identity" | "confirmed" | "error";
+type Phase = "verify" | "loading" | "payment_processing" | "agreement" | "identity" | "confirmed" | "error";
 
 interface BookingData {
   id: number;
@@ -152,6 +152,57 @@ export default function BookingComplete() {
     return true;
   };
 
+  // ── Poll for webhook confirmation (Rule 4) ────────────────────────────────
+  // After Stripe payment, the webhook may take a few seconds to fire and update
+  // the booking status from `pending_payment` → `confirmed`. This function polls
+  // the server until confirmation arrives or a 30-second timeout elapses.
+  const proceedWithBooking = async (data: BookingData, verifiedEmail: string) => {
+    setBooking(data);
+    setSignerName(data.customerName ?? "");
+    if (data.agreementSignedAt) {
+      setPhase(data.requireIdentityVerification ? "identity" : "confirmed");
+    } else {
+      setAgreementsLoading(true);
+      try {
+        const ar = await fetch(`${BASE}/api/bookings/${bookingId}/agreements-for-signing?customerEmail=${encodeURIComponent(verifiedEmail)}`);
+        const ad = await ar.json();
+        if (ar.ok) { setAgreementsData(ad); }
+      } catch { /* proceed with empty agreements */ }
+      setAgreementsLoading(false);
+      setPhase("agreement");
+    }
+  };
+
+  const pollForPaymentConfirmation = async (verifiedEmail: string) => {
+    setPhase("payment_processing");
+    const MAX_ATTEMPTS = 15;
+    for (let i = 0; i < MAX_ATTEMPTS; i++) {
+      await new Promise(r => setTimeout(r, 2000));
+      try {
+        const res = await fetch(`${BASE}/api/bookings/${bookingId}?customerEmail=${encodeURIComponent(verifiedEmail)}`);
+        if (!res.ok) continue;
+        const data: BookingData = await res.json();
+        if (data.status === "confirmed" || data.status === "active" || data.status === "completed") {
+          await proceedWithBooking(data, verifiedEmail);
+          return;
+        }
+        if (data.status === "payment_failed") {
+          setPhase("error");
+          setError("Your payment could not be processed. Please go back and try again.");
+          return;
+        }
+        if (data.status === "cancelled" || data.status === "refunded") {
+          setPhase("error");
+          setError("This booking has been cancelled. Please contact support if you believe this is an error.");
+          return;
+        }
+      } catch { /* keep polling */ }
+    }
+    // Timeout — webhook likely delayed or Stripe is slow
+    setPhase("error");
+    setError("Your payment is being processed — this is taking longer than expected. You'll receive a confirmation email shortly. If you don't, please contact support.");
+  };
+
   // ── Verify email & load booking ───────────────────────────────────────────
   const handleVerifyEmail = async () => {
     setEmailError("");
@@ -164,21 +215,26 @@ export default function BookingComplete() {
       const data = await res.json();
       if (res.status === 403) { setPhase("verify"); setEmailError("That email doesn't match this booking. Please check and try again."); return; }
       if (!res.ok) { setPhase("error"); setError(data.error || "Booking not found. Please contact support."); return; }
-      setBooking(data);
-      setSignerName(data.customerName ?? "");
-      if (data.agreementSignedAt) {
-        setPhase(data.requireIdentityVerification ? "identity" : "confirmed");
-      } else {
-        // Fetch agreements
-        setAgreementsLoading(true);
-        try {
-          const ar  = await fetch(`${BASE}/api/bookings/${bookingId}/agreements-for-signing?customerEmail=${encodeURIComponent(email.trim())}`);
-          const ad  = await ar.json();
-          if (ar.ok) { setAgreementsData(ad); }
-        } catch { /* proceed with empty agreements */ }
-        setAgreementsLoading(false);
-        setPhase("agreement");
+
+      // Rule 4: Booking confirmation must be based on server/webhook truth.
+      // If the booking is still in `pending_payment`, the Stripe webhook has not
+      // yet fired. Poll the server until the status becomes `confirmed`.
+      if (data.status === "pending_payment") {
+        await pollForPaymentConfirmation(email.trim());
+        return;
       }
+      if (data.status === "payment_failed") {
+        setPhase("error");
+        setError("Your payment could not be processed. Please go back and try again, or contact support.");
+        return;
+      }
+      if (data.status === "cancelled" || data.status === "refunded") {
+        setPhase("error");
+        setError("This booking is no longer active. Please contact support.");
+        return;
+      }
+
+      await proceedWithBooking(data, email.trim());
     } catch {
       setPhase("error");
       setError("Connection error. Please check your connection and try again.");
@@ -314,17 +370,18 @@ export default function BookingComplete() {
             {phase === "confirmed" ? "You're all set!" : "Complete your booking"}
           </h1>
           <p className="text-slate-500 text-sm mt-1">
-            {phase === "verify"    && "Enter your email to continue with your booking."}
-            {phase === "loading"   && "Looking up your booking…"}
-            {phase === "agreement" && "Review and sign to finalize your booking."}
-            {phase === "identity"  && "One last step — please verify your identity."}
-            {phase === "confirmed" && "Payment received and booking confirmed."}
-            {phase === "error"     && "Something went wrong."}
+            {phase === "verify"              && "Enter your email to continue with your booking."}
+            {phase === "loading"             && "Looking up your booking…"}
+            {phase === "payment_processing"  && "Confirming your payment — please wait…"}
+            {phase === "agreement"           && "Review and sign to finalize your booking."}
+            {phase === "identity"            && "One last step — please verify your identity."}
+            {phase === "confirmed"           && "Payment received and booking confirmed."}
+            {phase === "error"              && "Something went wrong."}
           </p>
         </div>
 
         {/* Step indicator */}
-        {booking && phase !== "verify" && phase !== "loading" && phase !== "error" && (() => {
+        {booking && phase !== "verify" && phase !== "loading" && phase !== "payment_processing" && phase !== "error" && (() => {
           const steps  = ["agreement", ...(booking.requireIdentityVerification ? ["identity"] : []), "confirmed"];
           const labels: Record<string, string> = { agreement: "Agreement", identity: "Verify ID", confirmed: "Confirmed" };
           const currentIdx = steps.indexOf(phase);
@@ -344,7 +401,7 @@ export default function BookingComplete() {
         })()}
 
         {/* Booking summary card */}
-        {booking && phase !== "verify" && phase !== "loading" && (
+        {booking && phase !== "verify" && phase !== "loading" && phase !== "payment_processing" && (
           <div className="bg-white rounded-2xl border border-slate-100 shadow-sm px-5 py-4">
             <div className="flex items-start gap-3">
               <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
@@ -393,6 +450,19 @@ export default function BookingComplete() {
           <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-10 flex flex-col items-center gap-3">
             <Loader2 className="w-8 h-8 animate-spin text-primary" />
             <p className="text-sm text-slate-500">Loading your booking…</p>
+          </div>
+        )}
+
+        {/* ── Payment processing (polling for webhook confirmation) ─────────── */}
+        {phase === "payment_processing" && (
+          <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-10 flex flex-col items-center gap-4 text-center">
+            <Loader2 className="w-10 h-10 animate-spin text-primary" />
+            <div>
+              <p className="font-semibold text-slate-800">Confirming your payment…</p>
+              <p className="text-sm text-slate-500 mt-1">
+                This usually takes just a few seconds. Please don't close this page.
+              </p>
+            </div>
           </div>
         )}
 

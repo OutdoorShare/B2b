@@ -14,7 +14,7 @@ export const bookingsTable = pgTable("bookings", {
   quantity: integer("quantity").notNull().default(1),
   totalPrice: decimal("total_price", { precision: 10, scale: 2 }).notNull(),
   depositPaid: decimal("deposit_paid", { precision: 10, scale: 2 }),
-  status: text("status", { enum: ["pending", "pending_payment", "confirmed", "active", "completed", "cancelled", "payment_failed"] }).notNull().default("pending"),
+  status: text("status", { enum: ["draft", "pending", "pending_payment", "confirmed", "active", "completed", "cancelled", "payment_failed", "refunded"] }).notNull().default("pending"),
   notes: text("notes"),
   adminNotes: text("admin_notes"),
   source: text("source", { enum: ["online", "kiosk", "phone", "walkin"] }).notNull().default("online"),
