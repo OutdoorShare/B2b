@@ -10,6 +10,7 @@ import {
   Type, DollarSign, Users, Eye, Download, RotateCcw,
   ExternalLink, Clock, ShieldCheck, ShieldOff, History,
   ArrowLeft, Plus, ToggleLeft, ToggleRight, Link2,
+  ListChecks, GripVertical, Pencil, ChevronUp as Up, ChevronDown as Down, Check,
 } from "lucide-react";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
@@ -90,18 +91,6 @@ const TOKEN_GROUPS = [
     tokens: [
       { token: "{{additional_riders}}", label: "Riders" },
       { token: "{{minors}}", label: "Minors" },
-    ],
-  },
-  {
-    label: "Checkboxes",
-    color: "text-violet-600 bg-violet-50 border-violet-200 hover:bg-violet-100",
-    tokens: [
-      { token: "{{ack_damage_responsibility}}", label: "Damage" },
-      { token: "{{ack_no_refund}}", label: "No Refund" },
-      { token: "{{ack_safety_rules}}", label: "Safety" },
-      { token: "{{ack_terms_and_conditions}}", label: "Terms" },
-      { token: "{{ack_late_return_fee}}", label: "Late Return" },
-      { token: "{{ack_fuel_policy}}", label: "Fuel Policy" },
     ],
   },
 ];
@@ -510,8 +499,11 @@ export default function ContractBuilder() {
   const [ackRequired, setAckRequired] = useState(true);
   const [savingAck, setSavingAck] = useState(false);
   const [deletingAck, setDeletingAck] = useState<number | null>(null);
+  const [editingAckId, setEditingAckId] = useState<number | null>(null);
+  const [editingAckText, setEditingAckText] = useState("");
+  const [reorderingAck, setReorderingAck] = useState<number | null>(null);
   const [listingDropOpen, setListingDropOpen] = useState(false);
-  const [viewMode, setViewMode]           = useState<"edit" | "preview">("edit");
+  const [viewMode, setViewMode]           = useState<"edit" | "preview" | "acks">("edit");
 
   const [showPlatformWarning, setShowPlatformWarning]                 = useState(false);
   const [platformWarningAcknowledged, setPlatformWarningAcknowledged] = useState(false);
@@ -568,6 +560,9 @@ export default function ContractBuilder() {
     setSaved(false);
     setAckItems([]);
     setAckText("");
+    setEditingAckId(null);
+    setEditingAckText("");
+    setReorderingAck(null);
   };
 
   const loadIntoEditor = (t: Contract) => {
@@ -622,6 +617,57 @@ export default function ContractBuilder() {
       });
       setAckItems(prev => prev.map(a => a.id === ack.id ? updated : a));
     } catch { /* silent */ }
+  };
+
+  const handleStartEditAck = (ack: { id: number; text: string }) => {
+    setEditingAckId(ack.id);
+    setEditingAckText(ack.text);
+  };
+
+  const handleSaveEditAck = async (id: number) => {
+    const trimmed = editingAckText.trim();
+    if (!trimmed) return;
+    try {
+      const updated = await apiFetch(`contracts/acknowledgements/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text: trimmed }),
+      });
+      setAckItems(prev => prev.map(a => a.id === id ? updated : a));
+      setEditingAckId(null);
+      setEditingAckText("");
+    } catch { /* silent */ }
+  };
+
+  const handleCancelEditAck = () => {
+    setEditingAckId(null);
+    setEditingAckText("");
+  };
+
+  const handleMoveAck = async (id: number, direction: "up" | "down") => {
+    const idx = ackItems.findIndex(a => a.id === id);
+    if (idx < 0) return;
+    if (direction === "up" && idx === 0) return;
+    if (direction === "down" && idx === ackItems.length - 1) return;
+    const newItems = [...ackItems];
+    const swapIdx = direction === "up" ? idx - 1 : idx + 1;
+    [newItems[idx], newItems[swapIdx]] = [newItems[swapIdx], newItems[idx]];
+    setAckItems(newItems);
+    setReorderingAck(id);
+    try {
+      await Promise.all([
+        apiFetch(`contracts/acknowledgements/${newItems[idx].id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ sortOrder: idx }),
+        }),
+        apiFetch(`contracts/acknowledgements/${newItems[swapIdx].id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ sortOrder: swapIdx }),
+        }),
+      ]);
+    } catch { /* silent */ } finally { setReorderingAck(null); }
   };
 
   const openEditor = (t?: Contract) => {
@@ -1007,9 +1053,231 @@ export default function ContractBuilder() {
                     className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all flex items-center gap-1.5 ${viewMode === "preview" ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-700"}`}>
                     <Eye className="w-3 h-3" /> Preview
                   </button>
+                  <button type="button" onClick={() => setViewMode("acks")}
+                    className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all flex items-center gap-1.5 ${viewMode === "acks" ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-700"}`}>
+                    <ListChecks className="w-3 h-3" />
+                    Acknowledgements
+                    {ackItems.length > 0 && (
+                      <span className={`ml-0.5 inline-flex items-center justify-center w-4 h-4 rounded-full text-[10px] font-bold ${viewMode === "acks" ? "bg-emerald-100 text-emerald-700" : "bg-slate-200 text-slate-600"}`}>
+                        {ackItems.length}
+                      </span>
+                    )}
+                  </button>
                 </div>
               </div>
 
+              {/* ── Acknowledgements Builder Panel ─────────────────────── */}
+              {viewMode === "acks" ? (
+                <div className="space-y-6">
+                  {/* Header card */}
+                  <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+                    <div className="flex items-center gap-3 px-6 py-4 bg-gradient-to-r from-emerald-50 to-white border-b border-emerald-100">
+                      <div className="w-8 h-8 rounded-lg bg-emerald-100 flex items-center justify-center shrink-0">
+                        <ListChecks className="w-4 h-4 text-emerald-700" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-semibold text-slate-900">Custom Acknowledgements</p>
+                        <p className="text-xs text-slate-500 mt-0.5">Each item appears as a checkbox the renter must review and check before signing. You write the exact wording.</p>
+                      </div>
+                      {!editingId && (
+                        <span className="text-xs text-amber-600 bg-amber-50 border border-amber-200 rounded-lg px-2.5 py-1 shrink-0">
+                          Save contract first to link items
+                        </span>
+                      )}
+                    </div>
+
+                    {/* Item list */}
+                    <div className="divide-y divide-slate-100">
+                      {ackItems.length === 0 && (
+                        <div className="flex flex-col items-center justify-center py-12 px-6 text-center">
+                          <div className="w-12 h-12 rounded-full bg-slate-100 flex items-center justify-center mb-3">
+                            <ListChecks className="w-5 h-5 text-slate-400" />
+                          </div>
+                          <p className="text-sm font-medium text-slate-600">No acknowledgements yet</p>
+                          <p className="text-xs text-slate-400 mt-1 max-w-xs">Add items below. Each becomes a required checkbox in the renter's signing flow with your exact wording.</p>
+                        </div>
+                      )}
+                      {ackItems.map((ack, idx) => (
+                        <div key={ack.id} className="flex items-start gap-3 px-5 py-4 hover:bg-slate-50 transition-colors group">
+                          {/* Grip + order controls */}
+                          <div className="flex flex-col items-center gap-0.5 pt-0.5 shrink-0">
+                            <button
+                              type="button"
+                              onClick={() => handleMoveAck(ack.id, "up")}
+                              disabled={idx === 0 || reorderingAck === ack.id}
+                              className="p-0.5 rounded text-slate-300 hover:text-slate-600 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                              title="Move up"
+                            >
+                              <Up className="w-3.5 h-3.5" />
+                            </button>
+                            <GripVertical className="w-3.5 h-3.5 text-slate-200 group-hover:text-slate-400 transition-colors" />
+                            <button
+                              type="button"
+                              onClick={() => handleMoveAck(ack.id, "down")}
+                              disabled={idx === ackItems.length - 1 || reorderingAck === ack.id}
+                              className="p-0.5 rounded text-slate-300 hover:text-slate-600 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                              title="Move down"
+                            >
+                              <Down className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+
+                          {/* Item number badge */}
+                          <div className="w-6 h-6 rounded-full bg-emerald-50 border border-emerald-200 flex items-center justify-center text-[10px] font-bold text-emerald-700 shrink-0 mt-0.5">
+                            {idx + 1}
+                          </div>
+
+                          {/* Content / inline editor */}
+                          <div className="flex-1 min-w-0">
+                            {editingAckId === ack.id ? (
+                              <div className="space-y-2">
+                                <textarea
+                                  value={editingAckText}
+                                  onChange={e => setEditingAckText(e.target.value)}
+                                  onKeyDown={e => {
+                                    if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) handleSaveEditAck(ack.id);
+                                    if (e.key === "Escape") handleCancelEditAck();
+                                  }}
+                                  autoFocus
+                                  rows={3}
+                                  className="w-full text-sm border border-emerald-300 rounded-lg px-3 py-2 resize-none focus:outline-none focus:ring-2 focus:ring-emerald-400/40 bg-white text-slate-800"
+                                />
+                                <div className="flex items-center gap-2">
+                                  <button
+                                    type="button"
+                                    onClick={() => handleSaveEditAck(ack.id)}
+                                    disabled={!editingAckText.trim()}
+                                    className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-semibold text-white disabled:opacity-50 transition-opacity"
+                                    style={{ backgroundColor: "#3ab549" }}
+                                  >
+                                    <Check className="w-3 h-3" /> Save
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={handleCancelEditAck}
+                                    className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-medium text-slate-600 bg-slate-100 hover:bg-slate-200 transition-colors"
+                                  >
+                                    <X className="w-3 h-3" /> Cancel
+                                  </button>
+                                </div>
+                              </div>
+                            ) : (
+                              <>
+                                {/* Renter-preview checkbox look */}
+                                <div className="flex items-start gap-2.5 mb-2">
+                                  <div className="mt-0.5 w-4 h-4 rounded border-2 border-emerald-500 bg-emerald-50 shrink-0" />
+                                  <p className="text-sm text-slate-800 leading-relaxed">{ack.text}</p>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                  <button
+                                    type="button"
+                                    onClick={() => handleToggleAckRequired(ack)}
+                                    className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold border transition-colors ${
+                                      ack.required
+                                        ? "bg-rose-50 text-rose-600 border-rose-200 hover:bg-rose-100"
+                                        : "bg-slate-100 text-slate-500 border-slate-200 hover:bg-slate-200"
+                                    }`}
+                                  >
+                                    {ack.required ? "Required" : "Optional"} — click to toggle
+                                  </button>
+                                </div>
+                              </>
+                            )}
+                          </div>
+
+                          {/* Edit / delete actions */}
+                          {editingAckId !== ack.id && (
+                            <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
+                              <button
+                                type="button"
+                                onClick={() => handleStartEditAck(ack)}
+                                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors"
+                                title="Edit"
+                              >
+                                <Pencil className="w-3.5 h-3.5" />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleDeleteAck(ack.id)}
+                                disabled={deletingAck === ack.id}
+                                className="p-1.5 rounded-lg text-slate-400 hover:text-red-500 hover:bg-red-50 transition-colors"
+                                title="Delete"
+                              >
+                                {deletingAck === ack.id
+                                  ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                  : <Trash2 className="w-3.5 h-3.5" />}
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* Add new item form */}
+                    <div className="px-5 py-4 bg-slate-50 border-t border-slate-200">
+                      <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Add New Acknowledgement</p>
+                      <textarea
+                        value={ackText}
+                        onChange={e => setAckText(e.target.value)}
+                        onKeyDown={e => { if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) handleAddAck(); }}
+                        placeholder='Type the exact text the renter must acknowledge — e.g. "I understand that I am responsible for all damage or loss during the rental period."'
+                        rows={3}
+                        className="w-full text-sm border border-slate-200 rounded-xl px-3 py-2.5 resize-none focus:outline-none focus:ring-2 focus:ring-primary/30 bg-white placeholder-slate-400"
+                      />
+                      <div className="flex items-center gap-3 mt-2">
+                        <label className="flex items-center gap-1.5 cursor-pointer select-none">
+                          <input
+                            type="checkbox"
+                            checked={ackRequired}
+                            onChange={e => setAckRequired(e.target.checked)}
+                            className="w-3.5 h-3.5 accent-primary rounded"
+                          />
+                          <span className="text-xs text-slate-600">Required</span>
+                        </label>
+                        <p className="text-xs text-slate-400 flex-1">⌘↵ to add quickly</p>
+                        <button
+                          type="button"
+                          onClick={handleAddAck}
+                          disabled={savingAck || !ackText.trim()}
+                          className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-semibold text-white disabled:opacity-50 transition-opacity shadow-sm"
+                          style={{ backgroundColor: "#3ab549" }}
+                        >
+                          {savingAck ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Plus className="w-3.5 h-3.5" />}
+                          Add Acknowledgement
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Renter preview section */}
+                  {ackItems.length > 0 && (
+                    <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+                      <div className="flex items-center gap-2 px-5 py-3 bg-slate-50 border-b border-slate-200">
+                        <Eye className="w-3.5 h-3.5 text-slate-400" />
+                        <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Renter View Preview</p>
+                        <p className="text-xs text-slate-400 ml-1">— this is what renters see before signing</p>
+                      </div>
+                      <div className="p-5 space-y-3">
+                        {ackItems.map((ack, idx) => (
+                          <div
+                            key={ack.id}
+                            className="flex items-start gap-3 p-4 rounded-xl border border-emerald-100 bg-emerald-50"
+                          >
+                            <div className="mt-0.5 w-4 h-4 rounded border-2 border-emerald-500 bg-emerald-500 flex items-center justify-center shrink-0">
+                              <svg className="w-2.5 h-2.5 text-white" fill="none" viewBox="0 0 12 12" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M2 6l3 3 5-5" /></svg>
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm text-slate-800 leading-relaxed">{ack.text}</p>
+                              {!ack.required && <p className="text-[10px] text-slate-400 mt-0.5">Optional</p>}
+                            </div>
+                            <span className="text-[10px] text-slate-400 shrink-0 mt-0.5">#{idx + 1}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ) : (
               <div className="bg-white rounded-sm shadow-[0_2px_8px_rgba(0,0,0,0.12),0_0_0_1px_rgba(0,0,0,0.04)] flex flex-col" style={{ minHeight: 900 }}>
                 <div className="px-16 pt-14 pb-6 border-b border-slate-100">
                   <input type="text" value={title} onChange={e => setTitle(e.target.value)}
@@ -1049,6 +1317,7 @@ export default function ContractBuilder() {
                   </>
                 )}
               </div>
+              )}
 
               {/* ── OutdoorShare Platform Agreements (preview only) ────────── */}
               {viewMode === "preview" && includePlatform && platformAgreements.length > 0 && (
@@ -1202,78 +1471,22 @@ export default function ContractBuilder() {
                   </div>
                 </div>
 
-                {/* ── Acknowledgement Checkboxes ── */}
-                <div className="mt-5 space-y-3 border-t border-slate-100 pt-5">
-                  <div>
-                    <Label className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Acknowledgement Checkboxes</Label>
-                    <p className="text-xs text-slate-400 mt-0.5">
-                      Renters must check these before they can sign. They appear in a "Before Signing" section at checkout.
-                      {!editingId && <span className="text-amber-600"> Save the contract first to attach items to it specifically.</span>}
-                    </p>
-                  </div>
-
-                  {/* Existing items */}
-                  {ackItems.length > 0 && (
-                    <div className="space-y-2">
-                      {ackItems.map(ack => (
-                        <div key={ack.id} className="flex items-start gap-2.5 bg-slate-50 rounded-xl px-3 py-2.5 border border-slate-100">
-                          <div className="flex-1 min-w-0">
-                            <p className="text-sm text-slate-700 leading-relaxed">{ack.text}</p>
-                            <button
-                              type="button"
-                              onClick={() => handleToggleAckRequired(ack)}
-                              className={`text-[10px] font-semibold mt-1 px-1.5 py-0.5 rounded-full border ${ack.required ? "bg-red-50 text-red-600 border-red-200" : "bg-slate-100 text-slate-500 border-slate-200"}`}
-                            >
-                              {ack.required ? "Required" : "Optional"} — click to toggle
-                            </button>
-                          </div>
-                          <button
-                            type="button"
-                            onClick={() => handleDeleteAck(ack.id)}
-                            disabled={deletingAck === ack.id}
-                            className="text-slate-300 hover:text-red-500 transition-colors shrink-0 mt-0.5"
-                          >
-                            {deletingAck === ack.id
-                              ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                              : <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" className="w-3.5 h-3.5"><path fillRule="evenodd" d="M5 3.25V4H2.75a.75.75 0 0 0 0 1.5h.3l.815 8.15A1.5 1.5 0 0 0 5.357 15h5.285a1.5 1.5 0 0 0 1.493-1.35l.815-8.15h.3a.75.75 0 0 0 0-1.5H11v-.75A2.25 2.25 0 0 0 8.75 1h-1.5A2.25 2.25 0 0 0 5 3.25Zm2.25-.75a.75.75 0 0 0-.75.75V4h3v-.75a.75.75 0 0 0-.75-.75h-1.5ZM6.05 6a.75.75 0 0 1 .787.713l.275 5.5a.75.75 0 0 1-1.498.075l-.275-5.5A.75.75 0 0 1 6.05 6Zm3.9 0a.75.75 0 0 1 .712.787l-.275 5.5a.75.75 0 0 1-1.498-.075l.275-5.5a.75.75 0 0 1 .786-.711Z" clipRule="evenodd" /></svg>}
-                          </button>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-
-                  {/* Add new item */}
-                  <div className="flex flex-col gap-2">
-                    <textarea
-                      value={ackText}
-                      onChange={e => setAckText(e.target.value)}
-                      onKeyDown={e => { if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) handleAddAck(); }}
-                      placeholder='e.g. "I understand I am responsible for all damage during the rental period."'
-                      rows={2}
-                      className="w-full text-sm border border-slate-200 rounded-xl px-3 py-2 resize-none focus:outline-none focus:ring-2 focus:ring-primary/30 bg-white"
-                    />
-                    <div className="flex items-center gap-3">
-                      <label className="flex items-center gap-1.5 cursor-pointer select-none">
-                        <input
-                          type="checkbox"
-                          checked={ackRequired}
-                          onChange={e => setAckRequired(e.target.checked)}
-                          className="w-3.5 h-3.5 accent-primary"
-                        />
-                        <span className="text-xs text-slate-600">Required</span>
-                      </label>
-                      <button
-                        type="button"
-                        onClick={handleAddAck}
-                        disabled={savingAck || !ackText.trim()}
-                        className="ml-auto flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-primary text-white hover:opacity-90 disabled:opacity-50 transition-opacity"
-                        style={{ backgroundColor: "#3ab549" }}
-                      >
-                        {savingAck ? <Loader2 className="w-3 h-3 animate-spin" /> : null}
-                        Add Acknowledgement
-                      </button>
-                    </div>
-                  </div>
+                {/* Acknowledgements are now managed in the dedicated Acknowledgements tab */}
+                <div className="mt-5 pt-5 border-t border-slate-100">
+                  <button
+                    type="button"
+                    onClick={() => { setSettingsOpen(false); setViewMode("acks"); }}
+                    className="inline-flex items-center gap-2 text-xs font-semibold text-emerald-700 hover:text-emerald-800 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 rounded-lg px-3 py-2 transition-colors"
+                  >
+                    <ListChecks className="w-3.5 h-3.5" />
+                    Manage Acknowledgements
+                    {ackItems.length > 0 && (
+                      <span className="inline-flex items-center justify-center w-4 h-4 rounded-full text-[10px] font-bold bg-emerald-200 text-emerald-800">
+                        {ackItems.length}
+                      </span>
+                    )}
+                  </button>
+                  <p className="text-xs text-slate-400 mt-1.5">Custom per-item acknowledgements the renter must check before signing.</p>
                 </div>
               </div>
             )}

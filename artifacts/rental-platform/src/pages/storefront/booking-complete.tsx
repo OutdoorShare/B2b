@@ -36,6 +36,7 @@ interface BookingData {
 
 interface RuleItem   { id: number; title: string; description: string; fee: number; }
 interface PlatformAgreement { id: number; title: string; checkboxLabel: string; isRequired: boolean; version: number; }
+interface OperatorAcknowledgement { id: number; text: string; required: boolean; sortOrder: number; }
 interface OperatorContract  {
   id: number;
   title: string;
@@ -50,6 +51,7 @@ interface OperatorContract  {
 interface AgreementsData {
   rules: RuleItem[];
   platformAgreements: PlatformAgreement[];
+  operatorAcknowledgements: OperatorAcknowledgement[];
   operatorContract: OperatorContract | null;
   alreadySigned: boolean;
 }
@@ -150,6 +152,9 @@ export default function BookingComplete() {
       if (pa.isRequired && !checkboxStates[`platform-${pa.id}`]) return false;
     }
     if (agreementsData.operatorContract && !checkboxStates["operator"]) return false;
+    for (const oa of (agreementsData.operatorAcknowledgements ?? [])) {
+      if (oa.required && !checkboxStates[`oa-${oa.id}`]) return false;
+    }
     return true;
   };
 
@@ -319,6 +324,13 @@ export default function BookingComplete() {
               accepted: !!checkboxStates["operator"],
             }]
           : []),
+        ...(agreementsData?.operatorAcknowledgements ?? []).map(oa => ({
+          type: "operator_ack" as const,
+          id: oa.id,
+          checkboxLabel: oa.text,
+          required: oa.required,
+          accepted: !!checkboxStates[`oa-${oa.id}`],
+        })),
       ];
 
       const res = await fetch(`${BASE}/api/bookings/${bookingId}/sign-agreement-public`, {
@@ -377,7 +389,20 @@ export default function BookingComplete() {
 
   const hasAnyAgreements = (agreementsData?.rules?.length ?? 0) > 0
     || (agreementsData?.platformAgreements?.length ?? 0) > 0
-    || !!agreementsData?.operatorContract;
+    || !!agreementsData?.operatorContract
+    || (agreementsData?.operatorAcknowledgements?.length ?? 0) > 0;
+
+  const hasRules = (agreementsData?.rules?.length ?? 0) > 0;
+  const hasOA    = (agreementsData?.operatorAcknowledgements?.length ?? 0) > 0;
+  const hasContractOrPlatform = (agreementsData?.platformAgreements?.length ?? 0) > 0 || !!agreementsData?.operatorContract;
+
+  const sectionNum = (after: ("rules" | "oa" | "contracts")[]) => {
+    let n = 1;
+    if (after.includes("rules") && hasRules) n++;
+    if (after.includes("oa") && hasOA) n++;
+    if (after.includes("contracts") && hasContractOrPlatform) n++;
+    return n;
+  };
 
   const canSubmit = hasSignature && signerName.trim().length > 0 && allRequiredChecked();
 
@@ -589,8 +614,8 @@ export default function BookingComplete() {
               </div>
             </div>
 
-            {/* Section 2 — Rules & Policies */}
-            {(agreementsData?.rules?.length ?? 0) > 0 && (
+            {/* Section — Rental Rules & Policies */}
+            {hasRules && (
               <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-6 space-y-4">
                 <h2 className="text-sm font-semibold text-slate-700 flex items-center gap-2">
                   <span className="w-5 h-5 rounded-full bg-primary text-white text-xs flex items-center justify-center font-bold">2</span>
@@ -600,10 +625,10 @@ export default function BookingComplete() {
                   {agreementsData!.rules.map(rule => (
                     <label
                       key={rule.id}
-                      className={`flex items-start gap-3 p-3 rounded-xl border cursor-pointer transition-colors ${
+                      className={`flex items-start gap-3 p-4 rounded-xl border cursor-pointer transition-all ${
                         checkboxStates[`rule-${rule.id}`]
-                          ? "border-emerald-200 bg-emerald-50"
-                          : "border-slate-200 bg-slate-50 hover:bg-slate-100"
+                          ? "border-emerald-200 bg-emerald-50 shadow-[0_0_0_1px_rgba(52,186,72,0.15)]"
+                          : "border-slate-200 bg-slate-50 hover:bg-slate-100 hover:border-slate-300"
                       }`}
                     >
                       <input
@@ -623,18 +648,117 @@ export default function BookingComplete() {
                           </p>
                         )}
                       </div>
+                      {checkboxStates[`rule-${rule.id}`] && (
+                        <CheckCircle className="w-4 h-4 text-emerald-500 shrink-0 mt-0.5" />
+                      )}
                     </label>
                   ))}
                 </div>
               </div>
             )}
 
-            {/* Section 3 — Agreements */}
-            {hasAnyAgreements && (agreementsData?.platformAgreements?.length ?? 0) + (agreementsData?.operatorContract ? 1 : 0) > 0 && (
+            {/* Section — Custom Acknowledgements (operator-defined) */}
+            {hasOA && (
+              <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
+                {/* Section header */}
+                <div className="px-6 pt-5 pb-3 flex items-center gap-2">
+                  <span className="w-5 h-5 rounded-full bg-primary text-white text-xs flex items-center justify-center font-bold shrink-0">
+                    {sectionNum(["rules"])}
+                  </span>
+                  <h2 className="text-sm font-semibold text-slate-700">Acknowledgements</h2>
+                  <span className="ml-auto text-xs text-slate-400">
+                    {(agreementsData?.operatorAcknowledgements ?? []).filter(a => a.required).length} required
+                  </span>
+                </div>
+                <p className="px-6 pb-4 text-xs text-slate-500">
+                  Please read each item carefully and check the box to confirm your understanding.
+                </p>
+
+                <div className="divide-y divide-slate-100">
+                  {(agreementsData?.operatorAcknowledgements ?? []).map((oa, idx) => {
+                    const checked = !!checkboxStates[`oa-${oa.id}`];
+                    return (
+                      <label
+                        key={oa.id}
+                        className={`flex items-start gap-4 px-6 py-4 cursor-pointer transition-all select-none ${
+                          checked
+                            ? "bg-emerald-50"
+                            : "bg-white hover:bg-slate-50"
+                        }`}
+                      >
+                        {/* Custom styled checkbox */}
+                        <div className={`mt-0.5 w-5 h-5 rounded-md border-2 flex items-center justify-center shrink-0 transition-all ${
+                          checked
+                            ? "border-emerald-500 bg-emerald-500 shadow-[0_0_0_3px_rgba(52,186,72,0.12)]"
+                            : "border-slate-300 bg-white hover:border-emerald-400"
+                        }`}>
+                          <input
+                            type="checkbox"
+                            className="sr-only"
+                            checked={checked}
+                            onChange={() => toggleCheck(`oa-${oa.id}`)}
+                          />
+                          {checked && (
+                            <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 12 12" stroke="currentColor" strokeWidth={2.5}>
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M2 6l3 3 5-5" />
+                            </svg>
+                          )}
+                        </div>
+
+                        {/* Text content */}
+                        <div className="flex-1 min-w-0">
+                          <p className={`text-sm leading-relaxed transition-colors ${
+                            checked ? "text-slate-700" : "text-slate-800"
+                          }`}>
+                            {oa.text}
+                          </p>
+                          {!oa.required && (
+                            <p className="text-[10px] text-slate-400 mt-1 font-medium">Optional</p>
+                          )}
+                        </div>
+
+                        {/* Status indicator */}
+                        <div className={`shrink-0 mt-0.5 transition-all ${checked ? "opacity-100" : "opacity-0"}`}>
+                          <CheckCircle className="w-4 h-4 text-emerald-500" />
+                        </div>
+                      </label>
+                    );
+                  })}
+                </div>
+
+                {/* Progress bar */}
+                {(agreementsData?.operatorAcknowledgements ?? []).length > 1 && (() => {
+                  const total = (agreementsData?.operatorAcknowledgements ?? []).length;
+                  const done  = (agreementsData?.operatorAcknowledgements ?? []).filter(a => !!checkboxStates[`oa-${a.id}`]).length;
+                  const pct   = Math.round((done / total) * 100);
+                  return (
+                    <div className="px-6 py-3 border-t border-slate-100 bg-slate-50">
+                      <div className="flex items-center justify-between mb-1.5">
+                        <span className="text-[11px] text-slate-400 font-medium">{done} of {total} acknowledged</span>
+                        {done === total && (
+                          <span className="text-[11px] font-semibold text-emerald-600 flex items-center gap-1">
+                            <CheckCircle className="w-3 h-3" /> All done
+                          </span>
+                        )}
+                      </div>
+                      <div className="h-1 bg-slate-200 rounded-full overflow-hidden">
+                        <div
+                          className="h-full rounded-full transition-all duration-500"
+                          style={{ width: `${pct}%`, backgroundColor: "#3ab549" }}
+                        />
+                      </div>
+                    </div>
+                  );
+                })()}
+              </div>
+            )}
+
+            {/* Section — Agreements & Terms */}
+            {hasContractOrPlatform && (
               <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-6 space-y-4">
                 <h2 className="text-sm font-semibold text-slate-700 flex items-center gap-2">
                   <span className="w-5 h-5 rounded-full bg-primary text-white text-xs flex items-center justify-center font-bold">
-                    {(agreementsData?.rules?.length ?? 0) > 0 ? "3" : "2"}
+                    {sectionNum(["rules", "oa"])}
                   </span>
                   Agreements & Terms
                 </h2>

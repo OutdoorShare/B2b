@@ -5,7 +5,7 @@ import multer from "multer";
 import { randomBytes } from "crypto";
 import { uploadBufferToGCS, downloadFromGCS } from "./upload";
 import { db } from "@workspace/db";
-import { bookingsTable, listingsTable, businessProfileTable, tenantsTable, contactCardsTable, customersTable, productsTable, quotesTable, platformProtectionPlansTable, listingRulesTable, platformAgreementsTable, operatorContractsTable } from "@workspace/db/schema";
+import { bookingsTable, listingsTable, businessProfileTable, tenantsTable, contactCardsTable, customersTable, productsTable, quotesTable, platformProtectionPlansTable, listingRulesTable, platformAgreementsTable, operatorContractsTable, operatorAcknowledgementsTable } from "@workspace/db/schema";
 import { eq, and, gte, lte, isNull, or, sql } from "drizzle-orm";
 import { logInfo, logWarn, logError } from "../lib/log";
 import { generateAgreementPdf } from "../lib/generate-agreement-pdf";
@@ -830,6 +830,31 @@ router.get("/bookings/:id/agreements-for-signing", async (req, res) => {
     // If operator has opted out of platform agreements, don't show them
     const showPlatformAgreements = !operatorContract || operatorContract.includeOutdoorShareAgreements;
 
+    // Custom operator acknowledgements — items attached to this contract OR global (null contractId)
+    const operatorAcknowledgements = booking.tenantId
+      ? await db
+          .select({
+            id: operatorAcknowledgementsTable.id,
+            text: operatorAcknowledgementsTable.text,
+            required: operatorAcknowledgementsTable.required,
+            sortOrder: operatorAcknowledgementsTable.sortOrder,
+          })
+          .from(operatorAcknowledgementsTable)
+          .where(
+            and(
+              eq(operatorAcknowledgementsTable.tenantId, booking.tenantId),
+              eq(operatorAcknowledgementsTable.isActive, true),
+              operatorContract
+                ? or(
+                    isNull(operatorAcknowledgementsTable.contractId),
+                    eq(operatorAcknowledgementsTable.contractId, operatorContract.id),
+                  )
+                : isNull(operatorAcknowledgementsTable.contractId),
+            )
+          )
+          .orderBy(operatorAcknowledgementsTable.sortOrder, operatorAcknowledgementsTable.id)
+      : [];
+
     res.json({
       alreadySigned: !!booking.agreementSignedAt,
       rules: rules.map(r => ({
@@ -859,6 +884,12 @@ router.get("/bookings/:id/agreements-for-signing", async (req, res) => {
             uploadedFileName: operatorContract.uploadedFileName ?? null,
           }
         : null,
+      operatorAcknowledgements: operatorAcknowledgements.map(a => ({
+        id: a.id,
+        text: a.text,
+        required: a.required,
+        sortOrder: a.sortOrder,
+      })),
     });
   } catch (err) {
     req.log.error(err);
