@@ -1,4 +1,5 @@
-import { useState, useMemo, useEffect, useRef, Fragment } from "react";
+import { useState, useMemo, useEffect, useRef, Fragment, useCallback } from "react";
+import { fetchWithRetry, BookingFetchError } from "@/lib/booking-fetch";
 import { useLocation, useParams } from "wouter";
 import {
   User, LogOut, Calendar, CalendarDays, List, Settings,
@@ -149,6 +150,8 @@ export default function MyBookings() {
   const [bookings, setBookings]   = useState<RenterBooking[]>([]);
   const [bookingsLoading, setBL]  = useState(true);
   const [profileLoading, setPL]   = useState(true);
+  const [bookingsError, setBookingsError] = useState<string | null>(null);
+  const [bookingsRetry, setBookingsRetry] = useState(0);
 
   const [tab, setTab] = useState<Tab>(() => {
     const p = new URLSearchParams(window.location.search);
@@ -161,17 +164,33 @@ export default function MyBookings() {
     const s = loadSession();
     if (!s) { setLocation(`${base}/login?redirect=${encodeURIComponent(`${base}/my-bookings`)}`); return; }
     setSession(s);
+    setBookingsError(null);
+    setBL(true);
 
-    fetch(`${API}/api/customers/${s.id}`)
+    // Profile load — non-critical, silently fails without blocking the page
+    fetchWithRetry(`${API}/api/customers/${s.id}`, undefined, 2)
       .then(r => r.json())
       .then((d: CustomerProfile) => { setProfile(d); setPL(false); })
       .catch(() => setPL(false));
 
-    fetch(`${API}/api/marketplace/renter/bookings?customerId=${s.id}`)
+    // Bookings list — critical, retry up to 3 times for transient errors
+    fetchWithRetry(`${API}/api/marketplace/renter/bookings?customerId=${s.id}`, undefined, 3)
       .then(r => r.json())
-      .then((d: RenterBooking[]) => { if (Array.isArray(d)) setBookings(d); setBL(false); })
-      .catch(() => setBL(false));
-  }, []);
+      .then((d: RenterBooking[]) => {
+        if (Array.isArray(d)) setBookings(d);
+        setBookingsError(null);
+        setBL(false);
+      })
+      .catch((err: unknown) => {
+        const msg = err instanceof BookingFetchError
+          ? err.code === "ACCESS_DENIED"
+            ? "Your session may have expired. Please sign in again."
+            : "Unable to load your bookings right now — please try again."
+          : "Unable to load your bookings right now — please try again.";
+        setBookingsError(msg);
+        setBL(false);
+      });
+  }, [bookingsRetry]);
 
   const handleLogout = () => {
     localStorage.removeItem("rental_customer");
@@ -355,13 +374,30 @@ export default function MyBookings() {
         )}
 
         {tab === "bookings" && (
-          <BookingsTab
-            bookings={bookings}
-            isLoading={bookingsLoading}
-            slug={slug ?? ""}
-            base={base}
-            onBrowse={() => setLocation(base || "/")}
-          />
+          bookingsError ? (
+            <div className="rounded-2xl border bg-background p-8 text-center space-y-4">
+              <AlertCircle className="w-8 h-8 text-muted-foreground mx-auto" />
+              <div>
+                <p className="font-semibold text-foreground text-sm">Unable to load bookings</p>
+                <p className="text-xs text-muted-foreground mt-1">{bookingsError}</p>
+              </div>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => setBookingsRetry(c => c + 1)}
+              >
+                Try again
+              </Button>
+            </div>
+          ) : (
+            <BookingsTab
+              bookings={bookings}
+              isLoading={bookingsLoading}
+              slug={slug ?? ""}
+              base={base}
+              onBrowse={() => setLocation(base || "/")}
+            />
+          )
         )}
 
         {tab === "memories" && (

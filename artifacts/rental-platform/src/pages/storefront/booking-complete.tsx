@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useParams, useLocation } from "wouter";
+import { fetchWithRetry } from "@/lib/booking-fetch";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -211,10 +212,33 @@ export default function BookingComplete() {
     }
     setPhase("loading");
     try {
-      const res  = await fetch(`${BASE}/api/bookings/${bookingId}?customerEmail=${encodeURIComponent(email.trim())}`);
+      // fetchWithRetry handles 5xx / network failures with 3 attempts and back-off.
+      // 403 (wrong email) and 404 (not found) are thrown immediately as BookingFetchError.
+      let res: Response;
+      try {
+        res = await fetchWithRetry(
+          `${BASE}/api/bookings/${bookingId}?customerEmail=${encodeURIComponent(email.trim())}`,
+          undefined,
+          3,
+        );
+      } catch (fetchErr: any) {
+        if (fetchErr?.code === "ACCESS_DENIED") {
+          setPhase("verify");
+          setEmailError("That email doesn't match this booking. Please check and try again.");
+          return;
+        }
+        if (fetchErr?.code === "NOT_FOUND") {
+          setPhase("error");
+          setError("Booking not found. The link may be outdated or the booking may have been removed.");
+          return;
+        }
+        // Transient — exhausted retries
+        setPhase("error");
+        setError("Connection error after multiple attempts. Please check your connection and try again.");
+        return;
+      }
+
       const data = await res.json();
-      if (res.status === 403) { setPhase("verify"); setEmailError("That email doesn't match this booking. Please check and try again."); return; }
-      if (!res.ok) { setPhase("error"); setError(data.error || "Booking not found. Please contact support."); return; }
 
       // Rule 4: Booking confirmation must be based on server/webhook truth.
       // If the booking is still in `pending_payment`, the Stripe webhook has not
@@ -237,7 +261,7 @@ export default function BookingComplete() {
       await proceedWithBooking(data, email.trim());
     } catch {
       setPhase("error");
-      setError("Connection error. Please check your connection and try again.");
+      setError("Something went wrong loading your booking. Please try again.");
     }
   };
 

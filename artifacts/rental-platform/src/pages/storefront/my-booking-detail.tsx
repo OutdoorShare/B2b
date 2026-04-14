@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useLocation, useParams, Link } from "wouter";
+import { loadBooking, BookingFetchError, bookingErrorUX, type BookingErrorCode } from "@/lib/booking-fetch";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import {
@@ -211,6 +212,8 @@ export default function MyBookingDetail() {
   const [booking, setBooking] = useState<any | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState("");
+  const [errorCode, setErrorCode] = useState<BookingErrorCode | null>(null);
+  const [retryCount, setRetryCount] = useState(0);
 
   // Pickup photo upload state
   const [staged, setStaged] = useState<File[]>([]);
@@ -308,17 +311,15 @@ export default function MyBookingDetail() {
     }
     setSession(s);
 
-    // Pass customerEmail as query param so the API can verify ownership
-    // across any tenant without requiring x-tenant-slug match.
-    fetch(`${BASE}/api/bookings/${id}?customerEmail=${encodeURIComponent(s.email)}`)
-      .then(r => r.json())
+    setIsLoading(true);
+    setError("");
+    setErrorCode(null);
+
+    // loadBooking performs up to 3 retries with exponential back-off for transient (5xx/network)
+    // errors before surfacing a typed BookingFetchError. 404 / 403 are thrown immediately
+    // without retrying since they won't resolve with more requests.
+    loadBooking(BASE, id!, s.email)
       .then(data => {
-        if (data.error) { setError("Booking not found."); return; }
-        // Double-check ownership on the frontend as well
-        if ((data.customerEmail ?? "").toLowerCase().trim() !== s.email.toLowerCase().trim()) {
-          setError("You don't have permission to view this booking.");
-          return;
-        }
         setBooking(data);
         // Mark as seen by renter if there's an update
         if (data.seenByRenter === false) {
@@ -330,13 +331,25 @@ export default function MyBookingDetail() {
         }
         // Initialize photo state from existing booking data
         if (Array.isArray(data.pickupPhotos) && data.pickupPhotos.length > 0) {
-          setSavedPhotos(data.pickupPhotos);
+          setSavedPhotos(data.pickupPhotos as string[]);
           setPhotoDone(true);
         }
       })
-      .catch(() => setError("Failed to load booking."))
+      .catch((err: unknown) => {
+        if (err instanceof BookingFetchError) {
+          setErrorCode(err.code);
+          setError(err.message);
+          // Auto-redirect for unrecoverable access errors
+          if (err.code === "ACCESS_DENIED") {
+            setLocation(`${base}/login?redirect=${encodeURIComponent(`${base}/my-bookings/${id}`)}`);
+          }
+        } else {
+          setErrorCode("TRANSIENT_ERROR");
+          setError("Unable to load this booking right now. Please try again.");
+        }
+      })
       .finally(() => setIsLoading(false));
-  }, [id]);
+  }, [id, retryCount]);
 
   // Fetch extension requests for this booking
   useEffect(() => {
@@ -450,6 +463,7 @@ export default function MyBookingDetail() {
   }
 
   if (error || !booking) {
+    const ux = bookingErrorUX(errorCode ?? "TRANSIENT_ERROR");
     return (
       <div className="max-w-2xl mx-auto px-4 py-8 space-y-4">
         <Link href={`${base}/my-bookings`}>
@@ -457,8 +471,38 @@ export default function MyBookingDetail() {
             <ArrowLeft className="w-4 h-4 mr-1.5" /> My Bookings
           </Button>
         </Link>
-        <div className="rounded-2xl border bg-background p-10 text-center text-muted-foreground">
-          {error || "Booking not found."}
+        <div className="rounded-2xl border bg-background p-8 text-center space-y-4">
+          <div className="w-12 h-12 rounded-full bg-muted flex items-center justify-center mx-auto">
+            {errorCode === "NOT_FOUND" ? (
+              <AlertCircle className="w-6 h-6 text-muted-foreground" />
+            ) : (
+              <RotateCcw className="w-6 h-6 text-muted-foreground" />
+            )}
+          </div>
+          <div>
+            <p className="font-semibold text-foreground">{ux.title}</p>
+            <p className="text-sm text-muted-foreground mt-1">{ux.description}</p>
+          </div>
+          <div className="flex flex-col sm:flex-row items-center justify-center gap-2">
+            {ux.canRetry && (
+              <Button
+                variant="default"
+                size="sm"
+                onClick={() => setRetryCount(c => c + 1)}
+              >
+                <RotateCcw className="w-3.5 h-3.5 mr-1.5" />
+                Try again
+              </Button>
+            )}
+            {ux.suggestBack && (
+              <Link href={`${base}/my-bookings`}>
+                <Button variant="outline" size="sm">
+                  <ArrowLeft className="w-3.5 h-3.5 mr-1.5" />
+                  Back to my bookings
+                </Button>
+              </Link>
+            )}
+          </div>
         </div>
       </div>
     );
