@@ -33,6 +33,8 @@ import {
   Mountain,
   Menu,
   X,
+  MoreHorizontal,
+  Bell,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useGetBusinessProfile } from "@workspace/api-client-react";
@@ -95,6 +97,13 @@ const NAV_GROUPS: NavGroup[] = [
 
 const NAV_ITEMS: NavItem[] = NAV_GROUPS.flatMap(g => g.items);
 
+const BOTTOM_TABS: { name: string; path: string; icon: React.ElementType; matchPrefix?: boolean }[] = [
+  { name: "Home", path: "", icon: LayoutDashboard },
+  { name: "Bookings", path: "/bookings", icon: CalendarDays, matchPrefix: true },
+  { name: "Listings", path: "/listings", icon: Package, matchPrefix: true },
+  { name: "Messages", path: "/messages", icon: MessageCircle, matchPrefix: true },
+];
+
 function EmailVerificationBanner() {
   const session = getAdminSession();
   const dismissKey = session ? `ev-banner-dismissed-${session.tenantSlug ?? session.email}` : null;
@@ -106,7 +115,6 @@ function EmailVerificationBanner() {
   const [resent, setResent] = useState(false);
   const base = import.meta.env.BASE_URL.replace(/\/+$/, "");
 
-  // Only show for owner accounts with unverified email
   if (dismissed || !session || session.type !== "owner" || session.emailVerified !== false) {
     return null;
   }
@@ -134,13 +142,13 @@ function EmailVerificationBanner() {
   };
 
   return (
-    <div className="bg-amber-50 border-b border-amber-200 px-6 py-2.5 flex items-center gap-3 flex-wrap">
+    <div className="bg-amber-50 border-b border-amber-200 px-4 md:px-6 py-2.5 flex items-center gap-3 flex-wrap">
       <div className="flex items-center gap-2 flex-1 min-w-0">
         <span className="text-amber-600 shrink-0">⚠️</span>
-        <p className="text-sm text-amber-800 font-medium">
+        <p className="text-xs md:text-sm text-amber-800 font-medium">
           {resent
             ? "Verification email sent — check your inbox."
-            : "Please verify your email address to fully activate your account."}
+            : "Please verify your email to activate your account."}
         </p>
       </div>
       {!resent && (
@@ -149,7 +157,7 @@ function EmailVerificationBanner() {
           disabled={resending}
           className="text-xs font-semibold text-amber-700 hover:text-amber-900 underline decoration-dotted shrink-0 disabled:opacity-50"
         >
-          {resending ? "Sending…" : "Resend verification email"}
+          {resending ? "Sending…" : "Resend"}
         </button>
       )}
       <button
@@ -165,7 +173,7 @@ function EmailVerificationBanner() {
 
 
 export function AdminLayout({ children }: { children: React.ReactNode }) {
-  const [location] = useLocation();
+  const [location, setLocation] = useLocation();
   const slug = getAdminSlug();
   const adminBase = `/${slug}/admin`;
   const { theme, toggleTheme } = useTheme();
@@ -231,6 +239,12 @@ export function AdminLayout({ children }: { children: React.ReactNode }) {
 
   const closeMobile = useCallback(() => setMobileOpen(false), []);
 
+  const isBottomTabActive = (tab: typeof BOTTOM_TABS[0]) => {
+    const href = `${adminBase}${tab.path}`;
+    if (tab.path === "") return location === href;
+    return location === href || (tab.matchPrefix && location.startsWith(href + "/"));
+  };
+
   const sidebarContent = (
     <>
       <div className="h-[60px] flex items-center px-4 border-b border-border/60 bg-gradient-to-b from-sidebar-accent/30 to-transparent shrink-0">
@@ -251,13 +265,13 @@ export function AdminLayout({ children }: { children: React.ReactNode }) {
         </Link>
         <button
           onClick={closeMobile}
-          className="md:hidden w-8 h-8 rounded-lg flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-sidebar-accent/70 transition-all shrink-0"
+          className="md:hidden w-9 h-9 rounded-lg flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-sidebar-accent/70 transition-all shrink-0 active:scale-90"
         >
           <X className="w-5 h-5" />
         </button>
       </div>
 
-      <nav className="px-2.5 py-3 flex-1 overflow-y-auto">
+      <nav className="px-2.5 py-3 flex-1 overflow-y-auto overscroll-contain">
         <div className="space-y-5">
           {NAV_GROUPS.map((group, gi) => (
             <div key={gi}>
@@ -278,10 +292,10 @@ export function AdminLayout({ children }: { children: React.ReactNode }) {
                         href={item.path}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="group flex items-center gap-2.5 px-2.5 py-2 rounded-xl text-sm font-medium transition-all duration-100 text-sidebar-foreground/75 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+                        className="group flex items-center gap-2.5 px-2.5 py-2.5 md:py-2 rounded-xl text-sm font-medium transition-all duration-100 text-sidebar-foreground/75 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground active:scale-[0.98]"
                       >
-                        <item.icon className="w-[15px] h-[15px] shrink-0 opacity-70 group-hover:opacity-100 transition-opacity" />
-                        <span className="flex-1 text-[13px]">{item.name}</span>
+                        <item.icon className="w-[17px] h-[17px] md:w-[15px] md:h-[15px] shrink-0 opacity-70 group-hover:opacity-100 transition-opacity" />
+                        <span className="flex-1 text-[14px] md:text-[13px]">{item.name}</span>
                         <ExternalLink className="w-3 h-3 opacity-30 group-hover:opacity-60 transition-opacity" />
                       </a>
                     );
@@ -295,7 +309,7 @@ export function AdminLayout({ children }: { children: React.ReactNode }) {
                       key={item.name}
                       href={href}
                       className={cn(
-                        "relative flex items-center gap-2.5 px-2.5 py-2 rounded-xl text-[13px] font-medium transition-all duration-100",
+                        "relative flex items-center gap-2.5 px-2.5 py-2.5 md:py-2 rounded-xl text-[14px] md:text-[13px] font-medium transition-all duration-100 active:scale-[0.98]",
                         isActive
                           ? "bg-primary/10 text-primary shadow-sm"
                           : "text-sidebar-foreground/75 hover:bg-sidebar-accent/70 hover:text-sidebar-accent-foreground"
@@ -304,12 +318,12 @@ export function AdminLayout({ children }: { children: React.ReactNode }) {
                       {isActive && (
                         <span className="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-5 rounded-r-full bg-primary" />
                       )}
-                      <item.icon className={cn("w-[15px] h-[15px] shrink-0 transition-opacity", isActive ? "opacity-100" : "opacity-60")} />
+                      <item.icon className={cn("w-[17px] h-[17px] md:w-[15px] md:h-[15px] shrink-0 transition-opacity", isActive ? "opacity-100" : "opacity-60")} />
                       <span className="flex-1">{item.name}</span>
                       {item.name === "Messages" && chatUnread > 0 && (
                         <span className={cn(
                           "min-w-[18px] h-[18px] rounded-full text-[10px] font-bold flex items-center justify-center px-1",
-                          isActive ? "bg-primary text-primary-foreground" : "bg-primary text-primary-foreground",
+                          "bg-primary text-primary-foreground",
                         )}>
                           {chatUnread > 9 ? "9+" : chatUnread}
                         </span>
@@ -329,12 +343,12 @@ export function AdminLayout({ children }: { children: React.ReactNode }) {
         </div>
       </nav>
 
-      <div className="px-3 py-3 border-t border-border/60">
+      <div className="px-3 py-3 border-t border-border/60 pb-[calc(0.75rem+env(safe-area-inset-bottom,0px))]">
         <a
           href={storefrontHref}
           target="_blank"
           rel="noopener noreferrer"
-          className="flex items-center gap-2 px-2.5 py-2 rounded-xl text-[12px] text-muted-foreground hover:text-foreground hover:bg-sidebar-accent/70 transition-all group"
+          className="flex items-center gap-2 px-2.5 py-2.5 md:py-2 rounded-xl text-[13px] md:text-[12px] text-muted-foreground hover:text-foreground hover:bg-sidebar-accent/70 transition-all group active:scale-[0.98]"
         >
           <ExternalLink className="w-3.5 h-3.5 opacity-50 group-hover:opacity-80 shrink-0 transition-opacity" />
           <span>View Storefront</span>
@@ -351,15 +365,16 @@ export function AdminLayout({ children }: { children: React.ReactNode }) {
       </aside>
 
       {/* Mobile Sidebar Overlay */}
-      {mobileOpen && (
-        <div
-          className="md:hidden fixed inset-0 z-40 bg-black/50 backdrop-blur-sm"
-          onClick={closeMobile}
-        />
-      )}
+      <div
+        className={cn(
+          "md:hidden fixed inset-0 z-40 bg-black/50 backdrop-blur-sm transition-opacity duration-300",
+          mobileOpen ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none"
+        )}
+        onClick={closeMobile}
+      />
       <aside
         className={cn(
-          "md:hidden fixed inset-y-0 left-0 z-50 w-72 max-w-[85vw] bg-sidebar border-r border-border flex flex-col transition-transform duration-300 ease-in-out",
+          "md:hidden fixed inset-y-0 left-0 z-50 w-72 max-w-[85vw] bg-sidebar border-r border-border flex flex-col shadow-2xl transition-transform duration-300 ease-[cubic-bezier(0.32,0.72,0,1)]",
           mobileOpen ? "translate-x-0" : "-translate-x-full"
         )}
       >
@@ -370,16 +385,16 @@ export function AdminLayout({ children }: { children: React.ReactNode }) {
       <main className="flex-1 flex flex-col min-w-0 min-h-0 overflow-hidden">
         <EmailVerificationBanner />
 
-        <header className="h-14 flex items-center justify-between px-3 md:px-6 border-b border-border/70 bg-background/80 backdrop-blur-sm sticky top-0 z-10">
-          <div className="flex items-center gap-2">
+        <header className="h-12 md:h-14 flex items-center justify-between px-3 md:px-6 border-b border-border/70 bg-background/80 backdrop-blur-sm sticky top-0 z-10">
+          <div className="flex items-center gap-2 min-w-0">
             <button
               onClick={() => setMobileOpen(true)}
-              className="md:hidden w-9 h-9 rounded-lg flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-sidebar-accent/70 transition-all"
+              className="md:hidden w-9 h-9 rounded-lg flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-sidebar-accent/70 transition-all active:scale-90 shrink-0"
             >
               <Menu className="w-5 h-5" />
             </button>
             {activeItem && (
-              <div className="w-7 h-7 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
+              <div className="hidden md:flex w-7 h-7 rounded-lg bg-primary/10 items-center justify-center shrink-0">
                 <activeItem.icon className="w-3.5 h-3.5 text-primary" />
               </div>
             )}
@@ -387,11 +402,11 @@ export function AdminLayout({ children }: { children: React.ReactNode }) {
               {activeItem?.name ?? "Dashboard"}
             </h1>
           </div>
-          <div className="flex items-center gap-1.5 md:gap-2">
+          <div className="flex items-center gap-1 md:gap-2 shrink-0">
             <button
               onClick={toggleTheme}
               title={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
-              className="w-8 h-8 rounded-lg flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-sidebar-accent/70 transition-all"
+              className="w-8 h-8 rounded-lg flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-sidebar-accent/70 transition-all active:scale-90"
             >
               {theme === "dark"
                 ? <Sun className="w-4 h-4" />
@@ -406,7 +421,7 @@ export function AdminLayout({ children }: { children: React.ReactNode }) {
             />
             <Link
               href={`${adminBase}/bookings/new`}
-              className="inline-flex items-center gap-1.5 px-2.5 md:px-3 py-1.5 rounded-lg bg-primary text-primary-foreground text-[12px] md:text-[13px] font-semibold hover:bg-primary/90 transition-colors shadow-sm"
+              className="inline-flex items-center gap-1 md:gap-1.5 px-2 md:px-3 py-1.5 rounded-lg bg-primary text-primary-foreground text-[12px] md:text-[13px] font-semibold hover:bg-primary/90 transition-colors shadow-sm active:scale-95"
             >
               <Plus className="w-3.5 h-3.5" />
               <span className="hidden sm:inline">New Booking</span>
@@ -414,12 +429,61 @@ export function AdminLayout({ children }: { children: React.ReactNode }) {
             </Link>
           </div>
         </header>
-        <div className="flex-1 overflow-y-auto p-3 md:p-6">
+
+        <div className="flex-1 overflow-y-auto overscroll-contain p-3 md:p-6 pb-[calc(4.5rem+env(safe-area-inset-bottom,0px))] md:pb-6">
           <div className="mx-auto max-w-6xl w-full">
             {children}
           </div>
         </div>
       </main>
+
+      {/* Mobile Bottom Tab Bar */}
+      <nav className="md:hidden fixed bottom-0 left-0 right-0 z-30 bg-background/95 backdrop-blur-lg border-t border-border/80 pb-[env(safe-area-inset-bottom,0px)]">
+        <div className="flex items-stretch h-14">
+          {BOTTOM_TABS.map((tab) => {
+            const isActive = isBottomTabActive(tab);
+            const href = `${adminBase}${tab.path}`;
+            const showBadge = tab.name === "Messages" && chatUnread > 0;
+            const showDot = tab.name === "Bookings" && bookingsUnseen > 0;
+            return (
+              <Link
+                key={tab.name}
+                href={href}
+                className={cn(
+                  "flex-1 flex flex-col items-center justify-center gap-0.5 transition-colors duration-150 active:bg-muted/50 relative",
+                  isActive ? "text-primary" : "text-muted-foreground"
+                )}
+              >
+                <div className="relative">
+                  <tab.icon className={cn("w-[22px] h-[22px] transition-all", isActive && "scale-110")} strokeWidth={isActive ? 2.5 : 1.8} />
+                  {showBadge && (
+                    <span className="absolute -top-1.5 -right-2.5 min-w-[16px] h-[16px] rounded-full bg-primary text-primary-foreground text-[9px] font-bold flex items-center justify-center px-1">
+                      {chatUnread > 9 ? "9+" : chatUnread}
+                    </span>
+                  )}
+                  {showDot && (
+                    <span className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-red-500" />
+                  )}
+                </div>
+                <span className={cn("text-[10px] font-medium leading-none", isActive && "font-semibold")}>{tab.name}</span>
+                {isActive && (
+                  <span className="absolute top-0 left-1/2 -translate-x-1/2 w-8 h-[3px] rounded-b-full bg-primary" />
+                )}
+              </Link>
+            );
+          })}
+          <button
+            onClick={() => setMobileOpen(true)}
+            className={cn(
+              "flex-1 flex flex-col items-center justify-center gap-0.5 transition-colors duration-150 active:bg-muted/50 text-muted-foreground"
+            )}
+          >
+            <MoreHorizontal className="w-[22px] h-[22px]" strokeWidth={1.8} />
+            <span className="text-[10px] font-medium leading-none">More</span>
+          </button>
+        </div>
+      </nav>
+
       {isPaid && (
         <AIAssistant
           role="admin"
