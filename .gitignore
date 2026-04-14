@@ -11,6 +11,22 @@ out-tsc
 # dependencies
 node_modules
 
+# Environment variables & secrets — NEVER commit these
+.env
+.env.local
+.env.*.local
+.env.development
+.env.development.local
+.env.production
+.env.production.local
+.env.test
+.env.test.local
+*.secret
+*.secrets
+secrets.json
+secrets.yaml
+secrets.yml
+
 # IDEs and editors
 /.idea
 .project
@@ -44,6 +60,11 @@ Thumbs.db
 .cursor/rules/nx-rules.mdc
 .github/instructions/nx.instructions.md
 
-# Replit
+# Replit-specific (not needed in production)
 .cache/
 .local/
+.replit
+.replitignore
+
+# Attached assets — large dev-only uploads, not part of deployable source
+attached_assets/
