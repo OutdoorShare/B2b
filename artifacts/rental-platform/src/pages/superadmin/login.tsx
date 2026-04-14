@@ -114,6 +114,15 @@ export default function SuperAdminLogin() {
               {loading ? "Signing in…" : "Sign In to Platform"}
             </Button>
 
+            <div className="text-center pt-1">
+              <a
+                href={`${BASE}/forgot-password?type=superadmin${email ? `&email=${encodeURIComponent(email.trim())}` : ""}`}
+                className="text-xs text-slate-500 hover:text-slate-300 underline underline-offset-2 transition-colors"
+              >
+                Forgot your password?
+              </a>
+            </div>
+
           </form>
         </div>
       </div>

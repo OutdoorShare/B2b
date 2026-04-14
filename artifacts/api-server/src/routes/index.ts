@@ -24,6 +24,7 @@ import openaiRouter from "./openai";
 import activitiesRouter from "./activities";
 import rentalExtensionsRouter from "./rental-extensions";
 import contractsRouter from "./contracts";
+import authPasswordRouter from "./auth-password";
 
 const router: IRouter = Router();
 
@@ -52,5 +53,6 @@ router.use(openaiRouter);
 router.use(activitiesRouter);
 router.use(rentalExtensionsRouter);
 router.use(contractsRouter);
+router.use(authPasswordRouter);
 
 export default router;

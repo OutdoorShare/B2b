@@ -130,6 +130,8 @@ app.use("/api/admin/auth", authRateLimit);
 app.use("/api/customers/login", authRateLimit);
 app.use("/api/customers/register", authRateLimit);
 app.use("/api/superadmin/auth", authRateLimit);
+app.use("/api/auth/forgot-password", authRateLimit);
+app.use("/api/auth/reset-password", authRateLimit);
 app.use("/api/ai/chat", aiRateLimit);
 
 app.use("/api", resolveTenant as any);

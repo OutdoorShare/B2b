@@ -175,6 +175,15 @@ export default function AdminLoginPage({ slug }: Props) {
             <Button type="submit" className="w-full h-11 font-bold" disabled={loading}>
               {loading ? "Signing in…" : "Sign In to Dashboard"}
             </Button>
+
+            <div className="text-center pt-1">
+              <a
+                href={`${BASE}/forgot-password?type=${tab === "owner" ? "owner" : "staff"}&slug=${encodeURIComponent(slug)}${email ? `&email=${encodeURIComponent(email)}` : ""}`}
+                className="text-xs text-muted-foreground hover:text-foreground underline underline-offset-2 transition-colors"
+              >
+                Forgot your password?
+              </a>
+            </div>
           </form>
         </div>
 

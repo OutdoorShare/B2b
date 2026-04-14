@@ -1,0 +1,197 @@
+We have a critical media/storage issue.
+
+Right now photos are not saving correctly and are not displaying correctly, especially for listings. In practice:
+
+* uploads appear to fail or disappear
+* images are not persisting
+* images are not rendering after upload
+* listing images are especially broken
+
+Please treat this as a full upload + storage + retrieval + display pipeline bug, not just a UI issue.
+
+Goal:
+Admins/users should be able to upload photos, save them successfully, reload the page, and still see those photos displayed correctly everywhere they are supposed to appear, especially on listings.
+
+## What I need investigated and fixed
+
+### 1. Reproduce the full issue
+
+Please test the complete flow for listing photos:
+
+* go to listing editor
+* upload one or more photos
+* save listing
+* reload page
+* confirm images still exist
+* confirm images display on:
+
+  * listing edit page
+  * listing card
+  * listing detail page
+  * storefront/renter listing page if applicable
+
+Also test any other photo-bearing categories if they exist, but listings are the priority.
+
+### 2. Identify the exact failure point
+
+I need the exact root cause, not a guess.
+
+Please determine whether the problem is in:
+
+* frontend file picker / upload component
+* API upload endpoint
+* storage provider upload
+* DB save of image reference
+* listing save/update logic
+* retrieval/query logic
+* signed URL/public URL generation
+* image rendering component
+* permissions/CORS
+* environment config
+* image array merge/overwrite bug
+
+### 3. Verify storage actually succeeds
+
+Please confirm:
+
+* file upload request is made
+* file reaches storage successfully
+* storage returns a file URL/key/path
+* backend saves the returned file reference correctly
+* listing record actually stores the image reference(s)
+
+I want logging around:
+
+* file name
+* mime type
+* file size
+* storage destination/key
+* saved DB field value
+* listing id
+* upload response status
+
+### 4. Check DB save/update logic for listings
+
+This feels especially likely for listing images.
+
+Please inspect whether listing save logic is:
+
+* not saving image URLs at all
+* overwriting image array with empty array
+* dropping uploaded images on update
+* saving under wrong field name
+* failing to persist after optimistic UI update
+
+Please confirm the exact listing field(s) used for photos and whether they are being written correctly.
+
+### 5. Confirm retrieval + display path
+
+Even if upload succeeds, the display path may be broken.
+
+Please verify:
+
+* listing fetch API returns image references
+* frontend receives them
+* image component renders the correct field
+* URLs are valid
+* signed URLs/public URLs are not expired or malformed
+* fallback image logic is not incorrectly hiding real images
+
+### 6. Inspect environment-specific storage config
+
+Please check dev, demo, and prod separately if needed:
+
+* storage bucket/container config
+* public vs signed URL logic
+* CORS
+* file upload permissions
+* environment variables
+
+It is possible uploads “work” in one environment but not another due to storage config mismatch.
+
+### 7. Add visible upload state + error handling
+
+Please improve UX so uploads cannot fail silently.
+
+Need visible states:
+
+* uploading
+* uploaded
+* failed
+* saving
+* saved
+
+If upload fails, show the actual reason:
+
+* file too large
+* invalid file type
+* storage error
+* DB save failed
+
+Right now it feels like files disappear.
+
+### 8. Make uploaded images visible immediately after save
+
+After upload/save, the user should clearly see:
+
+* image thumbnail
+* upload success
+* ability to reorder/remove if supported
+* that the image is attached to the listing
+
+Rule:
+If a user uploads a photo, they must be able to see exactly where it is and whether it was saved.
+
+### 9. Prevent destructive overwrite bugs
+
+Please inspect whether image arrays are being replaced incorrectly on edit.
+
+Common bug:
+
+* user uploads image
+* another save action sends partial payload
+* images field gets overwritten with `[]` or `null`
+
+Please harden this so image references are not lost accidentally.
+
+### 10. Add logging and diagnostics
+
+Please log the full image pipeline for listings:
+
+* upload started
+* upload succeeded/failed
+* storage key returned
+* DB updated
+* listing fetch returned images
+* frontend rendered image count
+
+This should make the failure point obvious.
+
+### 11. Acceptance criteria
+
+This is fixed when:
+
+* listing photos upload successfully
+* listing photos persist after save/reload
+* listing photos display correctly in admin and storefront where applicable
+* no silent upload failures occur
+* image URLs/keys are saved durably
+* editing a listing does not wipe existing images
+
+### 12. Deliverables
+
+Please send back:
+
+* exact root cause
+* exact files changed
+* exact image field(s) used in listings
+* storage location/path being used
+* proof with screenshots of:
+
+  * upload success
+  * saved listing with photos
+  * reloaded listing with same photos
+  * storefront display if applicable
+
+Simple rule:
+If a photo uploads, it must be stored, linked to the listing, returned by the API, and rendered after reload.

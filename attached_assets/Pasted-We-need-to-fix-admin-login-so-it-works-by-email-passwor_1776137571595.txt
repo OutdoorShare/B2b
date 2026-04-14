@@ -1,0 +1,152 @@
+We need to fix admin login so it works by email + password only, without requiring admins to know or enter a specific slug/company/storefront URL.
+
+Current problem:
+
+* Admins cannot reliably log in
+* They should not have to log in through a specific company slug
+* The system should identify the correct admin account(s) from the email and direct them appropriately
+
+Goal:
+Admin login should be simple:
+
+* email
+* password
+* submit
+* system routes them to the correct admin context automatically
+
+## Required behavior
+
+### 1. Central admin login
+
+Create one central admin login entry point, not slug-based.
+
+Admins should be able to log in from a generic admin login page like:
+
+* `/admin/login`
+  or equivalent platform-level route
+
+They should not need:
+
+* company slug
+* storefront name
+* special branded login URL
+
+### 2. Authenticate by email + password only
+
+When admin enters email and password:
+
+* authenticate credentials
+* look up which admin/business/storefront(s) this user belongs to
+* route them automatically
+
+### 3. Post-login routing logic
+
+After successful login:
+
+#### If admin belongs to exactly one admin account/storefront:
+
+* log them in
+* redirect straight to that admin dashboard
+
+Example:
+
+* `/admin`
+* `/dashboard`
+* or the correct company admin area
+
+#### If admin belongs to multiple storefronts/businesses:
+
+* log them in
+* show an account/company selector page
+* let them choose which admin context to enter
+
+Do not make them guess the slug before login.
+
+### 4. Remove slug dependency from auth
+
+Please audit the auth flow and remove any requirement that login depends on:
+
+* slug in route
+* storefront being preselected
+* company-specific login context before authentication
+
+Slug/company context can be applied after login once we know who the user is.
+
+### 5. Keep storefront/renter auth separate
+
+This change is for admin auth only.
+
+Customer/renter storefront login can still remain storefront-branded if needed.
+
+But admin/platform users should have a universal login flow.
+
+### 6. Session behavior
+
+Once logged in:
+
+* session should store user identity
+* available admin memberships/roles should be loaded
+* active admin context should be selected automatically or via selector
+* switching between admin contexts should be supported if user has more than one
+
+### 7. Error handling
+
+Please make login errors clear and simple:
+
+* invalid email or password
+* account not found
+* no admin access for this user
+* account disabled
+
+Do not return user to a broken slug page.
+
+### 8. Data model / auth audit
+
+Please inspect and confirm:
+
+* how admin users are linked to businesses/storefronts
+* whether one email can belong to multiple admin accounts
+* whether slug is currently being used incorrectly as part of authentication
+* what exact part is blocking successful admin login right now
+
+### 9. UX requirements
+
+Admin login screen should be:
+
+* simple email field
+* password field
+* forgot password link
+* sign in button
+
+After login:
+
+* automatic redirect if one admin context
+* selector screen if multiple contexts
+
+### 10. Acceptance criteria
+
+This is fixed when:
+
+* admin can log in from one universal login page
+* email + password is enough
+* no slug/company name is required before login
+* single-account admin goes directly to correct dashboard
+* multi-account admin gets a selector
+* renter/storefront auth is not broken
+
+### 11. Deliverables
+
+Please send back:
+
+* exact root cause of current admin login failure
+* exact files changed
+* updated login route(s)
+* updated post-login routing logic
+* proof tested with:
+
+  * single-storefront admin
+  * multi-storefront admin if supported
+  * invalid credentials case
+
+Simple rule:
+Admins should log in like normal software users, not like they need to know an internal slug first.

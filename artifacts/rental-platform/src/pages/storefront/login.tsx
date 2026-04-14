@@ -225,6 +225,17 @@ export default function LoginPage() {
                 ? (tab === "login" ? "Signing in…" : "Creating account…")
                 : (tab === "login" ? "Sign In" : "Create Account")}
             </Button>
+
+            {tab === "login" && (
+              <div className="text-center pt-1">
+                <a
+                  href={`${BASE}/forgot-password?type=customer&slug=${encodeURIComponent(slug ?? "")}${email ? `&email=${encodeURIComponent(email)}` : ""}`}
+                  className="text-xs text-muted-foreground hover:text-foreground underline underline-offset-2 transition-colors"
+                >
+                  Forgot your password?
+                </a>
+              </div>
+            )}
           </form>
         </div>
 

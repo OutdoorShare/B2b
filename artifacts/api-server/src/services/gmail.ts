@@ -3121,3 +3121,42 @@ export async function sendFeedbackNotification(opts: {
     requestBody: { raw: makeRawEmail(toEmail, emailSubject, html) },
   });
 }
+
+// ── Password reset ─────────────────────────────────────────────────────────────
+export async function sendPasswordResetEmail(opts: {
+  toEmail: string;
+  resetUrl: string;
+  accountLabel: string;
+  companyName?: string;
+}): Promise<void> {
+  const { toEmail, resetUrl, accountLabel, companyName } = opts;
+
+  const body = `
+    <p style="margin:0 0 8px;font-size:18px;font-weight:700;color:${BRAND_DARK};">Reset your password</p>
+    <p style="margin:0 0 20px;font-size:15px;color:#374151;line-height:1.6;">
+      We received a request to reset the password for your <strong>${esc(accountLabel)}</strong> account${companyName ? ` at <strong>${esc(companyName)}</strong>` : ""}.
+      Click the button below to choose a new password. This link expires in <strong>1 hour</strong>.
+    </p>
+
+    ${ctaButton("Reset My Password", resetUrl)}
+
+    <p style="margin:24px 0 0;font-size:13px;color:#9ca3af;text-align:center;">
+      If you did not request a password reset, you can safely ignore this email — your password will not change.
+    </p>
+  `;
+
+  const html = emailShell({
+    preheader: "Reset your password — this link expires in 1 hour.",
+    badgeLabel: "Password Reset",
+    badgeColor: BRAND_GREEN,
+    body,
+    logoUrlOverride: null,
+    companyNameOverride: companyName ?? "OutdoorShare",
+  });
+
+  const gmail = await getUncachableGmailClient();
+  await gmail.users.messages.send({
+    userId: "me",
+    requestBody: { raw: makeRawEmail(toEmail, "Reset your password — OutdoorShare", html) },
+  });
+}

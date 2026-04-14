@@ -33,6 +33,8 @@ import ReturnPage from "@/pages/storefront/return";
 import GetStartedPage from "@/pages/public/get-started";
 import SignupPage from "@/pages/public/signup";
 import VerifyEmailPage from "@/pages/public/verify-email";
+import ForgotPasswordPage from "@/pages/forgot-password";
+import ResetPasswordPage from "@/pages/reset-password";
 import AuditPage from "@/pages/public/audit";
 import ContactCardView from "@/pages/public/contact-card-view";
 import PrivacyPolicyPage from "@/pages/public/privacy";
@@ -255,6 +257,12 @@ function Router() {
       </Route>
       <Route path="/terms">
         <TermsOfServicePage />
+      </Route>
+      <Route path="/forgot-password">
+        <ForgotPasswordPage />
+      </Route>
+      <Route path="/reset-password">
+        <ResetPasswordPage />
       </Route>
 
       {/* Admin Onboarding — guarded so only the authenticated owner can access it */}

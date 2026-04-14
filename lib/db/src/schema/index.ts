@@ -35,3 +35,4 @@ export * from "./favorites";
 export * from "./platform-agreements";
 export * from "./operator-contracts";
 export * from "./agreement-packets";
+export * from "./password-reset-tokens";
