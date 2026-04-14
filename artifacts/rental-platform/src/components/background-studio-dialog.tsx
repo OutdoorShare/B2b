@@ -7,8 +7,6 @@ import { cn } from "@/lib/utils";
 import { BACKGROUND_CATEGORIES, BackgroundImage } from "@/lib/background-library";
 import { getAdminSession } from "@/lib/admin-nav";
 
-const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
-
 interface Props {
   open: boolean;
   onClose: () => void;
@@ -44,8 +42,18 @@ export function BackgroundStudioDialog({ open, onClose, imageUrl, onApply }: Pro
     setStage("removing");
     try {
       const { removeBackground: removeBg } = await import("@imgly/background-removal");
-      const result = await removeBg(imageUrl, {
-        publicPath: `${BASE}/`,
+
+      // The library requires an ABSOLUTE URL for both the image and publicPath.
+      // Relative paths (e.g. "/api/uploads/…") cause `new URL(x, base)` to throw
+      // "Failed to construct 'URL': Invalid base URL". Make them absolute here.
+      const absoluteImage = imageUrl.startsWith("http")
+        ? imageUrl
+        : `${window.location.origin}${imageUrl.startsWith("/") ? "" : "/"}${imageUrl}`;
+
+      const result = await removeBg(absoluteImage, {
+        // Point to jsDelivr CDN for WASM/model files (1.7.0 matches installed version).
+        // This avoids having to host the ~100 MB model files ourselves.
+        publicPath: "https://cdn.jsdelivr.net/npm/@imgly/background-removal@1.7.0/dist/",
         output: { format: "image/png", quality: 0.9 },
       });
       subjectBlobRef.current = result;
@@ -126,7 +134,8 @@ export function BackgroundStudioDialog({ open, onClose, imageUrl, onApply }: Pro
       const fd = new FormData();
       fd.append("file", blob, "bg-studio.jpg");
       const session = getAdminSession();
-      const up = await fetch(`${BASE}/api/upload/image`, {
+      const base = import.meta.env.BASE_URL.replace(/\/$/, "");
+      const up = await fetch(`${base}/api/upload/image`, {
         method: "POST",
         headers: session?.token ? { Authorization: `Bearer ${session.token}` } : {},
         body: fd,
