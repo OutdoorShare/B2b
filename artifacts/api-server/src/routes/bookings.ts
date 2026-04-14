@@ -357,6 +357,9 @@ router.post("/bookings", async (req, res) => {
       protectionPlanDeclined: reqProtectionPlanDeclined,
       quoteId: reqQuoteId,
       bookingPricing: _clientBookingPricing, // ignored — we compute server-side below
+      // Operator contract snapshot — stored for audit/compliance, not re-resolved server-side
+      operatorContractId: reqOperatorContractId,
+      operatorContractVersion: reqOperatorContractVersion,
       ...restBody
     } = body;
 
@@ -429,6 +432,8 @@ router.post("/bookings", async (req, res) => {
       agreementSignedAt,
       agreementSignature: agreementSignatureDataUrl ?? null,
       ruleInitials: ruleInitialsJson ?? null,
+      operatorContractId: reqOperatorContractId ? Number(reqOperatorContractId) : null,
+      operatorContractVersion: reqOperatorContractVersion ? Number(reqOperatorContractVersion) : null,
       protectionPlanFee: protectionPlanFee > 0 ? String(protectionPlanFee) : null,
       protectionPlanDeclined: !!reqProtectionPlanDeclined,
       bookingPricing: bookingPricingJson,

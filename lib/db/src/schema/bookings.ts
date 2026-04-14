@@ -53,6 +53,9 @@ export const bookingsTable = pgTable("bookings", {
   protectionPlanDeclined: boolean("protection_plan_declined").notNull().default(false),
   // Per-rule initials: JSON array of {ruleId, title, initials, initialedAt}
   ruleInitials: text("rule_initials"),
+  // Operator contract snapshot — which contract version the renter signed at checkout
+  operatorContractId: integer("operator_contract_id"),
+  operatorContractVersion: integer("operator_contract_version"),
   // Return documentation
   returnToken: text("return_token"),
   returnPhotos: text("return_photos"),

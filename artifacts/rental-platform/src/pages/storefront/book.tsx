@@ -873,6 +873,14 @@ export default function StorefrontBook() {
     type: "text" | "date" | "number" | "textarea" | "checkbox";
     required: boolean; placeholder: string; description: string;
   }>>([]);
+  // Resolved operator contract — the exact agreement assigned to this listing
+  const [resolvedOperatorContract, setResolvedOperatorContract] = useState<{
+    id: number; title: string; checkboxLabel: string; version: number;
+    contractType: "template" | "uploaded_pdf";
+    content: string | null; hasPdf: boolean;
+    uploadedFileName: string | null;
+    includeOutdoorShareAgreements: boolean;
+  } | null>(null);
   const sigCanvasRef = useRef<HTMLCanvasElement>(null);
   const isDrawingRef = useRef(false);
   const handleStartVerificationRef = useRef<(() => Promise<void>) | null>(null);
@@ -944,23 +952,55 @@ export default function StorefrontBook() {
   const [savedPhotos, setSavedPhotos] = useState<string[]>([]);
   const [uploadingPhotos, setUploadingPhotos] = useState(false);
 
-  // Fetch agreement + fields; fall back to DEFAULT_AGREEMENT if none is configured
+  // Fetch the correct agreement for this specific listing.
+  //
+  // Resolution chain (matches the server's agreements-for-signing logic):
+  //   1. Active operator contract whose listingIds includes this listing  →  listing-specific
+  //   2. Active operator contract with empty listingIds                   →  global default
+  //   3. Platform-level agreement (superadmin text, category-specific)   →  fallback
+  //
+  // deps: [listing.id, slug] — re-runs whenever the listing or tenant changes,
+  // NOT just categorySlug, so listing-specific contracts are always respected.
   useEffect(() => {
-    const catSlug = (listing as any)?.categorySlug;
-    const url = catSlug
-      ? `${BASE}/api/platform/agreement?categorySlug=${encodeURIComponent(catSlug)}`
-      : `${BASE}/api/platform/agreement`;
+    if (!listing?.id || !slug) return;
+
     Promise.all([
-      fetch(url).then(r => r.json()),
-      fetch(`${BASE}/api/platform/agreement/fields`).then(r => r.json()),
-    ]).then(([d, f]) => {
-      setAgreementText(d.value || DEFAULT_AGREEMENT);
-      if (f.fields) setContractFields(f.fields);
+      fetch(`${BASE}/api/contracts/resolve?tenantSlug=${encodeURIComponent(slug)}&listingId=${listing.id}`)
+        .then(r => r.json()).catch(() => ({ operatorContract: null })),
+      fetch(`${BASE}/api/platform/agreement/fields`)
+        .then(r => r.json()).catch(() => ({})),
+    ]).then(async ([contractData, fieldsData]) => {
+      const oc = contractData.operatorContract ?? null;
+      setResolvedOperatorContract(oc);
+
+      if (oc) {
+        // Operator contract found — use its content as the agreement text
+        // (so token substitution and rendering logic work unchanged)
+        if (oc.contractType !== "uploaded_pdf") {
+          setAgreementText(oc.content ?? DEFAULT_AGREEMENT);
+        } else {
+          // PDF contract — no inline text; signature confirms they reviewed the PDF
+          setAgreementText("");
+        }
+      } else {
+        // No operator contract — fall back to platform-level text agreement
+        const catSlug = (listing as any)?.categorySlug;
+        const url = catSlug
+          ? `${BASE}/api/platform/agreement?categorySlug=${encodeURIComponent(catSlug)}`
+          : `${BASE}/api/platform/agreement`;
+        try {
+          const d = await fetch(url).then(r => r.json());
+          setAgreementText(d.value || DEFAULT_AGREEMENT);
+        } catch {
+          setAgreementText(DEFAULT_AGREEMENT);
+        }
+      }
+
+      if (fieldsData.fields) setContractFields(fieldsData.fields);
     }).catch(() => {
-      // Network failure — still show the default so the flow isn't blocked
       setAgreementText(DEFAULT_AGREEMENT);
     });
-  }, [(listing as any)?.categorySlug]);
+  }, [listing?.id, slug]);
 
   // Fetch platform protection plan for this listing's category
   useEffect(() => {
@@ -2001,6 +2041,11 @@ export default function StorefrontBook() {
             splitDepositAmount: planDepositAmount.toFixed(2),
             splitRemainingAmount: planRemainingAmount.toFixed(2),
             splitRemainingDueDate: planDueDate,
+          } : {}),
+          // Operator contract snapshot — records exactly which contract version was signed
+          ...(resolvedOperatorContract ? {
+            operatorContractId: resolvedOperatorContract.id,
+            operatorContractVersion: resolvedOperatorContract.version,
           } : {}),
           ruleInitials: listingRules.length > 0
             ? JSON.stringify(listingRules.map(r => ({
@@ -3835,53 +3880,77 @@ export default function StorefrontBook() {
                       );
                     })()}
 
-                    {/* Agreement text */}
-                    <div className="bg-background rounded-2xl border shadow-sm p-6 space-y-4 max-h-96 overflow-y-auto text-sm text-muted-foreground leading-relaxed">
-                      <h2 className="text-base font-bold text-foreground">Rental Agreement</h2>
-                      <p><strong className="text-foreground">Rental Period:</strong> {startFormattedWithTime} — {endFormattedWithTime} ({days} day{days > 1 ? "s" : ""})</p>
-                      <p><strong className="text-foreground">Item:</strong> {listing.title}</p>
-                      <p><strong className="text-foreground">Renter:</strong> {name} ({email})</p>
-                      <Separator />
-                      {agreementText
-                        ? agreementText.split("\n\n").filter(Boolean).map((para, i) => renderAgreementParagraph(para, i))
-                        : (
-                          <div className="flex items-center gap-2 text-muted-foreground italic py-4">
-                            <Loader2 className="w-4 h-4 animate-spin shrink-0" />
-                            <span>Loading agreement…</span>
-                          </div>
-                        )
-                      }
+                    {/* Agreement — PDF uploaded contract type */}
+                    {resolvedOperatorContract?.contractType === "uploaded_pdf" && resolvedOperatorContract.hasPdf && (
+                      <div className="bg-background rounded-2xl border shadow-sm p-6 space-y-4">
+                        <div className="flex items-center gap-2">
+                          <FileText className="w-5 h-5 text-primary" />
+                          <h2 className="text-base font-bold text-foreground">{resolvedOperatorContract.title || "Rental Agreement"}</h2>
+                        </div>
+                        <p className="text-sm text-muted-foreground">
+                          Please review the rental agreement PDF before signing. By adding your signature below you confirm you have read and agree to all terms.
+                        </p>
+                        <a
+                          href={`${BASE}/api/contracts/public-pdf/${resolvedOperatorContract.id}?tenantSlug=${encodeURIComponent(slug ?? "")}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-2 text-sm font-semibold text-primary underline underline-offset-2 hover:opacity-80"
+                        >
+                          <FileText className="w-4 h-4" />
+                          View {resolvedOperatorContract.uploadedFileName ?? "Rental Agreement PDF"}
+                        </a>
+                      </div>
+                    )}
 
-                      {/* ── Listing Rules — embedded in agreement document ── */}
-                      {listingRules.length > 0 && (
-                        <>
-                          <Separator />
-                          <div>
-                            <p className="text-xs font-bold uppercase tracking-widest text-foreground mb-0.5">Rental Rules & Policies</p>
-                            <p className="text-xs text-muted-foreground mb-3">
-                              The following rules apply specifically to this listing. You must acknowledge each rule individually before signing.
-                            </p>
-                            <div className="space-y-3">
-                              {listingRules.map((rule, i) => (
-                                <div key={rule.id} className="pl-3 border-l-2 border-primary/25">
-                                  <p className="text-xs font-semibold text-foreground">{i + 1}. {rule.title}</p>
-                                  {rule.description && (
-                                    <p className="text-xs mt-0.5 leading-relaxed">{rule.description}</p>
-                                  )}
-                                  {rule.fee > 0 && (
-                                    <p className="text-xs mt-1 font-medium text-amber-700">
-                                      Violation fee: ${(rule.fee).toFixed(2)}
-                                    </p>
-                                  )}
-                                </div>
-                              ))}
+                    {/* Agreement text — template or platform fallback */}
+                    {resolvedOperatorContract?.contractType !== "uploaded_pdf" && (
+                      <div className="bg-background rounded-2xl border shadow-sm p-6 space-y-4 max-h-96 overflow-y-auto text-sm text-muted-foreground leading-relaxed">
+                        <h2 className="text-base font-bold text-foreground">{resolvedOperatorContract?.title || "Rental Agreement"}</h2>
+                        <p><strong className="text-foreground">Rental Period:</strong> {startFormattedWithTime} — {endFormattedWithTime} ({days} day{days > 1 ? "s" : ""})</p>
+                        <p><strong className="text-foreground">Item:</strong> {listing.title}</p>
+                        <p><strong className="text-foreground">Renter:</strong> {name} ({email})</p>
+                        <Separator />
+                        {agreementText
+                          ? agreementText.split("\n\n").filter(Boolean).map((para, i) => renderAgreementParagraph(para, i))
+                          : (
+                            <div className="flex items-center gap-2 text-muted-foreground italic py-4">
+                              <Loader2 className="w-4 h-4 animate-spin shrink-0" />
+                              <span>Loading agreement…</span>
                             </div>
-                          </div>
-                        </>
-                      )}
+                          )
+                        }
 
-                      <p className="text-xs italic">By signing below, you confirm you have read, understood, and agree to all terms in this rental agreement{listingRules.length > 0 ? ", including all rental rules and policies listed above" : ""}.</p>
-                    </div>
+                        {/* ── Listing Rules — embedded in agreement document ── */}
+                        {listingRules.length > 0 && (
+                          <>
+                            <Separator />
+                            <div>
+                              <p className="text-xs font-bold uppercase tracking-widest text-foreground mb-0.5">Rental Rules & Policies</p>
+                              <p className="text-xs text-muted-foreground mb-3">
+                                The following rules apply specifically to this listing. You must acknowledge each rule individually before signing.
+                              </p>
+                              <div className="space-y-3">
+                                {listingRules.map((rule, i) => (
+                                  <div key={rule.id} className="pl-3 border-l-2 border-primary/25">
+                                    <p className="text-xs font-semibold text-foreground">{i + 1}. {rule.title}</p>
+                                    {rule.description && (
+                                      <p className="text-xs mt-0.5 leading-relaxed">{rule.description}</p>
+                                    )}
+                                    {rule.fee > 0 && (
+                                      <p className="text-xs mt-1 font-medium text-amber-700">
+                                        Violation fee: ${(rule.fee).toFixed(2)}
+                                      </p>
+                                    )}
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          </>
+                        )}
+
+                        <p className="text-xs italic">By signing below, you confirm you have read, understood, and agree to all terms in this rental agreement{listingRules.length > 0 ? ", including all rental rules and policies listed above" : ""}.</p>
+                      </div>
+                    )}
 
                     {/* Listing rules — checkbox acknowledgment */}
                     {listingRules.length > 0 && (
@@ -4006,7 +4075,7 @@ export default function StorefrontBook() {
                       </p>
                       <label className="flex items-start gap-3 cursor-pointer">
                         <input type="checkbox" checked={agreeChecked} onChange={e => setAgreeChecked(e.target.checked)} className="mt-0.5 w-4 h-4 accent-primary" />
-                        <span className="text-sm">I have read and agree to all terms in the rental agreement above, including the cancellation policy and damage liability.</span>
+                        <span className="text-sm">{resolvedOperatorContract?.checkboxLabel || "I have read and agree to all terms in the rental agreement above, including the cancellation policy and damage liability."}</span>
                       </label>
                     </div>
 

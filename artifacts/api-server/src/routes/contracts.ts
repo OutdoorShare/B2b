@@ -52,6 +52,115 @@ async function streamPdf(res: any, req: any, key: string, filename: string) {
   fs.createReadStream(localPath).pipe(res);
 }
 
+// ── GET /contracts/resolve — public: resolve the correct contract for a listing ──
+// Used by checkout to get the exact operator contract a renter must sign.
+// Resolution order: listing-specific contract → global default → null.
+// No auth required — contracts are not personally sensitive (they are rental terms).
+router.get("/contracts/resolve", async (req, res) => {
+  try {
+    const { tenantSlug, listingId } = req.query;
+    if (!tenantSlug || !listingId) {
+      res.status(400).json({ error: "tenantSlug and listingId are required" }); return;
+    }
+    const listingIdNum = Number(listingId);
+    if (isNaN(listingIdNum) || listingIdNum <= 0) {
+      res.status(400).json({ error: "Invalid listingId" }); return;
+    }
+
+    const [tenant] = await db
+      .select({ id: tenantsTable.id })
+      .from(tenantsTable)
+      .where(eq(tenantsTable.slug, tenantSlug as string))
+      .limit(1);
+
+    if (!tenant) {
+      res.json({ operatorContract: null }); return;
+    }
+
+    const activeContracts = await db
+      .select({
+        id: operatorContractsTable.id,
+        title: operatorContractsTable.title,
+        checkboxLabel: operatorContractsTable.checkboxLabel,
+        version: operatorContractsTable.version,
+        contractType: operatorContractsTable.contractType,
+        content: operatorContractsTable.content,
+        uploadedPdfStorageKey: operatorContractsTable.uploadedPdfStorageKey,
+        uploadedFileName: operatorContractsTable.uploadedFileName,
+        listingIds: operatorContractsTable.listingIds,
+        includeOutdoorShareAgreements: operatorContractsTable.includeOutdoorShareAgreements,
+      })
+      .from(operatorContractsTable)
+      .where(and(
+        eq(operatorContractsTable.tenantId, tenant.id),
+        eq(operatorContractsTable.isActive, true),
+      ))
+      .orderBy(desc(operatorContractsTable.updatedAt));
+
+    // Resolution priority: listing-specific → global default (empty listingIds)
+    const contract =
+      activeContracts.find(c => (c.listingIds as number[] ?? []).includes(listingIdNum)) ??
+      activeContracts.find(c => !(c.listingIds as number[] ?? []).length) ??
+      null;
+
+    res.json({
+      operatorContract: contract
+        ? {
+            id: contract.id,
+            title: contract.title,
+            checkboxLabel: contract.checkboxLabel,
+            version: contract.version,
+            contractType: contract.contractType ?? "template",
+            content: contract.contractType !== "uploaded_pdf" ? (contract.content ?? "") : null,
+            hasPdf: contract.contractType === "uploaded_pdf" && !!contract.uploadedPdfStorageKey,
+            uploadedFileName: contract.uploadedFileName ?? null,
+            includeOutdoorShareAgreements: contract.includeOutdoorShareAgreements,
+          }
+        : null,
+    });
+  } catch (err) {
+    console.error("[contracts/resolve]", err);
+    res.status(500).json({ error: "Failed to resolve contract" });
+  }
+});
+
+// ── GET /contracts/public-pdf/:id — stream an active contract PDF (public, for checkout preview) ──
+// Only serves PDFs for active contracts. No personal data is exposed.
+router.get("/contracts/public-pdf/:id", async (req, res) => {
+  try {
+    const { tenantSlug } = req.query;
+    const contractId = Number(req.params.id);
+    if (isNaN(contractId) || !tenantSlug) {
+      res.status(400).json({ error: "contractId and tenantSlug required" }); return;
+    }
+
+    const [tenant] = await db
+      .select({ id: tenantsTable.id })
+      .from(tenantsTable)
+      .where(eq(tenantsTable.slug, tenantSlug as string))
+      .limit(1);
+    if (!tenant) { res.status(404).json({ error: "Tenant not found" }); return; }
+
+    const [contract] = await db
+      .select()
+      .from(operatorContractsTable)
+      .where(and(
+        eq(operatorContractsTable.id, contractId),
+        eq(operatorContractsTable.tenantId, tenant.id),
+        eq(operatorContractsTable.isActive, true),
+      ))
+      .limit(1);
+
+    if (!contract || contract.contractType !== "uploaded_pdf" || !contract.uploadedPdfStorageKey) {
+      res.status(404).json({ error: "No PDF found" }); return;
+    }
+    await streamPdf(res, req, contract.uploadedPdfStorageKey, contract.uploadedFileName ?? "rental-agreement.pdf");
+  } catch (err) {
+    console.error("[contracts/public-pdf]", err);
+    res.status(500).json({ error: "Failed to serve PDF" });
+  }
+});
+
 // ── GET /contracts — all templates for this tenant ───────────────────────────
 router.get("/contracts", async (req, res) => {
   try {
