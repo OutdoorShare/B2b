@@ -494,16 +494,20 @@ export default function BookingComplete() {
 
               {/* Additional Riders */}
               <div className="space-y-2">
-                <Label className="flex items-center gap-1.5">
-                  <Users className="w-3.5 h-3.5 text-slate-400" />
-                  Additional Riders <span className="text-slate-400 font-normal">(optional)</span>
-                </Label>
+                <div>
+                  <Label className="flex items-center gap-1.5">
+                    <Users className="w-3.5 h-3.5 text-slate-400" />
+                    Additional Riders
+                    <span className="text-xs font-normal text-slate-400 ml-1">— optional</span>
+                  </Label>
+                  <p className="text-xs text-slate-400 mt-0.5">Anyone age 21 or older who will drive or operate the equipment during this rental. Add one at a time.</p>
+                </div>
                 <div className="flex gap-2">
                   <Input
                     value={riderInput}
                     onChange={e => setRiderInput(e.target.value)}
                     onKeyDown={e => e.key === "Enter" && addRider()}
-                    placeholder="Full name"
+                    placeholder="Full name (21 or older)"
                     className="flex-1"
                   />
                   <Button type="button" variant="outline" size="sm" onClick={addRider} className="shrink-0">
@@ -515,7 +519,7 @@ export default function BookingComplete() {
                     {additionalRiders.map((name, i) => (
                       <span key={i} className="inline-flex items-center gap-1 bg-slate-100 text-slate-700 text-xs rounded-full px-2.5 py-1">
                         {name}
-                        <button onClick={() => removeRider(i)} className="text-slate-400 hover:text-slate-700">
+                        <button onClick={() => removeRider(i)} className="text-slate-400 hover:text-slate-700 ml-0.5">
                           <X className="w-3 h-3" />
                         </button>
                       </span>
@@ -526,16 +530,20 @@ export default function BookingComplete() {
 
               {/* Minors */}
               <div className="space-y-2">
-                <Label className="flex items-center gap-1.5">
-                  <Baby className="w-3.5 h-3.5 text-slate-400" />
-                  Minors participating <span className="text-slate-400 font-normal">(optional)</span>
-                </Label>
+                <div>
+                  <Label className="flex items-center gap-1.5">
+                    <Baby className="w-3.5 h-3.5 text-slate-400" />
+                    Minors
+                    <span className="text-xs font-normal text-slate-400 ml-1">— optional</span>
+                  </Label>
+                  <p className="text-xs text-slate-400 mt-0.5">Anyone under 21 who will participate in the rental, regardless of experience or licensing. Add one at a time.</p>
+                </div>
                 <div className="flex gap-2">
                   <Input
                     value={minorInput}
                     onChange={e => setMinorInput(e.target.value)}
                     onKeyDown={e => e.key === "Enter" && addMinor()}
-                    placeholder="Name and age (e.g. Emma, 10)"
+                    placeholder="Name and age, e.g. Emma, 17"
                     className="flex-1"
                   />
                   <Button type="button" variant="outline" size="sm" onClick={addMinor} className="shrink-0">
@@ -547,7 +555,7 @@ export default function BookingComplete() {
                     {minors.map((name, i) => (
                       <span key={i} className="inline-flex items-center gap-1 bg-slate-100 text-slate-700 text-xs rounded-full px-2.5 py-1">
                         {name}
-                        <button onClick={() => removeMinor(i)} className="text-slate-400 hover:text-slate-700">
+                        <button onClick={() => removeMinor(i)} className="text-slate-400 hover:text-slate-700 ml-0.5">
                           <X className="w-3 h-3" />
                         </button>
                       </span>
