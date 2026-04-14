@@ -25,7 +25,10 @@ import { getAdminSession } from "@/lib/admin-nav";
 import { ContactCardDialog } from "@/components/contact-card-dialog";
 import type { ContactCard } from "@/components/contact-card-dialog";
 import { ImageCropDialog } from "@/components/image-crop-dialog";
+import { ImageCropErrorBoundary } from "@/components/image-crop-error-boundary";
 import { BackgroundStudioDialog } from "@/components/background-studio-dialog";
+
+const MAX_UPLOAD_BYTES = 5 * 1024 * 1024; // 5 MB — must match API server limit
 
 interface Category { id: number; name: string; slug: string; icon?: string | null; }
 type TimeSlotDef = { label: string; startTime: string; endTime: string; rate: "full_day" | "half_day" };
@@ -481,12 +484,30 @@ export default function AdminListingsForm() {
     }
   }, [BASE]);
 
+  /** Validate files against the 5 MB limit before queuing for crop. */
+  const queueForCrop = useCallback((rawFiles: File[]) => {
+    const imageFiles = rawFiles.filter(f => f.type.startsWith("image/"));
+    const oversized  = imageFiles.filter(f => f.size > MAX_UPLOAD_BYTES);
+    const valid      = imageFiles.filter(f => f.size <= MAX_UPLOAD_BYTES);
+    if (oversized.length) {
+      toast({
+        title: `${oversized.length} file${oversized.length > 1 ? "s" : ""} too large`,
+        description: `Maximum file size is 5 MB. Oversized file${oversized.length > 1 ? "s" : ""}: ${oversized.map(f => f.name).join(", ")}`,
+        variant: "destructive",
+      });
+      console.warn("[upload] frontend rejected oversized files", {
+        rejected: oversized.map(f => ({ name: f.name, sizeBytes: f.size })),
+        maxBytes: MAX_UPLOAD_BYTES,
+      });
+    }
+    if (valid.length) setCropQueue(valid);
+  }, [toast]);
+
   const onDrop = useCallback((e: React.DragEvent<HTMLDivElement>) => {
     e.preventDefault();
     setDragOver(false);
-    const files = Array.from(e.dataTransfer.files).filter(f => f.type.startsWith("image/"));
-    if (files.length) setCropQueue(files);
-  }, []);
+    queueForCrop(Array.from(e.dataTransfer.files));
+  }, [queueForCrop]);
 
   // Publish readiness checks — required when status is "active"
   const publishChecks = [
@@ -592,23 +613,26 @@ export default function AdminListingsForm() {
 
   return (
     <div className="max-w-3xl mx-auto pb-12 space-y-6">
-      {/* Image crop dialog */}
+      {/* Image crop dialog — wrapped in error boundary so a render crash here
+          never takes down the whole listing form */}
       {cropQueue.length > 0 && (
-        <ImageCropDialog
-          files={cropQueue}
-          uploadFn={uploadBlob}
-          onDone={urls => {
-            setCropQueue([]);
-            if (urls.length) {
-              setFormData(prev => ({ ...prev, imageUrls: [...prev.imageUrls, ...urls] }));
-              toast({ title: `${urls.length} photo${urls.length > 1 ? "s" : ""} added — remember to save.` });
-            }
-          }}
-          onCancel={() => setCropQueue([])}
-          onUploadError={(_filename, error) => {
-            toast({ title: "Photo upload failed", description: error, variant: "destructive" });
-          }}
-        />
+        <ImageCropErrorBoundary onReset={() => setCropQueue([])}>
+          <ImageCropDialog
+            files={cropQueue}
+            uploadFn={uploadBlob}
+            onDone={urls => {
+              setCropQueue([]);
+              if (urls.length) {
+                setFormData(prev => ({ ...prev, imageUrls: [...prev.imageUrls, ...urls] }));
+                toast({ title: `${urls.length} photo${urls.length > 1 ? "s" : ""} added — remember to save.` });
+              }
+            }}
+            onCancel={() => setCropQueue([])}
+            onUploadError={(_filename, error) => {
+              toast({ title: "Photo upload failed", description: error, variant: "destructive" });
+            }}
+          />
+        </ImageCropErrorBoundary>
       )}
 
       {/* Background Studio dialog */}
@@ -858,8 +882,7 @@ export default function AdminListingsForm() {
                   multiple
                   className="hidden"
                   onChange={e => {
-                    const files = Array.from(e.target.files ?? []).filter(f => f.type.startsWith("image/"));
-                    if (files.length) setCropQueue(files);
+                    queueForCrop(Array.from(e.target.files ?? []));
                     e.target.value = "";
                   }}
                 />

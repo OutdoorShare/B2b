@@ -259,7 +259,7 @@ export function ImageCropDialog({ files, onDone, uploadFn, onCancel, onUploadErr
               </DialogDescription>
             </div>
             {onCancel && (
-              <button type="button" onClick={onCancel} className="rounded-full p-1 hover:bg-muted transition-colors">
+              <button type="button" aria-label="Close" onClick={onCancel} className="rounded-full p-1 hover:bg-muted transition-colors">
                 <X className="w-4 h-4 text-muted-foreground" />
               </button>
             )}
