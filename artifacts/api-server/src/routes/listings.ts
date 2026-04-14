@@ -361,14 +361,23 @@ router.get("/listings/addresses", async (req, res) => {
     const tenantId = req.tenantId;
     if (!tenantId) return res.status(401).json({ error: "Unauthorized" });
 
-    const rows = await db
-      .selectDistinct({ location: listingsTable.location })
-      .from(listingsTable)
-      .where(and(eq(listingsTable.tenantId, tenantId), isNotNull(listingsTable.location)))
-      .limit(100);
+    const [addrRows, detailRows] = await Promise.all([
+      db.selectDistinct({ location: listingsTable.location })
+        .from(listingsTable)
+        .where(and(eq(listingsTable.tenantId, tenantId), isNotNull(listingsTable.location)))
+        .limit(100),
+      db.selectDistinct({ locationDetail: listingsTable.locationDetail })
+        .from(listingsTable)
+        .where(and(eq(listingsTable.tenantId, tenantId), isNotNull(listingsTable.locationDetail)))
+        .limit(100),
+    ]);
 
-    const usedAddresses = rows
+    const usedAddresses = addrRows
       .map(r => r.location?.trim())
+      .filter((v): v is string => !!v);
+
+    const usedDetails = detailRows
+      .map(r => r.locationDetail?.trim())
       .filter((v): v is string => !!v);
 
     const [biz] = await db
@@ -381,7 +390,7 @@ router.get("/listings/addresses", async (req, res) => {
       ? [biz.address, biz.city, biz.state, biz.zipCode].filter(Boolean).join(", ") || null
       : null;
 
-    return res.json({ usedAddresses, businessAddress });
+    return res.json({ usedAddresses, usedDetails, businessAddress });
   } catch (err) {
     req.log.error(err);
     return res.status(500).json({ error: "Failed to fetch addresses" });

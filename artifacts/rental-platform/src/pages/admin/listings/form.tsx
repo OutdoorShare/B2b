@@ -69,16 +69,20 @@ function useCategories() {
   return categories;
 }
 
-interface PickupAddressData { usedAddresses: string[]; businessAddress: string | null; }
+interface PickupAddressData { usedAddresses: string[]; usedDetails: string[]; businessAddress: string | null; }
 function usePickupAddresses() {
-  const [data, setData] = useState<PickupAddressData>({ usedAddresses: [], businessAddress: null });
+  const [data, setData] = useState<PickupAddressData>({ usedAddresses: [], usedDetails: [], businessAddress: null });
   useEffect(() => {
     const s = getAdminSession();
     const headers: Record<string, string> = {};
     if (s?.token) headers["x-admin-token"] = s.token;
     fetch(`${BASE}/api/listings/addresses`, { headers })
-      .then(r => r.ok ? r.json() : { usedAddresses: [], businessAddress: null })
-      .then(setData)
+      .then(r => r.ok ? r.json() : {})
+      .then((d: any) => setData({
+        usedAddresses: d.usedAddresses ?? [],
+        usedDetails: d.usedDetails ?? [],
+        businessAddress: d.businessAddress ?? null,
+      }))
       .catch(() => {});
   }, []);
   return data;
@@ -236,6 +240,7 @@ export default function AdminListingsForm() {
     quantity: 1,
     imageUrls: [] as string[],
     location: '',
+    locationDetail: '',
     weight: '',
     dimensions: '',
     brand: '',
@@ -367,6 +372,7 @@ export default function AdminListingsForm() {
         quantity: listing.quantity,
         imageUrls: listing.imageUrls || [],
         location: listing.location || '',
+        locationDetail: (listing as any).locationDetail || '',
         weight: listing.weight || '',
         dimensions: listing.dimensions || '',
         brand: listing.brand || '',
@@ -1025,56 +1031,93 @@ export default function AdminListingsForm() {
                   </div>
                 </div>
               </CardHeader>
-              <CardContent className="space-y-3">
-                {pickupAddresses.businessAddress && (
-                  <div className="flex items-start gap-2.5">
-                    <input
-                      type="checkbox"
-                      id="useBusinessAddress"
-                      className="mt-0.5 h-4 w-4 accent-primary cursor-pointer"
-                      checked={useBusinessAddress}
-                      onChange={e => {
-                        setUseBusinessAddress(e.target.checked);
-                        if (e.target.checked) {
-                          setFormData(prev => ({ ...prev, location: pickupAddresses.businessAddress! }));
-                        } else {
-                          setFormData(prev => ({ ...prev, location: '' }));
-                        }
-                      }}
-                    />
-                    <label htmlFor="useBusinessAddress" className="text-sm cursor-pointer leading-snug">
-                      Use business address
-                      <span className="block text-xs text-muted-foreground mt-0.5">{pickupAddresses.businessAddress}</span>
-                    </label>
-                  </div>
-                )}
-                <div className={useBusinessAddress ? "opacity-50 pointer-events-none" : ""}>
-                  <Input
-                    placeholder="e.g. 123 Main St, Denver, CO 80202"
-                    value={formData.location}
-                    onChange={e => setFormData(prev => ({ ...prev, location: e.target.value }))}
-                  />
-                </div>
-                {pickupAddresses.usedAddresses.filter(a => a !== formData.location).length > 0 && !useBusinessAddress && (
-                  <div className="space-y-1.5">
-                    <p className="text-xs text-muted-foreground">Previously used addresses — click to fill:</p>
-                    <div className="flex flex-wrap gap-1.5">
-                      {pickupAddresses.usedAddresses
-                        .filter(a => a !== formData.location)
-                        .map(addr => (
-                          <button
-                            key={addr}
-                            type="button"
-                            onClick={() => { setFormData(prev => ({ ...prev, location: addr })); setUseBusinessAddress(false); }}
-                            className="text-xs border rounded-full px-2.5 py-1 hover:bg-muted transition-colors truncate max-w-[220px]"
-                            title={addr}
-                          >
-                            {addr}
-                          </button>
-                        ))}
+              <CardContent className="space-y-4">
+                {/* ── Street address ── */}
+                <div className="space-y-2">
+                  <Label className="text-sm font-medium">Street Address <span className="text-destructive">*</span></Label>
+                  {pickupAddresses.businessAddress && (
+                    <div className="flex items-start gap-2.5">
+                      <input
+                        type="checkbox"
+                        id="useBusinessAddress"
+                        className="mt-0.5 h-4 w-4 accent-primary cursor-pointer"
+                        checked={useBusinessAddress}
+                        onChange={e => {
+                          setUseBusinessAddress(e.target.checked);
+                          if (e.target.checked) {
+                            setFormData(prev => ({ ...prev, location: pickupAddresses.businessAddress! }));
+                          } else {
+                            setFormData(prev => ({ ...prev, location: '' }));
+                          }
+                        }}
+                      />
+                      <label htmlFor="useBusinessAddress" className="text-sm cursor-pointer leading-snug">
+                        Use business address
+                        <span className="block text-xs text-muted-foreground mt-0.5">{pickupAddresses.businessAddress}</span>
+                      </label>
                     </div>
+                  )}
+                  <div className={useBusinessAddress ? "opacity-50 pointer-events-none" : ""}>
+                    <Input
+                      placeholder="e.g. 123 Main St, Denver, CO 80202"
+                      value={formData.location}
+                      onChange={e => setFormData(prev => ({ ...prev, location: e.target.value }))}
+                    />
                   </div>
-                )}
+                  {pickupAddresses.usedAddresses.filter(a => a !== formData.location).length > 0 && !useBusinessAddress && (
+                    <div className="space-y-1.5">
+                      <p className="text-xs text-muted-foreground">Previously used addresses — click to fill:</p>
+                      <div className="flex flex-wrap gap-1.5">
+                        {pickupAddresses.usedAddresses
+                          .filter(a => a !== formData.location)
+                          .map(addr => (
+                            <button
+                              key={addr}
+                              type="button"
+                              onClick={() => { setFormData(prev => ({ ...prev, location: addr })); setUseBusinessAddress(false); }}
+                              className="text-xs border rounded-full px-2.5 py-1 hover:bg-muted transition-colors truncate max-w-[220px]"
+                              title={addr}
+                            >
+                              {addr}
+                            </button>
+                          ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* ── Location detail — bay, dock, lot, row, etc. ── */}
+                <div className="space-y-2">
+                  <div>
+                    <Label className="text-sm font-medium">Pickup Detail <span className="text-xs font-normal text-muted-foreground">(optional)</span></Label>
+                    <p className="text-xs text-muted-foreground mt-0.5">Specific spot at the address — e.g. "Main Lot — Bay 4" or "Marina Dock — Slip 3"</p>
+                  </div>
+                  <Input
+                    placeholder="e.g. Main Lot — Bay 4, Dock 3, Gear Shed — Row 1"
+                    value={formData.locationDetail}
+                    onChange={e => setFormData(prev => ({ ...prev, locationDetail: e.target.value }))}
+                  />
+                  {pickupAddresses.usedDetails.filter(d => d !== formData.locationDetail).length > 0 && (
+                    <div className="space-y-1.5">
+                      <p className="text-xs text-muted-foreground">Previously used details — click to fill:</p>
+                      <div className="flex flex-wrap gap-1.5">
+                        {pickupAddresses.usedDetails
+                          .filter(d => d !== formData.locationDetail)
+                          .map(detail => (
+                            <button
+                              key={detail}
+                              type="button"
+                              onClick={() => setFormData(prev => ({ ...prev, locationDetail: detail }))}
+                              className="text-xs border rounded-full px-2.5 py-1 hover:bg-muted transition-colors truncate max-w-[220px]"
+                              title={detail}
+                            >
+                              {detail}
+                            </button>
+                          ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
               </CardContent>
             </Card>
 

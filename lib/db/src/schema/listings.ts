@@ -32,6 +32,7 @@ export const listingsTable = pgTable("listings", {
   quantity: integer("quantity").notNull().default(1),
   imageUrls: json("image_urls").$type<string[]>().notNull().default([]),
   location: text("location"),
+  locationDetail: text("location_detail"),
   weight: text("weight"),
   dimensions: text("dimensions"),
   brand: text("brand"),
