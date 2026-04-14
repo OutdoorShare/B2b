@@ -1778,7 +1778,13 @@ export default function StorefrontBook() {
     if (intentFiredRef.current) return;
     if (!isKiosk && (!email || !name)) return;
     if (!dateRange?.from || !dateRange?.to) return;
-    if (discountedTotal <= 0) return;
+    // Guard: wait until the listing is loaded so pricePerDay is available.
+    // Without this, the effect fires while listing === null, subtotal = 0,
+    // discountedTotal hits the $0.50 floor, and the PI is created for $0.50.
+    if (!listing) return;
+    // The $0.50 minimum floor can mask a zero subtotal (unloaded price).
+    // Require the total to be above the floor before firing.
+    if (discountedTotal <= 0.50) return;
     intentFiredRef.current = true;
     const cents = Math.round(chargeNowAmount * 100);
     setShowStripeForm(true);
@@ -1788,7 +1794,7 @@ export default function StorefrontBook() {
       setPaymentInitTimedOut(true);
     }, 18000);
     createPaymentIntent(cents);
-  }, [session, isKiosk, email, name, discountedTotal, chargeNowAmount, clientSecret, paymentConfirmed, dateRange, createPaymentIntent]);
+  }, [session, isKiosk, email, name, discountedTotal, chargeNowAmount, clientSecret, paymentConfirmed, dateRange, listing, createPaymentIntent]);
 
   // Auto-launch Stripe Identity popup as soon as the session is ready — no extra button tap
   // Placed here (before early returns) so it's always called unconditionally; the handler
