@@ -174,12 +174,16 @@ export default function AdminListings() {
                     <TableCell onClick={e => e.stopPropagation()}>
                       <div className="w-12 h-12 bg-muted rounded-lg overflow-hidden">
                         {listing.imageUrls?.[0] ? (
-                          <img src={listing.imageUrls[0]} alt={listing.title} className="w-full h-full object-cover" />
-                        ) : (
-                          <div className="w-full h-full flex items-center justify-center text-muted-foreground">
-                            <Package className="w-5 h-5" />
-                          </div>
-                        )}
+                          <img
+                            src={listing.imageUrls[0]}
+                            alt={listing.title}
+                            className="w-full h-full object-cover"
+                            onError={e => { e.currentTarget.style.display = "none"; e.currentTarget.nextElementSibling?.removeAttribute("style"); }}
+                          />
+                        ) : null}
+                        <div className="w-full h-full flex items-center justify-center text-muted-foreground" style={listing.imageUrls?.[0] ? { display: "none" } : {}}>
+                          <Package className="w-5 h-5" />
+                        </div>
                       </div>
                     </TableCell>
                     <TableCell>

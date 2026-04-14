@@ -227,6 +227,7 @@ export default function SignupPage() {
           setLogoCropFiles([]);
         }}
         onCancel={() => setLogoCropFiles([])}
+        onUploadError={(_f, err) => toast({ title: "Logo upload failed", description: err, variant: "destructive" })}
       />
     )}
     <div className="min-h-screen flex" style={{ background: "#0d1117" }}>

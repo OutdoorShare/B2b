@@ -249,12 +249,16 @@ export default function AdminListingDetail() {
           <div className="bg-background rounded-2xl border overflow-hidden">
             <div className="aspect-[16/9] w-full bg-muted relative">
               {listing.imageUrls?.[activeImage] ? (
-                <img src={listing.imageUrls[activeImage]} alt={listing.title} className="w-full h-full object-cover" />
-              ) : (
-                <div className="w-full h-full flex items-center justify-center text-muted-foreground">
-                  <Package className="w-12 h-12 text-muted" />
-                </div>
-              )}
+                <img
+                  src={listing.imageUrls[activeImage]}
+                  alt={listing.title}
+                  className="w-full h-full object-cover"
+                  onError={e => { e.currentTarget.style.display = "none"; e.currentTarget.nextElementSibling?.removeAttribute("style"); }}
+                />
+              ) : null}
+              <div className="w-full h-full flex items-center justify-center text-muted-foreground" style={listing.imageUrls?.[activeImage] ? { display: "none" } : {}}>
+                <Package className="w-12 h-12 text-muted" />
+              </div>
             </div>
             {listing.imageUrls && listing.imageUrls.length > 1 && (
               <div className="flex gap-2 p-3 overflow-x-auto">
@@ -265,7 +269,7 @@ export default function AdminListingDetail() {
                     className={`shrink-0 w-16 aspect-square rounded-lg overflow-hidden border-2 transition-all
                       ${i === activeImage ? "border-primary" : "border-transparent opacity-60 hover:opacity-100"}`}
                   >
-                    <img src={url} alt="" className="w-full h-full object-cover" />
+                    <img src={url} alt="" className="w-full h-full object-cover" onError={e => { e.currentTarget.style.display = "none"; }} />
                   </button>
                 ))}
               </div>

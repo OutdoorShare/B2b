@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
-import { ZoomIn, ZoomOut, RotateCcw, ChevronRight, X } from "lucide-react";
+import { ZoomIn, ZoomOut, RotateCcw, ChevronRight, AlertCircle } from "lucide-react";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 interface Props {
@@ -10,6 +10,7 @@ interface Props {
   onDone: (uploaded: string[]) => void;
   uploadFn: (blob: Blob, filename: string) => Promise<string>;
   onCancel?: () => void;
+  onUploadError?: (filename: string, error: string) => void;
   /** Crop aspect ratio width/height. Default 4/3. Use 1 for square logos. */
   aspect?: number;
   /** Output pixel width of the saved image. Default 1200. */
@@ -17,7 +18,7 @@ interface Props {
 }
 
 // ── Component ─────────────────────────────────────────────────────────────────
-export function ImageCropDialog({ files, onDone, uploadFn, onCancel, aspect = 4 / 3, outputWidth = 1200 }: Props) {
+export function ImageCropDialog({ files, onDone, uploadFn, onCancel, onUploadError, aspect = 4 / 3, outputWidth = 1200 }: Props) {
   const ASPECT   = aspect;
   const OUTPUT_W = outputWidth;
   const OUTPUT_H = Math.round(OUTPUT_W / ASPECT);
@@ -31,6 +32,7 @@ export function ImageCropDialog({ files, onDone, uploadFn, onCancel, aspect = 4 
   const [dragging, setDragging]     = useState(false);
   const [collected, setCollected]   = useState<string[]>([]);
   const [processing, setProcessing] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
 
   // Actual rendered container dimensions (updated by ResizeObserver)
   const [frameW, setFrameW] = useState(0);
@@ -74,6 +76,7 @@ export function ImageCropDialog({ files, onDone, uploadFn, onCancel, aspect = 4 
     setNaturalH(0);
     setScale(1);
     setOffset({ x: 0, y: 0 });
+    setUploadError(null);
     return () => URL.revokeObjectURL(url);
   }, [currentFile]);
 
@@ -176,6 +179,7 @@ export function ImageCropDialog({ files, onDone, uploadFn, onCancel, aspect = 4 
   const doCrop = useCallback(async () => {
     if (!naturalW || !naturalH || !imgSrc || !frameW || !frameH) return;
     setProcessing(true);
+    setUploadError(null);
     try {
       const canvas = document.createElement("canvas");
       canvas.width  = OUTPUT_W;
@@ -194,7 +198,6 @@ export function ImageCropDialog({ files, onDone, uploadFn, onCancel, aspect = 4 
       }
 
       // Convert CSS-pixel offset back to source-image pixel coordinates.
-      // offset is in CSS pixels relative to the frame. scale is CSS pixels per source pixel.
       const srcX = -offset.x / scale;
       const srcY = -offset.y / scale;
       const srcW = frameW / scale;
@@ -210,12 +213,16 @@ export function ImageCropDialog({ files, onDone, uploadFn, onCancel, aspect = 4 
       );
       const url = await uploadFn(blob, currentFile.name.replace(/\.[^.]+$/, ext));
       advance([...collected, url]);
-    } catch {
-      advance(collected);
+    } catch (err: any) {
+      const msg = err?.message?.includes("413") ? "File too large (max 5 MB)"
+        : err?.message?.includes("Upload failed") ? "Upload failed — check your connection and try again"
+        : "Upload failed — please try again";
+      setUploadError(msg);
+      onUploadError?.(currentFile.name, msg);
     } finally {
       setProcessing(false);
     }
-  }, [naturalW, naturalH, imgSrc, offset, scale, frameW, frameH, currentFile, collected, uploadFn]);
+  }, [naturalW, naturalH, imgSrc, offset, scale, frameW, frameH, currentFile, collected, uploadFn, onUploadError]);
 
   const skipFile = () => advance(collected);
 
@@ -326,6 +333,15 @@ export function ImageCropDialog({ files, onDone, uploadFn, onCancel, aspect = 4 
           </button>
         </div>
 
+        {uploadError && (
+          <div className="mx-5 mb-3 flex items-start gap-2 rounded-md bg-destructive/10 border border-destructive/20 px-3 py-2">
+            <AlertCircle className="w-4 h-4 text-destructive shrink-0 mt-0.5" />
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-medium text-destructive">{uploadError}</p>
+              <p className="text-xs text-destructive/70 mt-0.5">Try again or skip this photo.</p>
+            </div>
+          </div>
+        )}
         <DialogFooter className="px-5 pb-5 flex gap-2">
           <Button
             type="button"
@@ -335,7 +351,7 @@ export function ImageCropDialog({ files, onDone, uploadFn, onCancel, aspect = 4 
             disabled={processing}
             className="text-muted-foreground"
           >
-            Skip
+            {uploadError ? "Skip this photo" : "Skip"}
           </Button>
           <Button
             type="button"
@@ -345,6 +361,8 @@ export function ImageCropDialog({ files, onDone, uploadFn, onCancel, aspect = 4 
           >
             {processing ? (
               <><span className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" /> Saving…</>
+            ) : uploadError ? (
+              "Try again"
             ) : files.length > 1 && queueIdx < files.length - 1 ? (
               <>Use this crop <ChevronRight className="w-3.5 h-3.5" /></>
             ) : (

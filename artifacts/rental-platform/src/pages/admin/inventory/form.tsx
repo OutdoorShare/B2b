@@ -187,6 +187,7 @@ export default function AdminInventoryForm() {
             }
           }}
           onCancel={() => setCropQueue([])}
+          onUploadError={(_f, err) => toast({ title: "Photo upload failed", description: err, variant: "destructive" })}
         />
       )}
 

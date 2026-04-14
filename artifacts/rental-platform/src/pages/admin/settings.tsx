@@ -527,6 +527,7 @@ export default function AdminSettings() {
             setLogoCropFiles([]);
           }}
           onCancel={() => setLogoCropFiles([])}
+          onUploadError={(_f, err) => toast({ title: "Logo upload failed", description: err, variant: "destructive" })}
         />
       )}
       {coverCropFiles.length > 0 && (
@@ -560,6 +561,7 @@ export default function AdminSettings() {
             setCoverCropFiles([]);
           }}
           onCancel={() => setCoverCropFiles([])}
+          onUploadError={(_f, err) => toast({ title: "Cover photo upload failed", description: err, variant: "destructive" })}
         />
       )}
       <div>
@@ -1027,7 +1029,7 @@ export default function AdminSettings() {
                   />
                   {coverUrl ? (
                     <div className="relative rounded-xl overflow-hidden border group">
-                      <img src={coverUrl} alt="Cover" className="w-full h-36 object-cover" />
+                      <img src={coverUrl} alt="Cover" className="w-full h-36 object-cover" onError={e => { e.currentTarget.style.display = "none"; }} />
                       <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-3">
                         <Button
                           type="button"

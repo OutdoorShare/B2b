@@ -601,10 +601,13 @@ export default function AdminListingsForm() {
             setCropQueue([]);
             if (urls.length) {
               setFormData(prev => ({ ...prev, imageUrls: [...prev.imageUrls, ...urls] }));
-              toast({ title: `${urls.length} photo${urls.length > 1 ? "s" : ""} added` });
+              toast({ title: `${urls.length} photo${urls.length > 1 ? "s" : ""} added — remember to save.` });
             }
           }}
           onCancel={() => setCropQueue([])}
+          onUploadError={(_filename, error) => {
+            toast({ title: "Photo upload failed", description: error, variant: "destructive" });
+          }}
         />
       )}
 
@@ -891,8 +894,22 @@ export default function AdminListingsForm() {
                 {formData.imageUrls.length > 0 && (
                   <div className="grid grid-cols-3 gap-2 mt-2">
                     {formData.imageUrls.map((url, idx) => (
-                      <div key={idx} className="relative group rounded-md overflow-hidden border aspect-[4/3]">
-                        <img src={url} alt={`Photo ${idx + 1}`} className="w-full h-full object-cover" />
+                      <div key={idx} className="relative group rounded-md overflow-hidden border aspect-[4/3] bg-muted">
+                        <img
+                          src={url}
+                          alt={`Photo ${idx + 1}`}
+                          className="w-full h-full object-cover"
+                          onError={e => {
+                            const img = e.currentTarget;
+                            img.style.display = "none";
+                            const placeholder = img.nextElementSibling as HTMLElement | null;
+                            if (placeholder) placeholder.style.display = "flex";
+                          }}
+                        />
+                        <div className="absolute inset-0 hidden flex-col items-center justify-center gap-1 text-muted-foreground bg-muted" style={{ display: "none" }}>
+                          <ImagePlus className="w-6 h-6 opacity-40" />
+                          <span className="text-[10px] text-center px-2 opacity-60">Image unavailable</span>
+                        </div>
                         <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors" />
                         <button
                           type="button"
