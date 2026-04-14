@@ -34,5 +34,6 @@ export * from "./messages";
 export * from "./favorites";
 export * from "./platform-agreements";
 export * from "./operator-contracts";
+export * from "./operator-acknowledgements";
 export * from "./agreement-packets";
 export * from "./password-reset-tokens";

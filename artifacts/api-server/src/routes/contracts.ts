@@ -1,8 +1,8 @@
 import { Router } from "express";
 import multer from "multer";
 import { db, operatorContractsTable } from "@workspace/db";
-import { adminUsersTable, tenantsTable, platformAgreementsTable } from "@workspace/db/schema";
-import { eq, and, desc } from "drizzle-orm";
+import { adminUsersTable, tenantsTable, platformAgreementsTable, operatorAcknowledgementsTable } from "@workspace/db/schema";
+import { eq, and, desc, asc, or, isNull } from "drizzle-orm";
 import { objectStorageClient } from "../lib/objectStorage";
 
 const router = Router();
@@ -481,6 +481,143 @@ router.post("/contracts/upload-pdf", upload.single("file"), async (req, res) => 
   } catch (err) {
     req.log.error(err);
     res.status(500).json({ error: "Failed to upload contract PDF" });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ACKNOWLEDGEMENT CHECKBOXES
+// ─────────────────────────────────────────────────────────────────────────────
+
+// GET /contracts/acknowledgements?tenantSlug=X&contractId=Y
+// Public — used by checkout to get the acknowledgements a renter must check.
+// Returns acknowledgements for the specific contract + global (null contractId) ones.
+router.get("/contracts/acknowledgements", async (req, res) => {
+  try {
+    const { tenantSlug, contractId } = req.query as Record<string, string>;
+    if (!tenantSlug) return res.status(400).json({ error: "tenantSlug required" });
+    const [tenant] = await db.select().from(tenantsTable).where(eq(tenantsTable.slug, tenantSlug)).limit(1);
+    if (!tenant) return res.status(404).json({ error: "Tenant not found" });
+
+    const cid = contractId ? parseInt(contractId, 10) : null;
+    const rows = await db
+      .select()
+      .from(operatorAcknowledgementsTable)
+      .where(
+        and(
+          eq(operatorAcknowledgementsTable.tenantId, tenant.id),
+          eq(operatorAcknowledgementsTable.isActive, true),
+          cid != null
+            ? or(isNull(operatorAcknowledgementsTable.contractId), eq(operatorAcknowledgementsTable.contractId, cid))
+            : isNull(operatorAcknowledgementsTable.contractId)
+        )
+      )
+      .orderBy(asc(operatorAcknowledgementsTable.sortOrder), asc(operatorAcknowledgementsTable.id));
+
+    res.json(rows);
+  } catch (err) {
+    req.log?.error(err);
+    res.status(500).json({ error: "Failed to fetch acknowledgements" });
+  }
+});
+
+// GET /contracts/acknowledgements/admin?contractId=Y
+// Admin — list all acknowledgements for a tenant (optional contractId filter)
+router.get("/contracts/acknowledgements/admin", async (req, res) => {
+  try {
+    const tenantId = await resolveTenantId(req);
+    if (!tenantId) return res.status(401).json({ error: "Unauthorized" });
+    const { contractId } = req.query as Record<string, string>;
+
+    const conditions: any[] = [eq(operatorAcknowledgementsTable.tenantId, tenantId)];
+    if (contractId) {
+      const cid = parseInt(contractId, 10);
+      conditions.push(
+        or(isNull(operatorAcknowledgementsTable.contractId), eq(operatorAcknowledgementsTable.contractId, cid))
+      );
+    }
+
+    const rows = await db
+      .select()
+      .from(operatorAcknowledgementsTable)
+      .where(and(...conditions))
+      .orderBy(asc(operatorAcknowledgementsTable.sortOrder), asc(operatorAcknowledgementsTable.id));
+    res.json(rows);
+  } catch (err) {
+    req.log?.error(err);
+    res.status(500).json({ error: "Failed to fetch acknowledgements" });
+  }
+});
+
+// POST /contracts/acknowledgements
+// Admin — create an acknowledgement
+router.post("/contracts/acknowledgements", async (req, res) => {
+  try {
+    const tenantId = await resolveTenantId(req);
+    if (!tenantId) return res.status(401).json({ error: "Unauthorized" });
+    const { text, required, sortOrder, contractId } = req.body;
+    if (!text?.trim()) return res.status(400).json({ error: "text required" });
+
+    const [row] = await db.insert(operatorAcknowledgementsTable).values({
+      tenantId,
+      contractId: contractId ? Number(contractId) : null,
+      text: text.trim(),
+      required: required !== false,
+      sortOrder: sortOrder ?? 0,
+      isActive: true,
+    }).returning();
+    res.status(201).json(row);
+  } catch (err) {
+    req.log?.error(err);
+    res.status(500).json({ error: "Failed to create acknowledgement" });
+  }
+});
+
+// PATCH /contracts/acknowledgements/:id
+// Admin — update an acknowledgement
+router.patch("/contracts/acknowledgements/:id", async (req, res) => {
+  try {
+    const tenantId = await resolveTenantId(req);
+    if (!tenantId) return res.status(401).json({ error: "Unauthorized" });
+    const id = parseInt(req.params.id, 10);
+    const { text, required, sortOrder, isActive, contractId } = req.body;
+
+    const [existing] = await db.select().from(operatorAcknowledgementsTable)
+      .where(and(eq(operatorAcknowledgementsTable.id, id), eq(operatorAcknowledgementsTable.tenantId, tenantId)))
+      .limit(1);
+    if (!existing) return res.status(404).json({ error: "Not found" });
+
+    const updates: Partial<typeof existing> = { updatedAt: new Date() };
+    if (text !== undefined) updates.text = text.trim();
+    if (required !== undefined) updates.required = required;
+    if (sortOrder !== undefined) updates.sortOrder = sortOrder;
+    if (isActive !== undefined) updates.isActive = isActive;
+    if (contractId !== undefined) updates.contractId = contractId ? Number(contractId) : null;
+
+    const [updated] = await db.update(operatorAcknowledgementsTable)
+      .set(updates).where(eq(operatorAcknowledgementsTable.id, id)).returning();
+    res.json(updated);
+  } catch (err) {
+    req.log?.error(err);
+    res.status(500).json({ error: "Failed to update acknowledgement" });
+  }
+});
+
+// DELETE /contracts/acknowledgements/:id
+// Admin — delete an acknowledgement
+router.delete("/contracts/acknowledgements/:id", async (req, res) => {
+  try {
+    const tenantId = await resolveTenantId(req);
+    if (!tenantId) return res.status(401).json({ error: "Unauthorized" });
+    const id = parseInt(req.params.id, 10);
+    const [existing] = await db.select().from(operatorAcknowledgementsTable)
+      .where(and(eq(operatorAcknowledgementsTable.id, id), eq(operatorAcknowledgementsTable.tenantId, tenantId)))
+      .limit(1);
+    if (!existing) return res.status(404).json({ error: "Not found" });
+    await db.delete(operatorAcknowledgementsTable).where(eq(operatorAcknowledgementsTable.id, id));
+    res.json({ success: true });
+  } catch (err) {
+    req.log?.error(err);
+    res.status(500).json({ error: "Failed to delete acknowledgement" });
   }
 });
 

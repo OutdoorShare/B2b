@@ -892,6 +892,9 @@ export default function StorefrontBook() {
   const [listingRules, setListingRules] = useState<ListingRule[]>([]);
   const [ruleInitials, setRuleInitials] = useState<Record<number, string>>({});
   const [ruleChecks, setRuleChecks] = useState<Record<number, boolean>>({});
+  // Acknowledgement checkboxes defined by the operator for this contract
+  const [ackItems, setAckItems] = useState<Array<{ id: number; text: string; required: boolean; sortOrder: number }>>([]);
+  const [ackChecks, setAckChecks] = useState<Record<number, boolean>>({});
 
   // Verification
   const [identityClientSecret, setIdentityClientSecret] = useState<string | null>(null);
@@ -1001,6 +1004,14 @@ export default function StorefrontBook() {
       }
 
       if (fieldsData.fields) setContractFields(fieldsData.fields);
+
+      // Fetch operator acknowledgement checkboxes for this contract
+      const ackUrl = oc
+        ? `${BASE}/api/contracts/acknowledgements?tenantSlug=${encodeURIComponent(slug)}&contractId=${oc.id}`
+        : `${BASE}/api/contracts/acknowledgements?tenantSlug=${encodeURIComponent(slug)}`;
+      fetch(ackUrl).then(r => r.ok ? r.json() : []).then((items: any[]) => {
+        if (Array.isArray(items)) setAckItems(items);
+      }).catch(() => {});
     }).catch(() => {
       setAgreementText(DEFAULT_AGREEMENT);
     });
@@ -3927,6 +3938,7 @@ export default function StorefrontBook() {
                   });
                   const allFieldsDone = requiredUnfilled.length === 0;
                   const allRulesDone = listingRules.every(r => ruleChecks[r.id]);
+                  const allAcksDone = ackItems.filter(a => a.required).every(a => ackChecks[a.id]);
                   const contractTitle = resolvedOperatorContract?.title || "Rental Agreement";
                   const isPdf = resolvedOperatorContract?.contractType === "uploaded_pdf" && resolvedOperatorContract.hasPdf;
 
@@ -4112,6 +4124,49 @@ export default function StorefrontBook() {
                             </div>
                           )}
 
+                          {/* ── Operator Acknowledgement Checkboxes ── */}
+                          {ackItems.length > 0 && (
+                            <div className="bg-card rounded-2xl border shadow-sm overflow-hidden">
+                              <div className="px-5 py-3.5 border-b bg-muted/20 flex items-center gap-3">
+                                <CheckCircle2 className="w-4 h-4 text-primary shrink-0" />
+                                <div>
+                                  <p className="font-semibold text-sm">Before Signing, Acknowledge the Following</p>
+                                  <p className="text-xs text-muted-foreground">Check each box to confirm you have read and understand</p>
+                                </div>
+                              </div>
+                              <div className="p-4 space-y-2.5">
+                                {ackItems.map(ack => {
+                                  const checked = !!ackChecks[ack.id];
+                                  return (
+                                    <button
+                                      key={ack.id}
+                                      type="button"
+                                      onClick={() => setAckChecks(prev => ({ ...prev, [ack.id]: !prev[ack.id] }))}
+                                      className={`w-full flex gap-3.5 items-start rounded-xl border p-3.5 text-left transition-all cursor-pointer ${checked ? "border-green-300 bg-green-50/60 shadow-sm" : "border-dashed border-muted-foreground/30 bg-muted/20 hover:border-muted-foreground/50"}`}
+                                    >
+                                      <div className={`mt-0.5 w-5 h-5 rounded border-2 shrink-0 flex items-center justify-center transition-all ${checked ? "bg-green-600 border-green-600" : "bg-background border-muted-foreground/40"}`}>
+                                        {checked && <svg viewBox="0 0 12 9" className="w-3 h-3 text-white fill-current"><path d="M1 4l3.5 3.5L11 1" stroke="white" strokeWidth="1.8" fill="none" strokeLinecap="round" strokeLinejoin="round" /></svg>}
+                                      </div>
+                                      <div className="flex-1 min-w-0">
+                                        <p className="text-sm text-foreground leading-relaxed">{ack.text}</p>
+                                        {!ack.required && <span className="text-[10px] text-muted-foreground mt-0.5 block">Optional</span>}
+                                      </div>
+                                      {checked && <CheckCircle2 className="w-4 h-4 text-green-600 shrink-0 mt-0.5" />}
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                              {!allAcksDone && (
+                                <div className="px-5 pb-4">
+                                  <p className="text-xs text-amber-700 flex items-center gap-1.5">
+                                    <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
+                                    All required acknowledgements must be checked before signing.
+                                  </p>
+                                </div>
+                              )}
+                            </div>
+                          )}
+
                           {/* Listing rule acknowledgments */}
                           {listingRules.length > 0 && (
                             <div className="bg-card rounded-2xl border shadow-sm overflow-hidden">
@@ -4222,7 +4277,7 @@ export default function StorefrontBook() {
                             size="lg"
                             className="w-full h-13 text-base font-bold rounded-xl"
                             onClick={handleFinalSubmit}
-                            disabled={isSubmitting || !agreeChecked || !sigHasContent || !allRulesDone}
+                            disabled={isSubmitting || !agreeChecked || !sigHasContent || !allRulesDone || !allAcksDone}
                           >
                             {isSubmitting ? "Submitting…" : "Sign & Verify My Identity"}
                             <ScanFace className="w-4 h-4 ml-2" />
