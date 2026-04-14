@@ -2,7 +2,7 @@ import { useState, useEffect, useLayoutEffect, useReducer } from "react";
 import { AIAssistant } from "@/components/ai-assistant";
 import { StorefrontChat } from "@/components/storefront-chat";
 import { Link, useParams, useLocation } from "wouter";
-import { Mountain, Lock, User, LogOut, BookOpen, UserCircle, Eye, EyeOff, ShieldAlert } from "lucide-react";
+import { Mountain, Lock, User, LogOut, BookOpen, UserCircle, Eye, EyeOff, ShieldAlert, Search, CalendarDays } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -15,9 +15,9 @@ import { PoweredByBadge } from "@/components/powered-by-badge";
 import { NotificationBell } from "@/components/notification-bell";
 import { applyBrandColors, saveBrandColors, loadBrandColors } from "@/lib/theme";
 import { applyStorefrontBrand, applyPlatformBrand } from "@/lib/branding";
+import { cn } from "@/lib/utils";
 
 // ── Demo Gate ────────────────────────────────────────────────────────────────
-// Slugs whose storefronts require the same credentials as their admin panel.
 const PROTECTED_DEMO_SLUGS = new Set(["demo-outdoorshare"]);
 const BASE_URL = import.meta.env.BASE_URL.replace(/\/$/, "");
 
@@ -70,7 +70,6 @@ function DemoLoginOverlay({ slug, onAuth }: { slug: string; onAuth: () => void }
   return (
     <div className="fixed inset-0 z-[200] flex items-center justify-center bg-[#0f1923]">
       <div className="w-full max-w-sm px-4">
-        {/* Logo */}
         <div className="flex flex-col items-center mb-8">
           <div className="w-14 h-14 rounded-2xl bg-[#3ab549]/10 border border-[#3ab549]/30 flex items-center justify-center mb-4">
             <Lock className="w-7 h-7 text-[#3ab549]" />
@@ -81,7 +80,6 @@ function DemoLoginOverlay({ slug, onAuth }: { slug: string; onAuth: () => void }
           </p>
         </div>
 
-        {/* Form */}
         <form
           onSubmit={e => { e.preventDefault(); handleLogin(); }}
           className="bg-white/5 border border-white/10 rounded-2xl p-6 space-y-4"
@@ -149,7 +147,6 @@ function DemoGate({ slug, children }: { slug: string; children: React.ReactNode 
 
 const OS_GREEN = "#3ab549";
 
-/** Returns true if a hex color is perceptually light */
 function isLight(hex: string): boolean {
   const c = hex.replace("#", "").padEnd(6, "0");
   const r = parseInt(c.slice(0, 2), 16);
@@ -158,7 +155,6 @@ function isLight(hex: string): boolean {
   return (r * 299 + g * 587 + b * 114) / 1000 > 145;
 }
 
-/** Darken a hex color by a given amount (0–255) */
 function darken(hex: string, amt = 20): string {
   const c = hex.replace("#", "").padEnd(6, "0");
   const clamp = (v: number) => Math.max(0, Math.min(255, v));
@@ -179,7 +175,7 @@ function loadCustomerSession(): CustomerSession | null {
 
 export function StorefrontLayout({ children }: { children: React.ReactNode }) {
   const { slug } = useParams<{ slug: string }>();
-  const [, setLocation] = useLocation();
+  const [location, setLocation] = useLocation();
   const base = slug ? `/${slug}` : "";
 
   const [customer, setCustomer] = useState<CustomerSession | null>(null);
@@ -192,7 +188,6 @@ export function StorefrontLayout({ children }: { children: React.ReactNode }) {
     setLocation(`${base}/login`);
   };
 
-  // initials for avatar
   const initials = customer?.name?.split(" ").map(w => w[0]).join("").slice(0, 2).toUpperCase() ?? "";
 
   const { data: profile, isError: businessNotFound, isLoading: businessLoading } = useGetBusinessProfile({
@@ -203,31 +198,24 @@ export function StorefrontLayout({ children }: { children: React.ReactNode }) {
   const isPaid = plan && plan !== "starter";
   const companyEmail = (profile as any)?.email as string | null | undefined;
 
-  // Brand colors — seeded from localStorage cache so they're correct on first render,
-  // then updated when the API responds (no flash on back-navigation or hard reload).
   const DEFAULT_PRIMARY = "#1b4332";
   const DEFAULT_ACCENT  = "#52b788";
   const cached = slug ? loadBrandColors(slug) : null;
   const primaryColor = profile?.primaryColor || cached?.primary || DEFAULT_PRIMARY;
   const accentColor  = profile?.accentColor  || cached?.accent  || DEFAULT_ACCENT;
 
-  // Apply CSS custom properties before first paint (useLayoutEffect is synchronous).
   useLayoutEffect(() => {
     applyBrandColors(primaryColor, accentColor);
   }, [primaryColor, accentColor]);
 
-  // When the real API data arrives, persist it to cache so future visits skip the flash.
   useEffect(() => {
     if (!slug || !profile) return;
     saveBrandColors(slug, primaryColor, accentColor);
     return () => {
-      // Reset to defaults when leaving storefront (e.g. navigating to admin)
       applyBrandColors(DEFAULT_PRIMARY, DEFAULT_ACCENT);
     };
   }, [slug, primaryColor, accentColor, profile]);
 
-  // Dynamic meta: swap favicon, title, og:*, twitter:*, apple-touch-icon, and theme-color
-  // to the tenant's branding while on their storefront. Restore OutdoorShare defaults on unmount.
   const logoUrl   = (profile as any)?.logoUrl   as string | undefined;
   const tagline   = (profile as any)?.tagline   as string | undefined;
   const desc      = (profile as any)?.description as string | undefined;
@@ -245,14 +233,24 @@ export function StorefrontLayout({ children }: { children: React.ReactNode }) {
     return cleanup;
   }, [companyName, tagline, desc, logoUrl, primaryColor]);
 
-  // Auto-contrast text colors
   const headerText     = isLight(primaryColor) ? "#111111" : "#ffffff";
   const headerTextMuted = isLight(primaryColor) ? "rgba(0,0,0,0.55)" : "rgba(255,255,255,0.65)";
   const headerBorder   = isLight(primaryColor) ? "rgba(0,0,0,0.08)" : "rgba(255,255,255,0.10)";
   const btnText        = isLight(accentColor)  ? "#111111" : "#ffffff";
   const btnHoverBg     = darken(accentColor, 18);
 
-  // All hooks have fired — now safe to early-return based on query state.
+  const isTabActive = (path: string, exact?: boolean) => {
+    const full = `${base}${path}`;
+    if (exact) return location === full || location === `${full}/`;
+    return location === full || location.startsWith(`${full}/`);
+  };
+
+  const bottomTabs = [
+    { name: "Browse", path: "", icon: Search, exact: true },
+    { name: "Bookings", path: "/my-bookings", icon: CalendarDays },
+    ...(customer ? [{ name: "Account", path: "/profile", icon: UserCircle }] : [{ name: "Sign In", path: "/login", icon: User, exact: true }]),
+  ];
+
   if (businessLoading) {
     return <div className="min-h-screen bg-gray-50" />;
   }
@@ -282,29 +280,27 @@ export function StorefrontLayout({ children }: { children: React.ReactNode }) {
           borderBottomColor: headerBorder,
         }}
       >
-        <div className="container mx-auto px-4 h-16 flex items-center justify-between">
-          {/* Logo / name */}
-          <Link href={base || "/"} className="flex items-center gap-2.5 min-w-0">
+        <div className="container mx-auto px-3 md:px-4 h-14 md:h-16 flex items-center justify-between">
+          <Link href={base || "/"} className="flex items-center gap-2 md:gap-2.5 min-w-0 active:opacity-80 transition-opacity">
             {profile?.logoUrl && !logoFailed ? (
               <img
                 src={profile.logoUrl}
                 alt={profile.name}
-                className="h-8 object-contain shrink-0"
+                className="h-7 md:h-8 object-contain shrink-0"
                 onError={() => setLogoFailed(true)}
               />
             ) : (
-              <Mountain className="w-6 h-6 shrink-0" style={{ color: accentColor }} />
+              <Mountain className="w-5 h-5 md:w-6 md:h-6 shrink-0" style={{ color: accentColor }} />
             )}
             <span
-              className="font-bold text-lg tracking-tight truncate"
+              className="font-bold text-base md:text-lg tracking-tight truncate"
               style={{ color: headerText }}
             >
               {profile?.name || "Outdoor Rentals"}
             </span>
           </Link>
 
-          {/* Nav */}
-          <nav className="flex items-center gap-4 shrink-0">
+          <nav className="flex items-center gap-2 md:gap-4 shrink-0">
             <Link
               href={base || "/"}
               className="text-sm font-medium transition-opacity hover:opacity-100 hidden sm:block"
@@ -324,11 +320,10 @@ export function StorefrontLayout({ children }: { children: React.ReactNode }) {
             )}
 
             {customer ? (
-              /* Logged-in state */
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <button
-                    className="flex items-center gap-2 rounded-full focus:outline-none"
+                    className="flex items-center gap-2 rounded-full focus:outline-none active:scale-95 transition-transform"
                     aria-label="Account menu"
                   >
                     <div
@@ -376,10 +371,9 @@ export function StorefrontLayout({ children }: { children: React.ReactNode }) {
                 </DropdownMenuContent>
               </DropdownMenu>
             ) : (
-              /* Logged-out state */
               <Link
                 href={`${base}/login`}
-                className="text-sm font-semibold px-4 py-1.5 rounded-full transition-colors"
+                className="text-sm font-semibold px-4 py-1.5 rounded-full transition-colors hidden md:inline-block active:scale-95"
                 style={{ backgroundColor: accentColor, color: btnText }}
                 onMouseEnter={e => (e.currentTarget.style.backgroundColor = btnHoverBg)}
                 onMouseLeave={e => (e.currentTarget.style.backgroundColor = accentColor)}
@@ -391,14 +385,14 @@ export function StorefrontLayout({ children }: { children: React.ReactNode }) {
         </div>
       </header>
 
-      <main className="flex-1">
+      <main className="flex-1 pb-[calc(env(safe-area-inset-bottom,0px)+3.5rem)] md:pb-0">
         {children}
       </main>
 
       {/* Footer */}
-      <footer className="border-t bg-gray-950 py-12 mt-16">
+      <footer className="border-t bg-gray-950 py-8 md:py-12 mt-10 md:mt-16 mb-14 md:mb-0">
         <div className="container mx-auto px-4">
-          <div className="flex flex-col md:flex-row items-center justify-between gap-6">
+          <div className="flex flex-col md:flex-row items-center justify-between gap-4 md:gap-6">
             <div className="flex items-center gap-2.5">
               {profile?.logoUrl && !logoFailed ? (
                 <img src={profile.logoUrl} alt={profile.name} className="h-7 object-contain opacity-80" onError={() => setLogoFailed(true)} />
@@ -423,10 +417,35 @@ export function StorefrontLayout({ children }: { children: React.ReactNode }) {
         </div>
       </footer>
 
-      {/* Fixed corner badge — shown for Half Throttle (free plan) */}
+      {/* ── Mobile Bottom Tab Bar ── */}
+      <nav className="md:hidden fixed bottom-0 left-0 right-0 z-[60] border-t bg-white/95 dark:bg-gray-950/95 backdrop-blur-lg border-gray-200 dark:border-gray-800 pb-[env(safe-area-inset-bottom,0px)]">
+        <div className="flex items-stretch h-14">
+          {bottomTabs.map((tab) => {
+            const active = isTabActive(tab.path, (tab as any).exact);
+            const href = `${base}${tab.path}`;
+            return (
+              <Link
+                key={tab.name}
+                href={href}
+                className={cn(
+                  "flex-1 flex flex-col items-center justify-center gap-0.5 transition-colors duration-150 active:bg-gray-100 dark:active:bg-gray-800 relative",
+                  active ? "text-[var(--brand-primary,#1b4332)]" : "text-gray-400 dark:text-gray-500"
+                )}
+                style={active ? { color: primaryColor } : undefined}
+              >
+                <tab.icon className={cn("w-[22px] h-[22px] transition-all", active && "scale-110")} strokeWidth={active ? 2.5 : 1.8} />
+                <span className={cn("text-[10px] leading-none", active ? "font-semibold" : "font-medium")}>{tab.name}</span>
+                {active && (
+                  <span className="absolute top-0 left-1/2 -translate-x-1/2 w-8 h-[3px] rounded-b-full" style={{ backgroundColor: primaryColor }} />
+                )}
+              </Link>
+            );
+          })}
+        </div>
+      </nav>
+
       {!isPaid && <PoweredByBadge variant="fixed" />}
 
-      {/* Renter Chat Widget — available to all visitors, guests included */}
       {slug && (
         <StorefrontChat
           slug={(profile as any)?.siteSlug ?? slug}
@@ -438,7 +457,6 @@ export function StorefrontLayout({ children }: { children: React.ReactNode }) {
         />
       )}
 
-      {/* AI Renter Assistant — Full Throttle and above only */}
       {slug && isPaid && (
         <AIAssistant
           role="renter"

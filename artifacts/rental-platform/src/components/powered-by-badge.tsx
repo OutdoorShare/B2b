@@ -15,7 +15,7 @@ export function PoweredByBadge({ variant = "footer" }: PoweredByBadgeProps) {
         rel="noopener noreferrer"
         onMouseEnter={() => setHovered(true)}
         onMouseLeave={() => setHovered(false)}
-        className="fixed bottom-5 left-5 z-50 flex items-center gap-0 group"
+        className="fixed bottom-[calc(env(safe-area-inset-bottom,0px)+4.5rem)] md:bottom-5 left-5 z-50 flex items-center gap-0 group"
         title="Powered by OutdoorShare"
         style={{ textDecoration: "none" }}
         aria-label="Powered by OutdoorShare"
