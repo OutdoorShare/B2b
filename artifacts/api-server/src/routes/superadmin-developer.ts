@@ -384,4 +384,42 @@ router.get("/superadmin/developer/system", requireSA, async (_req, res) => {
   });
 });
 
+// ── Cancel test / demo bookings for a tenant ─────────────────────────────────
+// Useful for resetting test-mode tenants without touching production data.
+// Cancels all non-cancelled bookings where the tenant is in testMode.
+router.post("/superadmin/developer/cancel-test-bookings", requireSA, async (req, res) => {
+  const { tenantId, listingId } = req.body ?? {};
+
+  const conditions: any[] = [
+    sql`${bookingsTable.status} NOT IN ('cancelled', 'rejected')`,
+  ];
+
+  if (tenantId) {
+    conditions.push(eq(bookingsTable.tenantId, Number(tenantId)));
+  } else {
+    // Only affect test-mode tenants when no specific tenantId given
+    const testTenants = await db
+      .select({ id: tenantsTable.id })
+      .from(tenantsTable)
+      .where(eq(tenantsTable.testMode, true));
+    const testTenantIds = testTenants.map(t => t.id);
+    if (testTenantIds.length === 0) {
+      res.json({ cancelled: 0, message: "No test-mode tenants found." });
+      return;
+    }
+    conditions.push(sql`${bookingsTable.tenantId} = ANY(ARRAY[${sql.join(testTenantIds.map(id => sql`${id}`), sql`, `)}]::int[])`);
+  }
+
+  if (listingId) {
+    conditions.push(eq(bookingsTable.listingId, Number(listingId)));
+  }
+
+  const result = await db
+    .update(bookingsTable)
+    .set({ status: "cancelled", updatedAt: new Date() })
+    .where(and(...conditions));
+
+  res.json({ cancelled: (result as any).rowCount ?? "done", message: "Test bookings cancelled." });
+});
+
 export default router;

@@ -238,6 +238,8 @@ export default function DeveloperPage() {
   const [errorFilter, setErrorFilter] = useState<"all" | "error" | "warn">("all");
   const [expandedLog, setExpandedLog] = useState<number | null>(null);
   const [clearingLogs, setClearingLogs] = useState(false);
+  const [cancellingTestBookings, setCancellingTestBookings] = useState(false);
+  const [cancelTestResult, setCancelTestResult] = useState<string | null>(null);
   const [tab, setTab] = useState<"health" | "errors" | "tenants" | "system">("health");
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -280,6 +282,24 @@ export default function DeveloperPage() {
     await saFetch("/superadmin/developer/errors", { method: "DELETE" });
     await fetchAll();
     setClearingLogs(false);
+  }
+
+  async function cancelTestBookings(tenantId?: number) {
+    setCancellingTestBookings(true);
+    setCancelTestResult(null);
+    try {
+      const res = await saFetch("/superadmin/developer/cancel-test-bookings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(tenantId ? { tenantId } : {}),
+      });
+      const data = await res.json().catch(() => ({}));
+      setCancelTestResult(`Cancelled ${data.cancelled ?? "?"} test booking(s).`);
+    } catch {
+      setCancelTestResult("Error — could not cancel test bookings.");
+    } finally {
+      setCancellingTestBookings(false);
+    }
   }
 
   const filteredLogs = (errors?.logs ?? []).filter(l =>
@@ -702,6 +722,43 @@ export default function DeveloperPage() {
         {/* ── SYSTEM INFO TAB ── */}
         {tab === "system" && system && (
           <div className="space-y-4">
+
+            {/* ── Test Data Management ── */}
+            <div className="bg-slate-900 border border-amber-500/20 rounded-xl p-4">
+              <h3 className="text-slate-300 text-sm font-semibold mb-1 flex items-center gap-2">
+                <Trash2 className="w-4 h-4 text-amber-400" />
+                Test Data Management
+              </h3>
+              <p className="text-slate-500 text-xs mb-3">
+                Cancel all active/confirmed/pending bookings for test-mode tenants. Safe to run — only affects tenants where <span className="font-mono text-slate-400">testMode = true</span>.
+              </p>
+              <div className="flex items-center gap-3 flex-wrap">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="border-amber-500/30 text-amber-400 hover:bg-amber-500/10 text-xs h-8"
+                  onClick={() => cancelTestBookings()}
+                  disabled={cancellingTestBookings}
+                >
+                  <Trash2 className="w-3.5 h-3.5 mr-1.5" />
+                  {cancellingTestBookings ? "Cancelling…" : "Cancel All Test Bookings"}
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="border-amber-500/30 text-amber-400 hover:bg-amber-500/10 text-xs h-8"
+                  onClick={() => cancelTestBookings(8)}
+                  disabled={cancellingTestBookings}
+                >
+                  <Trash2 className="w-3.5 h-3.5 mr-1.5" />
+                  {cancellingTestBookings ? "Cancelling…" : "Reset Demo Tenant Only"}
+                </Button>
+                {cancelTestResult && (
+                  <span className="text-xs text-emerald-400">{cancelTestResult}</span>
+                )}
+              </div>
+            </div>
+
             <div className="grid sm:grid-cols-2 gap-4">
               {/* Server */}
               <div className="bg-slate-900 border border-slate-800 rounded-xl p-4">

@@ -567,14 +567,28 @@ router.post("/stripe/payment-intent", async (req, res) => {
           const qty = listingQtyRow.quantity ?? 1;
           const requestedQty = Math.max(1, Number(rawQuantity) || 1);
 
-          // Count overlapping confirmed/pending bookings for every day in the range
+          // Count overlapping bookings for every day in the range.
+          //
+          // Status filter logic:
+          //   • `pending_payment` is an in-flight checkout that may never complete
+          //     (e.g. card declined, user closed tab). Counting it would permanently
+          //     block those dates if the matching webhook never fires. We exclude it
+          //     here; the booking-creation endpoint has its own atomic check.
+          //   • In TEST MODE we further restrict to only `confirmed` and `active`:
+          //     test bookings routinely accumulate in `pending` / `pending_payment`
+          //     status during repeated demos and would otherwise lock test dates
+          //     forever. The atomic booking-creation check still protects real data.
+          const statusFilter = isTestMode
+            ? sql`${bookingsTable.status} IN ('confirmed', 'active')`
+            : sql`${bookingsTable.status} NOT IN ('cancelled', 'rejected', 'pending_payment')`;
+
           const overlappingBookings = await db
             .select({ startDate: bookingsTable.startDate, endDate: bookingsTable.endDate, quantity: bookingsTable.quantity })
             .from(bookingsTable)
             .where(and(
               eq(bookingsTable.listingId, checkListingId),
               eq(bookingsTable.tenantId, tenant.id),
-              sql`${bookingsTable.status} NOT IN ('cancelled', 'rejected')`,
+              statusFilter,
               lte(bookingsTable.startDate, String(rawEndDate)),
               gte(bookingsTable.endDate, String(rawStartDate)),
             ));

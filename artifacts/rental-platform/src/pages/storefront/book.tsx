@@ -837,6 +837,10 @@ export default function StorefrontBook() {
   const [showStripeForm, setShowStripeForm] = useState(false);
   const [paymentInitFailed, setPaymentInitFailed] = useState(false);
   const [paymentInitTimedOut, setPaymentInitTimedOut] = useState(false);
+  // Set to true when the server returns 409 (dates already booked).
+  // Cleared automatically when the user selects different dates.
+  const [datesConflict, setDatesConflict] = useState(false);
+  const reviewDatesRef = useRef<HTMLDivElement | null>(null);
   const paymentTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   // Prevents the auto-create effect from firing again when email/name change after intent is already in flight
   const intentFiredRef = useRef(false);
@@ -1041,6 +1045,9 @@ export default function StorefrontBook() {
     const diff = differenceInDays(dateRange.to, dateRange.from);
     return diff > 0 ? diff : 1;
   }, [dateRange]);
+
+  // Clear the "dates already booked" conflict flag whenever the customer picks new dates
+  useEffect(() => { setDatesConflict(false); }, [dateRange]);
 
   // Fetch all active listings for bundle picker + bundle discount from business profile
   useEffect(() => {
@@ -1983,6 +1990,16 @@ export default function StorefrontBook() {
           method: "POST", headers: { "Content-Type": "application/json" }, body,
         });
         if (!res.ok) {
+          // 409 = dates already booked — retrying is pointless. Show the date picker
+          // immediately so the customer can choose different dates.
+          if (res.status === 409) {
+            setShowStripeForm(false);
+            setDatesConflict(true);
+            setTimeout(() => {
+              reviewDatesRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+            }, 80);
+            return;
+          }
           const errData = await res.json().catch(() => ({}));
           if (attempt < MAX_ATTEMPTS) {
             await new Promise(r => setTimeout(r, attempt * 1200));
@@ -2040,11 +2057,22 @@ export default function StorefrontBook() {
     setPaymentInitFailed(false);
     setPaymentInitTimedOut(false);
     setShowStripeForm(true);
-    // Allow the auto-create effect to fire again.
-    intentFiredRef.current = false;
+    // IMPORTANT: Keep intentFiredRef.current = true.
+    //
+    // Setting it to false here causes a double-fire race condition:
+    //   1. handleRetry calls createPaymentIntent() directly (below)
+    //   2. setClientSecret(null) triggers a re-render
+    //   3. The auto-create useEffect fires because clientSecret changed AND
+    //      intentFiredRef.current is false
+    //   4. useEffect also calls createPaymentIntent() — same nonce → same PI
+    //   5. setClientSecret() is called twice with the same value, which forces
+    //      the Elements provider to remount, destroying onReady before it fires.
+    //
+    // We own the direct call below, so the auto-create effect must stay suppressed.
+    intentFiredRef.current = true;
     const cents = Math.round(chargeNowAmount * 100);
     if (paymentTimeoutRef.current) clearTimeout(paymentTimeoutRef.current);
-    paymentTimeoutRef.current = setTimeout(() => setPaymentInitTimedOut(true), 18000);
+    paymentTimeoutRef.current = setTimeout(() => setPaymentInitTimedOut(true), 25000);
     createPaymentIntent(cents);
   }, [chargeNowAmount, createPaymentIntent]);
 
@@ -2069,11 +2097,11 @@ export default function StorefrontBook() {
     intentFiredRef.current = true;
     const cents = Math.round(chargeNowAmount * 100);
     setShowStripeForm(true);
-    // Timeout guard: if payment form isn't ready in 18 s, offer a manual retry
+    // Timeout guard: if payment form isn't ready in 25 s, offer a manual retry
     if (paymentTimeoutRef.current) clearTimeout(paymentTimeoutRef.current);
     paymentTimeoutRef.current = setTimeout(() => {
       setPaymentInitTimedOut(true);
-    }, 18000);
+    }, 25000);
     createPaymentIntent(cents);
   }, [session, isKiosk, email, name, discountedTotal, chargeNowAmount, clientSecret, paymentConfirmed, dateRange, listing, createPaymentIntent]);
 
@@ -3873,12 +3901,21 @@ export default function StorefrontBook() {
 
                 {/* ── Review / Change Dates — non-kiosk only (kiosk shows this above payment) ── */}
                 {!isKiosk && (
-                  <div>
+                  <div ref={reviewDatesRef}>
                     <Separator className="mb-6" />
                     <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-4 flex items-center gap-2">
                       <CalendarIcon className="w-3.5 h-3.5" />
                       Review or Change Dates
                     </h2>
+                    {datesConflict && (
+                      <div className="mb-4 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 flex items-start gap-3">
+                        <span className="text-amber-500 mt-0.5 shrink-0">⚠️</span>
+                        <div>
+                          <p className="text-sm font-semibold text-amber-800">Those dates are already booked</p>
+                          <p className="text-xs text-amber-700 mt-0.5">Please pick different dates below and then continue to payment.</p>
+                        </div>
+                      </div>
+                    )}
                     <div className="bg-background rounded-2xl border shadow-sm p-3 sm:p-4">
                       <Calendar
                         mode="range"
