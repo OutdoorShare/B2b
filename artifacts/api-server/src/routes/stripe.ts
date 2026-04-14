@@ -1,7 +1,7 @@
 import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
-import { tenantsTable, bookingsTable, customersTable, listingsTable, businessProfileTable, listingAddonsTable, promoCodesTable } from "@workspace/db/schema";
-import { eq, desc, and, or, sql } from "drizzle-orm";
+import { tenantsTable, bookingsTable, customersTable, listingsTable, businessProfileTable, listingAddonsTable, promoCodesTable, blockedDatesTable } from "@workspace/db/schema";
+import { eq, desc, and, or, sql, inArray, lte, gte } from "drizzle-orm";
 import { stripe, getStripeForTenant, PLATFORM_FEE_PERCENT, validateStripeCents, toStripeAmount } from "../services/stripe";
 import { calculateBookingPricing, feeModeFromLegacy, type FeeMode } from "../lib/pricing";
 import { computeListingPricing, validateRentalBase, countRentalDays } from "../lib/listing-pricing";
@@ -544,6 +544,83 @@ router.post("/stripe/payment-intent", async (req, res) => {
           listingId: validationListingId,
           error: priceErr?.message ?? String(priceErr),
         });
+      }
+    }
+
+    // ── Availability re-check (Rule: never charge for unavailable dates) ─────
+    // When the client sends listingId + dates, we re-verify availability server-side
+    // immediately before creating the Stripe PI. A race condition between browsing
+    // and paying could otherwise let two customers pay for the same unavailable slot.
+    if (validationListingId && rawStartDate && rawEndDate) {
+      try {
+        const checkListingId = Number(validationListingId);
+        const [listingQtyRow] = await db
+          .select({ quantity: listingsTable.quantity })
+          .from(listingsTable)
+          .where(and(eq(listingsTable.id, checkListingId), eq(listingsTable.tenantId, tenant.id)))
+          .limit(1);
+
+        if (listingQtyRow) {
+          const qty = listingQtyRow.quantity ?? 1;
+          const requestedQty = Math.max(1, Number(rawQuantity) || 1);
+
+          // Count overlapping confirmed/pending bookings for every day in the range
+          const overlappingBookings = await db
+            .select({ startDate: bookingsTable.startDate, endDate: bookingsTable.endDate, quantity: bookingsTable.quantity })
+            .from(bookingsTable)
+            .where(and(
+              eq(bookingsTable.listingId, checkListingId),
+              eq(bookingsTable.tenantId, tenant.id),
+              sql`${bookingsTable.status} NOT IN ('cancelled', 'rejected')`,
+              lte(bookingsTable.startDate, String(rawEndDate)),
+              gte(bookingsTable.endDate, String(rawStartDate)),
+            ));
+
+          // Walk each day to find the peak usage
+          const start = new Date(String(rawStartDate));
+          const end   = new Date(String(rawEndDate));
+          let maxBooked = 0;
+          for (const d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+            const day = d.toISOString().split("T")[0];
+            const booked = overlappingBookings.reduce((sum, b) =>
+              b.startDate <= day && b.endDate >= day ? sum + (b.quantity ?? 1) : sum, 0);
+            if (booked > maxBooked) maxBooked = booked;
+          }
+
+          // Also check blocked dates
+          const blocked = await db
+            .select({ startDate: blockedDatesTable.startDate, endDate: blockedDatesTable.endDate })
+            .from(blockedDatesTable)
+            .where(and(
+              eq(blockedDatesTable.tenantId, tenant.id),
+              lte(blockedDatesTable.startDate, String(rawEndDate)),
+              gte(blockedDatesTable.endDate, String(rawStartDate)),
+              or(
+                eq(blockedDatesTable.listingId, checkListingId),
+                sql`${blockedDatesTable.listingId} IS NULL`,
+              ),
+            ));
+
+          const isBlocked = blocked.length > 0;
+          const isFullyBooked = maxBooked + requestedQty > qty;
+
+          if (isBlocked || isFullyBooked) {
+            logWarn("payment_intent.availability_conflict", {
+              tenantId: tenant.id,
+              listingId: checkListingId,
+              startDate: rawStartDate,
+              endDate: rawEndDate,
+              maxBooked,
+              qty,
+              isBlocked,
+            });
+            res.status(409).json({ error: "These dates are no longer available. Please select different dates and try again." });
+            return;
+          }
+        }
+      } catch (availErr: any) {
+        // Non-fatal: log but don't block — the booking creation will also validate
+        logWarn("payment_intent.availability_check_failed", { tenantId: tenant.id, error: availErr?.message });
       }
     }
 

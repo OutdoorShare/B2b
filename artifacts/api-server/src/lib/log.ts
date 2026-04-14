@@ -4,7 +4,11 @@ export type LogFields = {
   bookingId?: number | string | null;
   listingId?: number | string | null;
   tenantId?: number | string | null;
+  customerId?: number | string | null;
   stripeId?: string | null;
+  action?: string | null;
+  result?: string | null;
+  email?: string | null;
   env?: string;
   [key: string]: unknown;
 };

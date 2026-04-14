@@ -26,7 +26,12 @@ import {
   sendIncompleteStepsAdminEmail,
   sendSplitPaymentChargedEmail,
   sendClaimWindowClosingAdminEmail,
+  sendBookingPickupReminderEmail,
+  sendAdminPickupReminderEmail,
+  withSmtpCreds,
+  withBrand,
 } from "./gmail";
+import { getTenantSmtpCreds, getTenantBrand } from "./smtp-helper";
 import { createNotification } from "./notifications";
 import { getStripeForTenant } from "./stripe";
 
@@ -907,6 +912,103 @@ async function autoReleaseDepositsAfterClaimWindow() {
   }
 }
 
+// ── Email retry: re-send missed booking confirmation emails ───────────────────
+// If a confirmation email failed to send at booking creation time, this pass
+// picks it up. Only retries bookings older than 30 minutes (to avoid racing with
+// the in-flight send) and caps at 10 per cycle so we never spam.
+async function retryMissedConfirmationEmails() {
+  const cutoffOld  = new Date(Date.now() - 30  * 60 * 1000); // >30 min old
+  const cutoffNew  = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000); // <7 days old
+  try {
+    const bookings = await db
+      .select({
+        id:            bookingsTable.id,
+        customerName:  bookingsTable.customerName,
+        customerEmail: bookingsTable.customerEmail,
+        listingId:     bookingsTable.listingId,
+        startDate:     bookingsTable.startDate,
+        endDate:       bookingsTable.endDate,
+        tenantId:      bookingsTable.tenantId,
+        emailEvents:   bookingsTable.emailEvents,
+        source:        bookingsTable.source,
+      })
+      .from(bookingsTable)
+      .where(and(
+        sql`${bookingsTable.status} IN ('confirmed', 'pending')`,
+        sql`${bookingsTable.createdAt} < ${cutoffOld}`,
+        sql`${bookingsTable.createdAt} > ${cutoffNew}`,
+        sql`${bookingsTable.customerEmail} IS NOT NULL`,
+        sql`${bookingsTable.source} != 'kiosk'`,
+      ))
+      .limit(10);
+
+    for (const booking of bookings) {
+      // Check if a confirmation email has already been sent
+      let events: { type: string }[] = [];
+      try { events = JSON.parse(booking.emailEvents ?? "[]"); } catch { events = []; }
+      if (events.some(e => e.type === "confirmation")) continue;
+
+      // Look up listing title + tenant info for the email
+      const [listing] = await db
+        .select({ title: listingsTable.title })
+        .from(listingsTable)
+        .where(eq(listingsTable.id, booking.listingId!))
+        .limit(1);
+
+      const { companyName, adminEmail, slug } = await getContext(booking.tenantId);
+      const tenantId = booking.tenantId ?? null;
+
+      try {
+        const [smtpCreds, brand] = await Promise.all([
+          getTenantSmtpCreds(tenantId),
+          getTenantBrand(tenantId),
+        ]);
+        await withBrand(brand, () => withSmtpCreds(smtpCreds, () => sendBookingPickupReminderEmail({
+          customerName:  booking.customerName,
+          customerEmail: booking.customerEmail!,
+          bookingId:     booking.id,
+          listingTitle:  listing?.title ?? "your rental",
+          startDate:     booking.startDate,
+          endDate:       booking.endDate,
+          companyName,
+          tenantSlug:    slug,
+          adminEmail,
+        })));
+
+        // Mark as sent
+        const updated: { type: string; sentAt: string; toEmail?: string }[] = [
+          ...events,
+          { type: "confirmation", sentAt: new Date().toISOString(), toEmail: booking.customerEmail ?? undefined },
+        ];
+        await db.update(bookingsTable)
+          .set({ emailEvents: JSON.stringify(updated), updatedAt: new Date() })
+          .where(eq(bookingsTable.id, booking.id));
+
+        console.log(`[scheduler] Retried missed confirmation email for booking #${booking.id} → ${booking.customerEmail}`);
+
+        // Also send admin alert if slug is known
+        if (adminEmail && slug) {
+          await sendAdminPickupReminderEmail({
+            adminEmail,
+            customerName:  booking.customerName,
+            customerEmail: booking.customerEmail!,
+            bookingId:     booking.id,
+            listingTitle:  listing?.title ?? "your rental",
+            startDate:     booking.startDate,
+            endDate:       booking.endDate,
+            companyName,
+            tenantSlug:    slug,
+          }).catch(err => console.warn(`[scheduler] Admin retry email failed for booking #${booking.id}:`, err?.message));
+        }
+      } catch (err: any) {
+        console.warn(`[scheduler] Email retry failed for booking #${booking.id}:`, err?.message);
+      }
+    }
+  } catch (err: any) {
+    console.warn("[scheduler] retryMissedConfirmationEmails error:", err?.message);
+  }
+}
+
 // ── Stale pending_payment booking expiry ──────────────────────────────────────
 // Bookings stuck in pending_payment for >24 hours have almost certainly failed
 // (the Stripe PI either expired or the customer abandoned checkout).
@@ -946,6 +1048,7 @@ async function runSchedulerCycle() {
     await alertClaimWindowClosingSoon();
     await autoReleaseDepositsAfterClaimWindow();
     await cancelStalePaymentPendingBookings();
+    await retryMissedConfirmationEmails();
   } catch (err: any) {
     console.warn("[scheduler] Cycle error:", err?.message);
   }

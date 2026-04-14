@@ -478,14 +478,20 @@ export default function AdminListingsForm() {
 
   const uploadBlob = useCallback(async (blob: Blob, filename: string): Promise<string> => {
     setUploading(true);
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 45_000);
     try {
       const fd = new FormData();
       fd.append("file", blob, filename);
-      const res = await fetch(`${BASE}/api/upload/image`, { method: "POST", body: fd });
+      const res = await fetch(`${BASE}/api/upload/image`, { method: "POST", body: fd, signal: controller.signal });
       if (!res.ok) throw new Error("Upload failed");
       const { url } = await res.json();
       return url as string;
+    } catch (err: any) {
+      if (err?.name === "AbortError") throw new Error("Upload timed out — please try again");
+      throw err;
     } finally {
+      clearTimeout(timeoutId);
       setUploading(false);
     }
   }, [BASE]);

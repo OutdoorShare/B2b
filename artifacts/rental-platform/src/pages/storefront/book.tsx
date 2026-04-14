@@ -4275,10 +4275,12 @@ export default function StorefrontBook() {
                           onClick={async () => {
                             if (!confirmedBooking || beforePhotos.length === 0) return;
                             setUploadingPhotos(true);
+                            const controller = new AbortController();
+                            const timeoutId = setTimeout(() => controller.abort(), 60_000);
                             try {
                               const fd = new FormData();
                               beforePhotos.forEach(f => fd.append("photos", f));
-                              const r = await fetch(`${BASE}/api/bookings/${confirmedBooking.id}/before-photos`, { method: "POST", body: fd });
+                              const r = await fetch(`${BASE}/api/bookings/${confirmedBooking.id}/before-photos`, { method: "POST", body: fd, signal: controller.signal });
                               const data = await r.json();
                               if (r.ok) {
                                 setSavedPhotos(data.photos ?? []);
@@ -4286,10 +4288,17 @@ export default function StorefrontBook() {
                                 beforePreviews.forEach(u => URL.revokeObjectURL(u));
                                 setBeforePreviews([]);
                                 toast({ title: `${data.photos?.length ?? 0} photo${(data.photos?.length ?? 0) !== 1 ? "s" : ""} saved!` });
+                              } else {
+                                toast({ title: "Upload failed — please try again", variant: "destructive" });
                               }
-                            } catch {
-                              toast({ title: "Upload failed — please try again", variant: "destructive" });
+                            } catch (uploadErr: any) {
+                              if (uploadErr?.name === "AbortError") {
+                                toast({ title: "Upload timed out — check your connection and try again", variant: "destructive" });
+                              } else {
+                                toast({ title: "Upload failed — please try again", variant: "destructive" });
+                              }
                             } finally {
+                              clearTimeout(timeoutId);
                               setUploadingPhotos(false);
                             }
                           }}
