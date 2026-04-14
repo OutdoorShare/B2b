@@ -503,7 +503,7 @@ export default function ContractBuilder() {
   const [editingAckText, setEditingAckText] = useState("");
   const [reorderingAck, setReorderingAck] = useState<number | null>(null);
   const [listingDropOpen, setListingDropOpen] = useState(false);
-  const [viewMode, setViewMode]           = useState<"edit" | "preview" | "acks">("edit");
+  const [viewMode, setViewMode]           = useState<"edit" | "preview">("edit");
 
   const [showPlatformWarning, setShowPlatformWarning]                 = useState(false);
   const [platformWarningAcknowledged, setPlatformWarningAcknowledged] = useState(false);
@@ -1053,38 +1053,84 @@ export default function ContractBuilder() {
                     className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all flex items-center gap-1.5 ${viewMode === "preview" ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-700"}`}>
                     <Eye className="w-3 h-3" /> Preview
                   </button>
-                  <button type="button" onClick={() => setViewMode("acks")}
-                    className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all flex items-center gap-1.5 ${viewMode === "acks" ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-700"}`}>
-                    <ListChecks className="w-3 h-3" />
-                    Acknowledgements
-                    {ackItems.length > 0 && (
-                      <span className={`ml-0.5 inline-flex items-center justify-center w-4 h-4 rounded-full text-[10px] font-bold ${viewMode === "acks" ? "bg-emerald-100 text-emerald-700" : "bg-slate-200 text-slate-600"}`}>
-                        {ackItems.length}
-                      </span>
-                    )}
-                  </button>
                 </div>
               </div>
 
-              {/* ── Acknowledgements Builder Panel ─────────────────────── */}
-              {viewMode === "acks" ? (
-                <div className="space-y-6">
-                  {/* Header card */}
-                  <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-                    <div className="flex items-center gap-3 px-6 py-4 bg-gradient-to-r from-emerald-50 to-white border-b border-emerald-100">
-                      <div className="w-8 h-8 rounded-lg bg-emerald-100 flex items-center justify-center shrink-0">
-                        <ListChecks className="w-4 h-4 text-emerald-700" />
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-semibold text-slate-900">Custom Acknowledgements</p>
-                        <p className="text-xs text-slate-500 mt-0.5">Each item appears as a checkbox the renter must review and check before signing. You write the exact wording.</p>
-                      </div>
-                      {!editingId && (
-                        <span className="text-xs text-amber-600 bg-amber-50 border border-amber-200 rounded-lg px-2.5 py-1 shrink-0">
-                          Save contract first to link items
+              {/* ── Document paper ─────────────────────────────────────── */}
+              <div className="bg-white rounded-sm shadow-[0_2px_8px_rgba(0,0,0,0.12),0_0_0_1px_rgba(0,0,0,0.04)] flex flex-col" style={{ minHeight: 900 }}>
+                <div className="px-16 pt-14 pb-6 border-b border-slate-100">
+                  <input type="text" value={title} onChange={e => setTitle(e.target.value)}
+                    className="w-full text-2xl font-bold text-slate-900 placeholder-slate-300 bg-transparent border-none outline-none tracking-tight"
+                    placeholder="Agreement Title"
+                    style={{ fontFamily: "'Georgia', 'Times New Roman', serif" }} />
+                  {editorContract?.updatedAt && (
+                    <p className="text-xs text-slate-400 mt-2">Last saved {new Date(editorContract.updatedAt).toLocaleString()}</p>
+                  )}
+                </div>
+
+                {viewMode === "edit" ? (
+                  <div className="flex-1 px-16 py-10">
+                    <textarea ref={textareaRef} id="contract-content" value={content}
+                      onChange={e => setContent(e.target.value)}
+                      placeholder={`Start typing your agreement, or paste directly from ChatGPT.\n\nMarkdown is supported:\n  # Section Heading\n  ## Sub-section\n  **bold text**\n  - bullet item\n  1. numbered item`}
+                      className="w-full h-full min-h-[640px] bg-transparent border-none outline-none resize-none text-slate-800 placeholder-slate-300"
+                      style={{ fontFamily: "'Georgia', 'Times New Roman', serif", fontSize: "14.5px", lineHeight: "1.9", letterSpacing: "0.01em" }}
+                      spellCheck />
+                  </div>
+                ) : (
+                  <>
+                    <div className="flex-1 px-16 py-10 min-h-[640px] text-slate-800"
+                      style={{ fontFamily: "'Georgia', 'Times New Roman', serif", fontSize: "14.5px" }}
+                      dangerouslySetInnerHTML={{ __html: markdownToHtml(content) || "<p style='color:#94a3b8'>Nothing to preview yet.</p>" }} />
+                    {/* Operator checkbox preview */}
+                    <div className="px-16 pb-10">
+                      <label className="flex items-start gap-3 cursor-default select-none">
+                        <div className="mt-0.5 w-4 h-4 rounded border-2 border-emerald-500 bg-emerald-500 flex items-center justify-center shrink-0">
+                          <svg className="w-2.5 h-2.5 text-white" fill="none" viewBox="0 0 12 12" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M2 6l3 3 5-5" /></svg>
+                        </div>
+                        <span className="text-sm text-slate-700" style={{ fontFamily: "'Georgia', 'Times New Roman', serif" }}>
+                          {checkboxLabel || "I have read and agree to the rental terms and conditions"}
+                        </span>
+                      </label>
+                    </div>
+                  </>
+                )}
+              </div>
+
+              {/* ── Custom Acknowledgements ─────────────────────────────── */}
+              <div className="space-y-5">
+                {/* Section divider + header */}
+                <div className="flex items-center gap-3 pt-2">
+                  <div className="flex-1 border-t border-slate-200" />
+                  <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 px-4 py-2 rounded-full bg-emerald-50 border border-emerald-200 shadow-sm">
+                      <ListChecks className="w-4 h-4 text-emerald-600" />
+                      <span className="text-sm font-semibold text-emerald-800">Custom Acknowledgements</span>
+                      {ackItems.length > 0 && (
+                        <span className="inline-flex items-center justify-center w-5 h-5 rounded-full text-[10px] font-bold bg-emerald-600 text-white">
+                          {ackItems.length}
                         </span>
                       )}
                     </div>
+                    {!editingId && (
+                      <span className="text-xs text-amber-600 bg-amber-50 border border-amber-200 rounded-full px-3 py-1 shrink-0">
+                        Save contract first to add items
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex-1 border-t border-slate-200" />
+                </div>
+                <p className="text-xs text-center text-slate-400 -mt-2">
+                  Each item below is shown as a required checkbox the renter must confirm before signing. You write the exact wording.
+                </p>
+
+                <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+                  <div className="flex items-center gap-3 px-6 py-4 bg-gradient-to-r from-emerald-50 to-white border-b border-emerald-100">
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-semibold text-slate-900">Acknowledgement Items</p>
+                      <p className="text-xs text-slate-500 mt-0.5">Add, edit, and reorder items. Changes save immediately.</p>
+                    </div>
+                  </div>
 
                     {/* Item list */}
                     <div className="divide-y divide-slate-100">
@@ -1277,47 +1323,6 @@ export default function ContractBuilder() {
                     </div>
                   )}
                 </div>
-              ) : (
-              <div className="bg-white rounded-sm shadow-[0_2px_8px_rgba(0,0,0,0.12),0_0_0_1px_rgba(0,0,0,0.04)] flex flex-col" style={{ minHeight: 900 }}>
-                <div className="px-16 pt-14 pb-6 border-b border-slate-100">
-                  <input type="text" value={title} onChange={e => setTitle(e.target.value)}
-                    className="w-full text-2xl font-bold text-slate-900 placeholder-slate-300 bg-transparent border-none outline-none tracking-tight"
-                    placeholder="Agreement Title"
-                    style={{ fontFamily: "'Georgia', 'Times New Roman', serif" }} />
-                  {editorContract?.updatedAt && (
-                    <p className="text-xs text-slate-400 mt-2">Last saved {new Date(editorContract.updatedAt).toLocaleString()}</p>
-                  )}
-                </div>
-
-                {viewMode === "edit" ? (
-                  <div className="flex-1 px-16 py-10">
-                    <textarea ref={textareaRef} id="contract-content" value={content}
-                      onChange={e => setContent(e.target.value)}
-                      placeholder={`Start typing your agreement, or paste directly from ChatGPT.\n\nMarkdown is supported:\n  # Section Heading\n  ## Sub-section\n  **bold text**\n  - bullet item\n  1. numbered item`}
-                      className="w-full h-full min-h-[640px] bg-transparent border-none outline-none resize-none text-slate-800 placeholder-slate-300"
-                      style={{ fontFamily: "'Georgia', 'Times New Roman', serif", fontSize: "14.5px", lineHeight: "1.9", letterSpacing: "0.01em" }}
-                      spellCheck />
-                  </div>
-                ) : (
-                  <>
-                    <div className="flex-1 px-16 py-10 min-h-[640px] text-slate-800"
-                      style={{ fontFamily: "'Georgia', 'Times New Roman', serif", fontSize: "14.5px" }}
-                      dangerouslySetInnerHTML={{ __html: markdownToHtml(content) || "<p style='color:#94a3b8'>Nothing to preview yet.</p>" }} />
-                    {/* Operator checkbox preview */}
-                    <div className="px-16 pb-10">
-                      <label className="flex items-start gap-3 cursor-default select-none">
-                        <div className="mt-0.5 w-4 h-4 rounded border-2 border-emerald-500 bg-emerald-500 flex items-center justify-center shrink-0">
-                          <svg className="w-2.5 h-2.5 text-white" fill="none" viewBox="0 0 12 12" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M2 6l3 3 5-5" /></svg>
-                        </div>
-                        <span className="text-sm text-slate-700" style={{ fontFamily: "'Georgia', 'Times New Roman', serif" }}>
-                          {checkboxLabel || "I have read and agree to the rental terms and conditions"}
-                        </span>
-                      </label>
-                    </div>
-                  </>
-                )}
-              </div>
-              )}
 
               {/* ── OutdoorShare Platform Agreements (preview only) ────────── */}
               {viewMode === "preview" && includePlatform && platformAgreements.length > 0 && (
