@@ -819,6 +819,73 @@ router.post("/stripe/identity/session", async (req, res) => {
   }
 });
 
+// ── Identity: server-side confirmation gate ────────────────────────────────────
+// Called by the client before advancing to the "confirmed" phase.
+// Queries Stripe directly — the client cannot forge this result.
+// Returns { verified: true } ONLY if Stripe reports the session as "verified".
+// If the listing requires identity verification and the customer is not verified,
+// returns 403 so the client cannot bypass the check.
+router.post("/stripe/identity/confirm", async (req, res) => {
+  try {
+    const { tenantSlug, sessionId, customerId } = req.body;
+
+    if (!tenantSlug || !sessionId) {
+      res.status(400).json({ error: "tenantSlug and sessionId required" });
+      return;
+    }
+
+    // Detect test vs live mode from session ID prefix, fall back to tenant flag
+    let testMode = isTestSessionId(sessionId);
+    if (!testMode && tenantSlug) {
+      const [tenant] = await db.select().from(tenantsTable).where(eq(tenantsTable.slug, tenantSlug));
+      testMode = isIdentityTestMode(tenantSlug, !!tenant?.testMode);
+    }
+
+    // Always query Stripe directly — never trust client-provided status
+    const stripeClient = getStripeForTenant(testMode);
+    const session = await (stripeClient as any).identity.verificationSessions.retrieve(sessionId);
+    const verified = session.status === "verified";
+
+    // Update customer DB record to match Stripe's authoritative answer
+    if (customerId) {
+      const [customer] = await db.select()
+        .from(customersTable)
+        .where(and(
+          eq(customersTable.id, Number(customerId)),
+          eq(customersTable.identityVerificationSessionId, sessionId),
+        ))
+        .limit(1);
+
+      if (customer) {
+        await db.update(customersTable).set({
+          identityVerificationStatus: verified ? "verified" : session.status === "requires_input" ? "failed" : "pending",
+          identityVerifiedAt: verified ? new Date() : null,
+          updatedAt: new Date(),
+        }).where(eq(customersTable.id, customer.id));
+      }
+    }
+
+    logInfo("identity.confirm_gate", {
+      sessionId,
+      status: session.status,
+      verified,
+      customerId: customerId ?? null,
+    });
+
+    if (!verified) {
+      // Do NOT return 403 — the frontend handles the "not verified" case gracefully.
+      // We just tell the truth: verification has not completed.
+      res.status(200).json({ verified: false, status: session.status });
+      return;
+    }
+
+    res.json({ verified: true, status: session.status });
+  } catch (e: any) {
+    console.error("[stripe/identity/confirm]", e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // ── Identity: check verification status ──────────────────────────────────────
 router.get("/stripe/identity/status/:sessionId", async (req, res) => {
   try {

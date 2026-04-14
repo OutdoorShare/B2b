@@ -2064,31 +2064,34 @@ export default function StorefrontBook() {
       }
 
       if (identitySessionId) {
-        const statusRes = await fetch(`${BASE}/api/stripe/identity/status/${identitySessionId}?tenantSlug=${encodeURIComponent(slug ?? "")}`);
-        const statusData = await statusRes.json();
-        if (statusData.verified) {
+        // Confirm with the server — Stripe is queried server-side; the client cannot forge the result.
+        const confirmRes = await fetch(`${BASE}/api/stripe/identity/confirm`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ tenantSlug: slug, sessionId: identitySessionId, customerId: session?.id ?? undefined }),
+        });
+        const confirmData = await confirmRes.json();
+        if (confirmData.verified) {
           setIdentityStatus("verified");
           sessionStorage.removeItem(`identity_session_${listingId}`);
           setTimeout(() => { setCompletePhase(isKiosk ? "photos" : "confirmed"); window.scrollTo(0, 0); }, 1200);
-        } else if (statusData.status === "requires_input" || statusData.status === "cancelled") {
-          // Definitive failure — user can retry or continue anyway
+        } else if (confirmData.status === "requires_input" || confirmData.status === "cancelled") {
           setIdentityStatus("failed");
-          setIdentityError("Verification could not be completed. You can try again or continue with your booking.");
+          setIdentityError("Verification could not be completed. Please try again.");
         } else {
-          // Still processing (async) — don't treat as failed, let renter continue
+          // Still processing — stay on this page; admin will be notified when it completes.
           setIdentityStatus("pending");
-          sessionStorage.removeItem(`identity_session_${listingId}`);
-          setTimeout(() => { setCompletePhase(isKiosk ? "photos" : "confirmed"); window.scrollTo(0, 0); }, 1500);
+          setIdentityError(null);
         }
       } else {
-        setIdentityStatus("verified");
-        sessionStorage.removeItem(`identity_session_${listingId}`);
-        setTimeout(() => { setCompletePhase(isKiosk ? "photos" : "confirmed"); window.scrollTo(0, 0); }, 1200);
+        // No session ID means we cannot confirm verification server-side.
+        setIdentityStatus("failed");
+        setIdentityError("Verification session unavailable. Please refresh and try again.");
       }
     } catch {
-      // Network/SDK error — don't block the renter, treat as pending
-      setIdentityStatus("pending");
-      setTimeout(() => { setCompletePhase(isKiosk ? "photos" : "confirmed"); window.scrollTo(0, 0); }, 1500);
+      // Network/SDK error — stay on verification page; do not silently advance.
+      setIdentityStatus("failed");
+      setIdentityError("Could not confirm your identity. Please check your connection and try again.");
     }
   };
 
@@ -2137,20 +2140,29 @@ export default function StorefrontBook() {
       if (error) { setIdentityStatus("failed"); setIdentityError(error.message ?? "Verification was not completed."); return; }
 
       if (idData.sessionId) {
-        const statusRes = await fetch(`${BASE}/api/stripe/identity/status/${idData.sessionId}?tenantSlug=${encodeURIComponent(slug ?? "")}`);
-        const statusData = await statusRes.json();
-        if (statusData.verified) {
+        // Confirm with the server — Stripe is queried server-side; the client cannot forge the result.
+        const confirmRes = await fetch(`${BASE}/api/stripe/identity/confirm`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ tenantSlug: slug, sessionId: idData.sessionId, customerId: session?.id ?? undefined }),
+        });
+        const confirmData = await confirmRes.json();
+        if (confirmData.verified) {
           setIdentityStatus("verified");
           sessionStorage.removeItem(`identity_session_${listingId}`);
           setTimeout(() => { setCompletePhase(isKiosk ? "photos" : "confirmed"); window.scrollTo(0, 0); }, 1200);
-        } else {
+        } else if (confirmData.status === "requires_input" || confirmData.status === "cancelled") {
           setIdentityStatus("failed");
-          setIdentityError("Identity could not be verified. Please try again or contact support.");
+          setIdentityError("Verification could not be completed. Please try again.");
+        } else {
+          // Still processing — stay on page; admin will be notified when complete.
+          setIdentityStatus("pending");
+          setIdentityError(null);
         }
       } else {
-        setIdentityStatus("verified");
-        sessionStorage.removeItem(`identity_session_${listingId}`);
-        setTimeout(() => { setCompletePhase(isKiosk ? "photos" : "confirmed"); window.scrollTo(0, 0); }, 1200);
+        // No session ID means we cannot confirm verification server-side.
+        setIdentityStatus("failed");
+        setIdentityError("Verification session unavailable. Please refresh and try again.");
       }
     } catch {
       setIdentityStatus("failed");
@@ -4163,8 +4175,8 @@ export default function StorefrontBook() {
                           </Button>
                         )}
 
-                        {/* Always-visible continue — booking is already saved */}
-                        {identityStatus !== "pending" && (
+                        {/* Skip button only shown when verification is NOT required by the listing */}
+                        {!needsIdentityVerif && identityStatus !== "pending" && (
                           <button
                             type="button"
                             className="w-full text-sm text-center text-muted-foreground hover:text-foreground underline underline-offset-2 py-1 transition-colors"
@@ -4172,6 +4184,12 @@ export default function StorefrontBook() {
                           >
                             {identityStatus === "failed" ? "Continue to confirmation without verifying →" : "Skip for now and continue →"}
                           </button>
+                        )}
+                        {/* When required and still processing, show informational message instead of skip */}
+                        {needsIdentityVerif && identityStatus === "pending" && (
+                          <p className="text-xs text-center text-blue-700 mt-1">
+                            Verification is being processed. You will receive an email once complete.
+                          </p>
                         )}
                       </>
                     )}

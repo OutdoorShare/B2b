@@ -1211,7 +1211,42 @@ router.put("/bookings/:id", async (req, res) => {
     // Get previous status for automation trigger — scoped to tenant
     const statusConditions = [eq(bookingsTable.id, bookingId)];
     if (req.tenantId) statusConditions.push(eq(bookingsTable.tenantId, req.tenantId));
-    const previousStatus = (await db.select({ status: bookingsTable.status }).from(bookingsTable).where(and(...statusConditions)))[0]?.status;
+    const [currentBooking] = await db
+      .select({ status: bookingsTable.status, listingId: bookingsTable.listingId, customerEmail: bookingsTable.customerEmail })
+      .from(bookingsTable)
+      .where(and(...statusConditions));
+    const previousStatus = currentBooking?.status;
+
+    // ── Server-side identity verification gate ─────────────────────────────────
+    // If the admin is marking a booking as "active" (pickup) and the listing
+    // requires identity verification, block until the customer is actually verified.
+    // This prevents bypass via the client-side skip button.
+    if (body.status === "active" && previousStatus !== "active" && currentBooking?.listingId) {
+      const [listingForIdCheck] = await db
+        .select({ requireIdentityVerification: listingsTable.requireIdentityVerification })
+        .from(listingsTable)
+        .where(eq(listingsTable.id, currentBooking.listingId));
+
+      if (listingForIdCheck?.requireIdentityVerification && currentBooking.customerEmail) {
+        const [customerForIdCheck] = await db
+          .select({ identityVerificationStatus: customersTable.identityVerificationStatus })
+          .from(customersTable)
+          .where(eq(customersTable.email, currentBooking.customerEmail.toLowerCase()))
+          .limit(1);
+
+        if (!customerForIdCheck || customerForIdCheck.identityVerificationStatus !== "verified") {
+          logWarn("booking.activation_blocked_identity_unverified", {
+            bookingId,
+            customerEmail: currentBooking.customerEmail,
+            identityStatus: customerForIdCheck?.identityVerificationStatus ?? "no_record",
+          });
+          res.status(422).json({
+            error: "Identity verification required: the renter's identity has not been verified. Send them the verification link before marking this booking as active.",
+          });
+          return;
+        }
+      }
+    }
 
     const whereConditions = [eq(bookingsTable.id, bookingId)];
     if (req.tenantId) whereConditions.push(eq(bookingsTable.tenantId, req.tenantId));
