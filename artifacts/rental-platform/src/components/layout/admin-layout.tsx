@@ -95,7 +95,11 @@ const NAV_ITEMS: NavItem[] = NAV_GROUPS.flatMap(g => g.items);
 
 function EmailVerificationBanner() {
   const session = getAdminSession();
-  const [dismissed, setDismissed] = useState(false);
+  const dismissKey = session ? `ev-banner-dismissed-${session.tenantSlug ?? session.email}` : null;
+  const [dismissed, setDismissed] = useState(() => {
+    if (!dismissKey) return false;
+    return localStorage.getItem(dismissKey) === "1";
+  });
   const [resending, setResending] = useState(false);
   const [resent, setResent] = useState(false);
   const base = import.meta.env.BASE_URL.replace(/\/+$/, "");
@@ -104,6 +108,11 @@ function EmailVerificationBanner() {
   if (dismissed || !session || session.type !== "owner" || session.emailVerified !== false) {
     return null;
   }
+
+  const handleDismiss = () => {
+    if (dismissKey) localStorage.setItem(dismissKey, "1");
+    setDismissed(true);
+  };
 
   const handleResend = async () => {
     if (!session.email) return;
@@ -142,7 +151,7 @@ function EmailVerificationBanner() {
         </button>
       )}
       <button
-        onClick={() => setDismissed(true)}
+        onClick={handleDismiss}
         className="text-xs text-amber-500 hover:text-amber-700 shrink-0 ml-1"
         title="Dismiss"
       >
