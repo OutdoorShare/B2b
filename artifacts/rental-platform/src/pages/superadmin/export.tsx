@@ -6,7 +6,6 @@ import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { SuperAdminLayout } from "@/components/layout/superadmin-layout";
 
-const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 function getToken() { return localStorage.getItem("superadmin_token") ?? ""; }
 
 export default function SuperAdminExport() {
@@ -20,7 +19,7 @@ export default function SuperAdminExport() {
   async function handleDownload() {
     setDownloading(true);
     try {
-      const res = await fetch(`${BASE}/api/superadmin/export/inventory`, {
+      const res = await fetch(`/api/superadmin/export/inventory`, {
         headers: { "x-superadmin-token": getToken() },
       });
       if (!res.ok) {
@@ -54,7 +53,7 @@ export default function SuperAdminExport() {
     }
     setSending(true);
     try {
-      const res = await fetch(`${BASE}/api/superadmin/export/inventory/email`, {
+      const res = await fetch(`/api/superadmin/export/inventory/email`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

@@ -15,13 +15,11 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { Users, Plus, Pencil, Trash2, Shield, UserCheck, UserX, Mail, RotateCcw, Clock, CheckCircle, AlertCircle } from "lucide-react";
 
-const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
-
 function getToken() { return localStorage.getItem("superadmin_token") ?? ""; }
 
 async function apiFetch(path: string, opts?: RequestInit) {
   const token = getToken();
-  return fetch(`${BASE}/api${path}`, {
+  return fetch(`/api${path}`, {
     ...opts,
     headers: { "Content-Type": "application/json", "x-superadmin-token": token, ...(opts?.headers as any) },
   });

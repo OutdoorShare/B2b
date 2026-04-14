@@ -25,11 +25,9 @@ const navigation = [
   { name: "Developer", href: "/superadmin/developer", icon: Bug },
 ];
 
-const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
-
 async function logout(setLocation: (to: string) => void) {
   try {
-    await fetch(`${BASE}/api/superadmin/auth/logout`, { method: "POST" });
+    await fetch(`/api/superadmin/auth/logout`, { method: "POST", credentials: "include" });
   } catch { /* ignore network errors — still clear local state */ }
   localStorage.removeItem("superadmin_key");
   localStorage.removeItem("superadmin_token");

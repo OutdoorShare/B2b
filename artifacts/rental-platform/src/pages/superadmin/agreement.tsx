@@ -13,13 +13,11 @@ import {
 } from "lucide-react";
 import { format } from "date-fns";
 
-const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
-
 function getToken() { return localStorage.getItem("superadmin_token") ?? ""; }
 
 async function apiFetch(path: string, opts?: RequestInit) {
   const tok = getToken();
-  const res = await fetch(`${BASE}/api/${path}`, {
+  const res = await fetch(`/api/${path}`, {
     ...opts,
     headers: { "Content-Type": "application/json", "x-superadmin-token": tok, ...(opts?.headers ?? {}) },
   });

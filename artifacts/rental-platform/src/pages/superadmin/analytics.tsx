@@ -10,13 +10,12 @@ import {
 } from "recharts";
 import { format } from "date-fns";
 
-const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 const OS_GREEN = "#3ab549";
 
 function getToken() { return localStorage.getItem("superadmin_token") ?? ""; }
 
 async function apiFetch(path: string) {
-  return fetch(`${BASE}/api${path}`, {
+  return fetch(`/api${path}`, {
     headers: { "x-superadmin-token": getToken() },
   });
 }
@@ -80,8 +79,7 @@ export default function SuperAdminAnalytics() {
   const [loading, setLoading] = useState(true);
 
   const load = useCallback(async () => {
-    const token = getToken();
-    if (!token) { setLocation("/superadmin"); return; }
+    if (!localStorage.getItem("superadmin_user")) { setLocation("/superadmin"); return; }
     setLoading(true);
     try {
       const r = await apiFetch("/superadmin/analytics");

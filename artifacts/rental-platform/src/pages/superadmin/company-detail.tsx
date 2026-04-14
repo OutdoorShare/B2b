@@ -25,10 +25,9 @@ import { useToast } from "@/hooks/use-toast";
 import { Switch } from "@/components/ui/switch";
 import { format } from "date-fns";
 
-const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 function getToken() { return localStorage.getItem("superadmin_token") ?? ""; }
 async function sa(path: string, opts?: RequestInit) {
-  return fetch(`${BASE}/api${path}`, {
+  return fetch(`/api${path}`, {
     ...opts,
     headers: { "Content-Type": "application/json", "x-superadmin-token": getToken(), ...opts?.headers },
   });
@@ -1223,8 +1222,7 @@ export default function CompanyDetailPage() {
   const [deleting, setDeleting] = useState(false);
 
   const loadTenant = useCallback(async () => {
-    const token = getToken();
-    if (!token) { setLocation("/superadmin"); return; }
+    if (!localStorage.getItem("superadmin_user")) { setLocation("/superadmin"); return; }
     const r = await sa(`/superadmin/tenants/${tenantId}`);
     if (r.status === 401) { setLocation("/superadmin"); return; }
     if (r.status === 404) { setLocation("/superadmin/dashboard"); return; }

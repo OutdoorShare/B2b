@@ -5,7 +5,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
-const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 const OS_GREEN = "#3ab549";
 const OS_GREEN_DARK = "#2e9a3d";
 
@@ -23,8 +22,9 @@ export default function SuperAdminLogin() {
     if (!password) { setError("Password is required."); return; }
     setLoading(true);
     try {
-      const res = await fetch(`${BASE}/api/superadmin/auth/login`, {
+      const res = await fetch(`/api/superadmin/auth/login`, {
         method: "POST",
+        credentials: "include",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email: email.trim().toLowerCase(), password }),
       });
@@ -116,7 +116,7 @@ export default function SuperAdminLogin() {
 
             <div className="text-center pt-1">
               <a
-                href={`${BASE}/forgot-password?type=superadmin${email ? `&email=${encodeURIComponent(email.trim())}` : ""}`}
+                href={`/forgot-password?type=superadmin${email ? `&email=${encodeURIComponent(email.trim())}` : ""}`}
                 className="text-xs text-slate-500 hover:text-slate-300 underline underline-offset-2 transition-colors"
               >
                 Forgot your password?

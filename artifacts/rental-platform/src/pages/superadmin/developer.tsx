@@ -11,7 +11,6 @@ import { Badge } from "@/components/ui/badge";
 import { format, formatDistanceToNow } from "date-fns";
 import { cn } from "@/lib/utils";
 
-const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 const OS_GREEN = "#3ab549";
 
 const ISSUE_DESCRIPTIONS: Record<string, { what: string; impact: string }> = {
@@ -52,7 +51,7 @@ const ISSUE_DESCRIPTIONS: Record<string, { what: string; impact: string }> = {
 function getToken() { return localStorage.getItem("superadmin_token") ?? ""; }
 
 async function saFetch(path: string, opts?: RequestInit) {
-  return fetch(`${BASE}/api${path}`, {
+  return fetch(`/api${path}`, {
     ...opts,
     headers: {
       "x-superadmin-token": getToken(),

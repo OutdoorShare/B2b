@@ -5,8 +5,6 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Eye, EyeOff, CheckCircle, AlertCircle, Loader2, Lock } from "lucide-react";
 
-const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
-
 function getTokenFromUrl(): string {
   if (typeof window === "undefined") return "";
   return new URLSearchParams(window.location.search).get("token") ?? "";
@@ -35,7 +33,7 @@ export default function SuperAdminAcceptInvite() {
 
     (async () => {
       try {
-        const res = await fetch(`${BASE}/api/superadmin/team/accept-invite?token=${encodeURIComponent(token)}`);
+        const res = await fetch(`/api/superadmin/team/accept-invite?token=${encodeURIComponent(token)}`);
         const data = await res.json();
         if (res.status === 410) { setState("expired"); return; }
         if (res.status === 409) { setState("already_accepted"); return; }
@@ -57,7 +55,7 @@ export default function SuperAdminAcceptInvite() {
 
     setState("submitting");
     try {
-      const res = await fetch(`${BASE}/api/superadmin/team/accept-invite`, {
+      const res = await fetch(`/api/superadmin/team/accept-invite`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ token, password }),

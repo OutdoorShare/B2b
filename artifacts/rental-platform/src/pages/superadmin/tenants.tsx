@@ -15,13 +15,12 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";
 
-const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 const OS_GREEN = "#3ab549";
 
 function getToken() { return localStorage.getItem("superadmin_token") ?? ""; }
 
 async function apiFetch(path: string, opts?: RequestInit) {
-  const r = await fetch(`${BASE}/api${path}`, {
+  const r = await fetch(`/api${path}`, {
     ...opts,
     headers: {
       "x-superadmin-token": getToken(),
@@ -125,8 +124,7 @@ export default function SuperAdminTenants() {
   };
 
   const load = useCallback(async () => {
-    const token = getToken();
-    if (!token) { setLocation("/superadmin"); return; }
+    if (!localStorage.getItem("superadmin_user")) { setLocation("/superadmin"); return; }
     setLoading(true);
     try {
       const data = await apiFetch("/superadmin/tenants");

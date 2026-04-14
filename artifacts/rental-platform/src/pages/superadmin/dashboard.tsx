@@ -11,11 +11,10 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { format, isAfter, isBefore, parseISO, startOfToday } from "date-fns";
 
-const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 function getToken() { return localStorage.getItem("superadmin_token") ?? ""; }
 async function apiFetch(path: string, opts?: RequestInit) {
   const token = getToken();
-  const res = await fetch(`${BASE}/api${path}`, {
+  const res = await fetch(`/api${path}`, {
     ...opts,
     headers: { "Content-Type": "application/json", "x-superadmin-token": token, ...opts?.headers },
   });
@@ -80,8 +79,7 @@ export default function SuperAdminDashboard() {
   const today = startOfToday();
 
   const load = useCallback(async () => {
-    const token = getToken();
-    if (!token) { setLocation("/superadmin"); return; }
+    if (!localStorage.getItem("superadmin_user")) { setLocation("/superadmin"); return; }
     setLoading(true);
     setClaimsLoading(true);
     try {

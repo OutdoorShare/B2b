@@ -6,7 +6,6 @@ import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 
 const OS_GREEN = "#3ab549";
-const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
 function getToken() { return localStorage.getItem("superadmin_token") ?? ""; }
 
@@ -55,7 +54,7 @@ export default function DocsAdminPage() {
     setSyncStatusLoading(true);
     setSyncError(null);
     try {
-      const res = await fetch(`${BASE}/api/superadmin/docs/sync-platform-features`, {
+      const res = await fetch(`/api/superadmin/docs/sync-platform-features`, {
         headers: { "x-superadmin-token": getToken() },
       });
       if (!res.ok) throw new Error("Failed to load");
@@ -76,7 +75,7 @@ export default function DocsAdminPage() {
     setSyncError(null);
     setLastResult(null);
     try {
-      const res = await fetch(`${BASE}/api/superadmin/docs/sync-platform-features`, {
+      const res = await fetch(`/api/superadmin/docs/sync-platform-features`, {
         method: "POST",
         headers: { "x-superadmin-token": getToken(), "Content-Type": "application/json" },
       });
