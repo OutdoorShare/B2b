@@ -1546,22 +1546,60 @@ export default function StorefrontBook() {
   const startFormattedWithTime = dateRange?.from ? `${format(dateRange.from, "MMM d, yyyy")} at ${pickupTime}` : "—";
   const endFormattedWithTime = dateRange?.to ? `${format(dateRange.to, "MMM d, yyyy")} at ${dropoffTime}` : "—";
 
+  // Derive first / last name from the full name string the renter entered
+  const _nameParts = (name || "").trim().split(/\s+/);
+  const _firstName = _nameParts[0] || "";
+  const _lastName  = _nameParts.slice(1).join(" ") || "";
+
   const autoFillMap: Record<string, string> = {
-    renter_name:    name || "—",
-    renter_email:   email || "—",
-    renter_phone:   phone || "—",
-    listing_title:  listing?.title || "—",
-    category:       (listing as any)?.categoryName || "—",
-    start_date:     startFormattedWithTime,
-    end_date:       endFormattedWithTime,
-    pickup_time:    pickupTime,
-    dropoff_time:   dropoffTime,
-    rental_days:    String(days),
-    price_per_day:  listing?.pricePerDay ? `$${parseFloat(String(listing.pricePerDay)).toFixed(2)}` : "—",
-    subtotal:       `$${subtotal.toFixed(2)}`,
-    deposit_amount: deposit > 0 ? `$${deposit.toFixed(2)}` : "$0.00",
-    total_price:    `$${discountedTotal.toFixed(2)}`,
-    company_name:   (businessProfile as any)?.name || "—",
+    // ── Renter personal info — primary keys ──
+    renter_name:         name    || "—",
+    renter_email:        email   || "—",
+    renter_phone:        phone   || "—",
+    // ── Common aliases operators put in their templates ──
+    first_name:          _firstName || name || "—",
+    last_name:           _lastName  || "—",
+    full_name:           name    || "—",
+    name:                name    || "—",
+    customer_name:       name    || "—",
+    client_name:         name    || "—",
+    renter_first_name:   _firstName || "—",
+    renter_last_name:    _lastName  || "—",
+    renter_full_name:    name    || "—",
+    email:               email   || "—",
+    renter_email_address:email   || "—",
+    email_address:       email   || "—",
+    customer_email:      email   || "—",
+    phone:               phone   || "—",
+    phone_number:        phone   || "—",
+    renter_phone_number: phone   || "—",
+    customer_phone:      phone   || "—",
+    mobile:              phone   || "—",
+    // ── Listing & booking info ──
+    listing_title:       listing?.title || "—",
+    item:                listing?.title || "—",
+    rental_item:         listing?.title || "—",
+    category:            (listing as any)?.categoryName || "—",
+    start_date:          startFormattedWithTime,
+    end_date:            endFormattedWithTime,
+    pickup_date:         startFormattedWithTime,
+    return_date:         endFormattedWithTime,
+    pickup_time:         pickupTime,
+    dropoff_time:        dropoffTime,
+    rental_days:         String(days),
+    duration:            `${days} day${days > 1 ? "s" : ""}`,
+    // ── Pricing ──
+    price_per_day:       listing?.pricePerDay ? `$${parseFloat(String(listing.pricePerDay)).toFixed(2)}` : "—",
+    subtotal:            `$${subtotal.toFixed(2)}`,
+    deposit_amount:      deposit > 0 ? `$${deposit.toFixed(2)}` : "$0.00",
+    security_deposit:    deposit > 0 ? `$${deposit.toFixed(2)}` : "$0.00",
+    total_price:         `$${discountedTotal.toFixed(2)}`,
+    total:               `$${discountedTotal.toFixed(2)}`,
+    rental_total:        `$${discountedTotal.toFixed(2)}`,
+    // ── Company ──
+    company_name:        (businessProfile as any)?.name || "—",
+    business_name:       (businessProfile as any)?.name || "—",
+    operator_name:       (businessProfile as any)?.name || "—",
   };
 
   function renderAgreementParagraph(para: string, paraIdx: number) {
@@ -1655,6 +1693,43 @@ export default function StorefrontBook() {
       setPhone(session.phone ?? "");
     }
   }, [session]);
+
+  // Pre-populate customFieldValues with known personal data whenever name/email/phone
+  // changes. This catches any operator-defined field whose key is not in autoFillMap
+  // but clearly maps to renter info (e.g. a custom key called "renter_first" or "licence_holder").
+  // Fields already in autoFillMap are fully auto-filled in the document and won't appear
+  // as form inputs at all, so this only fills inputs for non-standard keys.
+  useEffect(() => {
+    if (!name && !email && !phone) return;
+    const parts = (name || "").trim().split(/\s+/);
+    const fn = parts[0] || "";
+    const ln = parts.slice(1).join(" ") || "";
+
+    // Pattern matching: key contains these words → pre-fill with the matching value
+    const patterns: Array<{ test: (k: string) => boolean; value: string }> = [
+      { test: k => /\bfirst[\s_]?name\b/i.test(k) || k === "firstname",          value: fn    },
+      { test: k => /\blast[\s_]?name\b/i.test(k)  || k === "lastname" || k === "surname", value: ln },
+      { test: k => /\b(full[\s_]?name|whole[\s_]?name)\b/i.test(k),              value: name  },
+      { test: k => /\bemail\b/i.test(k),                                          value: email },
+      { test: k => /\bphone\b/i.test(k) || /\bmobile\b/i.test(k) || /\bcell\b/i.test(k), value: phone },
+    ];
+
+    setCustomFieldValues(prev => {
+      const next = { ...prev };
+      let changed = false;
+      for (const field of contractFields) {
+        if (next[field.key]) continue; // already has a value — don't overwrite
+        for (const p of patterns) {
+          if (p.test(field.key) && p.value) {
+            next[field.key] = p.value;
+            changed = true;
+            break;
+          }
+        }
+      }
+      return changed ? next : prev;
+    });
+  }, [name, email, phone, contractFields]);
 
   // ── Signature canvas helpers ──
   const getSigPos = useCallback((e: MouseEvent | TouchEvent, canvas: HTMLCanvasElement) => {
