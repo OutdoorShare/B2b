@@ -79,6 +79,7 @@ const ALLOWED_ORIGIN_PATTERNS = [
   /^https?:\/\/localhost(:\d+)?$/,
   /^https?:\/\/.*\.replit\.dev$/,
   /^https?:\/\/.*\.replit\.app$/,
+  /^https?:\/\/.*\.vercel\.app$/,
   /^https?:\/\/.*\.myoutdoorshare\.com$/,
   /^https?:\/\/(www\.)?outdoorshare\.rent$/,
 ];
