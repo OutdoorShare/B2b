@@ -11,6 +11,7 @@ import {
   ExternalLink, Clock, ShieldCheck, ShieldOff, History,
   ArrowLeft, Plus, ToggleLeft, ToggleRight, Link2,
   ListChecks, GripVertical, Pencil, ChevronUp as Up, ChevronDown as Down, Check,
+  Zap, BookOpen,
 } from "lucide-react";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
@@ -487,6 +488,7 @@ export default function ContractBuilder() {
   const [checkboxLabel, setCheckboxLabel] = useState("I have read and agree to the rental terms and conditions");
   const [includePlatform, setIncludePlatform] = useState(true);
   const [editorListingIds, setEditorListingIds] = useState<number[]>([]);
+  const [listingRules, setListingRules] = useState<Array<{ id: number; listingId: number; title: string; description: string | null; fee: number; sortOrder: number }>>([]);
 
   const [saving, setSaving]       = useState(false);
   const [saved, setSaved]         = useState(false);
@@ -534,6 +536,20 @@ export default function ContractBuilder() {
 
   useEffect(() => { loadTemplates(); }, []);
 
+  useEffect(() => {
+    if (editorListingIds.length === 0) { setListingRules([]); return; }
+    let stale = false;
+    Promise.all(
+      editorListingIds.map(id => apiFetch(`listings/${id}/rules`).catch(() => []))
+    ).then(results => {
+      if (stale) return;
+      const seen = new Set<number>();
+      const allRules = results.flat().filter((r: any) => r && !seen.has(r.id) && seen.add(r.id));
+      setListingRules(allRules);
+    });
+    return () => { stale = true; };
+  }, [editorListingIds.join(",")]);
+
   // ── Editor helpers ─────────────────────────────────────────────────────────
   const loadAckItems = (contractId: number | null) => {
     const url = contractId
@@ -562,6 +578,7 @@ export default function ContractBuilder() {
     setAckText("");
     setEditingAckId(null);
     setEditingAckText("");
+    setListingRules([]);
     setReorderingAck(null);
   };
 
@@ -585,18 +602,21 @@ export default function ContractBuilder() {
     loadAckItems(t.id);
   };
 
-  const handleAddAck = async () => {
-    if (!ackText.trim()) return;
+  const handleAddAck = async (prefillText?: string) => {
+    const text = (prefillText ?? ackText).trim();
+    if (!text) return;
     setSavingAck(true);
     try {
+      const nextNum = ackItems.length + 1;
       const item = await apiFetch("contracts/acknowledgements", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text: ackText.trim(), required: ackRequired, contractId: editingId ?? null, sortOrder: ackItems.length }),
+        body: JSON.stringify({ text, required: ackRequired, contractId: editingId ?? null, sortOrder: ackItems.length }),
       });
       setAckItems(prev => [...prev, item]);
-      setAckText("");
+      if (!prefillText) setAckText("");
       setAckRequired(true);
+      insertToken(`{{ack_${nextNum}}}`);
     } catch { /* silent */ } finally { setSavingAck(false); }
   };
 
@@ -1031,6 +1051,17 @@ export default function ContractBuilder() {
                   ))}
                 </div>
               ))}
+              {ackItems.length > 0 && (
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider mr-0.5">Ack</span>
+                  {ackItems.map((_, idx) => (
+                    <button key={idx} type="button" onClick={() => insertToken(`{{ack_${idx + 1}}}`)} title={`Insert {{ack_${idx + 1}}}`}
+                      className="inline-flex items-center px-2 py-0.5 rounded-md border text-[11px] font-medium transition-colors text-emerald-600 bg-emerald-50 border-emerald-200 hover:bg-emerald-100">
+                      Ack #{idx + 1}
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
 
@@ -1081,7 +1112,16 @@ export default function ContractBuilder() {
                   <>
                     <div className="flex-1 px-16 py-10 min-h-[640px] text-slate-800"
                       style={{ fontFamily: "'Georgia', 'Times New Roman', serif", fontSize: "14.5px" }}
-                      dangerouslySetInnerHTML={{ __html: markdownToHtml(content) || "<p style='color:#94a3b8'>Nothing to preview yet.</p>" }} />
+                      dangerouslySetInnerHTML={{ __html: (() => {
+                        const esc = (s: string) => s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
+                        let md = content.replace(/\{\{ack_(\d+)\}\}/g, (_, num) => {
+                          const idx = parseInt(num, 10) - 1;
+                          const ack = ackItems[idx];
+                          if (ack) return `<span style="display:inline-flex;align-items:center;gap:4px;background:#ecfdf5;border:1px solid #a7f3d0;border-radius:6px;padding:2px 8px;font-size:12px;font-weight:600;color:#065f46;font-family:system-ui;vertical-align:baseline">☑ Ack #${num}: ${esc(ack.text)}</span>`;
+                          return `<span style="display:inline-flex;align-items:center;gap:4px;background:#fef3c7;border:1px solid #fde68a;border-radius:6px;padding:2px 8px;font-size:12px;font-weight:600;color:#92400e;font-family:system-ui">⚠ ack_${num} — not found</span>`;
+                        });
+                        return markdownToHtml(md) || "<p style='color:#94a3b8'>Nothing to preview yet.</p>";
+                      })() }} />
                     {/* Operator checkbox preview */}
                     <div className="px-16 pb-10">
                       <label className="flex items-start gap-3 cursor-default select-none">
@@ -1124,11 +1164,53 @@ export default function ContractBuilder() {
                   Each item below is shown as a required checkbox the renter must confirm before signing. You write the exact wording.
                 </p>
 
+                {listingRules.length > 0 && (
+                  <div className="bg-white rounded-xl border border-amber-200 shadow-sm overflow-hidden">
+                    <div className="flex items-center gap-3 px-5 py-3 bg-gradient-to-r from-amber-50 to-white border-b border-amber-100">
+                      <div className="w-7 h-7 rounded-lg bg-amber-100 flex items-center justify-center shrink-0">
+                        <BookOpen className="w-3.5 h-3.5 text-amber-700" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-semibold text-slate-900">Rules &amp; Guidelines</p>
+                        <p className="text-xs text-slate-500 mt-0.5">From assigned rentals — click to add as an acknowledgement.</p>
+                      </div>
+                    </div>
+                    <div className="divide-y divide-amber-50">
+                      {listingRules.map(rule => {
+                        const alreadyAdded = ackItems.some(a => a.text === `I acknowledge and agree to the following rule: ${rule.title}${rule.description ? ` — ${rule.description}` : ""}`);
+                        const ruleText = `I acknowledge and agree to the following rule: ${rule.title}${rule.description ? ` — ${rule.description}` : ""}`;
+                        return (
+                          <div key={rule.id} className="flex items-center gap-3 px-5 py-3 hover:bg-amber-50/50 transition-colors">
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm font-medium text-slate-800">{rule.title}</p>
+                              {rule.description && <p className="text-xs text-slate-500 mt-0.5">{rule.description}</p>}
+                              {rule.fee > 0 && <p className="text-[10px] text-amber-600 mt-0.5">Violation fee: ${rule.fee.toFixed(2)}</p>}
+                            </div>
+                            <button
+                              type="button"
+                              disabled={alreadyAdded || savingAck}
+                              onClick={() => handleAddAck(ruleText)}
+                              className={`inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all shrink-0 ${
+                                alreadyAdded
+                                  ? "bg-emerald-50 text-emerald-600 border border-emerald-200 cursor-default"
+                                  : "text-white shadow-sm hover:opacity-90"
+                              }`}
+                              style={!alreadyAdded ? { backgroundColor: "#3ab549" } : undefined}
+                            >
+                              {alreadyAdded ? <><Check className="w-3 h-3" /> Added</> : <><Plus className="w-3 h-3" /> Add</>}
+                            </button>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
                 <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
                   <div className="flex items-center gap-3 px-6 py-4 bg-gradient-to-r from-emerald-50 to-white border-b border-emerald-100">
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-semibold text-slate-900">Acknowledgement Items</p>
-                      <p className="text-xs text-slate-500 mt-0.5">Add, edit, and reorder items. Changes save immediately.</p>
+                      <p className="text-xs text-slate-500 mt-0.5">Add, edit, and reorder items. Each auto-inserts a numbered token into the document.</p>
                     </div>
                   </div>
 
@@ -1168,9 +1250,19 @@ export default function ContractBuilder() {
                             </button>
                           </div>
 
-                          {/* Item number badge */}
-                          <div className="w-6 h-6 rounded-full bg-emerald-50 border border-emerald-200 flex items-center justify-center text-[10px] font-bold text-emerald-700 shrink-0 mt-0.5">
-                            {idx + 1}
+                          {/* Item number + token badge */}
+                          <div className="flex flex-col items-center gap-1 shrink-0 mt-0.5">
+                            <div className="w-6 h-6 rounded-full bg-emerald-50 border border-emerald-200 flex items-center justify-center text-[10px] font-bold text-emerald-700">
+                              {idx + 1}
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => insertToken(`{{ack_${idx + 1}}}`)}
+                              className="text-[9px] font-mono text-emerald-600 bg-emerald-50 border border-emerald-200 rounded px-1 py-0.5 hover:bg-emerald-100 transition-colors whitespace-nowrap"
+                              title={`Insert {{ack_${idx + 1}}} into document`}
+                            >
+                              ack_{idx + 1}
+                            </button>
                           </div>
 
                           {/* Content / inline editor */}
