@@ -305,7 +305,7 @@ export default function StorefrontHome() {
     <div className="w-full min-h-screen bg-background">
 
       {/* ── HERO ─────────────────────────────────────────────── */}
-      <section className="relative w-full flex flex-col items-center justify-center overflow-hidden" style={{ minHeight: "520px" }}>
+      <section className="relative w-full flex flex-col items-center justify-center overflow-hidden" style={{ minHeight: "clamp(520px, 41.67vw, 600px)" }}>
         {(profile as any)?.coverImageUrl && !coverFailed ? (
           <div className="absolute inset-0 z-0">
             <div className="absolute inset-0 bg-black/55 z-10" />

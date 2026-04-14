@@ -421,6 +421,9 @@ export function ImageCropDialog({
                     {queueIdx + 1} of {files.length}
                   </span>
                 )}
+                <span className="ml-2 text-muted-foreground/70">
+                  · Output: {OUTPUT_W} × {OUTPUT_H} px
+                </span>
               </DialogDescription>
             </div>
             {onCancel && (

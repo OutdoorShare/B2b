@@ -1028,8 +1028,8 @@ export default function AdminSettings() {
                     onChange={e => { const f = e.target.files?.[0]; if (f) { setCoverCropFiles([f]); e.target.value = ""; } }}
                   />
                   {coverUrl ? (
-                    <div className="relative rounded-xl overflow-hidden border group">
-                      <img src={coverUrl} alt="Cover" className="w-full h-36 object-cover" onError={e => { e.currentTarget.style.display = "none"; setFormData((prev: any) => ({ ...prev, coverImageUrl: "" })); }} />
+                    <div className="relative rounded-xl overflow-hidden border group" style={{ aspectRatio: "12/5" }}>
+                      <img src={coverUrl} alt="Cover" className="w-full h-full object-cover" onError={e => { e.currentTarget.style.display = "none"; setFormData((prev: any) => ({ ...prev, coverImageUrl: "" })); }} />
                       <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-3">
                         <Button
                           type="button"
