@@ -529,7 +529,7 @@ if (typeof window !== "undefined") {
 }
 
 // ── Stripe Payment Form ────────────────────────────────────────────────────────
-function StripePaymentForm({ onSuccess, customerEmail, testMode }: { onSuccess: () => void; customerEmail: string; testMode?: boolean }) {
+function StripePaymentForm({ onSuccess, onRetry, customerEmail, testMode }: { onSuccess: () => void; onRetry: () => void; customerEmail: string; testMode?: boolean }) {
   const stripe = useStripe();
   const elements = useElements();
   const [paying, setPaying] = useState(false);
@@ -695,14 +695,14 @@ function StripePaymentForm({ onSuccess, customerEmail, testMode }: { onSuccess: 
               {loadError ?? "We couldn't load the secure payment form."}
             </p>
             <p className="text-xs text-muted-foreground">
-              Please check your connection and try again, or use a different browser.
+              Please try again — we'll request a fresh payment session automatically.
             </p>
             <button
               type="button"
               className="text-sm font-semibold text-primary underline underline-offset-2"
-              onClick={() => window.location.reload()}
+              onClick={() => onRetry()}
             >
-              Refresh and retry
+              Retry payment
             </button>
           </div>
         ) : (
@@ -840,6 +840,10 @@ export default function StorefrontBook() {
   const paymentTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   // Prevents the auto-create effect from firing again when email/name change after intent is already in flight
   const intentFiredRef = useRef(false);
+  // Session nonce: a random token that makes each checkout page load's idempotency key unique.
+  // On retry, we generate a new nonce so Stripe creates a brand-new PaymentIntent instead of
+  // returning the (possibly terminal) one from the previous attempt.
+  const sessionNonceRef = useRef<string>(Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2));
   // Split / payment plan
   const [usePaymentPlan, setUsePaymentPlan] = useState(false);
 
@@ -1958,6 +1962,9 @@ export default function StorefrontBook() {
       protectionFeeCents: platformProtectionFee > 0 ? Math.round(platformProtectionFee * 100) : undefined,
       passthroughFeeCents: serviceFee > 0 ? Math.round(serviceFee * 100) : undefined,
       customFeesCents: customFeesSubtotal > 0 ? Math.round(customFeesSubtotal * 100) : undefined,
+      // Session nonce: unique per checkout page load so each new session gets a fresh
+      // PaymentIntent rather than Stripe returning a possibly-terminal one via idempotency.
+      sessionNonce: sessionNonceRef.current,
       // Server-side pricing validation params — allow the server to independently
       // verify the rental base against the listing price in the database.
       listingId: String(listingId),
@@ -2018,6 +2025,28 @@ export default function StorefrontBook() {
       }
     }
   }, [slug, email, name, listingId, toast]);
+
+  // handleRetry: called by StripePaymentForm when it encounters a load error (e.g. terminal-state
+  // intent). Generates a fresh session nonce so the backend creates a brand-new PaymentIntent
+  // instead of returning the same stale one via idempotency, then re-initializes Elements in place.
+  const handleRetry = useCallback(() => {
+    // Rotate the nonce — this makes the next createPaymentIntent call use a different
+    // idempotency key, guaranteeing Stripe creates a fresh PaymentIntent.
+    sessionNonceRef.current = Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2);
+    // Clear stale state so Elements unmounts and remounts with the new secret.
+    setClientSecret(null);
+    setPaymentIntentId(null);
+    setCustomerSessionClientSecret(null);
+    setPaymentInitFailed(false);
+    setPaymentInitTimedOut(false);
+    setShowStripeForm(true);
+    // Allow the auto-create effect to fire again.
+    intentFiredRef.current = false;
+    const cents = Math.round(chargeNowAmount * 100);
+    if (paymentTimeoutRef.current) clearTimeout(paymentTimeoutRef.current);
+    paymentTimeoutRef.current = setTimeout(() => setPaymentInitTimedOut(true), 18000);
+    createPaymentIntent(cents);
+  }, [chargeNowAmount, createPaymentIntent]);
 
   // Auto-create payment intent for logged-in or kiosk users.
   // Kiosk: fires as soon as dates + total are ready — no name/email needed yet.
@@ -3703,16 +3732,7 @@ export default function StorefrontBook() {
                               <button
                                 type="button"
                                 className="text-sm font-semibold text-primary underline underline-offset-2"
-                                onClick={() => {
-                                  setPaymentInitFailed(false);
-                                  setPaymentInitTimedOut(false);
-                                  intentFiredRef.current = false;
-                                  setShowStripeForm(true);
-                                  const cents = Math.round(chargeNowAmount * 100);
-                                  if (paymentTimeoutRef.current) clearTimeout(paymentTimeoutRef.current);
-                                  paymentTimeoutRef.current = setTimeout(() => setPaymentInitTimedOut(true), 18000);
-                                  createPaymentIntent(cents);
-                                }}
+                                onClick={handleRetry}
                               >
                                 Retry payment setup
                               </button>
@@ -3727,16 +3747,7 @@ export default function StorefrontBook() {
                                 <button
                                   type="button"
                                   className="mt-2 text-sm font-semibold text-primary underline underline-offset-2"
-                                  onClick={() => {
-                                    setPaymentInitFailed(false);
-                                    setPaymentInitTimedOut(false);
-                                    intentFiredRef.current = false;
-                                    setShowStripeForm(true);
-                                    const cents = Math.round(chargeNowAmount * 100);
-                                    if (paymentTimeoutRef.current) clearTimeout(paymentTimeoutRef.current);
-                                    paymentTimeoutRef.current = setTimeout(() => setPaymentInitTimedOut(true), 18000);
-                                    createPaymentIntent(cents);
-                                  }}
+                                  onClick={handleRetry}
                                 >
                                   Taking longer than expected — tap to retry
                                 </button>
@@ -3790,15 +3801,7 @@ export default function StorefrontBook() {
                                   <button
                                     type="button"
                                     className="text-sm font-semibold text-primary underline underline-offset-2"
-                                    onClick={() => {
-                                      setPaymentInitFailed(false);
-                                      setPaymentInitTimedOut(false);
-                                      intentFiredRef.current = false;
-                                      const cents = Math.round(chargeNowAmount * 100);
-                                      if (paymentTimeoutRef.current) clearTimeout(paymentTimeoutRef.current);
-                                      paymentTimeoutRef.current = setTimeout(() => setPaymentInitTimedOut(true), 18000);
-                                      createPaymentIntent(cents);
-                                    }}
+                                    onClick={handleRetry}
                                   >
                                     Retry payment setup
                                   </button>
@@ -3813,15 +3816,7 @@ export default function StorefrontBook() {
                                     <button
                                       type="button"
                                       className="mt-1 text-sm font-semibold text-primary underline underline-offset-2"
-                                      onClick={() => {
-                                        setPaymentInitFailed(false);
-                                        setPaymentInitTimedOut(false);
-                                        intentFiredRef.current = false;
-                                        const cents = Math.round(chargeNowAmount * 100);
-                                        if (paymentTimeoutRef.current) clearTimeout(paymentTimeoutRef.current);
-                                        paymentTimeoutRef.current = setTimeout(() => setPaymentInitTimedOut(true), 18000);
-                                        createPaymentIntent(cents);
-                                      }}
+                                      onClick={handleRetry}
                                     >
                                       Taking longer than expected — tap to retry
                                     </button>
@@ -3856,6 +3851,7 @@ export default function StorefrontBook() {
                                   >
                                     <StripePaymentForm
                                       onSuccess={() => setPaymentConfirmed(true)}
+                                      onRetry={handleRetry}
                                       customerEmail={email}
                                       testMode={isTestMode}
                                     />

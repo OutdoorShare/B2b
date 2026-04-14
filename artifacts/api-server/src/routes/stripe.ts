@@ -358,6 +358,9 @@ router.post("/stripe/payment-intent", async (req, res) => {
       protectionFeeCents,
       passthroughFeeCents,
       customFeesCents,
+      // Session nonce: unique per checkout page load, prevents idempotency collisions
+      // when the same user re-books or parameters shift between attempts.
+      sessionNonce,
       // Server-side pricing validation params
       listingId: rawListingId,
       startDate: rawStartDate,
@@ -712,19 +715,56 @@ router.post("/stripe/payment-intent", async (req, res) => {
     }
     // Otherwise: full amount held on platform, swept later via sweep-pending
 
-    // Idempotency key: deterministic per (tenant, email, amount, listing) so retries
-    // return the same intent instead of creating duplicates.
-    // v2: bumped because PaymentIntent params changed (added top-level setup_future_usage).
-    // Stripe rejects idempotency-key reuse if the params differ from the original request.
-    const idempotencyKey = `pi_v2_${tenant.id}_${(customerEmail ?? "anon").replace(/[^a-z0-9@._-]/gi, "")}_${amountCents}_${bookingMeta?.listing_id ?? "none"}`;
+    // Idempotency key strategy:
+    // - When the frontend sends a `sessionNonce` (a random hex string generated fresh each
+    //   checkout page load), we incorporate it so each new checkout session always gets a
+    //   brand-new PaymentIntent — preventing stale/terminal intent reuse.
+    // - Within a single checkout session the nonce is stable, so network retries inside
+    //   `createPaymentIntent`'s retry loop are still idempotent.
+    // - Without a nonce (legacy / external callers), we fall back to the old key so
+    //   we don't break anything already in flight.
+    const nonceSuffix = sessionNonce ? `_n${String(sessionNonce).replace(/[^a-z0-9]/gi, "")}` : "";
+    const idempotencyKey = `pi_v3_${tenant.id}_${(customerEmail ?? "anon").replace(/[^a-z0-9@._-]/gi, "")}_${amountCents}_${bookingMeta?.listing_id ?? "none"}${nonceSuffix}`;
+
+    const TERMINAL_STATUSES = new Set(["succeeded", "canceled"]);
+
+    const createFreshIntent = async (extraKeySuffix: string = "") => {
+      const freshKey = `fresh_${Date.now()}_${Math.random().toString(36).slice(2)}${extraKeySuffix}`;
+      logInfo("payment_intent.creating_fresh", { tenantId: tenant.id, reason: "terminal_or_error", freshKey });
+      return stripeClient.paymentIntents.create(intentParams, { idempotencyKey: freshKey });
+    };
 
     let intent;
     try {
       intent = await stripeClient.paymentIntents.create(intentParams, { idempotencyKey });
+
+      // Guard: if Stripe returned an existing intent that is already in a terminal state
+      // (succeeded, canceled), we must NOT hand its client_secret to the frontend — Stripe
+      // Elements will refuse to initialize with it. Create a fresh intent instead.
+      if (TERMINAL_STATUSES.has(intent.status)) {
+        logInfo("payment_intent.terminal_detected", {
+          tenantId: tenant.id,
+          intentId: intent.id,
+          status: intent.status,
+          action: "creating_fresh_intent",
+        });
+        intent = await createFreshIntent("_terminal_replace");
+      }
     } catch (piErr: any) {
-      // Stale customer ID — happens when the Stripe mode changed (test ↔ live)
-      // or the connected account was reset. Create a fresh customer and retry once.
-      if (
+      // Idempotency key reused with different params (e.g. customer ID changed between
+      // test/live mode flip, or amount shifted before the nonce was adopted).
+      // Create a completely fresh intent — the old key is poisoned.
+      if (piErr?.code === "idempotency_key_in_use" || piErr?.message?.toLowerCase().includes("idempotency")) {
+        logInfo("payment_intent.idempotency_collision", {
+          tenantId: tenant.id,
+          idempotencyKey,
+          error: piErr.message,
+          action: "creating_fresh_intent",
+        });
+        intent = await createFreshIntent("_idem_collision");
+      } else if (
+        // Stale customer ID — happens when the Stripe mode changed (test ↔ live)
+        // or the connected account was reset. Create a fresh customer and retry once.
         piErr?.code === "resource_missing" &&
         piErr?.message?.toLowerCase().includes("customer") &&
         dbCustomerRef
@@ -741,12 +781,19 @@ router.post("/stripe/payment-intent", async (req, res) => {
           .set({ stripeCustomerId: sc.id, updatedAt: new Date() })
           .where(eq(customersTable.id, dbCustomerRef.id));
         intentParams.customer = sc.id;
-        // Use a different idempotency key for the retry since customer changed
-        intent = await stripeClient.paymentIntents.create(intentParams, { idempotencyKey: idempotencyKey + "_c2" });
+        intent = await createFreshIntent("_stale_customer");
       } else {
         throw piErr;
       }
     }
+
+    logInfo("payment_intent.ready", {
+      tenantId: tenant.id,
+      intentId: intent.id,
+      status: intent.status,
+      amountCents,
+      hasNonce: !!sessionNonce,
+    });
 
     // Create a Customer Session so the PaymentElement can display the customer's saved cards.
     // Non-fatal — if this fails the payment still works, just without the saved-card UI.
