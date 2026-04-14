@@ -10,7 +10,7 @@
   "rewrites": [
     {
       "source": "/api/:path*",
-      "destination": "https://YOUR_API_HOST/api/:path*"
+      "destination": "https://rental-dashboard-contactus35.replit.app/api/:path*"
     },
     {
       "source": "/:path*",
