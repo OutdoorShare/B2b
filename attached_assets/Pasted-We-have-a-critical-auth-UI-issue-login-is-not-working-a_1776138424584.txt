@@ -1,0 +1,178 @@
+We have a critical auth/UI issue: login is not working anywhere, and it appears the form is not even attempting to submit.
+
+Current behavior:
+
+* user enters login info
+* clicks submit/sign in
+* nothing happens
+* no visible loading
+* no redirect
+* no error
+* it appears the login action is not firing at all
+
+Please treat this as a full login submit pipeline failure, not just a credentials issue.
+
+Goal:
+When a user clicks login, the app must clearly do one of these:
+
+* start loading and submit auth request
+* show validation error
+* show auth error
+* redirect on success
+
+It should never appear dead.
+
+## What I need investigated first
+
+### 1. Confirm whether submit handler is firing
+
+Please inspect the login form and confirm:
+
+* the button is type="submit" if using form submit
+* the form onSubmit handler is actually attached
+* no parent element is blocking the event
+* no disabled/loading condition is stuck permanently
+* no JavaScript error is preventing submit
+* preventDefault is not swallowing the event without calling the login action
+
+Add temporary logs for:
+
+* login form mounted
+* submit clicked
+* onSubmit fired
+* validation passed/failed
+* auth request started
+* auth request finished
+* auth request error
+
+Right now it feels like the click does nothing, so I need to know the exact step where it dies.
+
+### 2. Inspect button state
+
+Please confirm whether the login button is:
+
+* disabled accidentally
+* inside an invalid form state
+* covered by another element
+* using a custom button component that is not forwarding type/click correctly
+
+This is a very likely UI bug.
+
+### 3. Check browser console for frontend errors
+
+Please capture any console errors that happen when the login page loads or when submit is clicked.
+
+I need the exact error if present.
+
+Examples:
+
+* React render error
+* undefined handler
+* event not defined
+* auth client init failure
+* network call never triggered due to exception
+
+### 4. Confirm network request is actually attempted
+
+Open Network tab and click login.
+
+Please confirm:
+
+* is any auth request fired at all?
+* which endpoint is supposed to be called?
+* what request payload should be sent?
+* does request fail, or is there no request?
+
+This will tell us if the issue is:
+
+* frontend submit not firing
+* frontend validation blocking silently
+* auth request failing immediately
+* backend unreachable
+
+### 5. Check form validation behavior
+
+Please inspect whether validation is silently preventing submit.
+
+Examples:
+
+* hidden required field failing
+* schema validation not surfacing errors
+* password/email normalization bug
+* form library state not updating
+* submit blocked because form thinks it is invalid
+
+If validation blocks submit, errors must be shown inline.
+
+### 6. Audit auth initialization
+
+Please confirm auth client/provider is initialized correctly on page load.
+
+Check:
+
+* auth SDK/client loaded
+* env vars present
+* API base URL present
+* session/auth provider mounted
+* no startup error is preventing login logic
+
+### 7. Add visible loading/error states
+
+Even before the root cause is fixed, improve UX so login never feels dead.
+
+Need:
+
+* loading spinner/text when submit starts
+* inline validation messages
+* inline auth failure message
+* disabled button only while request is actually in progress
+
+Examples:
+
+* “Signing you in...”
+* “Invalid email or password”
+* “We couldn’t reach the server. Please try again.”
+
+### 8. Check all login entry points
+
+Please test:
+
+* admin login
+* renter login
+* any platform login page
+* forgot password if related
+
+I need to know whether this is:
+
+* one shared login component broken everywhere
+* one auth hook broken everywhere
+* one route-specific bug
+
+### 9. Most likely root cause areas
+
+Please inspect these first:
+
+* custom Button component not submitting form
+* form onSubmit not wired correctly
+* validation silently blocking submit
+* auth mutation/hook never called
+* frontend exception before request
+* login API URL/env missing
+* auth provider broken on mount
+
+### 10. Deliverables
+
+Please send back:
+
+* exact root cause
+* exact file(s) changed
+* whether submit handler was firing or not
+* whether network request was firing or not
+* proof login now shows loading and submits correctly
+* proof for both:
+
+  * successful login
+  * invalid credentials case
+
+Simple rule:
+Clicking Login must always trigger a visible action. It should never do nothing.

@@ -1213,8 +1213,14 @@ export default function CompanyDetailPage() {
   const params = useParams<{ id: string }>();
   const tenantId = parseInt(params.id ?? "0");
   const [, setLocation] = useLocation();
+  const { toast } = useToast();
   const [tenant, setTenant] = useState<Tenant | null>(null);
   const [loading, setLoading] = useState(true);
+
+  // Delete company state
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [deleteConfirmInput, setDeleteConfirmInput] = useState("");
+  const [deleting, setDeleting] = useState(false);
 
   const loadTenant = useCallback(async () => {
     const token = getToken();
@@ -1227,6 +1233,26 @@ export default function CompanyDetailPage() {
   }, [tenantId, setLocation]);
 
   useEffect(() => { loadTenant(); }, [loadTenant]);
+
+  const handleDeleteCompany = async () => {
+    if (!tenant || deleteConfirmInput !== tenant.slug) return;
+    setDeleting(true);
+    try {
+      const res = await sa(`/superadmin/tenants/${tenantId}`, { method: "DELETE" });
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}));
+        toast({ title: d.error ?? "Delete failed", variant: "destructive" });
+        return;
+      }
+      toast({ title: `${tenant.name} has been permanently deleted.` });
+      setLocation("/superadmin/tenants");
+    } catch {
+      toast({ title: "Connection error. Please try again.", variant: "destructive" });
+    } finally {
+      setDeleting(false);
+      setShowDeleteDialog(false);
+    }
+  };
 
   if (loading || !tenant) return (
     <div className="p-6 text-slate-400">Loading company…</div>
@@ -1261,8 +1287,66 @@ export default function CompanyDetailPage() {
           <Button size="sm" variant="outline" asChild className="border-slate-700 text-slate-300 hover:bg-slate-800 gap-1.5">
             <a href={`/${tenant.slug}/admin`} target="_blank" rel="noopener noreferrer"><ExternalLink className="w-3.5 h-3.5" />Open Admin</a>
           </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => { setDeleteConfirmInput(""); setShowDeleteDialog(true); }}
+            className="border-red-800/60 text-red-400 hover:bg-red-950/40 hover:border-red-700 hover:text-red-300 gap-1.5"
+          >
+            <Trash2 className="w-3.5 h-3.5" />Delete Company
+          </Button>
         </div>
       </div>
+
+      {/* Delete Company Confirmation Dialog */}
+      <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
+        <AlertDialogContent className="bg-slate-900 border border-slate-700 text-white max-w-md">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-red-400 flex items-center gap-2">
+              <AlertTriangle className="w-5 h-5" />
+              Permanently delete {tenant.name}?
+            </AlertDialogTitle>
+            <AlertDialogDescription className="text-slate-300 space-y-3">
+              <p>
+                This will <strong className="text-white">permanently and irreversibly delete</strong> this company
+                and all associated data including listings, bookings, customers, staff accounts, and all historical records.
+              </p>
+              <p className="text-amber-400 text-xs font-medium">
+                This cannot be undone. There is no recovery.
+              </p>
+              <div className="pt-1 space-y-1.5">
+                <p className="text-xs text-slate-400">
+                  Type <strong className="text-white font-mono">{tenant.slug}</strong> to confirm:
+                </p>
+                <input
+                  type="text"
+                  value={deleteConfirmInput}
+                  onChange={e => setDeleteConfirmInput(e.target.value)}
+                  placeholder={tenant.slug}
+                  className="w-full px-3 py-2 rounded-md bg-slate-800 border border-slate-600 text-white text-sm font-mono placeholder:text-slate-600 focus:outline-none focus:border-red-600"
+                  autoFocus
+                  onKeyDown={e => { if (e.key === "Enter" && deleteConfirmInput === tenant.slug) handleDeleteCompany(); }}
+                />
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel
+              className="bg-slate-800 border-slate-700 text-slate-300 hover:bg-slate-700"
+              onClick={() => setShowDeleteDialog(false)}
+            >
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDeleteCompany}
+              disabled={deleteConfirmInput !== tenant.slug || deleting}
+              className="bg-red-700 hover:bg-red-600 text-white disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              {deleting ? "Deleting…" : "Delete Company"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* Tabs */}
       <Tabs defaultValue="account">

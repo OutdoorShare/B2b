@@ -380,13 +380,80 @@ router.post("/superadmin/tenants/:id/provision-ghl", requireSuperAdmin, async (r
 });
 
 // ── DELETE /superadmin/tenants/:id ────────────────────────────────────────────
+// Cascades through all tenant-linked tables in dependency order before
+// removing the tenant row itself. Uses raw SQL for tables not already imported.
 router.delete("/superadmin/tenants/:id", requireSuperAdmin, async (req, res) => {
   try {
     const id = parseInt(req.params.id);
-    const [deleted] = await db.delete(tenantsTable).where(eq(tenantsTable.id, id)).returning();
-    if (!deleted) { res.status(404).json({ error: "Tenant not found" }); return; }
-    res.json({ ok: true });
-  } catch (e) {
+    if (isNaN(id)) { res.status(400).json({ error: "Invalid tenant id" }); return; }
+
+    const [tenant] = await db.select({ id: tenantsTable.id, slug: tenantsTable.slug }).from(tenantsTable).where(eq(tenantsTable.id, id)).limit(1);
+    if (!tenant) { res.status(404).json({ error: "Tenant not found" }); return; }
+
+    // --- cascade delete in dependency order ---
+
+    // Agreement documents (references packet_id → booking_agreement_packets)
+    await db.execute(sql`DELETE FROM booking_agreement_documents WHERE packet_id IN (SELECT id FROM booking_agreement_packets WHERE tenant_id = ${id})`);
+    await db.execute(sql`DELETE FROM booking_agreement_packets WHERE tenant_id = ${id}`);
+
+    // Rental extensions and activity bookings
+    await db.execute(sql`DELETE FROM rental_extensions WHERE tenant_id = ${id}`);
+    await db.execute(sql`DELETE FROM activity_bookings WHERE tenant_id = ${id}`);
+    await db.execute(sql`DELETE FROM activities WHERE tenant_id = ${id}`);
+
+    // Notifications and support threads (support_messages use thread_id)
+    await db.execute(sql`DELETE FROM notifications WHERE tenant_id = ${id}`);
+    await db.execute(sql`DELETE FROM support_messages WHERE thread_id IN (SELECT id FROM support_threads WHERE tenant_id = ${id})`);
+    await db.execute(sql`DELETE FROM support_threads WHERE tenant_id = ${id}`);
+
+    // Communications
+    await db.execute(sql`DELETE FROM message_logs WHERE tenant_id = ${id}`);
+    await db.execute(sql`DELETE FROM automation_settings WHERE tenant_id = ${id}`);
+
+    // Claims, bookings, quotes
+    await db.execute(sql`DELETE FROM claims WHERE tenant_id = ${id}`);
+    await db.execute(sql`DELETE FROM bookings WHERE tenant_id = ${id}`);
+    await db.execute(sql`DELETE FROM quotes WHERE tenant_id = ${id}`);
+
+    // Listing children
+    await db.execute(sql`DELETE FROM maintenance_logs WHERE tenant_id = ${id}`);
+    await db.execute(sql`DELETE FROM listing_rules WHERE tenant_id = ${id}`);
+    await db.execute(sql`DELETE FROM blocked_dates WHERE tenant_id = ${id}`);
+    await db.execute(sql`DELETE FROM listing_addons WHERE listing_id IN (SELECT id FROM listings WHERE tenant_id = ${id})`);
+    await db.execute(sql`DELETE FROM listing_units WHERE listing_id IN (SELECT id FROM listings WHERE tenant_id = ${id})`);
+    await db.execute(sql`DELETE FROM customer_favorites WHERE listing_id IN (SELECT id FROM listings WHERE tenant_id = ${id})`);
+
+    // Listings themselves
+    await db.execute(sql`DELETE FROM listings WHERE tenant_id = ${id}`);
+
+    // Operator contracts, bundles, products, contact cards, feedback, promo codes
+    await db.execute(sql`DELETE FROM operator_contracts WHERE tenant_id = ${id}`);
+    await db.execute(sql`DELETE FROM host_bundles WHERE tenant_id = ${id}`);
+    await db.execute(sql`DELETE FROM products WHERE tenant_id = ${id}`);
+    await db.execute(sql`DELETE FROM contact_cards WHERE tenant_id = ${id}`);
+    await db.execute(sql`DELETE FROM feedback WHERE tenant_id = ${id}`);
+    await db.execute(sql`DELETE FROM promo_codes WHERE tenant_id = ${id}`);
+
+    // Categories — customers use tenant_slug
+    await db.execute(sql`DELETE FROM categories WHERE tenant_id = ${id}`);
+    await db.execute(sql`DELETE FROM customers WHERE tenant_slug = ${tenant.slug}`);
+
+    // Admin users and password reset tokens
+    await db.execute(sql`DELETE FROM admin_users WHERE tenant_id = ${id}`);
+    await db.execute(sql`DELETE FROM password_reset_tokens WHERE tenant_slug = ${tenant.slug}`);
+
+    // Memories tagged with this tenant
+    await db.execute(sql`DELETE FROM memories WHERE tagged_tenant_id = ${id}`);
+
+    // Business profile
+    await db.execute(sql`DELETE FROM business_profile WHERE tenant_id = ${id}`);
+
+    // Finally, delete the tenant row itself
+    await db.delete(tenantsTable).where(eq(tenantsTable.id, id));
+
+    res.json({ ok: true, deleted: id });
+  } catch (e: any) {
+    console.error("[delete-tenant]", e?.message ?? e);
     res.status(500).json({ error: "Failed to delete tenant" });
   }
 });
