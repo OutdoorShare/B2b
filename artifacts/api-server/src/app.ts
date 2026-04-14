@@ -120,6 +120,7 @@ async function serveUpload(req: express.Request, res: express.Response) {
   }
   res.setHeader("Content-Type", result.contentType);
   res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
+  res.setHeader("Cross-Origin-Resource-Policy", "cross-origin");
   result.stream.pipe(res);
 }
 app.get("/uploads/:filename", serveUpload);

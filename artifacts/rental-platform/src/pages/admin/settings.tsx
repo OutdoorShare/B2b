@@ -916,7 +916,7 @@ export default function AdminSettings() {
               <div className="px-6 py-4 flex items-center justify-between" style={{ backgroundColor: primary }}>
                 <div className="flex items-center gap-3">
                   {logoUrl ? (
-                    <img src={logoUrl} alt="Logo preview" className="h-9 object-contain rounded" onError={e => (e.currentTarget.style.display = "none")} />
+                    <img src={logoUrl} alt="Logo preview" className="h-9 object-contain rounded" onError={e => { e.currentTarget.style.display = "none"; setFormData((prev: any) => ({ ...prev, logoUrl: "" })); }} />
                   ) : (
                     <div className="w-9 h-9 rounded-full flex items-center justify-center text-lg font-black" style={{ backgroundColor: accent, color: isLight(accent) ? "#111" : "#fff" }}>
                       {(formData.name || "B").charAt(0)}
@@ -975,7 +975,7 @@ export default function AdminSettings() {
                 <div className="flex items-start gap-6">
                   <div className="w-24 h-24 rounded-xl border-2 border-dashed border-border flex items-center justify-center bg-muted shrink-0 overflow-hidden">
                     {logoUrl ? (
-                      <img src={logoUrl} alt="Logo" className="w-full h-full object-contain p-2" onError={e => (e.currentTarget.style.display = "none")} />
+                      <img src={logoUrl} alt="Logo" className="w-full h-full object-contain p-2" onError={e => { e.currentTarget.style.display = "none"; setFormData((prev: any) => ({ ...prev, logoUrl: "" })); }} />
                     ) : (
                       <div className="text-center">
                         <div className="w-10 h-10 rounded-full mx-auto flex items-center justify-center text-xl font-black text-white mb-1" style={{ backgroundColor: primary }}>
@@ -1029,7 +1029,7 @@ export default function AdminSettings() {
                   />
                   {coverUrl ? (
                     <div className="relative rounded-xl overflow-hidden border group">
-                      <img src={coverUrl} alt="Cover" className="w-full h-36 object-cover" onError={e => { e.currentTarget.style.display = "none"; }} />
+                      <img src={coverUrl} alt="Cover" className="w-full h-36 object-cover" onError={e => { e.currentTarget.style.display = "none"; setFormData((prev: any) => ({ ...prev, coverImageUrl: "" })); }} />
                       <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-3">
                         <Button
                           type="button"
