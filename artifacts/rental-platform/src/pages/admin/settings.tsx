@@ -901,8 +901,8 @@ export default function AdminSettings() {
               </CardContent>
             </Card>
 
-            <div className="flex justify-end pt-2">
-              <Button type="submit" size="lg" disabled={saving} className="gap-2">
+            <div className="sticky bottom-0 z-10 bg-gradient-to-t from-background via-background to-transparent pt-6 pb-4 -mx-1 px-1 flex justify-end">
+              <Button type="submit" size="lg" disabled={saving} className="gap-2 shadow-lg">
                 {saving ? <><RefreshCw className="w-4 h-4 animate-spin" />Saving…</> : <><CheckCircle2 className="w-4 h-4" />Save General Settings</>}
               </Button>
             </div>
@@ -1288,8 +1288,8 @@ export default function AdminSettings() {
               </CardContent>
             </Card>
 
-            <div className="flex justify-end pt-2">
-              <Button type="submit" size="lg" disabled={saving} className="gap-2">
+            <div className="sticky bottom-0 z-10 bg-gradient-to-t from-background via-background to-transparent pt-6 pb-4 -mx-1 px-1 flex justify-end">
+              <Button type="submit" size="lg" disabled={saving} className="gap-2 shadow-lg">
                 {saving ? <><RefreshCw className="w-4 h-4 animate-spin" />Saving…</> : <><CheckCircle2 className="w-4 h-4" />Save Branding</>}
               </Button>
             </div>
@@ -1733,8 +1733,8 @@ export default function AdminSettings() {
               </CardContent>
             </Card>
 
-            <div className="flex justify-end pt-2">
-              <Button type="submit" size="lg" disabled={saving} className="gap-2">
+            <div className="sticky bottom-0 z-10 bg-gradient-to-t from-background via-background to-transparent pt-6 pb-4 -mx-1 px-1 flex justify-end">
+              <Button type="submit" size="lg" disabled={saving} className="gap-2 shadow-lg">
                 {saving ? <><RefreshCw className="w-4 h-4 animate-spin" />Saving…</> : <><CheckCircle2 className="w-4 h-4" />Save Policies</>}
               </Button>
             </div>
@@ -1844,11 +1844,13 @@ export default function AdminSettings() {
                   </div>
                 )}
 
-                <Button onClick={doSave} disabled={saving} size="sm">
-                  {saving ? <><RefreshCw className="w-3.5 h-3.5 mr-2 animate-spin" />Saving…</> : "Save Bundle Settings"}
-                </Button>
               </CardContent>
             </Card>
+            <div className="sticky bottom-0 z-10 bg-gradient-to-t from-background via-background to-transparent pt-6 pb-4 -mx-1 px-1 flex justify-end">
+              <Button onClick={doSave} disabled={saving} size="sm" className="shadow-lg">
+                {saving ? <><RefreshCw className="w-3.5 h-3.5 mr-2 animate-spin" />Saving…</> : "Save Bundle Settings"}
+              </Button>
+            </div>
           </TabsContent>
 
           {/* ── CUSTOM FEES ── */}
@@ -2067,8 +2069,8 @@ export default function AdminSettings() {
               </CardContent>
             </Card>
 
-            <div className="flex justify-end pt-2">
-              <Button type="submit" size="lg" disabled={saving} className="gap-2">
+            <div className="sticky bottom-0 z-10 bg-gradient-to-t from-background via-background to-transparent pt-6 pb-4 -mx-1 px-1 flex justify-end">
+              <Button type="submit" size="lg" disabled={saving} className="gap-2 shadow-lg">
                 {saving ? <><RefreshCw className="w-4 h-4 animate-spin" />Saving…</> : <><CheckCircle2 className="w-4 h-4" />Save Integration Settings</>}
               </Button>
             </div>
