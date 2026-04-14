@@ -115,6 +115,7 @@ export default function ContactCards() {
   const { toast } = useToast();
   const [cards, setCards] = useState<ContactCard[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadFailed, setLoadFailed] = useState(false);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingCard, setEditingCard] = useState<ContactCard | null>(null);
   const [businessAddress, setBusinessAddress] = useState<string | null>(null);
@@ -138,15 +139,22 @@ export default function ContactCards() {
       .catch(() => {});
   }, []);
 
-  const fetchCards = async () => {
+  const fetchCards = async (isRetry = false) => {
     setLoading(true);
+    setLoadFailed(false);
     try {
       const res = await fetch(`${BASE}/api/contact-cards`, { headers: authHeaders() });
       if (res.status === 401) { handleUnauthorized(); return; }
-      if (!res.ok) throw new Error();
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
       setCards(await res.json());
     } catch {
-      toast({ title: "Failed to load contact cards", variant: "destructive" });
+      if (!isRetry) {
+        // Auto-retry once after 1.5 s — handles the brief window when the server is starting up.
+        setTimeout(() => fetchCards(true), 1500);
+      } else {
+        setLoadFailed(true);
+        toast({ title: "Failed to load contact cards", description: "Check your connection and try again.", variant: "destructive" });
+      }
     } finally {
       setLoading(false);
     }
@@ -219,6 +227,19 @@ export default function ContactCards() {
 
       {loading ? (
         <div className="py-12 text-center text-muted-foreground">Loading contact cards…</div>
+      ) : loadFailed ? (
+        <div className="py-16 text-center space-y-4 rounded-2xl border border-dashed border-destructive/30 bg-destructive/5">
+          <div className="w-14 h-14 rounded-full bg-destructive/10 flex items-center justify-center mx-auto">
+            <IdCard className="w-7 h-7 text-destructive/70" />
+          </div>
+          <div>
+            <p className="font-semibold text-lg text-destructive">Failed to load contact cards</p>
+            <p className="text-muted-foreground text-sm mt-1">There was a problem connecting to the server.</p>
+          </div>
+          <Button variant="outline" onClick={() => fetchCards()} className="gap-2">
+            Retry
+          </Button>
+        </div>
       ) : cards.length === 0 ? (
         <div className="py-16 text-center space-y-4 rounded-2xl border border-dashed">
           <div className="w-14 h-14 rounded-full bg-primary/10 flex items-center justify-center mx-auto">
