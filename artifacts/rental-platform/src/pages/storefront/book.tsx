@@ -1351,19 +1351,16 @@ export default function StorefrontBook() {
   // ── Availability / quantity logic ─────────────────────────────────────────────
   const listingTotalQty = availabilityData?.listingQuantity ?? (listing as any)?.quantity ?? 1;
 
-  // For a given date, compute how many units are booked (sum of booking quantities overlapping that date)
   const bookedQtyOnDate = useMemo(() => {
     if (!availabilityData) return (_d: Date) => 0;
     return (d: Date) => {
       const dayStr = format(d, "yyyy-MM-dd");
       return availabilityData.ranges
-        .filter(r => r.type === "booking")
         .filter(r => r.start <= dayStr && r.end >= dayStr)
         .reduce((sum, r) => sum + (r.quantity ?? 1), 0);
     };
   }, [availabilityData]);
 
-  // Minimum available units across every day in the selected date range
   const availableQtyForRange = useMemo(() => {
     if (!dateRange?.from || !dateRange?.to) return listingTotalQty;
     const days = eachDayOfInterval({ start: dateRange.from, end: dateRange.to });
@@ -1374,9 +1371,8 @@ export default function StorefrontBook() {
     return Math.max(0, minAvail);
   }, [dateRange, listingTotalQty, bookedQtyOnDate]);
 
-  // Dates that are completely unavailable (all units booked — disable in calendar)
   const fullyBookedDates = useMemo(() => {
-    if (!availabilityData || listingTotalQty <= 1) return [];
+    if (!availabilityData) return [];
     return (d: Date) => {
       if (isBefore(d, startOfDay(new Date()))) return true;
       return bookedQtyOnDate(d) >= listingTotalQty;

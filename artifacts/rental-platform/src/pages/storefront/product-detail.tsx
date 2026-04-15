@@ -116,23 +116,22 @@ export default function StorefrontProductDetail() {
     if (!id) return;
     fetch(`${BASE}/api/listings/${id}/booked-dates`)
       .then(r => r.json())
-      .then((data: { start: string; end: string; type?: string }[]) => {
-        if (Array.isArray(data)) {
-          const serviceRanges = data.filter(b => b.type === "service");
-          const otherRanges = data.filter(b => b.type !== "service");
-          setBookedRanges(otherRanges.map(b => ({ start: new Date(b.start), end: new Date(b.end) })));
-          // Expand service dates
-          const svcDates: Date[] = [];
-          serviceRanges.forEach(b => {
-            let cur = startOfDay(new Date(b.start));
-            const last = startOfDay(new Date(b.end));
-            while (!isAfter(cur, last)) {
-              svcDates.push(new Date(cur));
-              cur = addDays(cur, 1);
-            }
-          });
-          setServiceDates(svcDates);
-        }
+      .then((resp: any) => {
+        const data: { start: string; end: string; type?: string; quantity?: number }[] =
+          Array.isArray(resp) ? resp : Array.isArray(resp?.ranges) ? resp.ranges : [];
+        const serviceRanges = data.filter(b => b.type === "service");
+        const otherRanges = data.filter(b => b.type !== "service");
+        setBookedRanges(otherRanges.map(b => ({ start: new Date(b.start), end: new Date(b.end) })));
+        const svcDates: Date[] = [];
+        serviceRanges.forEach(b => {
+          let cur = startOfDay(new Date(b.start));
+          const last = startOfDay(new Date(b.end));
+          while (!isAfter(cur, last)) {
+            svcDates.push(new Date(cur));
+            cur = addDays(cur, 1);
+          }
+        });
+        setServiceDates(svcDates);
       })
       .catch(() => {});
   }, [id]);
