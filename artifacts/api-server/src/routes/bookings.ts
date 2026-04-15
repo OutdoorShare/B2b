@@ -827,8 +827,8 @@ router.get("/bookings/:id/agreements-for-signing", async (req, res) => {
       activeContracts.find(c => !(c.listingIds as number[] ?? []).length) ??
       null;
 
-    // If operator has opted out of platform agreements, don't show them
-    const showPlatformAgreements = !operatorContract || operatorContract.includeOutdoorShareAgreements;
+    const hasProtectionPlan = !!(booking.protectionPlanFee && parseFloat(booking.protectionPlanFee) > 0 && !booking.protectionPlanDeclined);
+    const showPlatformAgreements = hasProtectionPlan || !operatorContract || operatorContract.includeOutdoorShareAgreements;
 
     // Custom operator acknowledgements — items attached to this contract OR global (null contractId)
     const operatorAcknowledgements = booking.tenantId
@@ -1043,6 +1043,7 @@ router.post("/bookings/:id/sign-agreement-public", async (req, res) => {
     try {
       if (isV2 && booking.tenantId) {
         // ── V2 path: full pipeline (Handlebars + multi-doc merge + immutable packet) ──
+        const hasProtectionPlan = !!(booking.protectionPlanFee && parseFloat(booking.protectionPlanFee) > 0 && !booking.protectionPlanDeclined);
         const result = await runAgreementPipeline({
           bookingId,
           tenantId:         booking.tenantId,
@@ -1053,6 +1054,7 @@ router.post("/bookings/:id/sign-agreement-public", async (req, res) => {
           minors:           cleanMinors,
           ipAddress:        req.ip ?? undefined,
           userAgent:        req.headers["user-agent"] as string | undefined,
+          hasProtectionPlan,
           acceptances:      Array.isArray(acceptances)
             ? acceptances.map((a: any) => ({
                 checkboxLabel: a.checkboxLabel ?? a.title ?? "",

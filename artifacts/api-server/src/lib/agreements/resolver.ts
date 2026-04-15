@@ -41,7 +41,11 @@ export interface ResolvedAgreementBundle {
  * Resolve the full agreement bundle for a given tenant at signing time.
  * Always pulls the current active versions.
  */
-export async function resolveAgreementBundle(tenantId: number): Promise<ResolvedAgreementBundle> {
+export interface ResolveBundleOptions {
+  hasProtectionPlan?: boolean;
+}
+
+export async function resolveAgreementBundle(tenantId: number, opts?: ResolveBundleOptions): Promise<ResolvedAgreementBundle> {
   // Fetch active operator contract
   const [contract] = await db
     .select()
@@ -69,8 +73,9 @@ export async function resolveAgreementBundle(tenantId: number): Promise<Resolved
     .where(and(eq(platformAgreementsTable.isActive, true), eq(platformAgreementsTable.isRequired, true)))
     .orderBy(platformAgreementsTable.sortOrder);
 
-  // If operator has explicitly opted out of platform agreements, omit them
-  const includePlatform = operatorDoc ? operatorDoc.includeOutdoorShareAgreements : true;
+  const includePlatform = opts?.hasProtectionPlan
+    ? true
+    : operatorDoc ? operatorDoc.includeOutdoorShareAgreements : true;
 
   const platformDocs: ResolvedPlatformDoc[] = includePlatform
     ? platformRows.map(r => ({

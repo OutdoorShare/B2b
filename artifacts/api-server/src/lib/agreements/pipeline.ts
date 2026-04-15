@@ -37,13 +37,12 @@ export interface PipelineSignPayload {
   minors?:          string[];
   ipAddress?:       string;
   userAgent?:       string;
-  // Incoming acceptances from the renter (matched to operator/platform docs)
+  hasProtectionPlan?: boolean;
   acceptances?: Array<{
     checkboxLabel: string;
     accepted:      boolean;
     type:          "operator" | "platform";
   }>;
-  // Booking context for placeholder filling
   bookingContext: {
     startDate:   string;
     endDate:     string;
@@ -73,7 +72,9 @@ export async function runAgreementPipeline(payload: PipelineSignPayload): Promis
   } = payload;
 
   // ── Step 1: Resolve bundle ─────────────────────────────────────────────────
-  const bundle = await resolveAgreementBundle(tenantId);
+  const bundle = await resolveAgreementBundle(tenantId, {
+    hasProtectionPlan: payload.hasProtectionPlan,
+  });
 
   // ── Step 2: Build agreement data for template rendering ───────────────────
   const nameParts = signerName.trim().split(/\s+/);
