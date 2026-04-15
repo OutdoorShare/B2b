@@ -753,7 +753,17 @@ router.get("/bookings/:id", async (req, res) => {
       }
     }
 
-    res.json({ ...formatBooking(booking, listing?.title ?? "Unknown"), contactCard, depositAmount, platformFeePercent, requireIdentityVerification: listing?.requireIdentityVerification ?? false, listingLocation: listing?.location ?? null, listingLocationDetail: listing?.locationDetail ?? null });
+    let customerIdentityStatus: string | null = null;
+    if (booking.customerEmail) {
+      const [cust] = await db
+        .select({ identityVerificationStatus: customersTable.identityVerificationStatus })
+        .from(customersTable)
+        .where(eq(customersTable.email, booking.customerEmail.toLowerCase().trim()))
+        .limit(1);
+      customerIdentityStatus = cust?.identityVerificationStatus ?? null;
+    }
+
+    res.json({ ...formatBooking(booking, listing?.title ?? "Unknown"), contactCard, depositAmount, platformFeePercent, requireIdentityVerification: listing?.requireIdentityVerification ?? false, customerIdentityStatus, listingLocation: listing?.location ?? null, listingLocationDetail: listing?.locationDetail ?? null });
   } catch (err) {
     req.log.error(err);
     res.status(500).json({ error: "Failed to fetch booking" });

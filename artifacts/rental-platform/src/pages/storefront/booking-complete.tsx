@@ -30,6 +30,7 @@ interface BookingData {
   status: string;
   agreementSignedAt: string | null;
   requireIdentityVerification: boolean;
+  customerIdentityStatus?: string | null;
   tenantSlug?: string;
   listingId?: number;
 }
@@ -166,7 +167,8 @@ export default function BookingComplete() {
     setBooking(data);
     setSignerName(data.customerName ?? "");
     if (data.agreementSignedAt) {
-      setPhase(data.requireIdentityVerification ? "identity" : "confirmed");
+      const alreadyVerified = data.customerIdentityStatus === "verified";
+      setPhase(data.requireIdentityVerification && !alreadyVerified ? "identity" : "confirmed");
     } else {
       setAgreementsLoading(true);
       try {
@@ -347,7 +349,8 @@ export default function BookingComplete() {
       });
       const data = await res.json();
       if (!res.ok) { alert(data.error || "Failed to sign. Please try again."); return; }
-      setPhase(booking?.requireIdentityVerification ? "identity" : "confirmed");
+      const alreadyVerified = booking?.customerIdentityStatus === "verified";
+      setPhase(booking?.requireIdentityVerification && !alreadyVerified ? "identity" : "confirmed");
     } catch {
       alert("Connection error. Please try again.");
     } finally {

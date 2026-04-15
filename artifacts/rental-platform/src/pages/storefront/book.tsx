@@ -4998,7 +4998,7 @@ export default function StorefrontBook() {
                     </div>
 
                     {/* ── Identity Verification Status ── */}
-                    {identityStatus !== "verified" && (
+                    {needsIdentityVerif && identityStatus !== "verified" && (
                       <div className={`flex items-start gap-3 rounded-xl px-4 py-3 text-sm border ${identityStatus === "pending" ? "bg-blue-50 border-blue-200 text-blue-800" : "bg-amber-50 border-amber-200 text-amber-800"}`}>
                         {identityStatus === "pending" ? (
                           <Loader2 className="w-4 h-4 mt-0.5 shrink-0 animate-spin text-blue-600" />
