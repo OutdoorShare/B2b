@@ -23,15 +23,71 @@ function drawSectionHeader(doc: InstanceType<typeof PDFDocument>, title: string)
   doc.moveDown(0.5);
 }
 
+function stripInline(raw: string): string {
+  return raw
+    .replace(/\*\*(.+?)\*\*/g, "$1")
+    .replace(/\*(.+?)\*/g, "$1")
+    .replace(/`(.+?)`/g, "$1");
+}
+
 function drawBody(doc: InstanceType<typeof PDFDocument>, text: string) {
   const pw = pageWidth(doc);
-  const paragraphs = text.split("\n\n").filter(Boolean);
-  for (const para of paragraphs) {
-    if (doc.y > doc.page.height - 100) doc.addPage();
-    doc.fillColor(DARK).font("Helvetica").fontSize(9.5).lineGap(3)
-      .text(para.trim(), 60, doc.y, { width: pw, align: "justify" });
-    doc.moveDown(0.8);
+  const lines = text.split("\n");
+  const pendingBullets: { prefix: string; body: string }[] = [];
+  const bulletIndent = 86;
+  const prefixCol = 70;
+
+  const flushBullets = () => {
+    if (!pendingBullets.length) return;
+    for (const b of pendingBullets) {
+      if (doc.y > doc.page.height - 60) doc.addPage();
+      const bTop = doc.y;
+      doc.fillColor(DARK).font("Helvetica").fontSize(9.5).lineGap(2);
+      doc.text(b.prefix, prefixCol, bTop, { width: 14, lineBreak: false });
+      doc.text(stripInline(b.body), bulletIndent, bTop, { width: pw - (bulletIndent - 60), align: "left" });
+      doc.moveDown(0.2);
+    }
+    pendingBullets.length = 0;
+    doc.moveDown(0.3);
+  };
+
+  for (const line of lines) {
+    if (line.startsWith("### ")) {
+      flushBullets();
+      if (doc.y > doc.page.height - 80) doc.addPage();
+      doc.fillColor(DARK).font("Helvetica-Bold").fontSize(10)
+        .text(stripInline(line.slice(4).trim()), 60, doc.y, { width: pw });
+      doc.moveDown(0.4);
+    } else if (line.startsWith("## ")) {
+      flushBullets();
+      drawSectionHeader(doc, stripInline(line.slice(3).trim()));
+    } else if (line.startsWith("# ")) {
+      flushBullets();
+      if (doc.y > doc.page.height - 80) doc.addPage();
+      doc.fillColor(PRIMARY).font("Helvetica-Bold").fontSize(13)
+        .text(stripInline(line.slice(2).trim()), 60, doc.y, { width: pw });
+      doc.moveDown(0.6);
+    } else if (/^---+$/.test(line.trim())) {
+      flushBullets();
+      doc.moveTo(60, doc.y).lineTo(60 + pw, doc.y).strokeColor("#dddddd").lineWidth(0.75).stroke();
+      doc.moveDown(0.8);
+    } else if (/^[-*] /.test(line)) {
+      pendingBullets.push({ prefix: "\u2022", body: line.slice(2) });
+    } else if (/^\d+\. /.test(line)) {
+      const num = line.match(/^(\d+)\. /)?.[1] ?? "1";
+      pendingBullets.push({ prefix: `${num}.`, body: line.replace(/^\d+\. /, "") });
+    } else if (line.trim() === "") {
+      flushBullets();
+      doc.moveDown(0.5);
+    } else {
+      flushBullets();
+      if (doc.y > doc.page.height - 60) doc.addPage();
+      doc.fillColor(DARK).font("Helvetica").fontSize(9.5).lineGap(3)
+        .text(stripInline(line.trim()), 60, doc.y, { width: pw, align: "justify" });
+      doc.moveDown(0.3);
+    }
   }
+  flushBullets();
 }
 
 export interface DocPdfOptions {

@@ -91,12 +91,14 @@ function drawBody(
 
   const flushBullets = () => {
     if (!pendingBullets.length) return;
+    const bulletIndent = 86;
+    const prefixCol    = 70;
     for (const b of pendingBullets) {
       if (doc.y > doc.page.height - 60) doc.addPage();
-      // Draw bullet prefix on the left, then body text indented
-      doc.fillColor(dark).font("Helvetica").fontSize(9.5).lineGap(2)
-        .text(b.prefix, 70, doc.y, { continued: true, width: 14 });
-      doc.text(stripInline(b.body), { width: pageWidth - 14, align: "left" });
+      const bTop = doc.y;
+      doc.fillColor(dark).font("Helvetica").fontSize(9.5).lineGap(2);
+      doc.text(b.prefix, prefixCol, bTop, { width: 14, lineBreak: false });
+      doc.text(stripInline(b.body), bulletIndent, bTop, { width: pageWidth - (bulletIndent - 60), align: "left" });
       doc.moveDown(0.2);
     }
     pendingBullets.length = 0;
