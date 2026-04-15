@@ -516,8 +516,14 @@ export default function BookingComplete() {
         )}
 
         {/* ── Agreement ────────────────────────────────────────────────────── */}
-        {phase === "agreement" && booking && (
-          <div className="space-y-4">
+        {phase === "agreement" && booking && (() => {
+          const totalRules = agreementsData?.rules?.length ?? 0;
+          const doneRules = agreementsData?.rules?.filter(r => checkboxStates[`rule-${r.id}`]).length ?? 0;
+          const totalOA = (agreementsData?.operatorAcknowledgements ?? []).filter(a => a.required).length;
+          const doneOA = (agreementsData?.operatorAcknowledgements ?? []).filter(a => a.required && checkboxStates[`oa-${a.id}`]).length;
+
+          return (
+          <div className="space-y-5">
             {agreementsLoading && (
               <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-6 flex items-center gap-3">
                 <Loader2 className="w-5 h-5 animate-spin text-primary shrink-0" />
@@ -525,245 +531,222 @@ export default function BookingComplete() {
               </div>
             )}
 
-            {/* Section 1 — Your Information */}
-            <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-6 space-y-5">
-              <h2 className="text-sm font-semibold text-slate-700 flex items-center gap-2">
-                <span className="w-5 h-5 rounded-full bg-primary text-white text-xs flex items-center justify-center font-bold">1</span>
-                Your Information
-              </h2>
-
-              <div className="space-y-1.5">
-                <Label>Full name (signer)</Label>
-                <Input
-                  value={signerName}
-                  onChange={e => setSignerName(e.target.value)}
-                  placeholder="Full legal name"
-                />
-              </div>
-
-              {/* Additional Riders */}
-              <div className="space-y-2">
+            <section className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
+              <div className="px-5 py-4 border-b bg-slate-50/80 flex items-center gap-3">
+                <span className="w-7 h-7 rounded-full bg-primary text-white text-xs flex items-center justify-center font-bold shrink-0">1</span>
                 <div>
-                  <Label className="flex items-center gap-1.5">
-                    <Users className="w-3.5 h-3.5 text-slate-400" />
-                    Additional Riders
-                    <span className="text-xs font-normal text-slate-400 ml-1">— optional</span>
-                  </Label>
-                  <p className="text-xs text-slate-400 mt-0.5">Anyone 21 or older who will drive or operate the equipment. By being listed here, each person is agreeing to and bound by the terms of this rental agreement.</p>
+                  <h2 className="text-sm font-semibold text-slate-800">Your Information</h2>
+                  <p className="text-xs text-slate-500">Confirm your name and add any participants</p>
                 </div>
-                <div className="flex gap-2">
-                  <Input
-                    value={riderInput}
-                    onChange={e => setRiderInput(e.target.value)}
-                    onKeyDown={e => e.key === "Enter" && addRider()}
-                    placeholder="Full name (21 or older)"
-                    className="flex-1"
-                  />
-                  <Button type="button" variant="outline" size="sm" onClick={addRider} className="shrink-0">
-                    <Plus className="w-4 h-4" />
-                  </Button>
-                </div>
-                {additionalRiders.length > 0 && (
-                  <div className="flex flex-wrap gap-1.5">
-                    {additionalRiders.map((name, i) => (
-                      <span key={i} className="inline-flex items-center gap-1 bg-slate-100 text-slate-700 text-xs rounded-full px-2.5 py-1">
-                        {name}
-                        <button onClick={() => removeRider(i)} className="text-slate-400 hover:text-slate-700 ml-0.5">
-                          <X className="w-3 h-3" />
-                        </button>
-                      </span>
-                    ))}
-                  </div>
-                )}
               </div>
-
-              {/* Minors */}
-              <div className="space-y-2">
-                <div>
-                  <Label className="flex items-center gap-1.5">
-                    <Baby className="w-3.5 h-3.5 text-slate-400" />
-                    Minors
-                    <span className="text-xs font-normal text-slate-400 ml-1">— optional</span>
-                  </Label>
-                  <p className="text-xs text-slate-400 mt-0.5">Anyone under 21 who will participate in the rental, regardless of experience or licensing. Add one at a time.</p>
-                </div>
-                <div className="flex gap-2">
+              <div className="px-5 py-5 space-y-5">
+                <div className="space-y-1.5">
+                  <Label>Full name (signer)</Label>
                   <Input
-                    value={minorInput}
-                    onChange={e => setMinorInput(e.target.value)}
-                    onKeyDown={e => e.key === "Enter" && addMinor()}
-                    placeholder="Name and age, e.g. Emma, 17"
-                    className="flex-1"
+                    value={signerName}
+                    onChange={e => setSignerName(e.target.value)}
+                    placeholder="Full legal name"
+                    className="rounded-xl"
                   />
-                  <Button type="button" variant="outline" size="sm" onClick={addMinor} className="shrink-0">
-                    <Plus className="w-4 h-4" />
-                  </Button>
                 </div>
-                {minors.length > 0 && (
-                  <div className="flex flex-wrap gap-1.5">
-                    {minors.map((name, i) => (
-                      <span key={i} className="inline-flex items-center gap-1 bg-slate-100 text-slate-700 text-xs rounded-full px-2.5 py-1">
-                        {name}
-                        <button onClick={() => removeMinor(i)} className="text-slate-400 hover:text-slate-700 ml-0.5">
-                          <X className="w-3 h-3" />
-                        </button>
-                      </span>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </div>
 
-            {/* Section — Rental Rules & Policies */}
-            {hasRules && (
-              <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-6 space-y-4">
-                <h2 className="text-sm font-semibold text-slate-700 flex items-center gap-2">
-                  <span className="w-5 h-5 rounded-full bg-primary text-white text-xs flex items-center justify-center font-bold">2</span>
-                  Rental Rules & Policies
-                </h2>
                 <div className="space-y-3">
-                  {agreementsData!.rules.map(rule => (
-                    <label
-                      key={rule.id}
-                      className={`flex items-start gap-3 p-4 rounded-xl border cursor-pointer transition-all ${
-                        checkboxStates[`rule-${rule.id}`]
-                          ? "border-emerald-200 bg-emerald-50 shadow-[0_0_0_1px_rgba(52,186,72,0.15)]"
-                          : "border-slate-200 bg-slate-50 hover:bg-slate-100 hover:border-slate-300"
-                      }`}
-                    >
-                      <input
-                        type="checkbox"
-                        className="mt-0.5 w-4 h-4 accent-emerald-600 shrink-0 cursor-pointer"
-                        checked={!!checkboxStates[`rule-${rule.id}`]}
-                        onChange={() => toggleCheck(`rule-${rule.id}`)}
-                      />
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium text-slate-800">{rule.title}</p>
-                        {rule.description && (
-                          <p className="text-xs text-slate-500 mt-0.5">{rule.description}</p>
-                        )}
-                        {rule.fee > 0 && (
-                          <p className="text-xs text-amber-700 font-medium mt-0.5">
-                            Violation fee: ${rule.fee.toFixed(2)}
-                          </p>
-                        )}
-                      </div>
-                      {checkboxStates[`rule-${rule.id}`] && (
-                        <CheckCircle className="w-4 h-4 text-emerald-500 shrink-0 mt-0.5" />
-                      )}
-                    </label>
-                  ))}
+                  <div>
+                    <Label className="flex items-center gap-1.5">
+                      <Users className="w-3.5 h-3.5 text-slate-400" />
+                      Additional Riders
+                      <span className="text-xs font-normal text-slate-400 ml-1">optional</span>
+                    </Label>
+                    <p className="text-xs text-slate-400 mt-1 leading-relaxed">Anyone 21 or older who will drive or operate the equipment. By being listed here, each person is agreeing to the terms of this rental agreement.</p>
+                  </div>
+                  <div className="flex gap-2">
+                    <Input
+                      value={riderInput}
+                      onChange={e => setRiderInput(e.target.value)}
+                      onKeyDown={e => e.key === "Enter" && addRider()}
+                      placeholder="Full name (21 or older)"
+                      className="flex-1 rounded-xl"
+                    />
+                    <Button type="button" variant="outline" size="sm" onClick={addRider} className="shrink-0 rounded-xl active:scale-95 transition-transform">
+                      <Plus className="w-4 h-4" />
+                    </Button>
+                  </div>
+                  {additionalRiders.length > 0 && (
+                    <div className="flex flex-wrap gap-2">
+                      {additionalRiders.map((rName, i) => (
+                        <span key={i} className="inline-flex items-center gap-1.5 bg-primary/10 text-primary text-sm rounded-full px-3 py-1.5 font-medium">
+                          <Users className="w-3 h-3" />
+                          {rName}
+                          <button onClick={() => removeRider(i)} className="hover:bg-primary/20 rounded-full p-0.5 transition-colors ml-0.5">
+                            <X className="w-3 h-3" />
+                          </button>
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                <div className="space-y-3">
+                  <div>
+                    <Label className="flex items-center gap-1.5">
+                      <Baby className="w-3.5 h-3.5 text-slate-400" />
+                      Minors
+                      <span className="text-xs font-normal text-slate-400 ml-1">optional</span>
+                    </Label>
+                    <p className="text-xs text-slate-400 mt-1 leading-relaxed">Anyone under 21 who will participate in the rental, regardless of experience or licensing.</p>
+                  </div>
+                  <div className="flex gap-2">
+                    <Input
+                      value={minorInput}
+                      onChange={e => setMinorInput(e.target.value)}
+                      onKeyDown={e => e.key === "Enter" && addMinor()}
+                      placeholder="Name and age, e.g. Emma, 17"
+                      className="flex-1 rounded-xl"
+                    />
+                    <Button type="button" variant="outline" size="sm" onClick={addMinor} className="shrink-0 rounded-xl active:scale-95 transition-transform">
+                      <Plus className="w-4 h-4" />
+                    </Button>
+                  </div>
+                  {minors.length > 0 && (
+                    <div className="flex flex-wrap gap-2">
+                      {minors.map((mName, i) => (
+                        <span key={i} className="inline-flex items-center gap-1.5 bg-slate-100 text-slate-700 text-sm rounded-full px-3 py-1.5 font-medium">
+                          <Baby className="w-3 h-3" />
+                          {mName}
+                          <button onClick={() => removeMinor(i)} className="hover:bg-slate-200 rounded-full p-0.5 transition-colors ml-0.5">
+                            <X className="w-3 h-3" />
+                          </button>
+                        </span>
+                      ))}
+                    </div>
+                  )}
                 </div>
               </div>
-            )}
+            </section>
 
-            {/* Section — Custom Acknowledgements (operator-defined) */}
-            {hasOA && (
-              <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
-                {/* Section header */}
-                <div className="px-6 pt-5 pb-3 flex items-center gap-2">
-                  <span className="w-5 h-5 rounded-full bg-primary text-white text-xs flex items-center justify-center font-bold shrink-0">
-                    {sectionNum(["rules"])}
+            {hasRules && (
+              <section className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
+                <div className="px-5 py-4 border-b bg-slate-50/80 flex items-center gap-3">
+                  <span className="w-7 h-7 rounded-full bg-primary text-white text-xs flex items-center justify-center font-bold shrink-0">
+                    <ShieldCheck className="w-3.5 h-3.5" />
                   </span>
-                  <h2 className="text-sm font-semibold text-slate-700">Acknowledgements</h2>
-                  <span className="ml-auto text-xs text-slate-400">
-                    {(agreementsData?.operatorAcknowledgements ?? []).filter(a => a.required).length} required
-                  </span>
+                  <div className="flex-1 min-w-0">
+                    <h2 className="text-sm font-semibold text-slate-800">Rental Rules & Policies</h2>
+                    <p className="text-xs text-slate-500">Read and acknowledge each rule</p>
+                  </div>
+                  {doneRules === totalRules
+                    ? <CheckCircle className="w-5 h-5 text-emerald-500 shrink-0" />
+                    : <span className="text-xs font-semibold text-amber-600 bg-amber-50 px-2 py-0.5 rounded-full border border-amber-200 shrink-0">{totalRules - doneRules} left</span>
+                  }
                 </div>
-                <p className="px-6 pb-4 text-xs text-slate-500">
-                  Please read each item carefully and check the box to confirm your understanding.
-                </p>
-
-                <div className="divide-y divide-slate-100">
-                  {(agreementsData?.operatorAcknowledgements ?? []).map((oa, idx) => {
-                    const checked = !!checkboxStates[`oa-${oa.id}`];
+                <div className="px-5 py-4 space-y-2.5">
+                  {agreementsData!.rules.map(rule => {
+                    const checked = !!checkboxStates[`rule-${rule.id}`];
                     return (
-                      <label
-                        key={oa.id}
-                        className={`flex items-start gap-4 px-6 py-4 cursor-pointer transition-all select-none ${
+                      <button
+                        key={rule.id}
+                        type="button"
+                        onClick={() => toggleCheck(`rule-${rule.id}`)}
+                        className={`w-full flex gap-4 items-start rounded-xl border p-4 text-left transition-all cursor-pointer active:scale-[0.99] ${
                           checked
-                            ? "bg-emerald-50"
-                            : "bg-white hover:bg-slate-50"
+                            ? "border-emerald-300 bg-emerald-50/60 shadow-sm"
+                            : "border-dashed border-slate-300 bg-slate-50/50 hover:border-slate-400 hover:bg-slate-50"
                         }`}
                       >
-                        {/* Custom styled checkbox */}
-                        <div className={`mt-0.5 w-5 h-5 rounded-md border-2 flex items-center justify-center shrink-0 transition-all ${
-                          checked
-                            ? "border-emerald-500 bg-emerald-500 shadow-[0_0_0_3px_rgba(52,186,72,0.12)]"
-                            : "border-slate-300 bg-white hover:border-emerald-400"
-                        }`}>
-                          <input
-                            type="checkbox"
-                            className="sr-only"
-                            checked={checked}
-                            onChange={() => toggleCheck(`oa-${oa.id}`)}
-                          />
-                          {checked && (
-                            <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 12 12" stroke="currentColor" strokeWidth={2.5}>
-                              <path strokeLinecap="round" strokeLinejoin="round" d="M2 6l3 3 5-5" />
-                            </svg>
-                          )}
+                        <div className={`mt-0.5 w-6 h-6 rounded-md border-2 shrink-0 flex items-center justify-center transition-all ${checked ? "bg-emerald-600 border-emerald-600 shadow-sm" : "bg-white border-slate-300"}`}>
+                          {checked && <svg viewBox="0 0 12 9" className="w-3.5 h-3.5"><path d="M1 4l3.5 3.5L11 1" stroke="white" strokeWidth="1.8" fill="none" strokeLinecap="round" strokeLinejoin="round" /></svg>}
                         </div>
-
-                        {/* Text content */}
                         <div className="flex-1 min-w-0">
-                          <p className={`text-sm leading-relaxed transition-colors ${
-                            checked ? "text-slate-700" : "text-slate-800"
-                          }`}>
-                            {oa.text}
-                          </p>
-                          {!oa.required && (
-                            <p className="text-[10px] text-slate-400 mt-1 font-medium">Optional</p>
-                          )}
+                          <p className="text-sm font-medium text-slate-800">{rule.title}</p>
+                          {rule.description && <p className="text-xs text-slate-500 mt-1 leading-relaxed">{rule.description}</p>}
+                          {rule.fee > 0 && <p className="text-xs text-amber-700 font-semibold mt-1.5 flex items-center gap-1"><AlertCircle className="w-3 h-3 shrink-0" />Violation fee: ${rule.fee.toFixed(2)}</p>}
                         </div>
+                        {checked && <CheckCircle className="w-5 h-5 text-emerald-500 shrink-0 mt-0.5" />}
+                      </button>
+                    );
+                  })}
+                </div>
+                {totalRules > 1 && (
+                  <div className="px-5 pb-4">
+                    <div className="h-1 bg-slate-200 rounded-full overflow-hidden">
+                      <div className="h-full bg-emerald-500 rounded-full transition-all duration-500" style={{ width: `${(doneRules / totalRules) * 100}%` }} />
+                    </div>
+                    <p className="text-[11px] text-slate-400 mt-1.5">{doneRules} of {totalRules} rules acknowledged</p>
+                  </div>
+                )}
+              </section>
+            )}
 
-                        {/* Status indicator */}
-                        <div className={`shrink-0 mt-0.5 transition-all ${checked ? "opacity-100" : "opacity-0"}`}>
-                          <CheckCircle className="w-4 h-4 text-emerald-500" />
+            {hasOA && (
+              <section className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
+                <div className="px-5 py-4 border-b bg-slate-50/80 flex items-center gap-3">
+                  <span className="w-7 h-7 rounded-full bg-primary text-white text-xs flex items-center justify-center font-bold shrink-0">
+                    <CheckCircle className="w-3.5 h-3.5" />
+                  </span>
+                  <div className="flex-1 min-w-0">
+                    <h2 className="text-sm font-semibold text-slate-800">Acknowledgements</h2>
+                    <p className="text-xs text-slate-500">Read each item and confirm your understanding</p>
+                  </div>
+                  {doneOA === totalOA
+                    ? <CheckCircle className="w-5 h-5 text-emerald-500 shrink-0" />
+                    : <span className="text-xs font-semibold text-amber-600 bg-amber-50 px-2 py-0.5 rounded-full border border-amber-200 shrink-0">{totalOA - doneOA} left</span>
+                  }
+                </div>
+
+                <div className="px-5 py-4 space-y-2.5">
+                  {(agreementsData?.operatorAcknowledgements ?? []).map((oa) => {
+                    const checked = !!checkboxStates[`oa-${oa.id}`];
+                    return (
+                      <button
+                        key={oa.id}
+                        type="button"
+                        onClick={() => toggleCheck(`oa-${oa.id}`)}
+                        className={`w-full flex gap-4 items-start rounded-xl border p-4 text-left transition-all cursor-pointer active:scale-[0.99] ${
+                          checked
+                            ? "border-emerald-300 bg-emerald-50/60 shadow-sm"
+                            : "border-dashed border-slate-300 bg-slate-50/50 hover:border-slate-400 hover:bg-slate-50"
+                        }`}
+                      >
+                        <div className={`mt-0.5 w-6 h-6 rounded-md border-2 shrink-0 flex items-center justify-center transition-all ${checked ? "bg-emerald-600 border-emerald-600 shadow-sm" : "bg-white border-slate-300"}`}>
+                          {checked && <svg viewBox="0 0 12 9" className="w-3.5 h-3.5"><path d="M1 4l3.5 3.5L11 1" stroke="white" strokeWidth="1.8" fill="none" strokeLinecap="round" strokeLinejoin="round" /></svg>}
                         </div>
-                      </label>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm leading-relaxed text-slate-800">{oa.text}</p>
+                          {!oa.required && <p className="text-[10px] text-slate-400 mt-1 font-medium">Optional</p>}
+                        </div>
+                        {checked && <CheckCircle className="w-5 h-5 text-emerald-500 shrink-0 mt-0.5" />}
+                      </button>
                     );
                   })}
                 </div>
 
-                {/* Progress bar */}
                 {(agreementsData?.operatorAcknowledgements ?? []).length > 1 && (() => {
                   const total = (agreementsData?.operatorAcknowledgements ?? []).length;
                   const done  = (agreementsData?.operatorAcknowledgements ?? []).filter(a => !!checkboxStates[`oa-${a.id}`]).length;
-                  const pct   = Math.round((done / total) * 100);
                   return (
-                    <div className="px-6 py-3 border-t border-slate-100 bg-slate-50">
-                      <div className="flex items-center justify-between mb-1.5">
-                        <span className="text-[11px] text-slate-400 font-medium">{done} of {total} acknowledged</span>
-                        {done === total && (
-                          <span className="text-[11px] font-semibold text-emerald-600 flex items-center gap-1">
-                            <CheckCircle className="w-3 h-3" /> All done
-                          </span>
-                        )}
-                      </div>
+                    <div className="px-5 pb-4">
                       <div className="h-1 bg-slate-200 rounded-full overflow-hidden">
-                        <div
-                          className="h-full rounded-full transition-all duration-500"
-                          style={{ width: `${pct}%`, backgroundColor: "#3ab549" }}
-                        />
+                        <div className="h-full bg-emerald-500 rounded-full transition-all duration-500" style={{ width: `${(done / total) * 100}%` }} />
                       </div>
+                      <p className="text-[11px] text-slate-400 mt-1.5">{done} of {total} acknowledged</p>
                     </div>
                   );
                 })()}
-              </div>
+              </section>
             )}
 
-            {/* Section — Agreements & Terms */}
             {hasContractOrPlatform && (
-              <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-6 space-y-4">
-                <h2 className="text-sm font-semibold text-slate-700 flex items-center gap-2">
-                  <span className="w-5 h-5 rounded-full bg-primary text-white text-xs flex items-center justify-center font-bold">
-                    {sectionNum(["rules", "oa"])}
+              <section className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
+                <div className="px-5 py-4 border-b bg-slate-50/80 flex items-center gap-3">
+                  <span className="w-7 h-7 rounded-full bg-primary text-white text-xs flex items-center justify-center font-bold shrink-0">
+                    <FileText className="w-3.5 h-3.5" />
                   </span>
-                  Agreements & Terms
-                </h2>
-                <div className="space-y-3">
-                  {/* Operator contract */}
+                  <div>
+                    <h2 className="text-sm font-semibold text-slate-800">Agreements & Terms</h2>
+                    <p className="text-xs text-slate-500">Review and accept each agreement</p>
+                  </div>
+                </div>
+                <div className="px-5 py-4 space-y-3">
                   {agreementsData?.operatorContract && (() => {
                     const oc = agreementsData.operatorContract;
                     const renterPdfUrl = oc.hasPdf
@@ -771,8 +754,7 @@ export default function BookingComplete() {
                       : null;
                     return (
                       <div className="rounded-xl border border-slate-200 overflow-hidden bg-white">
-                        {/* Header — title + view link */}
-                        <div className="flex items-center gap-3 px-3 py-2.5 bg-slate-50 border-b border-slate-200">
+                        <div className="flex items-center gap-3 px-4 py-3 bg-slate-50 border-b border-slate-200">
                           <FileText className="w-4 h-4 text-slate-500 shrink-0" />
                           <span className="text-sm font-semibold text-slate-800 flex-1">{oc.title}</span>
                           {oc.hasPdf && renterPdfUrl && (
@@ -797,7 +779,6 @@ export default function BookingComplete() {
                           )}
                         </div>
 
-                        {/* PDF inline preview (only shows when PDF available) */}
                         {oc.hasPdf && renterPdfUrl && (
                           <div className="border-b border-slate-200 bg-slate-100">
                             <iframe
@@ -809,11 +790,10 @@ export default function BookingComplete() {
                           </div>
                         )}
 
-                        {/* Template text (expandable) */}
                         {!oc.hasPdf && oc.content && contractExpanded && (
-                          <div className="px-4 py-3 max-h-64 overflow-y-auto border-b border-slate-100">
+                          <div className="px-5 py-4 max-h-72 overflow-y-auto border-b border-slate-100">
                             <pre
-                              className="text-xs text-slate-700 whitespace-pre-wrap leading-relaxed"
+                              className="text-[13px] text-slate-700 whitespace-pre-wrap leading-[1.8]"
                               style={{ fontFamily: "Georgia, 'Times New Roman', serif" }}
                             >
                               {oc.content}
@@ -821,28 +801,27 @@ export default function BookingComplete() {
                           </div>
                         )}
 
-                        {/* Checkbox row */}
                         <label
-                          className={`flex items-start gap-3 px-3 py-3 cursor-pointer transition-colors ${
+                          className={`flex items-start gap-3 px-4 py-3.5 cursor-pointer transition-colors ${
                             checkboxStates["operator"] ? "bg-emerald-50" : "hover:bg-slate-50"
                           }`}
                         >
                           <input
                             type="checkbox"
-                            className="mt-0.5 w-4 h-4 accent-emerald-600 shrink-0 cursor-pointer"
+                            className="mt-0.5 w-5 h-5 accent-emerald-600 shrink-0 cursor-pointer"
                             checked={!!checkboxStates["operator"]}
                             onChange={() => toggleCheck("operator")}
                           />
-                          <p className="text-sm text-slate-800 leading-snug">{oc.checkboxLabel}</p>
+                          <p className="text-sm text-slate-800 leading-relaxed">{oc.checkboxLabel}</p>
                         </label>
                       </div>
                     );
                   })()}
-                  {/* Platform agreements */}
+
                   {agreementsData?.platformAgreements.map(pa => (
                     <label
                       key={pa.id}
-                      className={`flex items-start gap-3 p-3 rounded-xl border cursor-pointer transition-colors ${
+                      className={`flex items-start gap-3 p-4 rounded-xl border cursor-pointer transition-all active:scale-[0.99] ${
                         checkboxStates[`platform-${pa.id}`]
                           ? "border-emerald-200 bg-emerald-50"
                           : "border-slate-200 bg-slate-50 hover:bg-slate-100"
@@ -850,75 +829,73 @@ export default function BookingComplete() {
                     >
                       <input
                         type="checkbox"
-                        className="mt-0.5 w-4 h-4 accent-emerald-600 shrink-0 cursor-pointer"
+                        className="mt-0.5 w-5 h-5 accent-emerald-600 shrink-0 cursor-pointer"
                         checked={!!checkboxStates[`platform-${pa.id}`]}
                         onChange={() => toggleCheck(`platform-${pa.id}`)}
                       />
                       <div className="flex-1 min-w-0">
-                        <p className="text-sm text-slate-800 leading-snug">{pa.checkboxLabel}</p>
-                        {!pa.isRequired && (
-                          <p className="text-xs text-slate-400 mt-0.5">Optional</p>
-                        )}
+                        <p className="text-sm text-slate-800 leading-relaxed">{pa.checkboxLabel}</p>
+                        {!pa.isRequired && <p className="text-xs text-slate-400 mt-0.5">Optional</p>}
                       </div>
                     </label>
                   ))}
                 </div>
-              </div>
+              </section>
             )}
 
-            {/* Section — Signature */}
-            <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-6 space-y-4">
-              <h2 className="text-sm font-semibold text-slate-700 flex items-center gap-2">
-                <span className="w-5 h-5 rounded-full bg-primary text-white text-xs flex items-center justify-center font-bold">
-                  <PenLine className="w-3 h-3" />
+            <section className="bg-white rounded-2xl border-2 border-primary/20 shadow-md overflow-hidden">
+              <div className="px-5 py-4 border-b bg-primary/5 flex items-center gap-3">
+                <span className="w-7 h-7 rounded-full bg-primary text-white text-xs flex items-center justify-center font-bold shrink-0">
+                  <PenLine className="w-3.5 h-3.5" />
                 </span>
-                Signature
-              </h2>
-
-              <div className="space-y-1.5">
-                <div className="flex items-center justify-between">
-                  <p className="text-xs text-slate-500">Draw your signature in the box below</p>
-                  {hasSignature && (
-                    <button type="button" onClick={clearSig} className="text-xs text-slate-400 hover:text-slate-600 flex items-center gap-1">
-                      <RotateCcw className="w-3 h-3" /> Clear
-                    </button>
-                  )}
+                <div className="flex-1 min-w-0">
+                  <h2 className="text-sm font-semibold text-slate-800">Sign to Finalize</h2>
+                  <p className="text-xs text-slate-500">Draw your signature below</p>
                 </div>
-                <div className="rounded-xl border-2 border-dashed border-slate-200 bg-slate-50 overflow-hidden touch-none">
+                {hasSignature && (
+                  <button type="button" onClick={clearSig} className="text-xs text-slate-400 hover:text-red-500 flex items-center gap-1 transition-colors">
+                    <RotateCcw className="w-3 h-3" /> Clear
+                  </button>
+                )}
+              </div>
+              <div className="px-5 py-5 space-y-4">
+                <div className={`rounded-xl border-2 overflow-hidden bg-white transition-colors ${hasSignature ? "border-primary shadow-sm" : "border-dashed border-slate-200"}`} style={{ touchAction: "none" }}>
                   <canvas
                     ref={sigCanvasRef}
-                    width={600} height={140}
-                    className="w-full h-[140px] cursor-crosshair"
+                    width={600} height={160}
+                    className="w-full cursor-crosshair"
+                    style={{ height: "160px" }}
                     onMouseDown={startDraw} onMouseMove={draw} onMouseUp={endDraw} onMouseLeave={endDraw}
                     onTouchStart={startDraw} onTouchMove={draw} onTouchEnd={endDraw}
                   />
                 </div>
                 {!hasSignature && (
-                  <p className="text-xs text-slate-400 text-center">Sign above to finalize</p>
+                  <p className="text-xs text-slate-400 text-center">Draw your signature in the box above</p>
+                )}
+
+                <Button
+                  className="w-full h-13 text-base font-bold rounded-xl shadow-lg text-white"
+                  style={{ backgroundColor: "#3ab549" }}
+                  disabled={!canSubmit || isSigning}
+                  onClick={handleSignAgreement}
+                >
+                  {isSigning
+                    ? <span className="flex items-center gap-2"><Loader2 className="w-4 h-4 animate-spin" /> Saving…</span>
+                    : "Finalize Booking"}
+                </Button>
+
+                {!canSubmit && (
+                  <p className="text-xs text-slate-400 text-center">
+                    {!signerName.trim() && "Enter your name above. "}
+                    {!allRequiredChecked() && "Check all required boxes. "}
+                    {!hasSignature && "Draw your signature above."}
+                  </p>
                 )}
               </div>
-
-              <Button
-                className="w-full text-white"
-                style={{ backgroundColor: "#3ab549" }}
-                disabled={!canSubmit || isSigning}
-                onClick={handleSignAgreement}
-              >
-                {isSigning
-                  ? <span className="flex items-center gap-2"><Loader2 className="w-4 h-4 animate-spin" /> Saving…</span>
-                  : "Finalize Booking"}
-              </Button>
-
-              {!canSubmit && (
-                <p className="text-xs text-slate-400 text-center">
-                  {!signerName.trim() && "Enter your name above. "}
-                  {!allRequiredChecked() && "Check all required boxes. "}
-                  {!hasSignature && "Draw your signature above."}
-                </p>
-              )}
-            </div>
+            </section>
           </div>
-        )}
+          );
+        })()}
 
         {/* ── Identity verification ─────────────────────────────────────────── */}
         {phase === "identity" && (
